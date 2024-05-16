@@ -1,10 +1,10 @@
-# Apache DataFusion Web Site
+# Apache DataFusion Blog Content
 
-Coming soon
+This repository contains the Apache DataFusion blog content.
 
-## Mac
+## Setup for Mac
 
-https://jekyllrb.com/docs/installation/macos/
+Based on instructions at https://jekyllrb.com/docs/installation/macos/
 
 ```shell
 brew install chruby ruby-install xz
@@ -23,5 +23,20 @@ Quit and restart terminal.
 
 ```shell
 ruby -v
+```
+Should be `ruby 3.1.3p185 (2022-11-24 revision 1a6b16756e) [arm64-darwin23]` or similar.
+
+```shell
 gem install jekyll bundler
 ```
+
+## Preview site locally
+
+```shell
+cd site
+bundle exec jekyll serve
+```
+
+## Publish site
+
+TBD, but create the html with `bundle exec jekyll build` then check the content into `asf-site` branch
