@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Apache Arrow Ballista 0.5.0 Release | Apache DataFusion Project News &amp; Blog</title>
+<meta name="generator" content="Jekyll v4.3.3" />
+<meta property="og:title" content="Apache Arrow Ballista 0.5.0 Release" />
+<meta name="author" content="pmc" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="&lt;!–" />
+<meta property="og:description" content="&lt;!–" />
+<link rel="canonical" href="https://datafusion.apache.org/2021/08/18/ballista-0.5.0/" />
+<meta property="og:url" content="https://datafusion.apache.org/2021/08/18/ballista-0.5.0/" />
+<meta property="og:site_name" content="Apache DataFusion Project News &amp; Blog" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2021-08-18T00:00:00-06:00" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Apache Arrow Ballista 0.5.0 Release" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"pmc"},"dateModified":"2021-08-18T00:00:00-06:00","datePublished":"2021-08-18T00:00:00-06:00","description":"&lt;!–","headline":"Apache Arrow Ballista 0.5.0 Release","mainEntityOfPage":{"@type":"WebPage","@id":"https://datafusion.apache.org/2021/08/18/ballista-0.5.0/"},"publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"https://datafusion.apache.org/img/2x_bgwhite_original.png"},"name":"pmc"},"url":"https://datafusion.apache.org/2021/08/18/ballista-0.5.0/"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/assets/main.css"><link type="application/atom+xml" rel="alternate" href="https://datafusion.apache.org/feed.xml" title="Apache DataFusion Project News &amp; Blog" /></head>
+<body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/">Apache DataFusion Project News &amp; Blog</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/about/">About</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post h-entry" itemscope itemtype="http://schema.org/BlogPosting">
+
+  <header class="post-header">
+    <h1 class="post-title p-name" itemprop="name headline">Apache Arrow Ballista 0.5.0 Release</h1>
+    <p class="post-meta">
+      <time class="dt-published" datetime="2021-08-18T00:00:00-06:00" itemprop="datePublished">Aug 18, 2021
+      </time>• <span itemprop="author" itemscope itemtype="http://schema.org/Person"><span class="p-author h-card" itemprop="name">pmc</span></span></p>
+  </header>
+
+  <div class="post-content e-content" itemprop="articleBody">
+    <!--
+
+-->
+
+<p>Ballista extends DataFusion to provide support for distributed queries. This is the first release of Ballista since 
+the project was <a href="https://arrow.apache.org/blog/2021/04/12/ballista-donation/">donated</a> to the Apache Arrow project 
+and includes 80 commits from 11 contributors.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>git shortlog -sn 4.0.0..5.0.0 ballista/rust/client ballista/rust/core ballista/rust/executor ballista/rust/scheduler
+  27  Andy Grove
+  15  Jiayu Liu
+  12  Andrew Lamb
+   8  Ximo Guanter
+   6  Daniël Heres
+   5  QP Hou
+   2  Jorge Leitao
+   1  Javier Goday
+   1  K.I. (Dennis) Jung
+   1  Mike Seddon
+   1  sathis
+</code></pre></div></div>
+
+<!--
+$ git log --pretty=oneline 4.0.0..5.0.0 ballista/rust/client ballista/rust/core ballista/rust/executor ballista/rust/scheduler ballista-examples/ | wc -l
+80
+-->
+
+<p>The release notes below are not exhaustive and only expose selected highlights of the release. Many other bug fixes 
+and improvements have been made: we refer you to the <a href="https://github.com/apache/arrow-datafusion/blob/5.0.0/ballista/CHANGELOG.md">complete changelog</a>.</p>
+
+<h1 id="performance-and-scalability">Performance and Scalability</h1>
+
+<p>Ballista is now capable of running complex SQL queries at scale and supports scalable distributed joins. We have been 
+benchmarking using individual queries from the TPC-H benchmark at scale factors up to 1000 (1 TB). When running against 
+CSV files, performance is generally very close to DataFusion, and significantly faster in some cases due to the fact 
+that the scheduler limits the number of concurrent tasks that run at any given time. Performance against large Parquet 
+datasets is currently non ideal due to some issues (<a href="https://github.com/apache/arrow-datafusion/issues/867">#867</a>, 
+<a href="https://github.com/apache/arrow-datafusion/issues/868">#868</a>) that we hope to resolve for the next release.</p>
+
+<h1 id="new-features">New Features</h1>
+
+<p>The main new features in this release are:</p>
+
+<ul>
+  <li>Ballista queries can now be executed by calling DataFrame.collect()</li>
+  <li>The shuffle mechanism has been re-implemented</li>
+  <li>Distributed hash-partitioned joins are now supported</li>
+  <li>Keda autoscaling is supported</li>
+</ul>
+
+<p>To get started with Ballista, refer to the <a href="https://docs.rs/ballista/0.5.0/ballista/">crate documentation</a>.</p>
+
+<p>Now that the basic functionality is in place, the focus for the next release will be to improve the performance and
+scalability as well as improving the documentation.</p>
+
+<h1 id="how-to-get-involved">How to Get Involved</h1>
+
+<p>If you are interested in contributing to Ballista, we would love to have you! You
+can help by trying out Ballista on some of your own data and projects and filing bug reports and helping to
+improve the documentation, or contribute to the documentation, tests or code. A list of open issues suitable for
+beginners is <a href="https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22">here</a>
+and the full list is <a href="https://github.com/apache/arrow-datafusion/issues">here</a>.</p>
+
+  </div><a class="u-url" href="/2021/08/18/ballista-0.5.0/" hidden></a>
+</article>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Apache DataFusion Project News &amp; Blog</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">Apache DataFusion Project News &amp; Blog</li><li><a class="u-email" href="mailto:dev@datafusion.apache.org">dev@datafusion.apache.org</a></li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"><li><a href="https://github.com/apache"><svg class="svg-icon"><use xlink:href="/assets/minima-social-icons.svg#github"></use></svg> <span class="username">apache</span></a></li><li><a href="https://www.twitter.com/ApacheDataFusio"><svg class="svg-icon"><use xlink:href="/assets/minima-social-icons.svg#twitter"></use></svg> <span class="username">ApacheDataFusio</span></a></li></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>Apache DataFusion is a very fast, extensible query engine for building high-quality  data-centric systems in Rust, using the Apache Arrow in-memory format.</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>
