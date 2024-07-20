@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "Apache DataFusion Comet 0.1.0 Release"
-date: "2024-07-23 00:00:00"
+date: "2024-07-20 00:00:00"
 author: pmc
 categories: [subprojects]
 ---
@@ -24,8 +24,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 {% endcomment %}
 -->
-
-# Apache DataFusion Comet 0.1.0 Release
 
 The Apache DataFusion PMC is pleased to announce the first official source release of the Comet subproject.
 
@@ -99,7 +97,7 @@ can run natively.
 The following chart shows how much Comet currently accelerates each query from the benchmark.
 
 <img 
-  src="{{ site.baseurl }}/img/comet-0.1.0/tpch_speedup.png" 
+  src="{{ site.baseurl }}/img/comet-0.1.0/tpch_queries_speedup.png" 
   width="100%" 
   class="img-responsive" 
   alt="Chart showing TPC-H benchmark results for Comet 0.1.0"
