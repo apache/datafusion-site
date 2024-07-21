@@ -117,7 +117,7 @@ here are some current focus areas.
   - Implement the remaining features needed so that all TPC-H queries can run entirely natively
   - Implement spill support in SortMergeJoin
   - Enable columnar shuffle by default
-- Fully support Spark versions 4.0.0
+- Fully support Spark version 4.0.0
 - Support more Spark operators and expressions
   - We would like to support many more expressions natively in Comet, and this is a great place to start 
     contributing. The contributors' guide has a section covering adding support for new expressions.
