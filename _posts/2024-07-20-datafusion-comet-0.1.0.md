@@ -120,7 +120,7 @@ here are some current focus areas.
 - Fully support Spark version 4.0.0
 - Support more Spark operators and expressions
   - We would like to support many more expressions natively in Comet, and this is a great place to start 
-    contributing. The contributors' guide has a section covering adding support for new expressions.
+    contributing. The contributors' guide has a section covering [adding support for new expressions].
 - Move more Spark expressions into the [datafusion-comet-spark-expr] crate. Although the main focus of the Comet 
   project is to provide an accelerator for Apache Spark, we also publish a standalone crate containing 
   Spark-compatible expressions that can be used by any project using DataFusion, without adding any dependencies 
@@ -130,6 +130,7 @@ here are some current focus areas.
   - Add documentation for running Spark and Comet in Kubernetes, and add example Dockerfiles.
 
 [datafusion-comet-spark-expr]: https://crates.io/crates/datafusion-comet-spark-expr
+[adding support for new expressions]: https://datafusion.apache.org/comet/contributor-guide/adding_a_new_expression.html
 
 ## Getting Involved
 
