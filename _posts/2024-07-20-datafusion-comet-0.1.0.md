@@ -113,14 +113,14 @@ encourage you to run these benchmarks in your environment or, even better, try C
 Comet is an open-source project, and contributors are welcome to work on any features they are interested in, but 
 here are some current focus areas.
 
-- Improve Performance & Reliability
-- Implement the remaining features needed so that all TPC-H queries can run entirely natively (issue)
-- Implement spill support in SortMergeJoin
-- Enable columnar shuffle by default
-- Fully support Spark versions 3.5.1 (issue) and 4.0.0 (issue)
+- Improve Performance & Reliability:
+  - Implement the remaining features needed so that all TPC-H queries can run entirely natively
+  - Implement spill support in SortMergeJoin
+  - Enable columnar shuffle by default
+- Fully support Spark versions 4.0.0
 - Support more Spark operators and expressions
-- We would like to support many more expressions natively in Comet, and this is a great place to start 
-  contributing. The contributors' guide has a section covering adding support for new expressions.
+  - We would like to support many more expressions natively in Comet, and this is a great place to start 
+    contributing. The contributors' guide has a section covering adding support for new expressions.
 - Move more Spark expressions into the [datafusion-comet-spark-expr] crate. Although the main focus of the Comet 
   project is to provide an accelerator for Apache Spark, we also publish a standalone crate containing 
   Spark-compatible expressions that can be used by any project using DataFusion, without adding any dependencies 
