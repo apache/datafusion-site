@@ -40,7 +40,7 @@ This release covers five months of development work since the project was [donat
 project and is the result of merging 343 PRs from 41 contributors. See the [change log] for more information.
 
 [donated]: https://datafusion.apache.org/blog/2024/03/06/comet-donation/
-[change log]: https://github.com/apache/datafusion-comet/blob/changelog-0.1.0/dev/changelog/0.1.0.md
+[change log]: https://github.com/apache/datafusion-comet/blob/main/dev/changelog/0.1.0.md
 
 This first release supports 15 [data types], 13 [operators], and 106 [expressions]. Comet is compatible with Apache
 Spark versions 3.3, 3.4, and 3.5. There is also experimental support for preview versions of Spark 4.0.
