@@ -42,8 +42,12 @@ project and is the result of merging 343 PRs from 41 contributors. See the [chan
 [donated]: https://datafusion.apache.org/blog/2024/03/06/comet-donation/
 [change log]: https://github.com/apache/datafusion-comet/blob/changelog-0.1.0/dev/changelog/0.1.0.md
 
-This first release supports 15 data types, 13 operators, and 106 expressions. Comet is compatible with Apache
+This first release supports 15 [data types], 13 [operators], and 106 [expressions]. Comet is compatible with Apache
 Spark versions 3.3, 3.4, and 3.5. There is also experimental support for preview versions of Spark 4.0.
+
+[data types]: https://datafusion.apache.org/comet/user-guide/datatypes.html#
+[operators]: https://datafusion.apache.org/comet/user-guide/operators.html#
+[expressions]: https://datafusion.apache.org/comet/user-guide/expressions.html#
 
 ## Project Status
 
