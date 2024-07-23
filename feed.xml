@@ -1,4 +1,119 @@
-<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" ><generator uri="https://jekyllrb.com/" version="4.3.3">Jekyll</generator><link href="https://datafusion.apache.org/blog/feed.xml" rel="self" type="application/atom+xml" /><link href="https://datafusion.apache.org/blog/" rel="alternate" type="text/html" /><updated>2024-05-19T08:41:02-06:00</updated><id>https://datafusion.apache.org/blog/feed.xml</id><title type="html">Apache DataFusion Project News &amp;amp; Blog</title><subtitle>Apache DataFusion is a very fast, extensible query engine for building high-quality  data-centric systems in Rust, using the Apache Arrow in-memory format.</subtitle><entry><title type="html">Announcing Apache Arrow DataFusion is now Apache DataFusion</title><link href="https://datafusion.apache.org/blog/2024/05/07/datafusion-tlp/" rel="alternate" type="text/html" title="Announcing Apache Arrow DataFusion is now Apache DataFusion" /><published>2024-05-07T00:00:00-06:00</published><updated>2024-05-07T00:00:00-06:00</updated><id>https://datafusion.apache.org/blog/2024/05/07/datafusion-tlp</id><content type="html" xml:base="https://datafusion.apache.org/blog/2024/05/07/datafusion-tlp/"><![CDATA[<!--
+<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" ><generator uri="https://jekyllrb.com/" version="4.3.3">Jekyll</generator><link href="https://datafusion.apache.org/blog/feed.xml" rel="self" type="application/atom+xml" /><link href="https://datafusion.apache.org/blog/" rel="alternate" type="text/html" /><updated>2024-07-23T15:02:58-06:00</updated><id>https://datafusion.apache.org/blog/feed.xml</id><title type="html">Apache DataFusion Project News &amp;amp; Blog</title><subtitle>Apache DataFusion is a very fast, extensible query engine for building high-quality  data-centric systems in Rust, using the Apache Arrow in-memory format.</subtitle><entry><title type="html">Apache DataFusion Comet 0.1.0 Release</title><link href="https://datafusion.apache.org/blog/2024/07/20/datafusion-comet-0.1.0/" rel="alternate" type="text/html" title="Apache DataFusion Comet 0.1.0 Release" /><published>2024-07-20T00:00:00-06:00</published><updated>2024-07-20T00:00:00-06:00</updated><id>https://datafusion.apache.org/blog/2024/07/20/datafusion-comet-0.1.0</id><content type="html" xml:base="https://datafusion.apache.org/blog/2024/07/20/datafusion-comet-0.1.0/"><![CDATA[<!--
+
+-->
+
+<p>The Apache DataFusion PMC is pleased to announce the first official source release of the <a href="https://datafusion.apache.org/comet/">Comet</a> subproject.</p>
+
+<p>Comet is an accelerator for Apache Spark that translates Spark physical plans to DataFusion physical plans for
+improved performance and efficiency without requiring any code changes.</p>
+
+<p>Comet runs on commodity hardware and aims to provide 100% compatibility with Apache Spark. Any operators or
+expressions that are not fully compatible will fall back to Spark unless explicitly enabled by the user. Refer
+to the <a href="https://datafusion.apache.org/comet/user-guide/compatibility.html">compatibility guide</a> for more information.</p>
+
+<p>This release covers five months of development work since the project was <a href="https://datafusion.apache.org/blog/2024/03/06/comet-donation/">donated</a> to the Apache DataFusion
+project and is the result of merging 343 PRs from 41 contributors. See the <a href="https://github.com/apache/datafusion-comet/blob/main/dev/changelog/0.1.0.md">change log</a> for more information.</p>
+
+<p>This first release supports 15 <a href="https://datafusion.apache.org/comet/user-guide/datatypes.html#">data types</a>, 13 <a href="https://datafusion.apache.org/comet/user-guide/operators.html#">operators</a>, and 106 <a href="https://datafusion.apache.org/comet/user-guide/expressions.html#">expressions</a>. Comet is compatible with Apache
+Spark versions 3.3, 3.4, and 3.5. There is also experimental support for preview versions of Spark 4.0.</p>
+
+<h2 id="project-status">Project Status</h2>
+
+<p>The project’s recent focus has been on fixing correctness and stability issues and implementing additional
+native operators and expressions so that a broader range of queries can be executed natively.</p>
+
+<p>Here are some of the highlights since the project was donated:</p>
+
+<ul>
+  <li>Implemented native support for:
+    <ul>
+      <li>SortMergeJoin</li>
+      <li>HashJoin</li>
+      <li>BroadcastHashJoin</li>
+      <li>Columnar Shuffle</li>
+      <li>More aggregate expressions</li>
+      <li>Window aggregates</li>
+      <li>Many Spark-compatible CAST expressions</li>
+    </ul>
+  </li>
+  <li>Implemented a simple Spark Fuzz Testing utility to find correctness issues</li>
+  <li>Published a <a href="https://datafusion.apache.org/comet/user-guide/overview.html">User Guide</a> and <a href="https://datafusion.apache.org/comet/contributor-guide/contributing.html">Contributors Guide</a></li>
+  <li>Created a <a href="https://github.com/apache/datafusion-benchmarks">DataFusion Benchmarks</a> repository with scripts and documentation for running benchmarks derived<br />
+from TPC-H and TPC-DS with DataFusion and Comet</li>
+</ul>
+
+<h2 id="current-performance">Current Performance</h2>
+
+<p>Comet already delivers a modest performance speedup for many queries, enabling faster data processing and
+shorter time-to-insights.</p>
+
+<p>We use benchmarks derived from the industry standard TPC-H and TPC-DS benchmarks for tracking progress with
+performance. The following chart shows the time it takes to run the 22 TPC-H queries against 100 GB of data in
+Parquet format using a single executor with eight cores. See the <a href="https://datafusion.apache.org/comet/contributor-guide/benchmarking.html">Comet Benchmarking Guide</a>
+for details of the environment used for these benchmarks.</p>
+
+<p><img src="/blog/img/comet-0.1.0/tpch_allqueries.png" width="100%" class="img-responsive" alt="Chart showing TPC-H benchmark results for Comet 0.1.0" /></p>
+
+<p>Comet reduces the overall execution time from 626 seconds to 407 seconds, a 54% speedup (1.54x faster).</p>
+
+<p>Running the same queries with DataFusion standalone using the same number of cores results in a 3.9x speedup
+compared to Spark. Although this isn’t a fair comparison (DataFusion does not have shuffle or match Spark
+semantics in some cases, for example), it does give some idea about the potential future performance of
+Comet. Comet aims to provide a 2x-4x speedup for a wide range of queries once more operators and expressions
+can run natively.</p>
+
+<p>The following chart shows how much Comet currently accelerates each query from the benchmark.</p>
+
+<p><img src="/blog/img/comet-0.1.0/tpch_queries_speedup.png" width="100%" class="img-responsive" alt="Chart showing TPC-H benchmark results for Comet 0.1.0" /></p>
+
+<p>These benchmarks can be reproduced in any environment using the documentation in the <a href="https://datafusion.apache.org/comet/contributor-guide/benchmarking.html">Comet Benchmarking Guide</a>. We
+encourage you to run these benchmarks in your environment or, even better, try Comet out with your existing Spark jobs.</p>
+
+<h2 id="roadmap">Roadmap</h2>
+
+<p>Comet is an open-source project, and contributors are welcome to work on any features they are interested in, but
+here are some current focus areas.</p>
+
+<ul>
+  <li>Improve Performance &amp; Reliability:
+    <ul>
+      <li>Implement the remaining features needed so that all TPC-H queries can run entirely natively</li>
+      <li>Implement spill support in SortMergeJoin</li>
+      <li>Enable columnar shuffle by default</li>
+    </ul>
+  </li>
+  <li>Fully support Spark version 4.0.0</li>
+  <li>Support more Spark operators and expressions
+    <ul>
+      <li>We would like to support many more expressions natively in Comet, and this is a great place to start
+contributing. The contributors’ guide has a section covering <a href="https://datafusion.apache.org/comet/contributor-guide/adding_a_new_expression.html">adding support for new expressions</a>.</li>
+    </ul>
+  </li>
+  <li>Move more Spark expressions into the <a href="https://crates.io/crates/datafusion-comet-spark-expr">datafusion-comet-spark-expr</a> crate. Although the main focus of the Comet
+project is to provide an accelerator for Apache Spark, we also publish a standalone crate containing
+Spark-compatible expressions that can be used by any project using DataFusion, without adding any dependencies
+on JVM or Apache Spark.</li>
+  <li>Release Process &amp; Documentation
+    <ul>
+      <li>Implement a binary release process so that we can publish JAR files to Maven for all supported platforms</li>
+      <li>Add documentation for running Spark and Comet in Kubernetes, and add example Dockerfiles.</li>
+    </ul>
+  </li>
+</ul>
+
+<h2 id="getting-involved">Getting Involved</h2>
+
+<p>The Comet project welcomes new contributors. We use the same <a href="https://datafusion.apache.org/contributor-guide/communication.html#slack-and-discord">Slack and Discord</a> channels as the main DataFusion
+project, and there is a Comet community video call held every four weeks on Wednesdays at 11:30 a.m. Eastern Time,
+which is 16:30 UTC during Eastern Standard Time and 15:30 UTC during Eastern Daylight Time. See the
+<a href="https://docs.google.com/document/d/1NBpkIAuU7O9h8Br5CbFksDhX-L9TyO9wmGLPMe0Plc8/edit?usp=sharing">Comet Community Meeting</a> Google Document for the next scheduled meeting date, the video call link, and
+recordings of previous calls.</p>
+
+<p>The easiest way to get involved is to test Comet with your current Spark jobs and file issues for any bugs or
+performance regressions that you find. See the <a href="https://datafusion.apache.org/comet/user-guide/installation.html">Getting Started</a> guide for instructions on downloading and installing
+Comet.</p>
+
+<p>There are also many <a href="https://github.com/apache/datafusion-comet/contribute">good first issues</a> waiting for contributions.</p>]]></content><author><name>pmc</name></author><category term="subprojects" /><summary type="html"><![CDATA[&lt;!–]]></summary></entry><entry><title type="html">Announcing Apache Arrow DataFusion is now Apache DataFusion</title><link href="https://datafusion.apache.org/blog/2024/05/07/datafusion-tlp/" rel="alternate" type="text/html" title="Announcing Apache Arrow DataFusion is now Apache DataFusion" /><published>2024-05-07T00:00:00-06:00</published><updated>2024-05-07T00:00:00-06:00</updated><id>https://datafusion.apache.org/blog/2024/05/07/datafusion-tlp</id><content type="html" xml:base="https://datafusion.apache.org/blog/2024/05/07/datafusion-tlp/"><![CDATA[<!--
 
 -->
 
@@ -1706,197 +1821,4 @@ and let us know how it goes or contribute a PR with documentation, tests or code
 for beginners is <a href="https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22">here</a></p>
 
 <p>Check out our new <a href="https://arrow.apache.org/datafusion/community/communication.html">Communication Doc</a> on more
-ways to engage with the community.</p>]]></content><author><name>pmc</name></author><category term="release" /><summary type="html"><![CDATA[&lt;!–]]></summary></entry><entry><title type="html">Introducing Apache Arrow DataFusion Contrib</title><link href="https://datafusion.apache.org/blog/2022/03/21/datafusion-contrib/" rel="alternate" type="text/html" title="Introducing Apache Arrow DataFusion Contrib" /><published>2022-03-21T00:00:00-06:00</published><updated>2022-03-21T00:00:00-06:00</updated><id>https://datafusion.apache.org/blog/2022/03/21/datafusion-contrib</id><content type="html" xml:base="https://datafusion.apache.org/blog/2022/03/21/datafusion-contrib/"><![CDATA[<!--
-
--->
-
-<h1 id="introduction">Introduction</h1>
-
-<p>Apache Arrow <a href="https://arrow.apache.org/datafusion/">DataFusion</a> is an extensible query execution framework, written in Rust, that uses <a href="https://arrow.apache.org">Apache Arrow</a> as its in-memory format.</p>
-
-<p>When you want to extend your Rust project with <a href="https://arrow.apache.org/datafusion/user-guide/sql/sql_status.html">SQL support</a>, a DataFrame API, or the ability to read and process Parquet, JSON, Avro or CSV data, DataFusion is definitely worth checking out. DataFusion’s pluggable design makes creating extensions at various points particular easy to build.</p>
-
-<p>DataFusion’s  SQL, <code class="language-plaintext highlighter-rouge">DataFrame</code>, and manual <code class="language-plaintext highlighter-rouge">PlanBuilder</code> API let users access a sophisticated query optimizer and execution engine capable of fast, resource efficient, and parallel execution that takes optimal advantage of todays multicore hardware. Being written in Rust means DataFusion can offer <em>both</em> the safety of dynamic languages as well as the resource efficiency of a compiled language.</p>
-
-<p>The DataFusion team is pleased to announce the creation of the <a href="https://github.com/datafusion-contrib">DataFusion-Contrib</a> GitHub organization to support and accelerate other projects.  While the core DataFusion library remains under Apache governance, the contrib organization provides a more flexible testing ground for new DataFusion features and a home for DataFusion extensions.  With this announcement, we are pleased to introduce the following inaugural DataFusion-Contrib repositories.</p>
-
-<h2 id="datafusion-python">DataFusion-Python</h2>
-
-<p>This <a href="https://github.com/datafusion-contrib/datafusion-python">project</a> provides Python bindings to the core Rust implementation of DataFusion, which allows users to:</p>
-
-<ul>
-  <li>Work with familiar SQL or DataFrame APIs to run queries in a safe, multi-threaded environment, returning results in Python</li>
-  <li>Create User Defined Functions and User Defined Aggregate Functions for complex operations</li>
-  <li>Pay no overhead to copy between Python and underlying Rust execution engine (by way of Apache Arrow arrays)</li>
-</ul>
-
-<h3 id="upcoming-enhancements">Upcoming enhancements</h3>
-
-<p>The team is focusing on exposing more features from the underlying Rust implementation of DataFusion and improving documentation.</p>
-
-<h3 id="how-to-install">How to install</h3>
-
-<p>From <code class="language-plaintext highlighter-rouge">pip</code></p>
-
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>pip <span class="nb">install </span>datafusion
-</code></pre></div></div>
-
-<p>Or</p>
-
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>python <span class="nt">-m</span> pip <span class="nb">install </span>datafusion
-</code></pre></div></div>
-
-<h2 id="datafusion-objectstore-s3">DataFusion-ObjectStore-S3</h2>
-
-<p>This <a href="https://github.com/datafusion-contrib/datafusion-objectstore-s3">crate</a> provides an <code class="language-plaintext highlighter-rouge">ObjectStore</code> implementation for querying data stored in S3 or S3 compatible storage. This makes it almost as easy to query data that lives on S3 as lives in local files</p>
-
-<ul>
-  <li>Ability to create <code class="language-plaintext highlighter-rouge">S3FileSystem</code> to register as part of DataFusion <code class="language-plaintext highlighter-rouge">ExecutionContext</code></li>
-  <li>Register files or directories stored on S3 with <code class="language-plaintext highlighter-rouge">ctx.register_listing_table</code></li>
-</ul>
-
-<h3 id="upcoming-enhancements-1">Upcoming enhancements</h3>
-
-<p>The current priority is adding python bindings for <code class="language-plaintext highlighter-rouge">S3FileSystem</code>.  After that there will be async improvements as DataFusion adopts more of that functionality and we are looking into S3 Select functionality.</p>
-
-<h3 id="how-to-install-1">How to Install</h3>
-
-<p>Add the below to your <code class="language-plaintext highlighter-rouge">Cargo.toml</code> in your Rust Project with DataFusion.</p>
-
-<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="py">datafusion-objectstore-s3</span> <span class="p">=</span> <span class="s">"0.1.0"</span>
-</code></pre></div></div>
-
-<h2 id="datafusion-substrait">DataFusion-Substrait</h2>
-
-<p><a href="https://substrait.io/">Substrait</a> is an emerging standard that provides a cross-language serialization format for relational algebra (e.g. expressions and query plans).</p>
-
-<p>This <a href="https://github.com/datafusion-contrib/datafusion-substrait">crate</a> provides a Substrait producer and consumer for DataFusion.  A producer converts a DataFusion logical plan into a Substrait protobuf and a consumer does the reverse.</p>
-
-<p>Examples of how to use this crate can be found <a href="https://github.com/datafusion-contrib/datafusion-substrait/blob/main/src/lib.rs">here</a>.</p>
-
-<h3 id="potential-use-cases">Potential Use Cases</h3>
-
-<ul>
-  <li>Replace custom DataFusion protobuf serialization.</li>
-  <li>Make it easier to pass query plans over FFI boundaries, such as from Python to Rust</li>
-  <li>Allow Apache Calcite query plans to be executed in DataFusion</li>
-</ul>
-
-<h2 id="datafusion-bigtable">DataFusion-BigTable</h2>
-
-<p>This <a href="https://github.com/datafusion-contrib/datafusion-bigtable">crate</a> implements <a href="https://cloud.google.com/bigtable">Bigtable</a> as a data source and physical executor for DataFusion queries.  It currently supports both UTF-8 string and 64-bit big-endian signed integers in Bigtable.  From a SQL perspective it supports both simple and composite row keys with <code class="language-plaintext highlighter-rouge">=</code>, <code class="language-plaintext highlighter-rouge">IN</code>, and <code class="language-plaintext highlighter-rouge">BETWEEN</code> operators as well as projection pushdown.  The physical execution for queries is handled by this crate while any subsequent aggregation, group bys, or joins are handled in DataFusion.</p>
-
-<h3 id="upcoming-enhancements-2">Upcoming Enhancements</h3>
-
-<ul>
-  <li>Predicate pushdown
-    <ul>
-      <li>Value range</li>
-      <li>Value Regex</li>
-      <li>Timestamp range</li>
-    </ul>
-  </li>
-  <li>Multithreaded</li>
-  <li>Partition aware execution</li>
-  <li>Production ready</li>
-</ul>
-
-<h3 id="how-to-install-2">How to Install</h3>
-
-<p>Add the below to your <code class="language-plaintext highlighter-rouge">Cargo.toml</code> in your Rust Project with DataFusion.</p>
-
-<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="py">datafusion-bigtable</span> <span class="p">=</span> <span class="s">"0.1.0"</span>
-</code></pre></div></div>
-
-<h2 id="datafusion-hdfs">DataFusion-HDFS</h2>
-
-<p>This <a href="https://github.com/datafusion-contrib/datafusion-objectstore-hdfs">crate</a> introduces <code class="language-plaintext highlighter-rouge">HadoopFileSystem</code> as a remote <code class="language-plaintext highlighter-rouge">ObjectStore</code> which provides the ability to query HDFS files.  For HDFS access the <a href="https://github.com/yahoNanJing/fs-hdfs">fs-hdfs</a> library is used.</p>
-
-<h2 id="datafusion-tokomak">DataFusion-Tokomak</h2>
-
-<p>This <a href="https://github.com/datafusion-contrib/datafusion-tokomak">crate</a> provides an e-graph based DataFusion optimization framework based on the Rust <a href="https://egraphs-good.github.io">egg</a> library.  An e-graph is a data structure that powers the equality saturation optimization technique.</p>
-
-<p>As context, the optimizer framework within DataFusion is currently <a href="https://github.com/apache/arrow-datafusion/issues/1972">under review</a> with the objective of implementing a more strategic long term solution that is more efficient and simpler to develop.</p>
-
-<p>Some of the benefits of using <code class="language-plaintext highlighter-rouge">egg</code> within DataFusion are:</p>
-
-<ul>
-  <li>Implements optimized algorithms that are hard to match with manually written optimization passes</li>
-  <li>Makes it easy and less verbose to add optimization rules</li>
-  <li>Plugin framework to add more complex optimizations</li>
-  <li>Egg does not depend on rule order and can lead to a higher level of optimization by being able to apply multiple rules at the same time until it converges</li>
-  <li>Allows for cost-based optimizations</li>
-</ul>
-
-<p>This is an exciting new area for DataFusion with lots of opportunity for community involvement!</p>
-
-<h2 id="datafusion-tui">DataFusion-Tui</h2>
-
-<p><a href="https://github.com/datafusion-contrib/datafusion-tui">DataFusion-tui</a> aka <code class="language-plaintext highlighter-rouge">dft</code> provides a feature rich terminal application for using DataFusion.  It has drawn inspiration and several features from <code class="language-plaintext highlighter-rouge">datafusion-cli</code>.  In contrast to <code class="language-plaintext highlighter-rouge">datafusion-cli</code> the objective of this tool is to provide a light SQL IDE experience for querying data with DataFusion.  This includes features such as the following which are currently implemented:</p>
-
-<ul>
-  <li>Tab Management to provide clean and structured organization of DataFusion queries, results, <code class="language-plaintext highlighter-rouge">ExecutionContext</code> information, and logs
-    <ul>
-      <li>SQL Editor
-        <ul>
-          <li>Text editor for writing SQL queries</li>
-        </ul>
-      </li>
-      <li>Query History
-        <ul>
-          <li>History of executed queries, their execution time, and the number of returned rows</li>
-        </ul>
-      </li>
-      <li><code class="language-plaintext highlighter-rouge">ExecutionContext</code> information
-        <ul>
-          <li>Expose information on which physical optimizers are used and which <code class="language-plaintext highlighter-rouge">ExecutionConfig</code> settings are set</li>
-        </ul>
-      </li>
-      <li>Logs
-        <ul>
-          <li>Logs from <code class="language-plaintext highlighter-rouge">dft</code>, DataFusion, and any dependent libraries</li>
-        </ul>
-      </li>
-    </ul>
-  </li>
-  <li>Support for custom <code class="language-plaintext highlighter-rouge">ObjectStore</code>s
-    <ul>
-      <li>S3</li>
-    </ul>
-  </li>
-  <li>Preload DDL from <code class="language-plaintext highlighter-rouge">~/.datafusionrc</code> to enable having local “database” available at startup</li>
-</ul>
-
-<h3 id="upcoming-enhancements-3">Upcoming Enhancements</h3>
-
-<ul>
-  <li>SQL Editor
-    <ul>
-      <li>Command to write query results to file</li>
-      <li>Multiple SQL editor tabs</li>
-    </ul>
-  </li>
-  <li>Expose more information from <code class="language-plaintext highlighter-rouge">ExecutionContext</code></li>
-  <li>A help tab that provides information on functions</li>
-  <li>Query custom <code class="language-plaintext highlighter-rouge">TableProvider</code>s such as <a href="https://github.com/delta-io/delta-rs">DeltaTable</a> or <a href="https://github.com/datafusion-contrib/datafusion-bigtable">BigTable</a></li>
-</ul>
-
-<h2 id="datafusion-streams">DataFusion-Streams</h2>
-
-<p><a href="https://github.com/datafusion-contrib/datafusion-streams">DataFusion-Stream</a> is a new testing ground for creating a <code class="language-plaintext highlighter-rouge">StreamProvider</code> in DataFusion that will enable querying streaming data sources such as Apache Kafka.  The implementation for this feature is currently being designed and is under active review.  Once the design is finalized the trait and attendant data structures will be added back to the core DataFusion crate.</p>
-
-<h2 id="datafusion-java">DataFusion-Java</h2>
-
-<p>This <a href="https://github.com/datafusion-contrib/datafusion-java">project</a> created an initial set of Java bindings to DataFusion.  The project is currently in maintenance mode and is looking for maintainers to drive future development.</p>
-
-<h1 id="how-to-get-involved">How to Get Involved</h1>
-
-<p>If you are interested in contributing to DataFusion, and learning about state of
-the art query processing, we would love to have you join us on the journey! You
-can help by trying out DataFusion on some of your own data and projects and let us know how it goes or contribute a PR with documentation, tests or code. A list of open issues suitable for beginners is <a href="https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22">here</a></p>
-
-<p>The best way to find out about creating new extensions within DataFusion-Contrib is reaching out on the <code class="language-plaintext highlighter-rouge">#arrow-rust</code> channel of the Apache Software Foundation <a href="https://join.slack.com/t/the-asf/shared_invite/zt-vlfbf7ch-HkbNHiU_uDlcH_RvaHv9gQ">Slack</a> workspace.</p>
-
-<p>You can also check out our new <a href="https://arrow.apache.org/datafusion/community/communication.html">Communication Doc</a> on more ways to engage with the community.</p>
-
-<p>Links for each DataFusion-Contrib repository are provided above if you would like to contribute to those.</p>]]></content><author><name>pmc</name></author><category term="release" /><summary type="html"><![CDATA[&lt;!–]]></summary></entry></feed>
+ways to engage with the community.</p>]]></content><author><name>pmc</name></author><category term="release" /><summary type="html"><![CDATA[&lt;!–]]></summary></entry></feed>
