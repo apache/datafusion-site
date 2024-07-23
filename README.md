@@ -33,7 +33,6 @@ gem install jekyll bundler
 ## Preview site locally
 
 ```shell
-cd site
 bundle exec jekyll serve
 ```
 
