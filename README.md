@@ -38,4 +38,30 @@ bundle exec jekyll serve
 
 ## Publish site
 
-TBD, but create the html with `bundle exec jekyll build` then check the content into `asf-site` branch
+This is currently a manual process. Basic steps are:
+
+#### Check out `main` and build site
+```shell
+# Check out latest code
+git checkout main
+git pull
+# build site (html is left in _site directory)
+bundle exec jekyll build
+```
+
+#### Check out `asf-site` and copy content
+Checkout a separate copy of `datafusion-site`
+
+```shell
+git checkout asf-site
+git pull
+# create a branch for the publishing
+git checkout -b publish_blog
+# copy content built from _site directory
+cp -R ../datafusion-site/_site/* .
+git commit -a -m 'Publish blog content'
+```
+
+#### Make PR, targeting the `asf-site` branch
+For example, see https://github.com/apache/datafusion-site/pull/9
+
