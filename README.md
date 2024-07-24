@@ -72,6 +72,8 @@ git checkout asf-site
 git pull
 # create a branch for the publishing
 git checkout -b publish_blog
+# push code upstream
+git push 
 # copy content built from _site directory
 cp -R ../datafusion-site/_site/* .
 git commit -a -m 'Publish blog content'
