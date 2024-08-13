@@ -1,8 +1,8 @@
 ---
 layout: post
 title: "Apache DataFusion Python 40.0.0 Released, Significant usability updates"
-date: "2024-07-22 00:00:00"
-author: pmc
+date: "2024-08-13 00:00:00"
+author: timsaucer
 categories: [release]
 ---
 <!--
@@ -24,30 +24,36 @@ limitations under the License.
 {% endcomment %}
 -->
 
-# Introduction
+## Introduction
 
-We are happy to announce that Python DataFusion 40.0.0 has been released. This release contains
-significant updates to the user interface and documentation. We listened to the python user
-community to create a more *pythonic* experience. If you have not used the python interface to
+We are happy to announce that [DataFusion in Python 40.0.0] has been released. In addition to
+bringing in all of the new features of the core [DataFusion 40.0.0] package, this release
+contains *significant* updates to the user interface and documentation. We listened to the python
+user community to create a more *pythonic* experience. If you have not used the python interface to
 DataFusion before, this is an excellent time to give it a try!
 
-# Background
+[DataFusion 40.0.0]: https://datafusion.apache.org/blog/2024/07/24/datafusion-40.0.0/
+[DataFusion in Python 40.0.0]: https://pypi.org/project/datafusion/40.0.0/
 
-Up until now, the python bindings to DataFusion have primarily exposed the underlying Rust
-functionality using the excellent [pyo3](https://pyo3.rs/) package. This has been excellent for
-early adopters to use DataFusion within their python projects, but some users have found it
-difficult to work with for a few reasons.
+## Background
 
-1. Most of the functions had little or no documentation. Users often had to refer to the rust
+Until now, the python bindings for DataFusion have primarily been a thin layer to expose the
+underlying Rust functionality. This has been worked well for early adopters to use DataFusion
+within their Python projects, but some users have found it difficult to work with. As compared to
+other DataFrame libraries, these issues were raised:
+
+1. Most of the functions had little or no documentation. Users often had to refer to the Rust
 documentation or code to learn how to use DataFusion. This alienated some python users.
 2. Users could not take advantage of modern IDE features such as type hinting. These are valuable
 tools for rapid testing and development.
-3. Some of the interfaces felt “clunky” to users since some python concepts do not always map well
+3. Some of the interfaces felt “clunky” to users since some Python concepts do not always map well
 to their Rust counterparts.
 
-# What's Changed
+This release aims to bring a better user experience to the DataFusion Python community.
 
-The most significant difference is that we now have wrapper functions and classes for most of the
+## What's Changed
+
+The most significant difference is that we have added wrapper functions and classes for most of the
 user facing interface. These wrappers, written in Python, contain both documentation and type
 annotations.
 
@@ -93,11 +99,26 @@ used a function's arguments as shown in Figure 2.
 In addition to these wrapper libraries, we have enhancements to some of the functions to feel more
 easy to use.
 
-## Comparison Operators
+### Improved DataFrame filter arguments
 
-When performing any kind of comparison operator, you can now use any python value that can be
-coerced into a `Literal` as the right hand side of the comparison. This gives an ergonomic easy
-to ready expression. For example, consider these few lines from one of the
+You can now apply multiple `filter` statements in a single step. When using `DataFrame.filter` you
+can pass in multiple arguments, separated by a comma. These will act as a logical `AND` of all of
+the filter arguments. The following two statements are equivalent:
+
+```python
+df.filter(col("size") < col("max_size")).filter(col("color") == lit("green"))
+df.filter(col("size") < col("max_size"), col("color") == lit("green"))
+```
+
+### Comparison against literal values
+
+It is very common to write DataFrame operations that compare an expression to some fixed value.
+For example, filtering a DataFrame might have an operation such as `df.filter(col("size") < lit(16))`.
+To make these common operations more ergonomic, you can now simply use `df.filter(col("size") < 16)`.
+
+For the right hand side of the comparison operator, you can now use any Python value that can be
+coerced into a `Literal`. This gives an easy to ready expression. For example, consider these few
+lines from one of the
 [TPC-H examples](https://github.com/apache/datafusion-python/tree/main/examples/tpch) provided in
 the DataFusion Python repository.
 
@@ -123,36 +144,37 @@ df = df_lineitem.filter(
 )
 ```
 
-## Select
+### Select columns by name
 
 It is very common for users to perform `DataFrame` selection where they simply want a column. For
 this we have had the function `select_columns("a", "b")` or the user could perform
 `select(col("a"), col("b"))`. In the new release, we accept either full expressions in `select()`
-or strings. You can mix these as well.
+or strings of the column names. You can mix these as well.
 
 Where before you may have to do an operation like
 
 ```python
-df_subset = df.select(col("a"), col("b"), f.abs(col("c")).alias("abs_c"))
+df_subset = df.select(col("a"), col("b"), f.abs(col("c")))
 ```
 
 You can now simplify this to
 
 ```python
-df_subset = df.select("a", "b", f.abs(col("c")).alias("abs_c"))
+df_subset = df.select("a", "b", f.abs(col("c")))
 ```
 
-# Next Steps
+## Next Steps
 
 While most of the user facing classes and functions have been exposed, there are a few that require
 exposure. Namely the classes in `datafusion.object_store` and the logical plans used by
 `datafusion.substrait`. The team is working on
 [these issues](https://github.com/apache/datafusion-python/issues/767).
 
-A nice to have feature on the [documentation site](https://datafusion.apache.org/python/index.html)
-is to cross reference all function types. This is currently under investigation.
+Additionally, in the next release of DataFusion there have been improvements made to the user-defined
+aggregate and window functions to make them easier to use. We plan on
+[bringing these enhancements](https://github.com/apache/datafusion-python/issues/780) to this project.
 
-# Get Involved
+## Get Involved
 
 The DataFusion Python team is an active and engaging community and we would love
 to have you join us and help the project. 
