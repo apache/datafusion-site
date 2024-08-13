@@ -83,10 +83,15 @@ Here are the two example use cases, taken from my own work but generalized.
 ### Use Case 1: Scalar Function
 
 I have a DataFrame and a list of tuples that I’m interested in. I want to filter out the DataFrame
-to only have values that match those tuples from certain columns in the DataFrame. For example,
-suppose I have a table of sales line items. There are many columns, but I am interested in three: a
-part key, supplier key, and return status. I want only to return a DataFrame with a specific
-combination of these three values.
+to only have values that match those tuples from certain columns in the DataFrame.
+
+To give a concrete example, we will use data generated for the [TPC-H benchmarks](https://www.tpc.org/tpch/).
+Suppose I have a table of sales line items. There are many columns, but I am interested in three: a
+part key (`p_partkey`), supplier key (`p_suppkey`), and return status (`p_returnflag`). I want
+only to return a DataFrame with a specific combination of these three values. That is, I want
+to know if part number 1530 from supplier 4031 was sold (not returned), so I want a specific
+combination of `p_partkey = 1530`, `p_suppkey = 4031`, and `p_returnflag = 'N'`. I have a small
+handful of these combinations I want to return.
 
 Probably the most ergonomic way to do this without UDF is to turn that list of tuples into a
 DataFrame itself, perform a join, and select the columns from the original DataFrame. If we were
