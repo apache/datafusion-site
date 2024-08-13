@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "Comparing approaches to User Defined Functions in Apache Datafusion using Python"
+title: "Comparing approaches to User Defined Functions in Apache DataFusion using Python"
 date: "2024-08-06 00:00:00"
 author: timsaucer
 categories: [tutorial]
@@ -24,36 +24,44 @@ See the License for the specific language governing permissions and
 limitations under the License.
 {% endcomment %}
 -->
-# Writing User Defined Functions in Apache Datafusion using Python
+# Writing User Defined Functions in Apache DataFusion using Python
 
 ## Personal Context
 
-For a few months now I’ve been working with Apache DataFusion, a fast query engine written in rust.
-From my experience the language that nearly all data scientists are working in is Python. In
-general, for in memory work people often stick to pandas and pyspark for larger tasks that cannot
-fit into memory. Polars is also growing extremely fast.
+For a few months now I’ve been working with [Apache DataFusion](https://datafusion.apache.org/), a
+fast query engine written in rust. From my experience the language that nearly all data scientists
+are working in is Python. In general, often stick to [pandas](https://pandas.pydata.org/) for
+in-memory tasks and [pyspark](https://spark.apache.org/) for larger tasks that require distributed
+processing.
+
+In addition to DataFusion, there is another rust based newcomer to the DataFrame world,
+[Polars](https://pola.rs/). It is growing extremely fast, and it serves many of the same use cases
+as DataFusion. For my use cases, I'm interested in DataFusion because I want to be able to build
+small scale tests rapidly and then scale them up to larger distributed systems with ease. I do
+recommend evaluating Polars for in memory work.
 
 Personally, I would love a single query approach that is fast for both in memory usage and can
 extend to large batch processing to exploit parallelization. I think DataFusion, coupled with
 Ballista, may provide this solution.
 
-As I’m testing, I’m primarily limiting my work to the datafusion-python project, a wrapper around
-the rust library. This wrapper gives you the speed advantages of keeping all of the data in the
+As I’m testing, I’m primarily limiting my work to the
+[datafusion-python](https://datafusion.apache.org/python/) project, a wrapper around the rust
+DataFusion library. This wrapper gives you the speed advantages of keeping all of the data in the
 rust implementation and the ergonomics of working in python. Personally, I would prefer to work
 purely in rust, but I also recognize that since the industry works in python we should meet the
 people where they are.
 
-## User Defined Functions
+## User-Defined Functions
 
-The focus of this post is User Defined Functions. The DataFusion library gives a lot of useful
-functions already for doing dataframe manipulation. These are going to be similar to those you
-find in other dataframe libraries. You’ll be able to do simple arithmetic, create substrings of
+The focus of this post is User-Defined Functions (UDFs). The DataFusion library gives a lot of
+useful functions already for doing DataFrame manipulation. These are going to be similar to those
+you find in other DataFrame libraries. You’ll be able to do simple arithmetic, create substrings of
 columns, or find the average value across a group of rows. These cover most of the use cases
 you’ll need in a DataFrame.
 
-However, there will always arise times when you want a custom function. By using user defined
-functions (UDFs) you open the world of possibilities of your code. Sometimes there simply isn’t an
-easy way to use built in functions to achieve your goals.
+However, there will always arise times when you want a custom function. With UDFs you open a
+world of possibilities of your code. Sometimes there simply isn’t an easy way to use built-in
+functions to achieve your goals.
 
 In the following, I’m going to demonstrate two example use cases. These are based on real world
 problems I’ve encountered. Also I want to demonstrate the approach of “make it work, make it work
@@ -74,26 +82,26 @@ Here are the two example use cases, taken from my own work but generalized.
 
 ### Use Case 1: Scalar Function
 
-I have a DataFrame and a list of tuples that I’m interested in. I want to filter out the dataframe
-to only have values that match those tuples from certain columns in the dataframe. For example,
+I have a DataFrame and a list of tuples that I’m interested in. I want to filter out the DataFrame
+to only have values that match those tuples from certain columns in the DataFrame. For example,
 suppose I have a table of sales line items. There are many columns, but I am interested in three: a
-part key, supplier key, and return status. I want only to return a dataframe with a specific
+part key, supplier key, and return status. I want only to return a DataFrame with a specific
 combination of these three values.
 
 Probably the most ergonomic way to do this without UDF is to turn that list of tuples into a
-dataframe itself, perform a join, and select the columns from the original dataframe. If we were
-working in pyspark we would probably broadcast join the dataframe created from the tuple list since
-it is tiny. In practice, I have found that with some dataframe libraries performing a filter rather
+DataFrame itself, perform a join, and select the columns from the original DataFrame. If we were
+working in pyspark we would probably broadcast join the DataFrame created from the tuple list since
+it is tiny. In practice, I have found that with some DataFrame libraries performing a filter rather
 than a join can be significantly faster. This is worth profiling for your specific use case.
 
 ### Use Case 2: Aggregate or Window Function
 
-I have a dataframe with many values that I want to aggregate. I have already analyzed it and
+I have a DataFrame with many values that I want to aggregate. I have already analyzed it and
 determined there is a noise level below which I do not want to include in my analysis. I want to
 compute a sum of only values that are above my noise threshold.
 
 This can be done fairly easy without leaning on a User Defined Aggegate Function (UDAF). You can
-simply filter the dataframe and then aggregate using the built in `sum` function. Here, we
+simply filter the DataFrame and then aggregate using the built-in `sum` function. Here, we
 demonstrate doing this as a UDF primarily as an example of how to write UDAFs. We will use the
 pyarrow compute approach.
 
@@ -101,7 +109,8 @@ pyarrow compute approach.
 
 The fastest way (developer time, not code time) for me to implement the scalar problem solution
 was to do something along the lines of “for each row, check the values of interest contains that
-tuple”. I’ve published this as [an example](https://github.com/apache/datafusion-python/blob/main/examples/python-udf-comparisons.py)
+tuple”. I’ve published this as
+[an example](https://github.com/apache/datafusion-python/blob/main/examples/python-udf-comparisons.py)
 in the [datafusion-python repository](https://github.com/apache/datafusion-python). Here is an
 example of how this can be done:
 
@@ -128,7 +137,8 @@ def is_of_interest_impl(
 
     return pa.array(result)
 
-
+# Wrap our custom function with `datafusion.udf`, annotating expected 
+# parameter and return types
 is_of_interest = udf(
     is_of_interest_impl,
     [pa.int64(), pa.int64(), pa.utf8()],
@@ -148,8 +158,8 @@ elements (rows). So the UDF example just iterates through all of the arrays and 
 the tuple created from these columns matches any of those that we’re looking for.
 
 I’ll repeat because this is something that tripped me up the first time I wrote a UDF for
-datafusion: **Datafusion UDFs, even scalar UDFs, process an array of values at a time not a single
-row.** This is different from some other dataframe libraries and you may need to recognize a slight
+datafusion: **DataFusion UDFs, even scalar UDFs, process an array of values at a time not a single
+row.** This is different from some other DataFrame libraries and you may need to recognize a slight
 change in mentality.
 
 Some important lines here are the lines like `partkey = partkey.as_py()`. When we do this, we pay a
@@ -163,9 +173,10 @@ design your UDFs to avoid this as much as possible.
 
 ## Python approach using pyarrow compute
 
-DataFusion uses [Apache Arrow](https://arrow.apache.org/) as it’s in memory data format. This can
+DataFusion uses [Apache Arrow](https://arrow.apache.org/) as its in-memory data format. This can
 be seen in the way that Arrow Arrays are passed into the UDFs. We can take advantage of the fact
-that [pyarrow](https://github.com/apache/arrow-rs), the python arrow wrapper, provides a variety of
+that [pyarrow](https://arrow.apache.org/docs/python/), the canonical Python Arrow implementation,
+provides a variety of
 useful functions. In the example below, we are only using a few of the boolean functions and the
 equality function. Each of these functions takes two arrays and analyzes them row by row. In the
 below example, we shift the logic around a little since we are now operating on an entire array of
@@ -217,7 +228,7 @@ of tuples exists, so we take the result from the current loop and perform a `pya
 on it.
 
 From my benchmarking, switching from approach of converting values into python objects to this
-approach of using the pyarrow built in functions leads to about a 10x speed improvement in this
+approach of using the pyarrow built-in functions leads to about a 10x speed improvement in this
 simple problem.
 
 It’s worth noting that almost all of the pyarrow compute functions expect to take one or two arrays
