@@ -253,8 +253,8 @@ deploy the Python wheels you generate. It is certainly not necessary for every u
 Due to the excellent work by the Python arrow team, we can simplify our work to needing only two
 dependencies on the Rust side, [arrow-rs](https://github.com/apache/arrow-rs) and
 [pyo3](https://pyo3.rs/). I have posted a [minimal example](https://github.com/timsaucer/tuple_filter_example).
-You’ll need [maturin](https://github.com/PyO3/maturin) to build the project, and I recommend using
-release mode when building.
+You’ll need [maturin](https://github.com/PyO3/maturin) to build the project, and you must use
+release mode when building to get the expected performance.
 
 ```bash
 maturin develop --release
@@ -504,7 +504,7 @@ impl TupleFilterDirectIterationClass {
 
 We convert the `values_of_interest` into a vector of borrowed types so that we can do a fast search
 without creating additional memory. The other option is to turn the `returnflag` into a `String`
-but that memory allocation is unnecessary. After taht we use two `zip` operations so that we can
+but that memory allocation is unnecessary. After that we use two `zip` operations so that we can
 iterate over all three columns in a single pass. Since each `zip` will return a tuple of two
 elements, a quick `map` turns them into the tuple format we need. Also, `StringArray` is a little
 different in the buffer it uses, so it is treated slightly differently from the others.
@@ -602,5 +602,5 @@ manner shown above.
 
 Lastly, the Apache Arrow and DataFusion community is an active group of very helpful people working
 to make a great tool. If you want to get involved, please take a look at the
-[online documenation](https://datafusion.apache.org/python/) and jump in to help with one of the
+[online documentation](https://datafusion.apache.org/python/) and jump in to help with one of the
 (open issues)[https://github.com/apache/datafusion-python/issues].
