@@ -163,6 +163,19 @@ You can now simplify this to
 df_subset = df.select("a", "b", f.abs(col("c")))
 ```
 
+### Creating named structs
+
+Creating a `struct` with named fields was previously difficult to use and allowed for potential
+user errors when specifying the name of each field. Now we have a cleaner interface where the
+user passes a list of tuples containing the name of the field and the expression to create.
+
+```python
+df.select(f.named_struct([
+  ("a", col("a")),
+  ("b", col("b"))
+]))
+```
+
 ## Next Steps
 
 While most of the user facing classes and functions have been exposed, there are a few that require
