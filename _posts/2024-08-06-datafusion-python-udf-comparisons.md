@@ -60,7 +60,7 @@ columns, or find the average value across a group of rows. These cover most of t
 you’ll need in a DataFrame.
 
 However, there will always arise times when you want a custom function. With UDFs you open a
-world of possibilities of your code. Sometimes there simply isn’t an easy way to use built-in
+world of possibilities in your code. Sometimes there simply isn’t an easy way to use built-in
 functions to achieve your goals.
 
 In the following, I’m going to demonstrate two example use cases. These are based on real world
