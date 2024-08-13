@@ -29,12 +29,12 @@ limitations under the License.
 ## Personal Context
 
 For a few months now I’ve been working with [Apache DataFusion](https://datafusion.apache.org/), a
-fast query engine written in rust. From my experience the language that nearly all data scientists
+fast query engine written in Rust. From my experience the language that nearly all data scientists
 are working in is Python. In general, often stick to [pandas](https://pandas.pydata.org/) for
 in-memory tasks and [pyspark](https://spark.apache.org/) for larger tasks that require distributed
 processing.
 
-In addition to DataFusion, there is another rust based newcomer to the DataFrame world,
+In addition to DataFusion, there is another Rust based newcomer to the DataFrame world,
 [Polars](https://pola.rs/). It is growing extremely fast, and it serves many of the same use cases
 as DataFusion. For my use cases, I'm interested in DataFusion because I want to be able to build
 small scale tests rapidly and then scale them up to larger distributed systems with ease. I do
@@ -45,10 +45,10 @@ extend to large batch processing to exploit parallelization. I think DataFusion,
 Ballista, may provide this solution.
 
 As I’m testing, I’m primarily limiting my work to the
-[datafusion-python](https://datafusion.apache.org/python/) project, a wrapper around the rust
+[datafusion-python](https://datafusion.apache.org/python/) project, a wrapper around the Rust
 DataFusion library. This wrapper gives you the speed advantages of keeping all of the data in the
-rust implementation and the ergonomics of working in python. Personally, I would prefer to work
-purely in rust, but I also recognize that since the industry works in python we should meet the
+Rust implementation and the ergonomics of working in Python. Personally, I would prefer to work
+purely in Rust, but I also recognize that since the industry works in Python we should meet the
 people where they are.
 
 ## User-Defined Functions
@@ -69,12 +69,12 @@ well, make it fast” that is a motto I’ve seen thrown around in data science.
 
 I will demonstrate three approaches to writing UDFs. In order of increasing performance they are
 
-- Writing a pure python function to do your computation
-- Using the pyarrow libraries in python to accelerate your processing
-- Writing a UDF in rust and exposing it to python
+- Writing a pure Python function to do your computation
+- Using the pyarrow libraries in Python to accelerate your processing
+- Writing a UDF in Rust and exposing it to Python
 
 Additionally I will demonstrate two variants of this. The first will be nearly identical to the
-pyarrow library approach to simplicity of understanding how to connect the rust code to python. The
+pyarrow library approach to simplicity of understanding how to connect the Rust code to Python. The
 second version we will do the iteration through the input arrays ourselves to give even greater
 flexibility to the user.
 
@@ -151,7 +151,7 @@ df_udf_filter = df_lineitem.filter(
 )
 ```
 
-When working with a DataFusion UDF in python, you define your function to take in some number of
+When working with a DataFusion UDF in Python, you define your function to take in some number of
 expressions. During the evaluation, these will get computed into their corresponding values and
 passed to your UDF as a pyarrow Array. We must return an Array also with the same number of
 elements (rows). So the UDF example just iterates through all of the arrays and checks to see if
@@ -163,12 +163,12 @@ row.** This is different from some other DataFrame libraries and you may need to
 change in mentality.
 
 Some important lines here are the lines like `partkey = partkey.as_py()`. When we do this, we pay a
-heavy cost. Now instead of keeping the analysis in the rust code, we have to take the values in the
-array and convert them over to python objects. In this case we end up getting two numbers and a
-string as real python objects, complete with reference counting and all. Also we are iterating
-through the array in python rather than rust native. These will **significantly** slow down your
-code. Any time you have to cross the barrier where you change values inside the rust arrays into
-python objects or vice versa you will pay **heavy** cost in that transformation. You will want to
+heavy cost. Now instead of keeping the analysis in the Rust code, we have to take the values in the
+array and convert them over to Python objects. In this case we end up getting two numbers and a
+string as real Python objects, complete with reference counting and all. Also we are iterating
+through the array in Python rather than Rust native. These will **significantly** slow down your
+code. Any time you have to cross the barrier where you change values inside the Rust arrays into
+Python objects or vice versa you will pay **heavy** cost in that transformation. You will want to
 design your UDFs to avoid this as much as possible.
 
 ## Python approach using pyarrow compute
@@ -227,7 +227,7 @@ our return value from the UDF needs to include arrays for which any of the value
 of tuples exists, so we take the result from the current loop and perform a `pyarrow.compute.or_`
 on it.
 
-From my benchmarking, switching from approach of converting values into python objects to this
+From my benchmarking, switching from approach of converting values into Python objects to this
 approach of using the pyarrow built-in functions leads to about a 10x speed improvement in this
 simple problem.
 
@@ -239,19 +239,19 @@ need to do something akin to what we’ve shown here.
 
 This is the most complicated approach, but has the potential to be the most performant. What we
 will do here is write a Rust function to perform our computation and then expose that function to
-python. I know of two use cases where I would recommend this approach. The first is the case when
+Python. I know of two use cases where I would recommend this approach. The first is the case when
 the pyarrow compute functions are insufficient for your needs. Perhaps your code is too complex or
 could be greatly simplified if you pulled in some outside dependency. The second use case is when
 you have written a UDF that you’re sharing across multiple projects and have hardened the approach.
-It is possible that you can implement your function in rust to give a speed improvement and then
+It is possible that you can implement your function in Rust to give a speed improvement and then
 every project that is using this shared UDF will benefit from those updates.
 
 When deciding to use this approach, it’s worth considering how much you think you’ll actually
-benefit from the rust implementation to decide if it’s worth the additional effort to maintain and
-deploy the python wheels you generate. It is certainly not necessary for every use case.
+benefit from the Rust implementation to decide if it’s worth the additional effort to maintain and
+deploy the Python wheels you generate. It is certainly not necessary for every use case.
 
-Due to the excellent work by the python arrow team, we can simplify our work to needing only two
-dependencies on the rust side, [arrow-rs](https://github.com/apache/arrow-rs) and
+Due to the excellent work by the Python arrow team, we can simplify our work to needing only two
+dependencies on the Rust side, [arrow-rs](https://github.com/apache/arrow-rs) and
 [pyo3](https://pyo3.rs/). I have posted a [minimal example](https://github.com/timsaucer/tuple_filter_example).
 You’ll need [maturin](https://github.com/PyO3/maturin) to build the project, and I recommend using
 release mode when building.
@@ -260,14 +260,14 @@ release mode when building.
 maturin develop --release
 ```
 
-When you write your UDF in rust you generally will need to take these steps
+When you write your UDF in Rust you generally will need to take these steps
 
-1. Write a function description that takes in some number of python generic objects.
+1. Write a function description that takes in some number of Python generic objects.
 2. Convert these objects to Arrow Arrays of the appropriate type(s).
 3. Perform your computation and create a resultant Array.
-3. Convert the array into a python generic object.
+3. Convert the array into a Python generic object.
 
-For the conversion to and from python objects, we can take advantage of the
+For the conversion to and from Python objects, we can take advantage of the
 `ArrayData::from_pyarrow_bound` and `ArrayData::to_pyarrow` functions.  All that remains is to
 perform your computation.
 
@@ -276,12 +276,12 @@ done in the above approach using pyarrow. In the second we demonstrate iterating
 arrays ourselves.
 
 In our first approach, we can expect the performance to be nearly identical to when we used the
-pyarrow compute functions. On the rust side we will have slightly less overhead but the heavy
-lifting portions of the code are essentially the same between this rust implementation and the
+pyarrow compute functions. On the Rust side we will have slightly less overhead but the heavy
+lifting portions of the code are essentially the same between this Rust implementation and the
 pyarrow approach above.
 
 The reason for demonstrating this, even though it doesn’t provide a significant speedup over
-python, is to primarily demonstrate how to make the python to rust with python wrapper
+Python, is to primarily demonstrate how to make the Python to Rust with Python wrapper
 transition. In the second implementation you can see how we can iterate through all of the arrays
 ourselves.
 
@@ -336,7 +336,7 @@ fn tuple_filter_example(module: &Bound<'_, PyModule>) -> PyResult<()> {
 }
 ```
 
-To use this we use the `udf` function in datafusion-python just as before.
+To use this we use the `udf` function in `datafusion-python` just as before.
 
 ```python
 from datafusion import udf
@@ -351,8 +351,8 @@ udf_using_custom_rust_fn = udf(
 )
 ```
 
-That's it! We've now got a third party rust UDF with python wrappers working with DataFusion's
-python bindings!
+That's it! We've now got a third party Rust UDF with Python wrappers working with DataFusion's
+Python bindings!
 
 ### Rust UDF with initialization
 
@@ -362,9 +362,9 @@ the computation. The code above is sloppy, so let's clean it up.
 
 We want to write the function to take some additional data. A limitation of the UDFs we create is
 that they expect to operate on entire arrays of data at a time. We can get around this problem by
-creating an initializer for our UDF. We do this by defining a rust struct that contains the data we
+creating an initializer for our UDF. We do this by defining a Rust struct that contains the data we
 need and implement two methods on this struct, `new` and `__call__`. By doing this we will create a
-python object that is callable, so it can be the function we provide to `udf`.
+Python object that is callable, so it can be the function we provide to `udf`.
 
 ```rust
 #[pyclass]
@@ -426,7 +426,7 @@ fn tuple_filter_example(module: &Bound<'_, PyModule>) -> PyResult<()> {
 
 When you write this, you don't have to call your constructor `new`. The more important part is that
 you have `#[new]` designated on the function. With this you can provide any kinds of data you need
-during processing. Using this initializer in python is fairly straightforward.
+during processing. Using this initializer in Python is fairly straightforward.
 
 ```python
 from datafusion import udf
@@ -450,7 +450,7 @@ can give this udf any name you choose.
 
 ### Rust UDF with direct iteration
 
-The final version of our scalar UDF is one where we implement it in rust and iterate through all of
+The final version of our scalar UDF is one where we implement it in Rust and iterate through all of
 the arrays ourselves. If you are iterating through more than 3 arrays at a time I recommend looking
 at [izip](https://docs.rs/itertools/latest/itertools/macro.izip.html) in the
 [itertools crate](https://crates.io/crates/itertools). For ease of understanding and since we only
@@ -582,20 +582,20 @@ times. For this simple example these are our results.
 +-----------------------------+--------------+---------+
 ```
 
-As expected, the conversion to python objects is by far the worst performance. As soon as we drop
-into using any functions that keep the data entirely on the rust side we see a near 10x speed
+As expected, the conversion to Python objects is by far the worst performance. As soon as we drop
+into using any functions that keep the data entirely on the Rust side we see a near 10x speed
 improvement. Then as we increase our complexity from using pyarrow compute functions to
-implementing the UDF in rust we see incremental improvements. Our fastest approach - iterating
+implementing the UDF in Rust we see incremental improvements. Our fastest approach - iterating
 through the arrays ourselves does operate nearly 10% faster than the pyarrow compute approach.
 
 ## Final Thoughts and Recommendations
 
 For anyone who is curious about [DataFusion](https://datafusion.apache.org/) I highly recommend
-giving it a try. This post was designed to make it easier for new users to the python implementation
+giving it a try. This post was designed to make it easier for new users to the Python implementation
 to work with User Defined Functions by giving a few examples of how one might implement these.
 
 When it comes to designing UDFs, I strongly recommend seeing if you can write your UDF using
-[pyarrow functions](https://arrow.apache.org/docs/python/api/compute.html) rather than pure python
+[pyarrow functions](https://arrow.apache.org/docs/python/api/compute.html) rather than pure Python
 objects. These will give you enormous speed benefits. If you must do something that isn't well
 represented by the pyarrow compute functions, then I would consider using a Rust based UDF in the
 manner shown above.
