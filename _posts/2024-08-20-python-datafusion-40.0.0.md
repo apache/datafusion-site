@@ -57,9 +57,8 @@ The most significant difference is that we have added wrapper functions and clas
 user facing interface. These wrappers, written in Python, contain both documentation and type
 annotations.
 
-This documenation is now available on the [DataFusion in Python](https://datafusion.apache.org/python/api.html)
-website. There you can browse the available functions and classes to see the breadth of available
-functionality.
+This documenation is now available on the [DataFusion in Python API] website. There you can browse
+the available functions and classes to see the breadth of available functionality.
 
 Modern IDEs use language servers such as
 [Pylance](https://marketplace.visualstudio.com/items?itemName=ms-python.vscode-pylance) or
@@ -212,7 +211,7 @@ page.
 * Try out the project and provide feedback, file issues, and contribute code.
 
 [mailing list]: https://lists.apache.org/list.html?dev@datafusion.apache.org
-
+[DataFusion in Python API]: https://datafusion.apache.org/python/autoapi/datafusion/index.html
 [@andygrove]: https://github.com/andygrove
 [@max-muoto]: https://github.com/max-muoto
 [@slyons]: https://github.com/slyons
