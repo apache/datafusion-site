@@ -1,4 +1,181 @@
-<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" ><generator uri="https://jekyllrb.com/" version="4.3.3">Jekyll</generator><link href="https://datafusion.apache.org/blog/feed.xml" rel="self" type="application/atom+xml" /><link href="https://datafusion.apache.org/blog/" rel="alternate" type="text/html" /><updated>2024-07-24T10:33:30+00:00</updated><id>https://datafusion.apache.org/blog/feed.xml</id><title type="html">Apache DataFusion Project News &amp;amp; Blog</title><subtitle>Apache DataFusion is a very fast, extensible query engine for building high-quality  data-centric systems in Rust, using the Apache Arrow in-memory format.</subtitle><entry><title type="html">Apache DataFusion 40.0.0 Released</title><link href="https://datafusion.apache.org/blog/2024/07/24/datafusion-40.0.0/" rel="alternate" type="text/html" title="Apache DataFusion 40.0.0 Released" /><published>2024-07-24T00:00:00+00:00</published><updated>2024-07-24T00:00:00+00:00</updated><id>https://datafusion.apache.org/blog/2024/07/24/datafusion-40.0.0</id><content type="html" xml:base="https://datafusion.apache.org/blog/2024/07/24/datafusion-40.0.0/"><![CDATA[<!--
+<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" ><generator uri="https://jekyllrb.com/" version="4.3.3">Jekyll</generator><link href="https://datafusion.apache.org/blog/feed.xml" rel="self" type="application/atom+xml" /><link href="https://datafusion.apache.org/blog/" rel="alternate" type="text/html" /><updated>2024-08-20T13:43:42+00:00</updated><id>https://datafusion.apache.org/blog/feed.xml</id><title type="html">Apache DataFusion Project News &amp;amp; Blog</title><subtitle>Apache DataFusion is a very fast, extensible query engine for building high-quality  data-centric systems in Rust, using the Apache Arrow in-memory format.</subtitle><entry><title type="html">Apache DataFusion Python 40.1.0 Released, Significant usability updates</title><link href="https://datafusion.apache.org/blog/2024/08/20/python-datafusion-40.0.0/" rel="alternate" type="text/html" title="Apache DataFusion Python 40.1.0 Released, Significant usability updates" /><published>2024-08-20T00:00:00+00:00</published><updated>2024-08-20T00:00:00+00:00</updated><id>https://datafusion.apache.org/blog/2024/08/20/python-datafusion-40.0.0</id><content type="html" xml:base="https://datafusion.apache.org/blog/2024/08/20/python-datafusion-40.0.0/"><![CDATA[<!--
+
+-->
+
+<h2 id="introduction">Introduction</h2>
+
+<p>We are happy to announce that <a href="https://pypi.org/project/datafusion/40.1.0/">DataFusion in Python 40.1.0</a> has been released. In addition to
+bringing in all of the new features of the core <a href="https://datafusion.apache.org/blog/2024/07/24/datafusion-40.0.0/">DataFusion 40.0.0</a> package, this release
+contains <em>significant</em> updates to the user interface and documentation. We listened to the python
+user community to create a more <em>pythonic</em> experience. If you have not used the python interface to
+DataFusion before, this is an excellent time to give it a try!</p>
+
+<h2 id="background">Background</h2>
+
+<p>Until now, the python bindings for DataFusion have primarily been a thin layer to expose the
+underlying Rust functionality. This has been worked well for early adopters to use DataFusion
+within their Python projects, but some users have found it difficult to work with. As compared to
+other DataFrame libraries, these issues were raised:</p>
+
+<ol>
+  <li>Most of the functions had little or no documentation. Users often had to refer to the Rust
+documentation or code to learn how to use DataFusion. This alienated some python users.</li>
+  <li>Users could not take advantage of modern IDE features such as type hinting. These are valuable
+tools for rapid testing and development.</li>
+  <li>Some of the interfaces felt “clunky” to users since some Python concepts do not always map well
+to their Rust counterparts.</li>
+</ol>
+
+<p>This release aims to bring a better user experience to the DataFusion Python community.</p>
+
+<h2 id="whats-changed">What’s Changed</h2>
+
+<p>The most significant difference is that we have added wrapper functions and classes for most of the
+user facing interface. These wrappers, written in Python, contain both documentation and type
+annotations.</p>
+
+<p>This documenation is now available on the <a href="https://datafusion.apache.org/python/api.html">DataFusion in Python</a>
+website. There you can browse the available functions and classes to see the breadth of available
+functionality.</p>
+
+<p>Modern IDEs use language servers such as
+<a href="https://marketplace.visualstudio.com/items?itemName=ms-python.vscode-pylance">Pylance</a> or
+<a href="https://jedi.readthedocs.io/en/latest/">Jedi</a> to perform analysis of python code, provide useful
+hints, and identify usage errors. These are major tools in the python user community. With this
+release, users can fully use these tools in their workflow.</p>
+
+<figure style="text-align: center;">
+  <img src="/blog/img/python-datafusion-40.0.0/vscode_hover_tooltip.png" width="100%" class="img-responsive" alt="Fig 1: Enhanced tooltips in an IDE." />
+  <figcaption>
+   <b>Figure 1</b>: With the enhanced python wrappers, users can see helpful tool tips with
+   type annotations directly in modern IDEs.
+</figcaption>
+</figure>
+
+<p>By having the type annotations, these IDEs can also identify quickly when a user has incorrectly
+used a function’s arguments as shown in Figure 2.</p>
+
+<figure style="text-align: center;">
+  <img src="/blog/img/python-datafusion-40.0.0/pylance_error_checking.png" width="100%" class="img-responsive" alt="Fig 2: Error checking in static analysis" />
+  <figcaption>
+   <b>Figure 2</b>: Modern Python language servers can perform static analysis and quickly find
+   errors in the arguments to functions.
+</figcaption>
+</figure>
+
+<p>In addition to these wrapper libraries, we have enhancements to some of the functions to feel more
+easy to use.</p>
+
+<h3 id="improved-dataframe-filter-arguments">Improved DataFrame filter arguments</h3>
+
+<p>You can now apply multiple <code class="language-plaintext highlighter-rouge">filter</code> statements in a single step. When using <code class="language-plaintext highlighter-rouge">DataFrame.filter</code> you
+can pass in multiple arguments, separated by a comma. These will act as a logical <code class="language-plaintext highlighter-rouge">AND</code> of all of
+the filter arguments. The following two statements are equivalent:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">df</span><span class="p">.</span><span class="nf">filter</span><span class="p">(</span><span class="nf">col</span><span class="p">(</span><span class="sh">"</span><span class="s">size</span><span class="sh">"</span><span class="p">)</span> <span class="o">&lt;</span> <span class="nf">col</span><span class="p">(</span><span class="sh">"</span><span class="s">max_size</span><span class="sh">"</span><span class="p">)).</span><span class="nf">filter</span><span class="p">(</span><span class="nf">col</span><span class="p">(</span><span class="sh">"</span><span class="s">color</span><span class="sh">"</span><span class="p">)</span> <span class="o">==</span> <span class="nf">lit</span><span class="p">(</span><span class="sh">"</span><span class="s">green</span><span class="sh">"</span><span class="p">))</span>
+<span class="n">df</span><span class="p">.</span><span class="nf">filter</span><span class="p">(</span><span class="nf">col</span><span class="p">(</span><span class="sh">"</span><span class="s">size</span><span class="sh">"</span><span class="p">)</span> <span class="o">&lt;</span> <span class="nf">col</span><span class="p">(</span><span class="sh">"</span><span class="s">max_size</span><span class="sh">"</span><span class="p">),</span> <span class="nf">col</span><span class="p">(</span><span class="sh">"</span><span class="s">color</span><span class="sh">"</span><span class="p">)</span> <span class="o">==</span> <span class="nf">lit</span><span class="p">(</span><span class="sh">"</span><span class="s">green</span><span class="sh">"</span><span class="p">))</span>
+</code></pre></div></div>
+
+<h3 id="comparison-against-literal-values">Comparison against literal values</h3>
+
+<p>It is very common to write DataFrame operations that compare an expression to some fixed value.
+For example, filtering a DataFrame might have an operation such as <code class="language-plaintext highlighter-rouge">df.filter(col("size") &lt; lit(16))</code>.
+To make these common operations more ergonomic, you can now simply use <code class="language-plaintext highlighter-rouge">df.filter(col("size") &lt; 16)</code>.</p>
+
+<p>For the right hand side of the comparison operator, you can now use any Python value that can be
+coerced into a <code class="language-plaintext highlighter-rouge">Literal</code>. This gives an easy to ready expression. For example, consider these few
+lines from one of the
+<a href="https://github.com/apache/datafusion-python/tree/main/examples/tpch">TPC-H examples</a> provided in
+the DataFusion Python repository.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">df</span> <span class="o">=</span> <span class="p">(</span>
+    <span class="n">df_lineitem</span><span class="p">.</span><span class="nf">filter</span><span class="p">(</span><span class="nf">col</span><span class="p">(</span><span class="sh">"</span><span class="s">l_shipdate</span><span class="sh">"</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="nf">lit</span><span class="p">(</span><span class="n">date</span><span class="p">))</span>
+    <span class="p">.</span><span class="nf">filter</span><span class="p">(</span><span class="nf">col</span><span class="p">(</span><span class="sh">"</span><span class="s">l_discount</span><span class="sh">"</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="nf">lit</span><span class="p">(</span><span class="n">DISCOUNT</span><span class="p">)</span> <span class="o">-</span> <span class="nf">lit</span><span class="p">(</span><span class="n">DELTA</span><span class="p">))</span>
+    <span class="p">.</span><span class="nf">filter</span><span class="p">(</span><span class="nf">col</span><span class="p">(</span><span class="sh">"</span><span class="s">l_discount</span><span class="sh">"</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="nf">lit</span><span class="p">(</span><span class="n">DISCOUNT</span><span class="p">)</span> <span class="o">+</span> <span class="nf">lit</span><span class="p">(</span><span class="n">DELTA</span><span class="p">))</span>
+    <span class="p">.</span><span class="nf">filter</span><span class="p">(</span><span class="nf">col</span><span class="p">(</span><span class="sh">"</span><span class="s">l_quantity</span><span class="sh">"</span><span class="p">)</span> <span class="o">&lt;</span> <span class="nf">lit</span><span class="p">(</span><span class="n">QUANTITY</span><span class="p">))</span>
+<span class="p">)</span>
+</code></pre></div></div>
+
+<p>The above code mirrors closely how these filters would need to be applied in rust. With this new
+release, the user can simplify these lines. Also shown in the example below is that <code class="language-plaintext highlighter-rouge">filter()</code>
+now accepts a variable number of arguments and filters on all such arguments (boolean AND).</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">df</span> <span class="o">=</span> <span class="n">df_lineitem</span><span class="p">.</span><span class="nf">filter</span><span class="p">(</span>
+    <span class="nf">col</span><span class="p">(</span><span class="sh">"</span><span class="s">l_shipdate</span><span class="sh">"</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="n">date</span><span class="p">,</span>
+    <span class="nf">col</span><span class="p">(</span><span class="sh">"</span><span class="s">l_discount</span><span class="sh">"</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="n">DISCOUNT</span> <span class="o">-</span> <span class="n">DELTA</span><span class="p">,</span>
+    <span class="nf">col</span><span class="p">(</span><span class="sh">"</span><span class="s">l_discount</span><span class="sh">"</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="n">DISCOUNT</span> <span class="o">+</span> <span class="n">DELTA</span><span class="p">,</span>
+    <span class="nf">col</span><span class="p">(</span><span class="sh">"</span><span class="s">l_quantity</span><span class="sh">"</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">QUANTITY</span><span class="p">,</span>
+<span class="p">)</span>
+</code></pre></div></div>
+
+<h3 id="select-columns-by-name">Select columns by name</h3>
+
+<p>It is very common for users to perform <code class="language-plaintext highlighter-rouge">DataFrame</code> selection where they simply want a column. For
+this we have had the function <code class="language-plaintext highlighter-rouge">select_columns("a", "b")</code> or the user could perform
+<code class="language-plaintext highlighter-rouge">select(col("a"), col("b"))</code>. In the new release, we accept either full expressions in <code class="language-plaintext highlighter-rouge">select()</code>
+or strings of the column names. You can mix these as well.</p>
+
+<p>Where before you may have to do an operation like</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">df_subset</span> <span class="o">=</span> <span class="n">df</span><span class="p">.</span><span class="nf">select</span><span class="p">(</span><span class="nf">col</span><span class="p">(</span><span class="sh">"</span><span class="s">a</span><span class="sh">"</span><span class="p">),</span> <span class="nf">col</span><span class="p">(</span><span class="sh">"</span><span class="s">b</span><span class="sh">"</span><span class="p">),</span> <span class="n">f</span><span class="p">.</span><span class="nf">abs</span><span class="p">(</span><span class="nf">col</span><span class="p">(</span><span class="sh">"</span><span class="s">c</span><span class="sh">"</span><span class="p">)))</span>
+</code></pre></div></div>
+
+<p>You can now simplify this to</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">df_subset</span> <span class="o">=</span> <span class="n">df</span><span class="p">.</span><span class="nf">select</span><span class="p">(</span><span class="sh">"</span><span class="s">a</span><span class="sh">"</span><span class="p">,</span> <span class="sh">"</span><span class="s">b</span><span class="sh">"</span><span class="p">,</span> <span class="n">f</span><span class="p">.</span><span class="nf">abs</span><span class="p">(</span><span class="nf">col</span><span class="p">(</span><span class="sh">"</span><span class="s">c</span><span class="sh">"</span><span class="p">)))</span>
+</code></pre></div></div>
+
+<h3 id="creating-named-structs">Creating named structs</h3>
+
+<p>Creating a <code class="language-plaintext highlighter-rouge">struct</code> with named fields was previously difficult to use and allowed for potential
+user errors when specifying the name of each field. Now we have a cleaner interface where the
+user passes a list of tuples containing the name of the field and the expression to create.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">df</span><span class="p">.</span><span class="nf">select</span><span class="p">(</span><span class="n">f</span><span class="p">.</span><span class="nf">named_struct</span><span class="p">([</span>
+  <span class="p">(</span><span class="sh">"</span><span class="s">a</span><span class="sh">"</span><span class="p">,</span> <span class="nf">col</span><span class="p">(</span><span class="sh">"</span><span class="s">a</span><span class="sh">"</span><span class="p">)),</span>
+  <span class="p">(</span><span class="sh">"</span><span class="s">b</span><span class="sh">"</span><span class="p">,</span> <span class="nf">col</span><span class="p">(</span><span class="sh">"</span><span class="s">b</span><span class="sh">"</span><span class="p">))</span>
+<span class="p">]))</span>
+</code></pre></div></div>
+
+<h2 id="next-steps">Next Steps</h2>
+
+<p>While most of the user facing classes and functions have been exposed, there are a few that require
+exposure. Namely the classes in <code class="language-plaintext highlighter-rouge">datafusion.object_store</code> and the logical plans used by
+<code class="language-plaintext highlighter-rouge">datafusion.substrait</code>. The team is working on
+<a href="https://github.com/apache/datafusion-python/issues/767">these issues</a>.</p>
+
+<p>Additionally, in the next release of DataFusion there have been improvements made to the user-defined
+aggregate and window functions to make them easier to use. We plan on
+<a href="https://github.com/apache/datafusion-python/issues/780">bringing these enhancements</a> to this project.</p>
+
+<h2 id="thank-you">Thank You</h2>
+
+<p>We would like to thank the following members for their very helpful discussions regarding these
+updates: <a href="https://github.com/andygrove">@andygrove</a>, <a href="https://github.com/max-muoto">@max-muoto</a>, <a href="https://github.com/slyons">@slyons</a>, <a href="https://github.com/Throne3d">@Throne3d</a>, <a href="https://github.com/Michael-J-Ward">@Michael-J-Ward</a>, <a href="https://github.com/datapythonista">@datapythonista</a>,
+<a href="https://github.com/austin362667">@austin362667</a>, <a href="https://github.com/kylebarron">@kylebarron</a>, <a href="https://github.com/simicd">@simicd</a>. The <a href="https://github.com/apache/datafusion-python/pull/750">primary PR (#750)</a> that includes these updates
+had an extensive conversation, leading to a significantly improved end product. Again, thank you
+to all who provided input!</p>
+
+<p>We would like to give an special thank you to <a href="https://github.com/3ok">@3ok</a> who created the initial version of the wrapper
+definitions. The work they did was time consuming and required exceptional attention to detail. It
+provided enormous value to starting this project. Thank you!</p>
+
+<h2 id="get-involved">Get Involved</h2>
+
+<p>The DataFusion Python team is an active and engaging community and we would love
+to have you join us and help the project.</p>
+
+<p>Here are some ways to get involved:</p>
+
+<ul>
+  <li>
+    <p>Learn more by visiting the <a href="https://datafusion.apache.org/python/index.html">DataFusion Python project</a>
+page.</p>
+  </li>
+  <li>
+    <p>Try out the project and provide feedback, file issues, and contribute code.</p>
+  </li>
+</ul>]]></content><author><name>timsaucer</name></author><category term="release" /><summary type="html"><![CDATA[&lt;!–]]></summary></entry><entry><title type="html">Apache DataFusion 40.0.0 Released</title><link href="https://datafusion.apache.org/blog/2024/07/24/datafusion-40.0.0/" rel="alternate" type="text/html" title="Apache DataFusion 40.0.0 Released" /><published>2024-07-24T00:00:00+00:00</published><updated>2024-07-24T00:00:00+00:00</updated><id>https://datafusion.apache.org/blog/2024/07/24/datafusion-40.0.0</id><content type="html" xml:base="https://datafusion.apache.org/blog/2024/07/24/datafusion-40.0.0/"><![CDATA[<!--
 
 -->
 
@@ -1764,226 +1941,4 @@ tuning Ballista.</p>
 
 <p>Ballista has a friendly community and we welcome contributions. A good place to start is to following the instructions
 in the <a href="https://arrow.apache.org/ballista/">user guide</a> and try using Ballista with your own SQL queries and ETL pipelines, and file issues
-for any bugs or feature suggestions.</p>]]></content><author><name>pmc</name></author><category term="release" /><summary type="html"><![CDATA[&lt;!–]]></summary></entry><entry><title type="html">Apache Arrow DataFusion 13.0.0 Project Update</title><link href="https://datafusion.apache.org/blog/2022/10/25/datafusion-13.0.0/" rel="alternate" type="text/html" title="Apache Arrow DataFusion 13.0.0 Project Update" /><published>2022-10-25T00:00:00+00:00</published><updated>2022-10-25T00:00:00+00:00</updated><id>https://datafusion.apache.org/blog/2022/10/25/datafusion-13.0.0</id><content type="html" xml:base="https://datafusion.apache.org/blog/2022/10/25/datafusion-13.0.0/"><![CDATA[<!--
-
--->
-
-<h1 id="introduction">Introduction</h1>
-
-<p><a href="https://arrow.apache.org/datafusion/">Apache Arrow DataFusion</a> <a href="https://crates.io/crates/datafusion"><code class="language-plaintext highlighter-rouge">13.0.0</code></a> is released, and this blog contains an update on the project for the 5 months since our <a href="https://arrow.apache.org/blog/2022/05/16/datafusion-8.0.0/">last update in May 2022</a>.</p>
-
-<p>DataFusion is an extensible and embeddable query engine, written in Rust used to create modern, fast and efficient data pipelines, ETL processes, and database systems. You may want to check out DataFusion to extend your Rust project to:</p>
-
-<ul>
-  <li>Support <a href="https://arrow.apache.org/datafusion/user-guide/sql/sql_status.html">SQL support</a></li>
-  <li>Support <a href="https://docs.rs/datafusion/13.0.0/datafusion/dataframe/struct.DataFrame.html">DataFrame API</a></li>
-  <li>Support a Domain Specific Query Language</li>
-  <li>Easily and quickly read and process Parquet, JSON, Avro or CSV data.</li>
-  <li>Read from remote object stores such as AWS S3, Azure Blob Storage, GCP.</li>
-</ul>
-
-<p>Even though DataFusion is 4 years “young,” it has seen significant community growth in the last few months and the momentum continues to accelerate.</p>
-
-<h1 id="background">Background</h1>
-
-<p>DataFusion is used as the engine in <a href="https://github.com/apache/arrow-datafusion#known-uses">many open source and commercial projects</a> and was one of the early open source projects to provide this capability. 2022 has validated our belief in the need for such a <a href="https://docs.google.com/presentation/d/1iNX_35sWUakee2q3zMFPyHE4IV2nC3lkCK_H6Y2qK84/edit#slide=id.p">“LLVM for database and AI systems”</a><a href="https://www.slideshare.net/AndrewLamb32/20220623-apache-arrow-and-datafusion-changing-the-game-for-implementing-database-systemspdf">(alternate link)</a> with announcements such as the <a href="https://engineering.fb.com/2022/08/31/open-source/velox/">release of FaceBook’s Velox</a> engine, the major investments in <a href="https://arrow.apache.org/docs/cpp/streaming_execution.html">Acero</a> as well as the continued popularity of <a href="https://calcite.apache.org/">Apache Calcite</a> and other similar technologies.</p>
-
-<p>While Velox and Acero focus on execution engines, DataFusion provides the entire suite of components needed to build most analytic systems, including a SQL frontend, a dataframe API, and  extension points for just about everything. Some <a href="https://github.com/apache/arrow-datafusion#known-uses">DataFusion users</a> use a subset of the features such as the frontend (e.g. <a href="https://dask-sql.readthedocs.io/en/latest/">dask-sql</a>) or the execution engine, (e.g.  <a href="https://github.com/blaze-init/blaze">Blaze</a>), and some use many different components to build both SQL based and customized DSL based systems such as <a href="https://github.com/influxdata/influxdb_iox/pulls">InfluxDB IOx</a> and <a href="https://github.com/vegafusion/vegafusion">VegaFusion</a>.</p>
-
-<p>One of DataFusion’s advantages is its implementation in <a href="https://www.rust-lang.org/">Rust</a> and thus its easy integration with the broader Rust ecosystem. Rust continues to be a major source of benefit, from the <a href="https://www.influxdata.com/blog/using-rustlangs-async-tokio-runtime-for-cpu-bound-tasks/">ease of parallelization with the high quality and standardized <code class="language-plaintext highlighter-rouge">async</code> ecosystem</a> , as well as its modern dependency management system and wonderful performance. <!-- I wonder if we should link to clickbench?? -->
-<!--While we haven’t invested in the benchmarking ratings game datafusion continues to be quite speedy (todo quantity this, with some evidence) – maybe clickbench?--></p>
-
-<!--
-Maybe we can do this un a future post
-# DataFusion in Action
-
-While DataFusion really shines as an embeddable query engine, if you want to try it out and get a feel for its power, you can use the basic[`datafusion-cli`](https://docs.rs/datafusion-cli/13.0.0/datafusion_cli/) tool to get a sense for what is possible to add in your application
-
-(TODO example here of using datafusion-cli to query from local parquet files on disk)
-
-TODO: also mention you can use the same thing to query data from S3
--->
-
-<h1 id="summary">Summary</h1>
-
-<p>We have increased the frequency of DataFusion releases to monthly instead of quarterly. This
-makes it easier for the increasing number of projects that now depend on DataFusion.</p>
-
-<p>We have also completed the “graduation” of <a href="https://github.com/apache/arrow-ballista">Ballista to its own top-level arrow-ballista repository</a>
-which decouples the two projects and allows each project to move even faster.</p>
-
-<p>Along with numerous other bug fixes and smaller improvements, here are some of the major advances:</p>
-
-<h1 id="improved-support-for-cloud-object-stores">Improved Support for Cloud Object Stores</h1>
-
-<p>DataFusion now supports many major cloud object stores (Amazon S3, Azure Blob Storage, and Google Cloud Storage) “out of the box” via the <a href="https://crates.io/crates/object_store">object_store</a> crate. Using this integration, DataFusion optimizes reading parquet files by reading only the parts of the files that are needed.</p>
-
-<h2 id="advanced-sql">Advanced SQL</h2>
-
-<p>DataFusion now supports correlated subqueries, by rewriting them as joins. See the <a href="https://arrow.apache.org/datafusion/user-guide/sql/subqueries.html">Subquery</a> page in the User Guide for more information.</p>
-
-<p>In addition to numerous other small improvements, the following SQL features are now supported:</p>
-
-<ul>
-  <li><code class="language-plaintext highlighter-rouge">ROWS</code>, <code class="language-plaintext highlighter-rouge">RANGE</code>, <code class="language-plaintext highlighter-rouge">PRECEDING</code> and <code class="language-plaintext highlighter-rouge">FOLLOWING</code> in <code class="language-plaintext highlighter-rouge">OVER</code> clauses <a href="https://github.com/apache/arrow-datafusion/issues/3570">#3570</a></li>
-  <li><code class="language-plaintext highlighter-rouge">ROLLUP</code> and <code class="language-plaintext highlighter-rouge">CUBE</code> grouping set expressions  <a href="https://github.com/apache/arrow-datafusion/issues/2446">#2446</a></li>
-  <li><code class="language-plaintext highlighter-rouge">SUM DISTINCT</code> aggregate support  <a href="https://github.com/apache/arrow-datafusion/issues/2405">#2405</a></li>
-  <li><code class="language-plaintext highlighter-rouge">IN</code> and <code class="language-plaintext highlighter-rouge">NOT IN</code> Subqueries by rewriting them to <code class="language-plaintext highlighter-rouge">SEMI</code> / <code class="language-plaintext highlighter-rouge">ANTI</code> <a href="https://github.com/apache/arrow-datafusion/issues/2885">#2421</a></li>
-  <li>Non equality predicates in  <code class="language-plaintext highlighter-rouge">ON</code> clause of  <code class="language-plaintext highlighter-rouge">LEFT</code>, <code class="language-plaintext highlighter-rouge">RIGHT, </code>and <code class="language-plaintext highlighter-rouge">FULL</code> joins <a href="https://github.com/apache/arrow-datafusion/issues/2591">#2591</a></li>
-  <li>Exact <code class="language-plaintext highlighter-rouge">MEDIAN</code> <a href="https://github.com/apache/arrow-datafusion/issues/3009">#3009</a></li>
-  <li><code class="language-plaintext highlighter-rouge">GROUPING SETS</code>/<code class="language-plaintext highlighter-rouge">CUBE</code>/<code class="language-plaintext highlighter-rouge">ROLLUP</code> <a href="https://github.com/apache/arrow-datafusion/issues/2716">#2716</a></li>
-</ul>
-
-<h1 id="more-ddl-support">More DDL Support</h1>
-
-<p>Just as it is important to query, it is also important to give users the ability to define their data sources. We have added:</p>
-
-<ul>
-  <li><code class="language-plaintext highlighter-rouge">CREATE VIEW</code> <a href="https://github.com/apache/arrow-datafusion/issues/2279">#2279</a></li>
-  <li><code class="language-plaintext highlighter-rouge">DESCRIBE &lt;table&gt;</code> <a href="https://github.com/apache/arrow-datafusion/issues/2642">#2642</a></li>
-  <li>Custom / Dynamic table provider factories <a href="https://github.com/apache/arrow-datafusion/issues/3311">#3311</a></li>
-  <li><code class="language-plaintext highlighter-rouge">SHOW CREATE TABLE</code> for support for views <a href="https://github.com/apache/arrow-datafusion/issues/2830">#2830</a></li>
-</ul>
-
-<h1 id="faster-execution">Faster Execution</h1>
-<p>Performance is always an important goal for DataFusion, and there are a number of significant new optimizations such as</p>
-
-<ul>
-  <li>Optimizations of TopK (queries with a <code class="language-plaintext highlighter-rouge">LIMIT</code> or <code class="language-plaintext highlighter-rouge">OFFSET</code> clause):  <a href="https://github.com/apache/arrow-datafusion/issues/3527">#3527</a>, <a href="https://github.com/apache/arrow-datafusion/issues/2521">#2521</a></li>
-  <li>Reduce <code class="language-plaintext highlighter-rouge">left</code>/<code class="language-plaintext highlighter-rouge">right</code>/<code class="language-plaintext highlighter-rouge">full</code> joins to <code class="language-plaintext highlighter-rouge">inner</code> join <a href="https://github.com/apache/arrow-datafusion/issues/2750">#2750</a></li>
-  <li>Convert  cross joins to inner joins when possible <a href="https://github.com/apache/arrow-datafusion/issues/3482">#3482</a></li>
-  <li>Sort preserving <code class="language-plaintext highlighter-rouge">SortMergeJoin</code> <a href="https://github.com/apache/arrow-datafusion/issues/2699">#2699</a></li>
-  <li>Improvements in group by and sort performance <a href="https://github.com/apache/arrow-datafusion/issues/2375">#2375</a></li>
-  <li>Adaptive <code class="language-plaintext highlighter-rouge">regex_replace</code> implementation <a href="https://github.com/apache/arrow-datafusion/issues/3518">#3518</a></li>
-</ul>
-
-<h1 id="optimizer-enhancements">Optimizer Enhancements</h1>
-<p>Internally the optimizer has been significantly enhanced as well.</p>
-
-<ul>
-  <li>Casting / coercion now happens during logical planning <a href="https://github.com/apache/arrow-datafusion/issues/3396">#3185</a> <a href="https://github.com/apache/arrow-datafusion/issues/3636">#3636</a></li>
-  <li>More sophisticated expression analysis and simplification is available</li>
-</ul>
-
-<h1 id="parquet">Parquet</h1>
-<ul>
-  <li>The parquet reader can now read directly from parquet files on remote object storage <a href="https://github.com/apache/arrow-datafusion/issues/2677">#2489</a> <a href="https://github.com/apache/arrow-datafusion/issues/3051">#3051</a></li>
-  <li>Experimental support for “predicate pushdown” with late materialization after filtering during the scan (another blog post on this topic is coming soon).</li>
-  <li>Support reading directly from AWS S3 and other object stores via <code class="language-plaintext highlighter-rouge">datafusion-cli </code> <a href="https://github.com/apache/arrow-datafusion/issues/3631">#3631</a></li>
-</ul>
-
-<h1 id="datatype-support">DataType Support</h1>
-<ul>
-  <li>Support for <code class="language-plaintext highlighter-rouge">TimestampTz</code> <a href="https://github.com/apache/arrow-datafusion/issues/3660">#3660</a></li>
-  <li>Expanded support for the <code class="language-plaintext highlighter-rouge">Decimal</code> type, including  <code class="language-plaintext highlighter-rouge">IN</code> list and better built in coercion.</li>
-  <li>Expanded support for date/time manipulation such as  <code class="language-plaintext highlighter-rouge">date_bin</code> built-in function , timestamp <code class="language-plaintext highlighter-rouge">+/-</code> interval, <code class="language-plaintext highlighter-rouge">TIME</code> literal values <a href="https://github.com/apache/arrow-datafusion/issues/3010">#3010</a>, <a href="https://github.com/apache/arrow-datafusion/issues/3110">#3110</a>, <a href="https://github.com/apache/arrow-datafusion/issues/3034">#3034</a></li>
-  <li>Binary operations (<code class="language-plaintext highlighter-rouge">AND</code>, <code class="language-plaintext highlighter-rouge">XOR</code>, etc):  <a href="https://github.com/apache/arrow-datafusion/issues/1619">#3037</a> <a href="https://github.com/apache/arrow-datafusion/issues/3430">#3420</a></li>
-  <li><code class="language-plaintext highlighter-rouge">IS TRUE/FALSE</code> and <code class="language-plaintext highlighter-rouge">IS [NOT] UNKNOWN</code> <a href="https://github.com/apache/arrow-datafusion/issues/3235">#3235</a>, <a href="https://github.com/apache/arrow-datafusion/issues/3246">#3246</a></li>
-</ul>
-
-<h2 id="upcoming-work">Upcoming Work</h2>
-<p>With the community growing and code accelerating, there is so much great stuff on the horizon. Some features we expect to land in the next few months:</p>
-
-<ul>
-  <li><a href="https://github.com/apache/arrow-datafusion/issues/3462">Complete Parquet Pushdown</a></li>
-  <li><a href="https://github.com/apache/arrow-datafusion/issues/3148">Additional date/time support</a></li>
-  <li>Cost models, Nested Join Optimizations, analysis framework <a href="https://github.com/apache/arrow-datafusion/issues/128">#128</a>, <a href="https://github.com/apache/arrow-datafusion/issues/3843">#3843</a>, <a href="https://github.com/apache/arrow-datafusion/issues/3845">#3845</a></li>
-</ul>
-
-<h1 id="community-growth">Community Growth</h1>
-
-<p>The DataFusion 9.0.0 and 13.0.0 releases consists of 433 PRs from 64 distinct contributors. This does not count all the work that goes into our dependencies such as <a href="https://crates.io/crates/arrow">arrow</a>,  <a href="https://crates.io/crates/parquet">parquet</a>, and <a href="https://crates.io/crates/object_store">object_store</a>, that much of the same community helps nurture.</p>
-
-<!--
-$ git log --pretty=oneline 9.0.0..13.0.0 . | wc -l
-433
-
-$ git shortlog -sn 9.0.0..13.0.0 . | wc -l
-65
--->
-
-<h1 id="how-to-get-involved">How to Get Involved</h1>
-
-<p>Kudos to everyone in the community who contributed ideas, discussions, bug reports, documentation and code. It is exciting to be building something so cool together!</p>
-
-<p>If you are interested in contributing to DataFusion, we would love to
-have you join us on our journey to create the most advanced open
-source query engine. You can try out DataFusion on some of your own
-data and projects and let us know how it goes or contribute a PR with
-documentation, tests or code. A list of open issues suitable for
-beginners is
-<a href="https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22">here</a>.</p>
-
-<p>Check out our <a href="https://arrow.apache.org/datafusion/community/communication.html">Communication Doc</a> on more
-ways to engage with the community.</p>
-
-<h2 id="appendix-contributor-shoutout">Appendix: Contributor Shoutout</h2>
-
-<p>To give a sense of the number of people who contribute to this project regularly, we present for your consideration the following list derived from <code class="language-plaintext highlighter-rouge">git shortlog -sn 9.0.0..13.0.0 .</code> Thank you all again!</p>
-
-<!-- Note: combined kmitchener and Kirk Mitchener -->
-
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>    87	Andy Grove
-    71	Andrew Lamb
-    29	Kun Liu
-    29	Kirk Mitchener
-    17	Wei-Ting Kuo
-    14	Yang Jiang
-    12	Raphael Taylor-Davies
-    11	Batuhan Taskaya
-    10	Brent Gardner
-    10	Remzi Yang
-    10	comphead
-    10	xudong.w
-     8	AssHero
-     7	Ruihang Xia
-     6	Dan Harris
-     6	Daniël Heres
-     6	Ian Alexander Joiner
-     6	Mike Roberts
-     6	askoa
-     4	BaymaxHWY
-     4	gorkem
-     4	jakevin
-     3	George Andronchik
-     3	Sarah Yurick
-     3	Stuart Carnie
-     2	Dalton Modlin
-     2	Dmitry Patsura
-     2	JasonLi
-     2	Jon Mease
-     2	Marco Neumann
-     2	yahoNanJing
-     1	Adilet Sarsembayev
-     1	Ayush Dattagupta
-     1	Dezhi Wu
-     1	Dhamotharan Sritharan
-     1	Eduard Karacharov
-     1	Francis Du
-     1	Harbour Zheng
-     1	Ismaël Mejía
-     1	Jack Klamer
-     1	Jeremy Dyer
-     1	Jiayu Liu
-     1	Kamil Konior
-     1	Liang-Chi Hsieh
-     1	Martin Grigorov
-     1	Matthijs Brobbel
-     1	Mehmet Ozan Kabak
-     1	Metehan Yıldırım
-     1	Morgan Cassels
-     1	Nitish Tiwari
-     1	Renjie Liu
-     1	Rito Takeuchi
-     1	Robert Pack
-     1	Thomas Cameron
-     1	Vrishabh
-     1	Xin Hao
-     1	Yijie Shen
-     1	byteink
-     1	kamille
-     1	mateuszkj
-     1	nvartolomei
-     1	yourenawo
-     1	Özgür Akkurt
-</code></pre></div></div>]]></content><author><name>pmc</name></author><category term="release" /><summary type="html"><![CDATA[&lt;!–]]></summary></entry></feed>
+for any bugs or feature suggestions.</p>]]></content><author><name>pmc</name></author><category term="release" /><summary type="html"><![CDATA[&lt;!–]]></summary></entry></feed>
