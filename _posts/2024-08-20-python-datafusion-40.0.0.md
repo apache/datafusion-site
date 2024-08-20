@@ -1,7 +1,7 @@
 ---
 layout: post
-title: "Apache DataFusion Python 40.0.0 Released, Significant usability updates"
-date: "2024-08-13 00:00:00"
+title: "Apache DataFusion Python 40.1.0 Released, Significant usability updates"
+date: "2024-08-20 00:00:00"
 author: timsaucer
 categories: [release]
 ---
@@ -26,14 +26,14 @@ limitations under the License.
 
 ## Introduction
 
-We are happy to announce that [DataFusion in Python 40.0.0] has been released. In addition to
+We are happy to announce that [DataFusion in Python 40.1.0] has been released. In addition to
 bringing in all of the new features of the core [DataFusion 40.0.0] package, this release
 contains *significant* updates to the user interface and documentation. We listened to the python
 user community to create a more *pythonic* experience. If you have not used the python interface to
 DataFusion before, this is an excellent time to give it a try!
 
 [DataFusion 40.0.0]: https://datafusion.apache.org/blog/2024/07/24/datafusion-40.0.0/
-[DataFusion in Python 40.0.0]: https://pypi.org/project/datafusion/40.0.0/
+[DataFusion in Python 40.1.0]: https://pypi.org/project/datafusion/40.1.0/
 
 ## Background
 
@@ -57,7 +57,7 @@ The most significant difference is that we have added wrapper functions and clas
 user facing interface. These wrappers, written in Python, contain both documentation and type
 annotations.
 
-This documenation is now available on the [DataFusion in Python](https://datafusion.apache.org/python)
+This documenation is now available on the [DataFusion in Python](https://datafusion.apache.org/python/api.html)
 website. There you can browse the available functions and classes to see the breadth of available
 functionality.
 
@@ -190,7 +190,7 @@ aggregate and window functions to make them easier to use. We plan on
 ## Get Involved
 
 The DataFusion Python team is an active and engaging community and we would love
-to have you join us and help the project. 
+to have you join us and help the project.
 
 Here are some ways to get involved:
 
