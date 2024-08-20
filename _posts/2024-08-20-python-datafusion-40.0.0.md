@@ -187,6 +187,18 @@ Additionally, in the next release of DataFusion there have been improvements mad
 aggregate and window functions to make them easier to use. We plan on
 [bringing these enhancements](https://github.com/apache/datafusion-python/issues/780) to this project.
 
+## Thank You
+
+We would like to thank the following members for their very helpful discussions regarding these
+updates: [@andygrove], [@max-muoto], [@slyons], [@Throne3d], [@Michael-J-Ward], [@datapythonista],
+[@austin362667], [@kylebarron], [@simicd]. The [primary PR (#750)] that includes these updates
+had and extensive conversation, leading to an significantly improved end product. Again, thank you
+to all who provided input!
+
+We would like to give an special thank you to [@3ok] who created the initial version of the wrapper
+definitions. The work they did was time consuming and required exception attention to detail. It
+provided enormous value to starting this project. Thank you!
+
 ## Get Involved
 
 The DataFusion Python team is an active and engaging community and we would love
@@ -201,3 +213,14 @@ page.
 
 [mailing list]: https://lists.apache.org/list.html?dev@datafusion.apache.org
 
+[@andygrove]: https://github.com/andygrove
+[@max-muoto]: https://github.com/max-muoto
+[@slyons]: https://github.com/slyons
+[@Throne3d]: https://github.com/Throne3d
+[@Michael-J-Ward]: https://github.com/Michael-J-Ward
+[@datapythonista]: https://github.com/datapythonista
+[@austin362667]: https://github.com/austin362667
+[@kylebarron]: https://github.com/kylebarron
+[@simicd]: https://github.com/simicd
+[@3ok]: https://github.com/3ok
+[primary PR (#750)]: https://github.com/apache/datafusion-python/pull/750
