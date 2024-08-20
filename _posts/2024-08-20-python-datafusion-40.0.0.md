@@ -196,7 +196,7 @@ had and extensive conversation, leading to an significantly improved end product
 to all who provided input!
 
 We would like to give an special thank you to [@3ok] who created the initial version of the wrapper
-definitions. The work they did was time consuming and required exception attention to detail. It
+definitions. The work they did was time consuming and required exceptional attention to detail. It
 provided enormous value to starting this project. Thank you!
 
 ## Get Involved
