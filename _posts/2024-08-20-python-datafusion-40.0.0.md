@@ -192,7 +192,7 @@ aggregate and window functions to make them easier to use. We plan on
 We would like to thank the following members for their very helpful discussions regarding these
 updates: [@andygrove], [@max-muoto], [@slyons], [@Throne3d], [@Michael-J-Ward], [@datapythonista],
 [@austin362667], [@kylebarron], [@simicd]. The [primary PR (#750)] that includes these updates
-had and extensive conversation, leading to an significantly improved end product. Again, thank you
+had an extensive conversation, leading to a significantly improved end product. Again, thank you
 to all who provided input!
 
 We would like to give an special thank you to [@3ok] who created the initial version of the wrapper
