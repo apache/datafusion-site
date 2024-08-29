@@ -75,6 +75,8 @@ performance. The following chart shows the time it takes to run the 22 TPC-H que
 Parquet format using a single executor with eight cores. See the [Comet Benchmarking Guide]
 for details of the environment used for these benchmarks.
 
+[Comet Benchmarking Guide]: https://datafusion.apache.org/comet/contributor-guide/benchmarking.html
+
 ### Benchmark derived from TPC-H
 
 Comet 0.2.0 provides a 62% speedup compared to Spark. This is slightly better than the Comet 0.1.0 release.
