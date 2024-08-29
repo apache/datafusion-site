@@ -71,7 +71,7 @@ Docker images are now available from the [GitHub Container Registry].
 ## Current Performance
 
 We use benchmarks derived from the industry standard TPC-H and TPC-DS benchmarks for tracking progress with
-performance. The following chart shows the time it takes to run the 22 TPC-H queries against 100 GB of data in
+performance. The following charts shows the time it takes to run the TPC-H/TPC-DS queries against 100 GB of data in
 Parquet format using a single executor with eight cores. See the [Comet Benchmarking Guide]
 for details of the environment used for these benchmarks.
 
