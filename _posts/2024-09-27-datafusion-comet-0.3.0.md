@@ -73,8 +73,11 @@ The following expressions are now supported natively:
 
 ### Documentation Updates
 
-Improved documentation for deploying Comet with Kubernetes and Helm in the Comet Kubernetes Guide
-More detailed architectural overview of Comet scan and execution in the Comet Plugin Overview in the contributor guide
+- Improved documentation for deploying Comet with Kubernetes and Helm in the [Comet Kubernetes Guide]
+- More detailed architectural overview of Comet scan and execution in the [Comet Plugin Overview] in the contributor guide
+
+[Comet Kubernetes Guide]: https://datafusion.apache.org/comet/user-guide/kubernetes.html
+[Comet Plugin Overview]: https://datafusion.apache.org/comet/contributor-guide/plugin_overview.html
 
 ## Getting Involved
 
