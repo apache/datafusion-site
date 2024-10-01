@@ -1,4 +1,308 @@
-<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" ><generator uri="https://jekyllrb.com/" version="4.3.3">Jekyll</generator><link href="https://datafusion.apache.org/blog/feed.xml" rel="self" type="application/atom+xml" /><link href="https://datafusion.apache.org/blog/" rel="alternate" type="text/html" /><updated>2024-08-29T16:32:33+00:00</updated><id>https://datafusion.apache.org/blog/feed.xml</id><title type="html">Apache DataFusion Project News &amp;amp; Blog</title><subtitle>Apache DataFusion is a very fast, extensible query engine for building high-quality  data-centric systems in Rust, using the Apache Arrow in-memory format.</subtitle><entry><title type="html">Apache DataFusion Comet 0.2.0 Release</title><link href="https://datafusion.apache.org/blog/2024/08/28/datafusion-comet-0.2.0/" rel="alternate" type="text/html" title="Apache DataFusion Comet 0.2.0 Release" /><published>2024-08-28T00:00:00+00:00</published><updated>2024-08-28T00:00:00+00:00</updated><id>https://datafusion.apache.org/blog/2024/08/28/datafusion-comet-0.2.0</id><content type="html" xml:base="https://datafusion.apache.org/blog/2024/08/28/datafusion-comet-0.2.0/"><![CDATA[<!--
+<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" ><generator uri="https://jekyllrb.com/" version="4.3.3">Jekyll</generator><link href="https://datafusion.apache.org/blog/feed.xml" rel="self" type="application/atom+xml" /><link href="https://datafusion.apache.org/blog/" rel="alternate" type="text/html" /><updated>2024-10-01T19:55:17+00:00</updated><id>https://datafusion.apache.org/blog/feed.xml</id><title type="html">Apache DataFusion Project News &amp;amp; Blog</title><subtitle>Apache DataFusion is a very fast, extensible query engine for building high-quality  data-centric systems in Rust, using the Apache Arrow in-memory format.</subtitle><entry><title type="html">Using StringView / German Style Strings to Make Queries Faster: Part 1- Reading Parquet</title><link href="https://datafusion.apache.org/blog/2024/09/13/string-view-german-style-strings-part-1/" rel="alternate" type="text/html" title="Using StringView / German Style Strings to Make Queries Faster: Part 1- Reading Parquet" /><published>2024-09-13T00:00:00+00:00</published><updated>2024-09-13T00:00:00+00:00</updated><id>https://datafusion.apache.org/blog/2024/09/13/string-view-german-style-strings-part-1</id><content type="html" xml:base="https://datafusion.apache.org/blog/2024/09/13/string-view-german-style-strings-part-1/"><![CDATA[<!--
+
+-->
+
+<p><em>Editor’s Note: This is the first of a <a href="/blog/2024/09/13/string-view-german-style-strings-part-2/">two part</a> blog series that was first published on the <a href="https://www.influxdata.com/blog/faster-queries-with-stringview-part-one-influxdb/">InfluxData blog</a>. Thanks to InfluxData for sponsoring this work as <a href="https://haoxp.xyz/">Xiangpeng Hao</a>’s summer intern project</em></p>
+
+<p>This blog describes our experience implementing <a href="https://arrow.apache.org/docs/format/Columnar.html#variable-size-binary-view-layout">StringView</a> in the <a href="https://github.com/apache/arrow-rs">Rust implementation</a> of <a href="https://arrow.apache.org/">Apache Arrow</a>, and integrating it into <a href="https://datafusion.apache.org/">Apache DataFusion</a>, significantly accelerating string-intensive queries in the <a href="https://benchmark.clickhouse.com/">ClickBench</a> benchmark by 20%- 200% (Figure 1<sup id="fnref:1" role="doc-noteref"><a href="#fn:1" class="footnote" rel="footnote">1</a></sup>).</p>
+
+<p>Getting significant end-to-end performance improvements was non-trivial. Implementing StringView itself was only a fraction of the effort required. Among other things, we had to optimize UTF-8 validation, implement unintuitive compiler optimizations, tune block sizes, and time GC to realize the <a href="https://www.influxdata.com/blog/flight-datafusion-arrow-parquet-fdap-architecture-influxdb/">FDAP ecosystem</a>’s benefit. With other members of the open source community, we were able to overcome performance bottlenecks that could have killed the project. We would like to contribute by explaining the challenges and solutions in more detail so that more of the community can learn from our experience.</p>
+
+<p>StringView is based on a simple idea: avoid some string copies and accelerate comparisons with inlined prefixes. Like most great ideas, it is “obvious” only after <a href="https://db.in.tum.de/~freitag/papers/p29-neumann-cidr20.pdf">someone describes it clearly</a>. Although simple, straightforward implementation actually <em>slows down performance for almost every query</em>. We must, therefore, apply astute observations and diligent engineering to realize the actual benefits from StringView.</p>
+
+<p>Although this journey was successful, not all research ideas are as lucky. To accelerate the adoption of research into industry, it is valuable to integrate research prototypes with practical systems. Understanding the nuances of real-world systems makes it more likely that research designs<sup id="fnref:2" role="doc-noteref"><a href="#fn:2" class="footnote" rel="footnote">2</a></sup> will lead to practical system improvements.</p>
+
+<p>StringView support was released as part of <a href="https://crates.io/crates/arrow/52.2.0">arrow-rs v52.2.0</a> and <a href="https://crates.io/crates/datafusion/41.0.0">DataFusion v41.0.0</a>. You can try it by setting the <code class="language-plaintext highlighter-rouge">schema_force_view_types</code> <a href="https://datafusion.apache.org/user-guide/configs.html">DataFusion configuration option</a>, and we are<a href="https://github.com/apache/datafusion/issues/11682"> hard at work with the community to </a>make it the default. We invite everyone to try it out, take advantage of the effort invested so far, and contribute to making it better.</p>
+
+<p><img src="/blog/img/string-view-1/figure1-performance.png" width="100%" class="img-responsive" alt="End to end performance improvements for ClickBench queries" /></p>
+
+<p>Figure 1: StringView improves string-intensive ClickBench query performance by 20% - 200%</p>
+
+<h2 id="what-is-stringview">What is StringView?</h2>
+
+<p><img src="/blog/img/string-view-1/figure2-string-view.png" width="100%" class="img-responsive" alt="Diagram of using StringArray and StringViewArray to represent the same string content" /></p>
+
+<p>Figure 2: Use StringArray and StringViewArray to represent the same string content.</p>
+
+<p>The concept of inlined strings with prefixes (called “German Strings” <a href="https://x.com/andy_pavlo/status/1813258735965643203">by Andy Pavlo</a>, in homage to <a href="https://www.tum.de/">TUM</a>, where the <a href="https://db.in.tum.de/~freitag/papers/p29-neumann-cidr20.pdf">Umbra paper that describes</a> them originated) 
+has been used in many recent database systems (<a href="https://engineering.fb.com/2024/02/20/developer-tools/velox-apache-arrow-15-composable-data-management/">Velox</a>, <a href="https://pola.rs/posts/polars-string-type/">Polars</a>, <a href="https://duckdb.org/2021/12/03/duck-arrow.html">DuckDB</a>, <a href="https://cedardb.com/blog/german_strings/">CedarDB</a>, etc.) 
+and was introduced to Arrow as a new <a href="https://arrow.apache.org/docs/format/Columnar.html#variable-size-binary-view-layout">StringViewArray</a><sup id="fnref:3" role="doc-noteref"><a href="#fn:3" class="footnote" rel="footnote">3</a></sup> type. Arrow’s original <a href="https://arrow.apache.org/docs/format/Columnar.html#variable-size-binary-layout">StringArray</a> is very memory efficient but less effective for certain operations. 
+StringViewArray accelerates string-intensive operations via prefix inlining and a more flexible and compact string representation.</p>
+
+<p>A StringViewArray consists of three components:</p>
+
+<ol>
+  <li>The <code><em>view</em></code> array</li>
+  <li>The buffers</li>
+  <li>The buffer pointers (IDs) that map buffer offsets to their physical locations</li>
+</ol>
+
+<p>Each <code>view</code> is 16 bytes long, and its contents differ based on the string’s length:</p>
+
+<ul>
+  <li>string length &lt; 12 bytes: the first four bytes store the string length, and the remaining 12 bytes store the inlined string.</li>
+  <li>string length &gt; 12 bytes: the string is stored in a separate buffer. The length is again stored in the first 4 bytes, followed by the buffer id (4 bytes), the buffer offset (4 bytes), and the prefix (first 4 bytes) of the string.</li>
+</ul>
+
+<p>Figure 2 shows an example of the same logical content (left) using StringArray (middle) and StringViewArray (right):</p>
+
+<ul>
+  <li>The first string – <code class="language-plaintext highlighter-rouge">"Apache DataFusion"</code> – is 17 bytes long, and both StringArray and StringViewArray store the string’s bytes at the beginning of the buffer. The StringViewArray also inlines the first 4 bytes – <code class="language-plaintext highlighter-rouge">"Apac"</code> – in the view.</li>
+  <li>The second string, <code class="language-plaintext highlighter-rouge">"InfluxDB"</code> is only 8 bytes long, so StringViewArray completely inlines the string content in the <code class="language-plaintext highlighter-rouge">view</code> struct while StringArray stores the string in the buffer as well.</li>
+  <li>The third string <code class="language-plaintext highlighter-rouge">"Arrow Rust Impl"</code> is 15 bytes long and cannot be fully inlined. StringViewArray stores this in the same form as the first string.</li>
+  <li>The last string <code class="language-plaintext highlighter-rouge">"Apache DataFusion"</code> has the same content as the first string. It’s possible to use StringViewArray to avoid this duplication and reuse the bytes by pointing the view to the previous location.</li>
+</ul>
+
+<p>StringViewArray provides three opportunities for outperforming StringArray:</p>
+
+<ol>
+  <li>Less copying via the offset + buffer format</li>
+  <li>Faster comparisons using the inlined string prefix</li>
+  <li>Reusing repeated string values with the flexible <code class="language-plaintext highlighter-rouge">view</code> layout</li>
+</ol>
+
+<p>The rest of this blog post discusses how to apply these opportunities in real query scenarios to improve performance, what challenges we encountered along the way, and how we solved them.</p>
+
+<h2 id="faster-parquet-loading">Faster Parquet Loading</h2>
+
+<p><a href="https://parquet.apache.org/">Apache Parquet</a> is the de facto format for storing large-scale analytical data commonly stored LakeHouse-style, such as <a href="https://iceberg.apache.org">Apache Iceberg</a> and <a href="https://delta.io">Delta Lake</a>. Efficiently loading data from Parquet is thus critical to query performance in many important real-world workloads.</p>
+
+<p>Parquet encodes strings (i.e., <a href="https://docs.rs/parquet/latest/parquet/data_type/struct.ByteArray.html">byte array</a>) in a slightly different format than required for the original Arrow StringArray. The string length is encoded inline with the actual string data (as shown in Figure 4 left). As mentioned previously, StringArray requires the data buffer to be continuous and compact—the strings have to follow one after another. This requirement means that reading Parquet string data into an Arrow StringArray requires copying and consolidating the string bytes to a new buffer and tracking offsets in a separate array. Copying these strings is often wasteful. Typical queries filter out most data immediately after loading, so most of the copied data is quickly discarded.</p>
+
+<p>On the other hand, reading Parquet data as a StringViewArray can re-use the same data buffer as storing the Parquet pages because StringViewArray does not require strings to be contiguous. For example, in Figure 4, the StringViewArray directly references the buffer with the decoded Parquet page. The string <code class="language-plaintext highlighter-rouge">"Arrow Rust Impl"</code> is represented by a <code class="language-plaintext highlighter-rouge">view</code> with offset 37 and length 15 into that buffer.</p>
+
+<p><img src="/blog/img/string-view-1/figure4-copying.png" width="100%" class="img-responsive" alt="Diagram showing how StringViewArray can avoid copying by reusing decoded Parquet pages." /></p>
+
+<p>Figure 4: StringViewArray avoids copying by reusing decoded Parquet pages.</p>
+
+<p><strong>Mini benchmark</strong></p>
+
+<p>Reusing Parquet buffers is great in theory, but how much does saving a copy actually matter? We can run the following benchmark in arrow-rs to find out:</p>
+
+<p>Our benchmarking machine shows that loading <em>BinaryViewArray</em> is almost 2x faster than loading BinaryArray (see next section about why this isn’t <em>String</em> ViewArray).</p>
+
+<p>You can read more on this arrow-rs issue: <a href="https://github.com/apache/arrow-rs/issues/5904">https://github.com/apache/arrow-rs/issues/5904</a></p>
+
+<h1 id="from-binary-to-strings">From Binary to Strings</h1>
+
+<p>You may wonder why we reported performance for BinaryViewArray when this post is about StringViewArray. Surprisingly, initially, our implementation to read StringViewArray from Parquet was much <em>slower</em> than StringArray. Why? TLDR: Although reading StringViewArray copied less data, the initial implementation also spent much more time validating <a href="https://en.wikipedia.org/wiki/UTF-8#:~:text=UTF%2D8%20is%20a%20variable,Unicode%20Standard">UTF-8</a> (as shown in Figure 5).</p>
+
+<p>Strings are stored as byte sequences. When reading data from (potentially untrusted) Parquet files, a Parquet decoder must ensure those byte sequences are valid UTF-8 strings, and most programming languages, including Rust, include highly<a href="https://doc.rust-lang.org/std/str/fn.from_utf8.html"> optimized routines</a> for doing so.</p>
+
+<p><img src="/blog/img/string-view-1/figure5-loading-strings.png" width="100%" class="img-responsive" alt="Figure showing time to load strings from Parquet and the effect of optimized UTF-8 validation." /></p>
+
+<p>Figure 5: Time to load strings from Parquet. The UTF-8 validation advantage initially eliminates the advantage of reduced copying for StringViewArray.</p>
+
+<p>A StringArray can be validated in a single call to the UTF-8 validation function as it has a continuous string buffer. As long as the underlying buffer is UTF-8<sup id="fnref:4" role="doc-noteref"><a href="#fn:4" class="footnote" rel="footnote">4</a></sup>, all strings in the array must be UTF-8. The Rust parquet reader makes a single function call to validate the entire buffer.</p>
+
+<p>However, validating an arbitrary StringViewArray requires validating each string with a separate call to the validation function, as the underlying buffer may also contain non-string data (for example, the lengths in Parquet pages).</p>
+
+<p>UTF-8 validation in Rust is highly optimized and favors longer strings (as shown in Figure 6), likely because it leverages SIMD instructions to perform parallel validation. The benefit of a single function call to validate UTF-8 over a function call for each string more than eliminates the advantage of avoiding the copy for StringViewArray.</p>
+
+<p><img src="/blog/img/string-view-1/figure6-utf8-validation.png" width="100%" class="img-responsive" alt="Figure showing UTF-8 validation throughput vs string length." /></p>
+
+<p>Figure 6: UTF-8 validation throughput vs string length—StringArray’s contiguous buffer can be validated much faster than StringViewArray’s buffer.</p>
+
+<p>Does this mean we should only use StringArray? No! Thankfully, there’s a clever way out. The key observation is that in many real-world datasets,<a href="https://www.vldb.org/pvldb/vol17/p148-zeng.pdf"> 99% of strings are shorter than 128 bytes</a>, meaning the encoded length values are smaller than 128, <strong>in which case the length itself is also valid UTF-8</strong> (in fact, it is <a href="https://en.wikipedia.org/wiki/ASCII">ASCII</a>).</p>
+
+<p>This observation means we can optimize validating UTF-8 strings in Parquet pages by treating the length bytes as part of a single large string as long as the length <em>value</em> is less than 128. Put another way, prior to this optimization, the length bytes act as string boundaries, which require a UTF-8 validation on each string. After this optimization, only those strings with lengths larger than 128 bytes (less than 1% of the strings in the ClickBench dataset) are string boundaries, significantly increasing the UTF-8 validation chunk size and thus improving performance.</p>
+
+<p>The <a href="https://github.com/apache/arrow-rs/pull/6009/files">actual implementation</a> is only nine lines of Rust (with 30 lines of comments). You can find more details in the related arrow-rs issue:<a href="https://github.com/apache/arrow-rs/issues/5995"> https://github.com/apache/arrow-rs/issues/5995</a>. As expected, with this optimization, loading StringViewArray is almost 2x faster than loading StringArray.</p>
+
+<h1 id="be-careful-about-implicit-copies">Be Careful About Implicit Copies</h1>
+
+<p>After all the work to avoid copying strings when loading from Parquet, performance was still not as good as expected. We tracked the problem to a few implicit data copies that we weren’t aware of, as described in<a href="https://github.com/apache/arrow-rs/issues/6033"> this issue</a>.</p>
+
+<p>The copies we eventually identified come from the following innocent-looking line of Rust code, where <code class="language-plaintext highlighter-rouge">self.buf</code> is a <a href="https://en.wikipedia.org/wiki/Reference_counting">reference counted</a> pointer that should transform without copying into a buffer for use in StringViewArray.</p>
+
+<p>However, Rust-type coercion rules favored a blanket implementation that <em>did</em> copy data. This implementation is shown in the following code block where the <code class="language-plaintext highlighter-rouge">impl&lt;T: AsRef&lt;[u8]&gt;&gt;</code> will accept any type that implements <code class="language-plaintext highlighter-rouge">AsRef&lt;[u8]&gt;</code> and copies the data to create a new buffer. To avoid copying, users need to explicitly call <code class="language-plaintext highlighter-rouge">from_vec</code>, which consumes the <code class="language-plaintext highlighter-rouge">Vec</code> and transforms it into a buffer.</p>
+
+<p>Diagnosing this implicit copy was time-consuming as it relied on subtle Rust language semantics. We needed to track every step of the data flow to ensure every copy was necessary. To help other users and prevent future mistakes, we also <a href="https://github.com/apache/arrow-rs/pull/6043">removed</a> the implicit API from arrow-rs in favor of an explicit API. Using this approach, we found and fixed several <a href="https://github.com/apache/arrow-rs/pull/6039">other unintentional copies</a> in the code base—hopefully, the change will help other <a href="https://github.com/spiraldb/vortex/pull/504">downstream users</a> avoid unnecessary copies.</p>
+
+<h1 id="help-the-compiler-by-giving-it-more-information">Help the Compiler by Giving it More Information</h1>
+
+<p>The Rust compiler’s automatic optimizations mostly work very well for a wide variety of use cases, but sometimes, it needs additional hints to generate the most efficient code. When profiling the performance of <code class="language-plaintext highlighter-rouge">view</code> construction, we found, counterintuitively, that constructing <strong>long</strong> strings was 10x faster than constructing <strong>short</strong> strings, which made short strings slower on StringViewArray than on StringArray!</p>
+
+<p>As described in the first section, StringViewArray treats long and short strings differently. Short strings (&lt;12 bytes) directly inline to the <code class="language-plaintext highlighter-rouge">view</code> struct, while long strings only inline the first 4 bytes. The code to construct a <code class="language-plaintext highlighter-rouge">view</code> looks something like this:</p>
+
+<p>It appears that both branches of the code should be fast: they both involve copying at most 16 bytes of data and some memory shift/store operations. How could the branch for short strings be 10x slower?</p>
+
+<p>Looking at the assembly code using <a href="https://godbolt.org/">Compiler Explorer</a>, we (with help from <a href="https://github.com/aoli-al">Ao Li</a>) found the compiler used CPU <strong>load instructions</strong> to copy the fixed-sized 4 bytes to the <code class="language-plaintext highlighter-rouge">view</code> for long strings, but it calls a function, <a href="https://doc.rust-lang.org/std/ptr/fn.copy_nonoverlapping.html"><code class="language-plaintext highlighter-rouge">ptr::copy_non_overlapping</code></a>, to copy the inlined bytes to the <code>view</code> for short strings. The difference is that long strings have a prefix size (4 bytes) known at compile time, so the compiler directly uses efficient CPU instructions. But, since the size of the short string is unknown to the compiler, it has to call the general-purpose function <code>ptr::copy_non_coverlapping</code>. Making a function call is significant unnecessary overhead compared to a CPU copy instruction.</p>
+
+<p>However, we know something the compiler doesn’t know: the short string size is not arbitrary—it must be between 0 and 12 bytes, and we can leverage this information to avoid the function call. Our solution generates 13 copies of the function using generics, one for each of the possible prefix lengths. The code looks as follows, and <a href="https://godbolt.org/z/685YPsd5G">checking the assembly code</a>, we confirmed there are no calls to <code class="language-plaintext highlighter-rouge">ptr::copy_non_overlapping</code>, and only native CPU instructions are used. For more details, see <a href="https://github.com/apache/arrow-rs/issues/6034">the ticket</a>.</p>
+
+<h1 id="end-to-end-query-performance">End-to-End Query Performance</h1>
+
+<p>In the previous sections, we went out of our way to make sure loading StringViewArray is faster than StringArray. Before going further, we wanted to verify if obsessing about reducing copies and function calls has actually improved end-to-end performance in real-life queries. To do this, we evaluated a ClickBench query (Q20) in DataFusion that counts how many URLs contain the word <code class="language-plaintext highlighter-rouge">"google"</code>:</p>
+
+<p>This is a relatively simple query; most of the time is spent on loading the “URL” column to find matching rows. The query plan looks like this:</p>
+
+<p>We ran the benchmark in the DataFusion repo like this:</p>
+
+<p>With StringViewArray we saw a 24% end-to-end performance improvement, as shown in Figure 7. With the <code class="language-plaintext highlighter-rouge">--string-view</code> argument, the end-to-end query time is <code class="language-plaintext highlighter-rouge">944.3 ms, 869.6 ms, 861.9 ms</code> (three iterations). Without <code class="language-plaintext highlighter-rouge">--string-view</code>, the end-to-end query time is <code class="language-plaintext highlighter-rouge">1186.1 ms, 1126.1 ms, 1138.3 ms</code>.</p>
+
+<p><img src="/blog/img/string-view-1/figure7-end-to-end.png" width="100%" class="img-responsive" alt="Figure showing StringView improves end to end performance by 24 percent." /></p>
+
+<p>Figure 7: StringView reduces end-to-end query time by 24% on ClickBench Q20.</p>
+
+<p>We also double-checked with detailed profiling and verified that the time reduction is indeed due to faster Parquet loading.</p>
+
+<h2 id="conclusion">Conclusion</h2>
+
+<p>In this first blog post, we have described what it took to improve the
+performance of simply reading strings from Parquet files using StringView. While
+this resulted in real end-to-end query performance improvements, in our <a href="https://datafusion.apache.org/blog/2024/09/13/using-stringview-to-make-queries-faster-part-2.html">next
+post</a>, we explore additional optimizations enabled by StringView in DataFusion,
+along with some of the pitfalls we encountered while implementing them.</p>
+
+<h1 id="footnotes">Footnotes</h1>
+
+<div class="footnotes" role="doc-endnotes">
+  <ol>
+    <li id="fn:1" role="doc-endnote">
+      <p>Benchmarked with AMD Ryzen 7600x (12 core, 24 threads, 32 MiB L3), WD Black SN770 NVMe SSD (5150MB/4950MB seq RW bandwidth) <a href="#fnref:1" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:2" role="doc-endnote">
+      <p>Xiangpeng is a PhD student at the University of Wisconsin-Madison <a href="#fnref:2" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:3" role="doc-endnote">
+      <p>There is also a corresponding <em>BinaryViewArray</em> which is similar except that the data is not constrained to be UTF-8 encoded strings. <a href="#fnref:3" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:4" role="doc-endnote">
+      <p>We also make sure that offsets do not break a UTF-8 code point, which is <a href="https://github.com/apache/arrow-rs/blob/master/parquet/src/arrow/buffer/offset_buffer.rs#L62-L71">cheaply validated</a>. <a href="#fnref:4" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+  </ol>
+</div>]]></content><author><name>Xiangpeng Hao, Andrew Lamb</name></author><category term="performance" /><summary type="html"><![CDATA[&lt;!–]]></summary></entry><entry><title type="html">Using StringView / German Style Strings to make Queries Faster: Part 2 - String Operations</title><link href="https://datafusion.apache.org/blog/2024/09/13/string-view-german-style-strings-part-2/" rel="alternate" type="text/html" title="Using StringView / German Style Strings to make Queries Faster: Part 2 - String Operations" /><published>2024-09-13T00:00:00+00:00</published><updated>2024-09-13T00:00:00+00:00</updated><id>https://datafusion.apache.org/blog/2024/09/13/string-view-german-style-strings-part-2</id><content type="html" xml:base="https://datafusion.apache.org/blog/2024/09/13/string-view-german-style-strings-part-2/"><![CDATA[<!--
+
+-->
+
+<p><em>Editor’s Note: This blog series was first published on the <a href="https://www.influxdata.com/blog/faster-queries-with-stringview-part-two-influxdb/">InfluxData blog</a>. Thanks to InfluxData for sponsoring this work as <a href="https://haoxp.xyz/">Xiangpeng Hao</a>’s summer intern project</em></p>
+
+<p>In the <a href="/blog/2024/09/13/string-view-german-style-strings-part-1/">first post</a>, we discussed the nuances required to accelerate Parquet loading using StringViewArray by reusing buffers and reducing copies. 
+In this second part of the post, we describe the rest of the journey: implementing additional efficient operations for real query processing.</p>
+
+<h2 id="faster-string-operations">Faster String Operations</h2>
+
+<h1 id="faster-comparison">Faster comparison</h1>
+
+<p>String comparison is ubiquitous; it is the core of 
+<a href="https://docs.rs/arrow/latest/arrow/compute/kernels/cmp/index.html"><code class="language-plaintext highlighter-rouge">cmp</code></a>, 
+<a href="https://docs.rs/arrow/latest/arrow/compute/fn.min.html"><code class="language-plaintext highlighter-rouge">min</code></a>/<a href="https://docs.rs/arrow/latest/arrow/compute/fn.max.html"><code class="language-plaintext highlighter-rouge">max</code></a>, 
+and <a href="https://docs.rs/arrow/latest/arrow/compute/kernels/comparison/fn.like.html"><code class="language-plaintext highlighter-rouge">like</code></a>/<a href="https://docs.rs/arrow/latest/arrow/compute/kernels/comparison/fn.ilike.html"><code class="language-plaintext highlighter-rouge">ilike</code></a> kernels. StringViewArray is designed to accelerate such comparisons using the inlined prefix—the key observation is that, in many cases, only the first few bytes of the string determine the string comparison results.</p>
+
+<p>For example, to compare the strings <code class="language-plaintext highlighter-rouge">InfluxDB</code> with <code class="language-plaintext highlighter-rouge">Apache DataFusion</code>, we only need to look at the first byte to determine the string ordering or equality. In this case, since <code class="language-plaintext highlighter-rouge">A</code> is earlier in the alphabet than <code class="language-plaintext highlighter-rouge">I,</code> <code class="language-plaintext highlighter-rouge">Apache DataFusion</code> sorts first, and we know the strings are not equal. Despite only needing the first byte, comparing these strings when stored as a StringArray requires two memory accesses: 1) load the string offset and 2) use the offset to locate the string bytes. For low-level operations such as <code class="language-plaintext highlighter-rouge">cmp</code> that are invoked millions of times in the very hot paths of queries, avoiding this extra memory access can make a measurable difference in query performance.</p>
+
+<p>For StringViewArray, typically, only one memory access is needed to load the view struct. Only if the result can not be determined from the prefix is the second memory access required. For the example above, there is no need for the second access. This technique is very effective in practice: the second access is never necessary for the more than <a href="https://www.vldb.org/pvldb/vol17/p148-zeng.pdf">60% of real-world strings which are shorter than 12 bytes</a>, as they are stored completely in the prefix.</p>
+
+<p>However, functions that operate on strings must be specialized to take advantage of the inlined prefix. In addition to low-level comparison kernels, we implemented <a href="https://github.com/apache/arrow-rs/issues/5374">a wide range</a> of other StringViewArray operations that cover the functions and operations seen in ClickBench queries. Supporting StringViewArray in all string operations takes quite a bit of effort, and thankfully the Arrow and DataFusion communities are already hard at work doing so (see <a href="https://github.com/apache/datafusion/issues/11752">https://github.com/apache/datafusion/issues/11752</a> if you want to help out).</p>
+
+<h1 id="faster-take-and-filter">Faster <code class="language-plaintext highlighter-rouge">take </code>and<code class="language-plaintext highlighter-rouge"> filter</code></h1>
+
+<p>After a filter operation such as <code class="language-plaintext highlighter-rouge">WHERE url &lt;&gt; ''</code> to avoid processing empty urls, DataFusion will often <em>coalesce</em> results to form a new array with only the passing elements. 
+This coalescing ensures the batches are sufficiently sized to benefit from <a href="https://www.vldb.org/pvldb/vol11/p2209-kersten.pdf">vectorized processing</a> in subsequent steps.</p>
+
+<p>The coalescing operation is implemented using the <a href="https://docs.rs/arrow/latest/arrow/compute/fn.take.html">take</a> and <a href="https://arrow.apache.org/rust/arrow/compute/kernels/filter/fn.filter.html">filter</a> kernels in arrow-rs. For StringArray, these kernels require copying the string contents to a new buffer without “holes” in between. This copy can be expensive especially when the new array is large.</p>
+
+<p>However, <code class="language-plaintext highlighter-rouge">take</code> and <code class="language-plaintext highlighter-rouge">filter</code> for StringViewArray can avoid the copy by reusing buffers from the old array. The kernels only need to create a new list of  <code class="language-plaintext highlighter-rouge">view</code>s that point at the same strings within the old buffers. 
+Figure 1 illustrates the difference between the output of both string representations. StringArray creates two new strings at offsets 0-17 and 17-32, while StringViewArray simply points to the original buffer at offsets 0 and 25.</p>
+
+<p><img src="/blog/img/string-view-2/figure1-zero-copy-take.png" width="100%" class="img-responsive" alt="Diagram showing Zero-copy `take`/`filter` for StringViewArray" /></p>
+
+<p>Figure 1: Zero-copy <code class="language-plaintext highlighter-rouge">take</code>/<code class="language-plaintext highlighter-rouge">filter</code> for StringViewArray</p>
+
+<h1 id="when-to-gc">When to GC?</h1>
+
+<p>Zero-copy <code class="language-plaintext highlighter-rouge">take/filter</code> is great for generating large arrays quickly, but it is suboptimal for highly selective filters, where most of the strings are filtered out. When the cardinality drops, StringViewArray buffers become sparse—only a small subset of the bytes in the buffer’s memory are referred to by any <code class="language-plaintext highlighter-rouge">view</code>. This leads to excessive memory usage, especially in a <a href="https://github.com/apache/datafusion/issues/11628">filter-then-coalesce scenario</a>. For example, a StringViewArray with 10M strings may only refer to 1M strings after some filter operations; however, due to zero-copy take/filter, the (reused) 10M buffers can not be released/reused.</p>
+
+<p>To release unused memory, we implemented a <a href="https://docs.rs/arrow/latest/arrow/array/struct.GenericByteViewArray.html#method.gc">garbage collection (GC)</a> routine to consolidate the data into a new buffer to release the old sparse buffer(s). As the GC operation copies strings, similarly to StringArray, we must be careful about when to call it. If we call GC too early, we cause unnecessary copying, losing much of the benefit of StringViewArray. If we call GC too late, we hold large buffers for too long, increasing memory use and decreasing cache efficiency. The <a href="https://pola.rs/posts/polars-string-type/">Polars blog</a> on StringView also refers to the challenge presented by garbage collection timing.</p>
+
+<p><code class="language-plaintext highlighter-rouge">arrow-rs</code> implements the GC process, but it is up to users to decide when to call it. We leverage the semantics of the query engine and observed that the <a href="https://docs.rs/datafusion/latest/datafusion/physical_plan/coalesce_batches/struct.CoalesceBatchesExec.html"><code class="language-plaintext highlighter-rouge">CoalseceBatchesExec</code></a> operator, which merge smaller batches to a larger batch, is often used after the record cardinality is expected to shrink, which aligns perfectly with the scenario of GC in StringViewArray. 
+We, therefore,<a href="https://github.com/apache/datafusion/pull/11587"> implemented the GC procedure</a> inside <code>CoalseceBatchesExec</code><sup id="fnref:5" role="doc-noteref"><a href="#fn:5" class="footnote" rel="footnote">1</a></sup> with a heuristic that estimates when the buffers are too sparse.</p>
+
+<h2 id="the-art-of-function-inlining-not-too-much-not-too-little">The art of function inlining: not too much, not too little</h2>
+
+<p>Like string inlining, <em>function</em> inlining is the process of embedding a short function into the caller to avoid the overhead of function calls (caller/callee save). 
+Usually, the Rust compiler does a good job of deciding when to inline. However, it is possible to override its default using the <a href="https://doc.rust-lang.org/reference/attributes/codegen.html#the-inline-attribute"><code class="language-plaintext highlighter-rouge">#[inline(always)]</code> directive</a>. 
+In performance-critical code, inlined code allows us to organize large functions into smaller ones without paying the runtime cost of function invocation.</p>
+
+<p>However, function inlining is <strong><em>not</em></strong> always better, as it leads to larger function bodies that are harder for LLVM to optimize (for example, suboptimal <a href="https://en.wikipedia.org/wiki/Register_allocation">register spilling</a>) and risk overflowing the CPU’s instruction cache. We observed several performance regressions where function inlining caused <em>slower</em> performance when implementing the StringViewArray comparison kernels. Careful inspection and tuning of the code was required to aid the compiler in generating efficient code. More details can be found in this PR: <a href="https://github.com/apache/arrow-rs/pull/5900">https://github.com/apache/arrow-rs/pull/5900</a>.</p>
+
+<h2 id="buffer-size-tuning">Buffer size tuning</h2>
+
+<p>StringViewArray permits multiple buffers, which enables a flexible buffer layout and potentially reduces the need to copy data. However, a large number of buffers slows down the performance of other operations. 
+For example, <a href="https://docs.rs/arrow/latest/arrow/array/trait.Array.html#tymethod.get_array_memory_size"><code class="language-plaintext highlighter-rouge">get_array_memory_size</code></a> needs to sum the memory size of each buffer, which takes a long time with thousands of small buffers. 
+In certain cases, we found that multiple calls to <a href="https://docs.rs/arrow/latest/arrow/compute/fn.concat_batches.html"><code class="language-plaintext highlighter-rouge">concat_batches</code></a> lead to arrays with millions of buffers, which was prohibitively expensive.</p>
+
+<p>For example, consider a StringViewArray with the previous default buffer size of 8 KB. With this configuration, holding 4GB of string data requires almost half a million buffers! Larger buffer sizes are needed for larger arrays, but we cannot arbitrarily increase the default buffer size, as small arrays would consume too much memory (most arrays require at least one buffer). Buffer sizing is especially problematic in query processing, as we often need to construct small batches of string arrays, and the sizes are unknown at planning time.</p>
+
+<p>To balance the buffer size trade-off, we again leverage the query processing (DataFusion) semantics to decide when to use larger buffers. While coalescing batches, we combine multiple small string arrays and set a smaller buffer size to keep the total memory consumption low. In string aggregation, we aggregate over an entire Datafusion partition, which can generate a large number of strings, so we set a larger buffer size (2MB).</p>
+
+<p>To assist situations where the semantics are unknown, we also <a href="https://github.com/apache/arrow-rs/pull/6136">implemented</a> a classic dynamic exponential buffer size growth strategy, which starts with a small buffer size (8KB) and doubles the size of each new buffer up to 2MB. We implemented this strategy in arrow-rs and enabled it by default so that other users of StringViewArray can also benefit from this optimization. See this issue for more details: <a href="https://github.com/apache/arrow-rs/issues/6094">https://github.com/apache/arrow-rs/issues/6094</a>.</p>
+
+<h2 id="end-to-end-query-performance">End-to-end query performance</h2>
+
+<p>We have made significant progress in optimizing StringViewArray filtering operations. Now, let’s test it in the real world to see how it works!</p>
+
+<p>Let’s consider ClickBench query 22, which selects multiple string fields (<code class="language-plaintext highlighter-rouge">URL</code>, <code class="language-plaintext highlighter-rouge">Title</code>, and <code class="language-plaintext highlighter-rouge">SearchPhase</code>) and applies several filters.</p>
+
+<p>We ran the benchmark using the following command in the DataFusion repo. Again, the <code class="language-plaintext highlighter-rouge">--string-view</code> option means we use StringViewArray instead of StringArray.</p>
+
+<p>To eliminate the impact of the faster Parquet reading using StringViewArray (see the first part of this blog), Figure 2 plots only the time spent in <code class="language-plaintext highlighter-rouge">FilterExec</code>. Without StringViewArray, the filter takes 7.17s; with StringViewArray, the filter only takes 4.86s, a 32% reduction in time. Moreover, we see a 17% improvement in end-to-end query performance.</p>
+
+<p><img src="/blog/img/string-view-2/figure2-filter-time.png" width="100%" class="img-responsive" alt="Figure showing StringViewArray reduces the filter time by 32% on ClickBench query 22." /></p>
+
+<p>Figure 2: StringViewArray reduces the filter time by 32% on ClickBench query 22.</p>
+
+<h1 id="faster-string-aggregation">Faster String Aggregation</h1>
+
+<p>So far, we have discussed how to exploit two StringViewArray features: reduced copy and faster filtering. This section focuses on reusing string bytes to repeat string values.</p>
+
+<p>As described in part one of this blog, if two strings have identical values, StringViewArray can use two different <code class="language-plaintext highlighter-rouge">view</code>s pointing at the same buffer range, thus avoiding repeating the string bytes in the buffer. This makes StringViewArray similar to an Arrow <a href="https://docs.rs/arrow/latest/arrow/array/struct.DictionaryArray.html">DictionaryArray</a> that stores Strings—both array types work well for strings with only a few distinct values.</p>
+
+<p>Deduplicating string values can significantly reduce memory consumption in StringViewArray. However, this process is expensive and involves hashing every string and maintaining a hash table, and so it cannot be done by default when creating a StringViewArray. We introduced an<a href="https://docs.rs/arrow/latest/arrow/array/builder/struct.GenericByteViewBuilder.html#method.with_deduplicate_strings"> opt-in string deduplication mode</a> in arrow-rs for advanced users who know their data has a small number of distinct values, and where the benefits of reduced memory consumption outweigh the additional overhead of array construction.</p>
+
+<p>Once again, we leverage DataFusion query semantics to identify StringViewArray with duplicate values, such as aggregation queries with multiple group keys. For example, some <a href="https://github.com/apache/datafusion/blob/main/benchmarks/queries/clickbench/queries.sql">ClickBench queries</a> group by two columns:</p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">UserID</code> (an integer with close to 1 M distinct values)</li>
+  <li><code class="language-plaintext highlighter-rouge">MobilePhoneModel</code> (a string with less than a hundred distinct values)</li>
+</ul>
+
+<p>In this case, the output row count is<code class="language-plaintext highlighter-rouge"> count(distinct UserID) * count(distinct MobilePhoneModel)</code>,  which is 100M. Each string value of  <code class="language-plaintext highlighter-rouge">MobilePhoneModel</code> is repeated 1M times. With StringViewArray, we can save space by pointing the repeating values to the same underlying buffer.</p>
+
+<p>Faster string aggregation with StringView is part of a larger project to <a href="https://github.com/apache/datafusion/issues/7000">improve DataFusion aggregation performance</a>. We have a <a href="https://github.com/apache/datafusion/pull/11794">proof of concept implementation</a> with StringView that can improve the multi-column string aggregation by 20%. We would love your help to get it production ready!</p>
+
+<h1 id="stringview-pitfalls">StringView Pitfalls</h1>
+
+<p>Most existing blog posts (including this one) focus on the benefits of using StringViewArray over other string representations such as StringArray. As we have discussed, even though it requires a significant engineering investment to realize, StringViewArray is a major improvement over StringArray in many cases.</p>
+
+<p>However, there are several cases where StringViewArray is slower than StringArray. For completeness, we have listed those instances here:</p>
+
+<ol>
+  <li><strong>Tiny strings (when strings are shorter than 8 bytes)</strong>: every element of the StringViewArray consumes at least 16 bytes of memory—the size of the <code class="language-plaintext highlighter-rouge">view</code> struct. For an array of tiny strings, StringViewArray consumes more memory than StringArray and thus can cause slower performance due to additional memory pressure on the CPU cache.</li>
+  <li><strong>Many repeated short strings</strong>: Similar to the first point, StringViewArray can be slower and require more memory than a DictionaryArray because 1) it can only reuse the bytes in the buffer when the strings are longer than 12 bytes and 2) 32-bit offsets are always used, even when a smaller size (8 bit or 16 bit) could represent all the distinct values.</li>
+  <li><strong>Filtering:</strong> As we mentioned above, StringViewArrays often consume more memory than the corresponding StringArray, and memory bloat quickly dominates the performance without GC. However, invoking GC also reduces the benefits of less copying so must be carefully tuned.</li>
+</ol>
+
+<h1 id="conclusion-and-takeaways">Conclusion and Takeaways</h1>
+
+<p>In these two blog posts, we discussed what it takes to implement StringViewArray in arrow-rs and then integrate it into DataFusion. Our evaluations on ClickBench queries show that StringView can improve the performance of string-intensive workloads by up to 2x.</p>
+
+<p>Given that DataFusion already <a href="https://benchmark.clickhouse.com/#eyJzeXN0ZW0iOnsiQWxsb3lEQiI6ZmFsc2UsIkF0aGVuYSAocGFydGl0aW9uZWQpIjpmYWxzZSwiQXRoZW5hIChzaW5nbGUpIjpmYWxzZSwiQXVyb3JhIGZvciBNeVNRTCI6ZmFsc2UsIkF1cm9yYSBmb3IgUG9zdGdyZVNRTCI6ZmFsc2UsIkJ5Q29uaXR5IjpmYWxzZSwiQnl0ZUhvdXNlIjpmYWxzZSwiY2hEQiAoUGFycXVldCwgcGFydGl0aW9uZWQpIjpmYWxzZSwiY2hEQiI6ZmFsc2UsIkNpdHVzIjpmYWxzZSwiQ2xpY2tIb3VzZSBDbG91ZCAoYXdzKSI6ZmFsc2UsIkNsaWNrSG91c2UgQ2xvdWQgKGF3cykgUGFyYWxsZWwgUmVwbGljYXMgT04iOmZhbHNlLCJDbGlja0hvdXNlIENsb3VkIChBenVyZSkiOmZhbHNlLCJDbGlja0hvdXNlIENsb3VkIChBenVyZSkgUGFyYWxsZWwgUmVwbGljYSBPTiI6ZmFsc2UsIkNsaWNrSG91c2UgQ2xvdWQgKEF6dXJlKSBQYXJhbGxlbCBSZXBsaWNhcyBPTiI6ZmFsc2UsIkNsaWNrSG91c2UgQ2xvdWQgKGdjcCkiOmZhbHNlLCJDbGlja0hvdXNlIENsb3VkIChnY3ApIFBhcmFsbGVsIFJlcGxpY2FzIE9OIjpmYWxzZSwiQ2xpY2tIb3VzZSAoZGF0YSBsYWtlLCBwYXJ0aXRpb25lZCkiOmZhbHNlLCJDbGlja0hvdXNlIChkYXRhIGxha2UsIHNpbmdsZSkiOmZhbHNlLCJDbGlja0hvdXNlIChQYXJxdWV0LCBwYXJ0aXRpb25lZCkiOmZhbHNlLCJDbGlja0hvdXNlIChQYXJxdWV0LCBzaW5nbGUpIjpmYWxzZSwiQ2xpY2tIb3VzZSAod2ViKSI6ZmFsc2UsIkNsaWNrSG91c2UiOmZhbHNlLCJDbGlja0hvdXNlICh0dW5lZCkiOmZhbHNlLCJDbGlja0hvdXNlICh0dW5lZCwgbWVtb3J5KSI6ZmFsc2UsIkNsb3VkYmVycnkiOmZhbHNlLCJDcmF0ZURCIjpmYWxzZSwiQ3J1bmNoeSBCcmlkZ2UgZm9yIEFuYWx5dGljcyAoUGFycXVldCkiOmZhbHNlLCJEYXRhYmVuZCI6ZmFsc2UsIkRhdGFGdXNpb24gKFBhcnF1ZXQsIHBhcnRpdGlvbmVkKSI6dHJ1ZSwiRGF0YUZ1c2lvbiAoUGFycXVldCwgc2luZ2xlKSI6ZmFsc2UsIkFwYWNoZSBEb3JpcyI6ZmFsc2UsIkRydWlkIjpmYWxzZSwiRHVja0RCIChQYXJxdWV0LCBwYXJ0aXRpb25lZCkiOnRydWUsIkR1Y2tEQiI6ZmFsc2UsIkVsYXN0aWNzZWFyY2giOmZhbHNlLCJFbGFzdGljc2VhcmNoICh0dW5lZCkiOmZhbHNlLCJHbGFyZURCIjpmYWxzZSwiR3JlZW5wbHVtIjpmYWxzZSwiSGVhdnlBSSI6ZmFsc2UsIkh5ZHJhIjpmYWxzZSwiSW5mb2JyaWdodCI6ZmFsc2UsIktpbmV0aWNhIjpmYWxzZSwiTWFyaWFEQiBDb2x1bW5TdG9yZSI6ZmFsc2UsIk1hcmlhREIiOmZhbHNlLCJNb25ldERCIjpmYWxzZSwiTW9uZ29EQiI6ZmFsc2UsIk1vdGhlcmR1Y2siOmZhbHNlLCJNeVNRTCAoTXlJU0FNKSI6ZmFsc2UsIk15U1FMIjpmYWxzZSwiT3hsYSI6ZmFsc2UsIlBhcmFkZURCIChQYXJxdWV0LCBwYXJ0aXRpb25lZCkiOmZhbHNlLCJQYXJhZGVEQiAoUGFycXVldCwgc2luZ2xlKSI6ZmFsc2UsIlBpbm90IjpmYWxzZSwiUG9zdGdyZVNRTCAodHVuZWQpIjpmYWxzZSwiUG9zdGdyZVNRTCI6ZmFsc2UsIlF1ZXN0REIgKHBhcnRpdGlvbmVkKSI6ZmFsc2UsIlF1ZXN0REIiOmZhbHNlLCJSZWRzaGlmdCI6ZmFsc2UsIlNlbGVjdERCIjpmYWxzZSwiU2luZ2xlU3RvcmUiOmZhbHNlLCJTbm93Zmxha2UiOmZhbHNlLCJTUUxpdGUiOmZhbHNlLCJTdGFyUm9ja3MiOmZhbHNlLCJUYWJsZXNwYWNlIjpmYWxzZSwiVGVtYm8gT0xBUCAoY29sdW1uYXIpIjpmYWxzZSwiVGltZXNjYWxlREIgKGNvbXByZXNzaW9uKSI6ZmFsc2UsIlRpbWVzY2FsZURCIjpmYWxzZSwiVW1icmEiOmZhbHNlfSwidHlwZSI6eyJDIjp0cnVlLCJjb2x1bW4tb3JpZW50ZWQiOnRydWUsIlBvc3RncmVTUUwgY29tcGF0aWJsZSI6dHJ1ZSwibWFuYWdlZCI6dHJ1ZSwiZ2NwIjp0cnVlLCJzdGF0ZWxlc3MiOnRydWUsIkphdmEiOnRydWUsIkMrKyI6dHJ1ZSwiTXlTUUwgY29tcGF0aWJsZSI6dHJ1ZSwicm93LW9yaWVudGVkIjp0cnVlLCJDbGlja0hvdXNlIGRlcml2YXRpdmUiOnRydWUsImVtYmVkZGVkIjp0cnVlLCJzZXJ2ZXJsZXNzIjp0cnVlLCJhd3MiOnRydWUsInBhcmFsbGVsIHJlcGxpY2FzIjp0cnVlLCJBenVyZSI6dHJ1ZSwiYW5hbHl0aWNhbCI6dHJ1ZSwiUnVzdCI6dHJ1ZSwic2VhcmNoIjp0cnVlLCJkb2N1bWVudCI6dHJ1ZSwic29tZXdoYXQgUG9zdGdyZVNRTCBjb21wYXRpYmxlIjp0cnVlLCJ0aW1lLXNlcmllcyI6dHJ1ZX0sIm1hY2hpbmUiOnsiMTYgdkNQVSAxMjhHQiI6dHJ1ZSwiOCB2Q1BVIDY0R0IiOnRydWUsInNlcnZlcmxlc3MiOnRydWUsIjE2YWN1Ijp0cnVlLCJjNmEuNHhsYXJnZSwgNTAwZ2IgZ3AyIjp0cnVlLCJMIjp0cnVlLCJNIjp0cnVlLCJTIjp0cnVlLCJYUyI6dHJ1ZSwiYzZhLm1ldGFsLCA1MDBnYiBncDIiOnRydWUsIjE5MkdCIjp0cnVlLCIyNEdCIjp0cnVlLCIzNjBHQiI6dHJ1ZSwiNDhHQiI6dHJ1ZSwiNzIwR0IiOnRydWUsIjk2R0IiOnRydWUsIjE0MzBHQiI6dHJ1ZSwiZGV2Ijp0cnVlLCI3MDhHQiI6dHJ1ZSwiYzVuLjR4bGFyZ2UsIDUwMGdiIGdwMiI6dHJ1ZSwiQW5hbHl0aWNzLTI1NkdCICg2NCB2Q29yZXMsIDI1NiBHQikiOnRydWUsImM1LjR4bGFyZ2UsIDUwMGdiIGdwMiI6dHJ1ZSwiYzZhLjR4bGFyZ2UsIDE1MDBnYiBncDIiOnRydWUsImNsb3VkIjp0cnVlLCJkYzIuOHhsYXJnZSI6dHJ1ZSwicmEzLjE2eGxhcmdlIjp0cnVlLCJyYTMuNHhsYXJnZSI6dHJ1ZSwicmEzLnhscGx1cyI6dHJ1ZSwiUzIiOnRydWUsIlMyNCI6dHJ1ZSwiMlhMIjp0cnVlLCIzWEwiOnRydWUsIjRYTCI6dHJ1ZSwiWEwiOnRydWUsIkwxIC0gMTZDUFUgMzJHQiI6dHJ1ZSwiYzZhLjR4bGFyZ2UsIDUwMGdiIGdwMyI6dHJ1ZX0sImNsdXN0ZXJfc2l6ZSI6eyIxIjp0cnVlLCIyIjp0cnVlLCI0Ijp0cnVlLCI4Ijp0cnVlLCIxNiI6dHJ1ZSwiMzIiOnRydWUsIjY0Ijp0cnVlLCIxMjgiOnRydWUsInNlcnZlcmxlc3MiOnRydWUsImRlZGljYXRlZCI6dHJ1ZX0sIm1ldHJpYyI6ImhvdCIsInF1ZXJpZXMiOlt0cnVlLHRydWUsdHJ1ZSx0cnVlLHRydWUsdHJ1ZSx0cnVlLHRydWUsdHJ1ZSx0cnVlLHRydWUsdHJ1ZSx0cnVlLHRydWUsdHJ1ZSx0cnVlLH">performs very well on ClickBench</a>, the level of end-to-end performance improvement using StringViewArray shows the power of this technique and, of course, is a win for DataFusion and the systems that build upon it.</p>
+
+<p>StringView is a big project that has received tremendous community support. Specifically, we would like to thank <a href="https://github.com/tustvold">@tustvold</a>, <a href="https://github.com/ariesdevil">@ariesdevil</a>, <a href="https://github.com/RinChanNOWWW">@RinChanNOWWW</a>, <a href="https://github.com/ClSlaid">@ClSlaid</a>, <a href="https://github.com/2010YOUY01">@2010YOUY01</a>, <a href="https://github.com/chloro-pn">@chloro-pn</a>, <a href="https://github.com/a10y">@a10y</a>, <a href="https://github.com/Kev1n8">@Kev1n8</a>, <a href="https://github.com/Weijun-H">@Weijun-H</a>, <a href="https://github.com/PsiACE">@PsiACE</a>, <a href="https://github.com/tshauck">@tshauck</a>, and <a href="https://github.com/xinlifoobar">@xinlifoobar</a> for their valuable contributions!</p>
+
+<p>As the introduction states, “German Style Strings” is a relatively straightforward research idea that avoid some string copies and accelerates comparisons. However, applying this (great) idea in practice requires a significant investment in careful software engineering. Again, we encourage the research community to continue to help apply research ideas to industrial systems, such as DataFusion, as doing so provides valuable perspectives when evaluating future research questions for the greatest potential impact.</p>
+
+<h3 id="footnotes">Footnotes</h3>
+
+<div class="footnotes" role="doc-endnotes">
+  <ol>
+    <li id="fn:5" role="doc-endnote">
+      <p>There are additional optimizations possible in this operation that the community is working on, such as  <a href="https://github.com/apache/datafusion/issues/7957">https://github.com/apache/datafusion/issues/7957</a>. <a href="#fnref:5" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+  </ol>
+</div>]]></content><author><name>Xiangpeng Hao, Andrew Lamb</name></author><category term="performance" /><summary type="html"><![CDATA[&lt;!–]]></summary></entry><entry><title type="html">Apache DataFusion Comet 0.2.0 Release</title><link href="https://datafusion.apache.org/blog/2024/08/28/datafusion-comet-0.2.0/" rel="alternate" type="text/html" title="Apache DataFusion Comet 0.2.0 Release" /><published>2024-08-28T00:00:00+00:00</published><updated>2024-08-28T00:00:00+00:00</updated><id>https://datafusion.apache.org/blog/2024/08/28/datafusion-comet-0.2.0</id><content type="html" xml:base="https://datafusion.apache.org/blog/2024/08/28/datafusion-comet-0.2.0/"><![CDATA[<!--
 
 -->
 
@@ -1468,465 +1772,4 @@ allocation using the arrow Row format
       <p><a href="https://datasets.clickhouse.com/hits_compatible/athena_partitioned/hits_%7B%7D.parquet">hits_0.parquet</a>, one of the files from the partitioned ClickBench dataset, which has <code class="language-plaintext highlighter-rouge">100,000</code> rows and is 117 MB in size. The entire dataset has <code class="language-plaintext highlighter-rouge">100,000,000</code> rows in a single 14 GB Parquet file. The script did not complete on the entire dataset after 40 minutes, and used 212 GB RAM at peak. <a href="#fnref:6" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
     </li>
   </ol>
-</div>]]></content><author><name>alamb, Dandandan, tustvold</name></author><category term="release" /><summary type="html"><![CDATA[&lt;!–]]></summary></entry><entry><title type="html">Apache Arrow DataFusion 26.0.0</title><link href="https://datafusion.apache.org/blog/2023/06/24/datafusion-25.0.0/" rel="alternate" type="text/html" title="Apache Arrow DataFusion 26.0.0" /><published>2023-06-24T00:00:00+00:00</published><updated>2023-06-24T00:00:00+00:00</updated><id>https://datafusion.apache.org/blog/2023/06/24/datafusion-25.0.0</id><content type="html" xml:base="https://datafusion.apache.org/blog/2023/06/24/datafusion-25.0.0/"><![CDATA[<!--
-
--->
-
-<p>It has been a whirlwind 6 months of DataFusion development since <a href="https://arrow.apache.org/blog/2023/01/19/datafusion-16.0.0">our
-last update</a>: the community has grown, many features have been added,
-performance improved and we are <a href="https://github.com/apache/arrow-datafusion/discussions/6475">discussing</a> branching out to our own
-top level Apache Project.</p>
-
-<h2 id="background">Background</h2>
-
-<p><a href="https://arrow.apache.org/datafusion/">Apache Arrow DataFusion</a> is an extensible query engine and database
-toolkit, written in <a href="https://www.rust-lang.org/">Rust</a>, that uses <a href="https://arrow.apache.org">Apache Arrow</a> as its in-memory
-format.</p>
-
-<p>DataFusion, along with <a href="https://calcite.apache.org">Apache Calcite</a>, Facebook’s <a href="https://github.com/facebookincubator/velox">Velox</a> and
-similar technology are part of the next generation “<a href="https://www.usenix.org/publications/login/winter2018/khurana">Deconstructed
-Database</a>” architectures, where new systems are built on a foundation
-of fast, modular components, rather as a single tightly integrated
-system.</p>
-
-<p>While single tightly integrated systems such as <a href="https://spark.apache.org/">Spark</a>, <a href="https://duckdb.org">DuckDB</a> and
-<a href="https://www.pola.rs/">Pola.rs</a> are great pieces of technology, our community believes that
-anyone developing new data heavy application, such as those common in
-machine learning in the next 5 years, will <strong>require</strong> a high
-performance, vectorized, query engine to remain relevant. The only
-practical way to gain access to such technology without investing many
-millions of dollars to build a new tightly integrated engine, is
-though open source projects like DataFusion and similar enabling
-technologies such as <a href="https://arrow.apache.org">Apache Arrow</a> and <a href="https://www.rust-lang.org/">Rust</a>.</p>
-
-<p>DataFusion is targeted primarily at developers creating other data
-intensive analytics, and offers:</p>
-
-<ul>
-  <li>High performance, native, parallel streaming execution engine</li>
-  <li>Mature <a href="https://arrow.apache.org/datafusion/user-guide/sql/index.html">SQL support</a>, featuring  subqueries, window functions, grouping sets, and more</li>
-  <li>Built in support for Parquet, Avro, CSV, JSON and Arrow formats and easy extension for others</li>
-  <li>Native DataFrame API and <a href="https://arrow.apache.org/datafusion-python/">python bindings</a></li>
-  <li><a href="https://docs.rs/datafusion/latest/datafusion/index.html">Well documented</a> source code and architecture, designed to be customized to suit downstream project needs</li>
-  <li>High quality, easy to use code <a href="https://crates.io/crates/datafusion/versions">released every 2 weeks to crates.io</a></li>
-  <li>Welcoming, open community, governed by the highly regarded and well understood <a href="https://www.apache.org/">Apache Software Foundation</a></li>
-</ul>
-
-<p>The rest of this post highlights some of the improvements we have made
-to DataFusion over the last 6 months and a preview of where we are
-heading. You can see a list of all changes in the detailed
-<a href="https://github.com/apache/arrow-datafusion/blob/main/datafusion/CHANGELOG.md">CHANGELOG</a>.</p>
-
-<h2 id="even-better-performance">(Even) Better Performance</h2>
-
-<p><a href="https://voltrondata.com/resources/speeds-and-feeds-hardware-and-software-matter">Various</a> benchmarks show DataFusion to be quite close or <a href="https://github.com/tustvold/access-log-bench">even
-faster</a> to the state of the art in analytic performance (at the moment
-this seems to be DuckDB). We continually work on improving performance
-(see <a href="https://github.com/apache/arrow-datafusion/issues/5546">#5546</a> for a list) and would love additional help in this area.</p>
-
-<p>DataFusion now reads single large Parquet files significantly faster by
-<a href="https://github.com/apache/arrow-datafusion/pull/5057">parallelizing across multiple cores</a>. Native speeds for reading JSON
-and CSV files are also up to 2.5x faster thanks to improvements
-upstream in arrow-rs <a href="https://github.com/apache/arrow-rs/pull/3479#issuecomment-1384353159">JSON reader</a> and <a href="https://github.com/apache/arrow-rs/pull/3365">CSV reader</a>.</p>
-
-<p>Also, we have integrated the <a href="https://arrow.apache.org/blog/2022/11/07/multi-column-sorts-in-arrow-rust-part-1/">arrow-rs Row Format</a> into DataFusion resulting in up to <a href="https://github.com/apache/arrow-datafusion/pull/6163">2-3x faster sorting and merging</a>.</p>
-
-<h2 id="improved-documentation-and-website">Improved Documentation and Website</h2>
-
-<p>Part of growing the DataFusion community is ensuring that DataFusion’s
-features are understood and that it is easy to contribute and
-participate. To that end the <a href="https://arrow.apache.org/datafusion/">website</a> has been cleaned up, <a href="https://docs.rs/datafusion/latest/datafusion/index.html#architecture">the
-architecture guide</a> expanded, the <a href="https://arrow.apache.org/datafusion/contributor-guide/roadmap.html">roadmap</a> updated, and several
-overview talks created:</p>
-
-<ul>
-  <li>Apr 2023 <em>Query Engine</em>: <a href="https://youtu.be/NVKujPxwSBA">recording</a> and <a href="https://docs.google.com/presentation/d/1D3GDVas-8y0sA4c8EOgdCvEjVND4s2E7I6zfs67Y4j8/edit#slide=id.p">slides</a></li>
-  <li>April 2023 <em>Logical Plan and Expressions</em>: <a href="https://youtu.be/EzZTLiSJnhY">recording</a> and <a href="https://docs.google.com/presentation/d/1ypylM3-w60kVDW7Q6S99AHzvlBgciTdjsAfqNP85K30">slides</a></li>
-  <li>April 2023 <em>Physical Plan and Execution</em>: <a href="https://youtu.be/2jkWU3_w6z0">recording</a> and <a href="https://docs.google.com/presentation/d/1cA2WQJ2qg6tx6y4Wf8FH2WVSm9JQ5UgmBWATHdik0hg">slides</a></li>
-</ul>
-
-<h2 id="new-features">New Features</h2>
-
-<h3 id="more-streaming-less-memory">More Streaming, Less Memory</h3>
-
-<p>We have made significant progress on the <a href="https://github.com/apache/arrow-datafusion/issues/4285">streaming execution roadmap</a>
-such as <a href="https://docs.rs/datafusion/latest/datafusion/physical_plan/trait.ExecutionPlan.html#method.unbounded_output">unbounded datasources</a>, <a href="https://docs.rs/datafusion/latest/datafusion/physical_plan/aggregates/enum.GroupByOrderMode.html">streaming group by</a>, sophisticated
-<a href="https://docs.rs/datafusion/latest/datafusion/physical_optimizer/global_sort_selection/index.html">sort</a> and <a href="https://docs.rs/datafusion/latest/datafusion/physical_optimizer/repartition/index.html">repartitioning</a> improvements in the optimizer, and support
-for <a href="https://docs.rs/datafusion/latest/datafusion/physical_plan/joins/struct.SymmetricHashJoinExec.html">symmetric hash join</a> (read more about that in the great <a href="https://www.synnada.ai/blog/general-purpose-stream-joins-via-pruning-symmetric-hash-joins">Synnada
-Blog Post</a> on the topic). Together, these features both 1) make it
-easier to build streaming systems using DataFusion that can
-incrementally generate output before (or ever) seeing the end of the
-input and 2) allow general queries to use less memory and generate their
-results faster.</p>
-
-<p>We have also improved the runtime <a href="https://docs.rs/datafusion/latest/datafusion/execution/memory_pool/index.html">memory management</a> system so that
-DataFusion now stays within its declared memory budget <a href="https://github.com/apache/arrow-datafusion/issues/3941">generate
-runtime errors</a>.</p>
-
-<h3 id="dml-support-insert-delete-update-etc">DML Support (<code class="language-plaintext highlighter-rouge">INSERT</code>, <code class="language-plaintext highlighter-rouge">DELETE</code>, <code class="language-plaintext highlighter-rouge">UPDATE</code>, etc)</h3>
-
-<p>Part of building high performance data systems includes writing data,
-and DataFusion supports several features for creating new files:</p>
-
-<ul>
-  <li><code class="language-plaintext highlighter-rouge">INSERT INTO</code> and <code class="language-plaintext highlighter-rouge">SELECT ... INTO </code> support for memory backed and CSV tables</li>
-  <li>New <a href="https://docs.rs/datafusion/latest/datafusion/physical_plan/insert/trait.DataSink.html">API for writing data into TableProviders</a></li>
-</ul>
-
-<p>We are working on easier to use <a href="https://github.com/apache/arrow-datafusion/issues/5654">COPY INTO</a> syntax, better support
-for writing parquet, JSON, and AVRO, and more – see our <a href="https://github.com/apache/arrow-datafusion/issues/6569">tracking epic</a>
-for more details.</p>
-
-<h3 id="timestamp-and-intervals">Timestamp and Intervals</h3>
-
-<p>One mark of the maturity of a SQL engine is how it handles the tricky
-world of timestamp, date, times and interval arithmetic. DataFusion is
-feature complete in this area and behaves as you would expect,
-supporting queries such as</p>
-
-<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">SELECT</span> <span class="n">now</span><span class="p">()</span> <span class="o">+</span> <span class="s1">'1 month'</span> <span class="k">FROM</span> <span class="n">my_table</span><span class="p">;</span>
-</code></pre></div></div>
-
-<p>We still have a long tail of <a href="https://github.com/apache/arrow-datafusion/issues/3148">date and time improvements</a>, which we are working on as well.</p>
-
-<h3 id="querying-structured-types-list-and-structs">Querying Structured Types (<code class="language-plaintext highlighter-rouge">List</code> and <code class="language-plaintext highlighter-rouge">Struct</code>s)</h3>
-
-<p>Arrow and Parquet <a href="https://arrow.apache.org/blog/2022/10/08/arrow-parquet-encoding-part-2/">support nested data</a> well and DataFusion lets you
-easily query such <code class="language-plaintext highlighter-rouge">Struct</code> and <code class="language-plaintext highlighter-rouge">List</code>. For example, you can use
-DataFusion to read and query the <a href="https://data.mendeley.com/datasets/ct8f9skv97">JSON Datasets for Exploratory OLAP -
-Mendeley Data</a> like this:</p>
-
-<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">----------</span>
-<span class="c1">-- Explore structured data using SQL</span>
-<span class="c1">----------</span>
-<span class="k">SELECT</span> <span class="k">delete</span> <span class="k">FROM</span> <span class="s1">'twitter-sample-head-100000.parquet'</span> <span class="k">WHERE</span> <span class="k">delete</span> <span class="k">IS</span> <span class="k">NOT</span> <span class="k">NULL</span> <span class="k">limit</span> <span class="mi">10</span><span class="p">;</span>
-<span class="o">+</span><span class="c1">---------------------------------------------------------------------------------------------------------------------------+</span>
-<span class="o">|</span> <span class="k">delete</span>                                                                                                                    <span class="o">|</span>
-<span class="o">+</span><span class="c1">---------------------------------------------------------------------------------------------------------------------------+</span>
-<span class="o">|</span> <span class="p">{</span><span class="n">status</span><span class="p">:</span> <span class="p">{</span><span class="n">id</span><span class="p">:</span> <span class="p">{</span><span class="err">$</span><span class="n">numberLong</span><span class="p">:</span> <span class="mi">135037425050320896</span><span class="p">},</span> <span class="n">id_str</span><span class="p">:</span> <span class="mi">135037425050320896</span><span class="p">,</span> <span class="n">user_id</span><span class="p">:</span> <span class="mi">334902461</span><span class="p">,</span> <span class="n">user_id_str</span><span class="p">:</span> <span class="mi">334902461</span><span class="p">}}</span> <span class="o">|</span>
-<span class="o">|</span> <span class="p">{</span><span class="n">status</span><span class="p">:</span> <span class="p">{</span><span class="n">id</span><span class="p">:</span> <span class="p">{</span><span class="err">$</span><span class="n">numberLong</span><span class="p">:</span> <span class="mi">134703982051463168</span><span class="p">},</span> <span class="n">id_str</span><span class="p">:</span> <span class="mi">134703982051463168</span><span class="p">,</span> <span class="n">user_id</span><span class="p">:</span> <span class="mi">405383453</span><span class="p">,</span> <span class="n">user_id_str</span><span class="p">:</span> <span class="mi">405383453</span><span class="p">}}</span> <span class="o">|</span>
-<span class="o">|</span> <span class="p">{</span><span class="n">status</span><span class="p">:</span> <span class="p">{</span><span class="n">id</span><span class="p">:</span> <span class="p">{</span><span class="err">$</span><span class="n">numberLong</span><span class="p">:</span> <span class="mi">134773741740765184</span><span class="p">},</span> <span class="n">id_str</span><span class="p">:</span> <span class="mi">134773741740765184</span><span class="p">,</span> <span class="n">user_id</span><span class="p">:</span> <span class="mi">64823441</span><span class="p">,</span> <span class="n">user_id_str</span><span class="p">:</span> <span class="mi">64823441</span><span class="p">}}</span>   <span class="o">|</span>
-<span class="o">|</span> <span class="p">{</span><span class="n">status</span><span class="p">:</span> <span class="p">{</span><span class="n">id</span><span class="p">:</span> <span class="p">{</span><span class="err">$</span><span class="n">numberLong</span><span class="p">:</span> <span class="mi">132543659655704576</span><span class="p">},</span> <span class="n">id_str</span><span class="p">:</span> <span class="mi">132543659655704576</span><span class="p">,</span> <span class="n">user_id</span><span class="p">:</span> <span class="mi">45917834</span><span class="p">,</span> <span class="n">user_id_str</span><span class="p">:</span> <span class="mi">45917834</span><span class="p">}}</span>   <span class="o">|</span>
-<span class="o">|</span> <span class="p">{</span><span class="n">status</span><span class="p">:</span> <span class="p">{</span><span class="n">id</span><span class="p">:</span> <span class="p">{</span><span class="err">$</span><span class="n">numberLong</span><span class="p">:</span> <span class="mi">133786431926697984</span><span class="p">},</span> <span class="n">id_str</span><span class="p">:</span> <span class="mi">133786431926697984</span><span class="p">,</span> <span class="n">user_id</span><span class="p">:</span> <span class="mi">67229952</span><span class="p">,</span> <span class="n">user_id_str</span><span class="p">:</span> <span class="mi">67229952</span><span class="p">}}</span>   <span class="o">|</span>
-<span class="o">|</span> <span class="p">{</span><span class="n">status</span><span class="p">:</span> <span class="p">{</span><span class="n">id</span><span class="p">:</span> <span class="p">{</span><span class="err">$</span><span class="n">numberLong</span><span class="p">:</span> <span class="mi">134619093570560002</span><span class="p">},</span> <span class="n">id_str</span><span class="p">:</span> <span class="mi">134619093570560002</span><span class="p">,</span> <span class="n">user_id</span><span class="p">:</span> <span class="mi">182430773</span><span class="p">,</span> <span class="n">user_id_str</span><span class="p">:</span> <span class="mi">182430773</span><span class="p">}}</span> <span class="o">|</span>
-<span class="o">|</span> <span class="p">{</span><span class="n">status</span><span class="p">:</span> <span class="p">{</span><span class="n">id</span><span class="p">:</span> <span class="p">{</span><span class="err">$</span><span class="n">numberLong</span><span class="p">:</span> <span class="mi">134019857527214080</span><span class="p">},</span> <span class="n">id_str</span><span class="p">:</span> <span class="mi">134019857527214080</span><span class="p">,</span> <span class="n">user_id</span><span class="p">:</span> <span class="mi">257396311</span><span class="p">,</span> <span class="n">user_id_str</span><span class="p">:</span> <span class="mi">257396311</span><span class="p">}}</span> <span class="o">|</span>
-<span class="o">|</span> <span class="p">{</span><span class="n">status</span><span class="p">:</span> <span class="p">{</span><span class="n">id</span><span class="p">:</span> <span class="p">{</span><span class="err">$</span><span class="n">numberLong</span><span class="p">:</span> <span class="mi">133931546469076993</span><span class="p">},</span> <span class="n">id_str</span><span class="p">:</span> <span class="mi">133931546469076993</span><span class="p">,</span> <span class="n">user_id</span><span class="p">:</span> <span class="mi">124539548</span><span class="p">,</span> <span class="n">user_id_str</span><span class="p">:</span> <span class="mi">124539548</span><span class="p">}}</span> <span class="o">|</span>
-<span class="o">|</span> <span class="p">{</span><span class="n">status</span><span class="p">:</span> <span class="p">{</span><span class="n">id</span><span class="p">:</span> <span class="p">{</span><span class="err">$</span><span class="n">numberLong</span><span class="p">:</span> <span class="mi">134397743350296576</span><span class="p">},</span> <span class="n">id_str</span><span class="p">:</span> <span class="mi">134397743350296576</span><span class="p">,</span> <span class="n">user_id</span><span class="p">:</span> <span class="mi">139836391</span><span class="p">,</span> <span class="n">user_id_str</span><span class="p">:</span> <span class="mi">139836391</span><span class="p">}}</span> <span class="o">|</span>
-<span class="o">|</span> <span class="p">{</span><span class="n">status</span><span class="p">:</span> <span class="p">{</span><span class="n">id</span><span class="p">:</span> <span class="p">{</span><span class="err">$</span><span class="n">numberLong</span><span class="p">:</span> <span class="mi">127833661767823360</span><span class="p">},</span> <span class="n">id_str</span><span class="p">:</span> <span class="mi">127833661767823360</span><span class="p">,</span> <span class="n">user_id</span><span class="p">:</span> <span class="mi">244442687</span><span class="p">,</span> <span class="n">user_id_str</span><span class="p">:</span> <span class="mi">244442687</span><span class="p">}}</span> <span class="o">|</span>
-<span class="o">+</span><span class="c1">---------------------------------------------------------------------------------------------------------------------------+</span>
-
-<span class="c1">----------</span>
-<span class="c1">-- Select some deeply nested fields</span>
-<span class="c1">----------</span>
-<span class="k">SELECT</span>
-  <span class="k">delete</span><span class="p">[</span><span class="s1">'status'</span><span class="p">][</span><span class="s1">'id'</span><span class="p">][</span><span class="s1">'$numberLong'</span><span class="p">]</span> <span class="k">as</span> <span class="n">delete_id</span><span class="p">,</span>
-  <span class="k">delete</span><span class="p">[</span><span class="s1">'status'</span><span class="p">][</span><span class="s1">'user_id'</span><span class="p">]</span> <span class="k">as</span> <span class="n">delete_user_id</span>
-<span class="k">FROM</span> <span class="s1">'twitter-sample-head-100000.parquet'</span> <span class="k">WHERE</span> <span class="k">delete</span> <span class="k">IS</span> <span class="k">NOT</span> <span class="k">NULL</span> <span class="k">LIMIT</span> <span class="mi">10</span><span class="p">;</span>
-
-<span class="o">+</span><span class="c1">--------------------+----------------+</span>
-<span class="o">|</span> <span class="n">delete_id</span>          <span class="o">|</span> <span class="n">delete_user_id</span> <span class="o">|</span>
-<span class="o">+</span><span class="c1">--------------------+----------------+</span>
-<span class="o">|</span> <span class="mi">135037425050320896</span> <span class="o">|</span> <span class="mi">334902461</span>      <span class="o">|</span>
-<span class="o">|</span> <span class="mi">134703982051463168</span> <span class="o">|</span> <span class="mi">405383453</span>      <span class="o">|</span>
-<span class="o">|</span> <span class="mi">134773741740765184</span> <span class="o">|</span> <span class="mi">64823441</span>       <span class="o">|</span>
-<span class="o">|</span> <span class="mi">132543659655704576</span> <span class="o">|</span> <span class="mi">45917834</span>       <span class="o">|</span>
-<span class="o">|</span> <span class="mi">133786431926697984</span> <span class="o">|</span> <span class="mi">67229952</span>       <span class="o">|</span>
-<span class="o">|</span> <span class="mi">134619093570560002</span> <span class="o">|</span> <span class="mi">182430773</span>      <span class="o">|</span>
-<span class="o">|</span> <span class="mi">134019857527214080</span> <span class="o">|</span> <span class="mi">257396311</span>      <span class="o">|</span>
-<span class="o">|</span> <span class="mi">133931546469076993</span> <span class="o">|</span> <span class="mi">124539548</span>      <span class="o">|</span>
-<span class="o">|</span> <span class="mi">134397743350296576</span> <span class="o">|</span> <span class="mi">139836391</span>      <span class="o">|</span>
-<span class="o">|</span> <span class="mi">127833661767823360</span> <span class="o">|</span> <span class="mi">244442687</span>      <span class="o">|</span>
-<span class="o">+</span><span class="c1">--------------------+----------------+</span>
-</code></pre></div></div>
-
-<h3 id="subqueries-all-the-way-down">Subqueries All the Way Down</h3>
-
-<p>DataFusion can run many different subqueries by rewriting them to
-joins. It has been able to run the full suite of TPC-H queries for at
-least the last year, but recently we have implemented significant
-improvements to this logic, sufficient to run almost all queries in
-the TPC-DS benchmark as well.</p>
-
-<h2 id="community-and-project-growth">Community and Project Growth</h2>
-
-<p>The six months since <a href="https://arrow.apache.org/blog/2023/01/19/datafusion-16.0.0">our last update</a> saw significant growth in
-the DataFusion community. Between versions <code class="language-plaintext highlighter-rouge">17.0.0</code> and <code class="language-plaintext highlighter-rouge">26.0.0</code>,
-DataFusion merged 711 PRs from 107 distinct contributors, not
-including all the work that goes into our core dependencies such as
-<a href="https://crates.io/crates/arrow">arrow</a>,
-<a href="https://crates.io/crates/parquet">parquet</a>, and
-<a href="https://crates.io/crates/object_store">object_store</a>, that much of
-the same community helps support.</p>
-
-<p>In addition, we have added 7 new committers and 1 new PMC member to
-the Apache Arrow project, largely focused on DataFusion, and we
-learned about some of the cool <a href="https://arrow.apache.org/datafusion/user-guide/introduction.html#known-users">new systems</a> which are using
-DataFusion. Given the growth of the community and interest in the
-project, we also clarified the <a href="https://github.com/apache/arrow-datafusion/discussions/6441">mission statement</a> and are
-<a href="https://github.com/apache/arrow-datafusion/discussions/6475">discussing</a> “graduate”ing DataFusion to a new top level
-Apache Software Foundation project.</p>
-
-<!--
-$ git log --pretty=oneline 17.0.0..26.0.0 . | wc -l
-     711
-
-$ git shortlog -sn 17.0.0..26.0.0 . | wc -l
-      107
--->
-
-<h1 id="how-to-get-involved">How to Get Involved</h1>
-
-<p>Kudos to everyone in the community who has contributed ideas,
-discussions, bug reports, documentation and code. It is exciting to be
-innovating on the next generation of database architectures together!</p>
-
-<p>If you are interested in contributing to DataFusion, we would love to
-have you join us. You can try out DataFusion on some of your own
-data and projects and let us know how it goes or contribute a PR with
-documentation, tests or code. A list of open issues suitable for
-beginners is <a href="https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22">here</a>.</p>
-
-<p>Check out our <a href="https://arrow.apache.org/datafusion/contributor-guide/communication.html">Communication Doc</a> for more ways to engage with the
-community.</p>]]></content><author><name>pmc</name></author><category term="release" /><summary type="html"><![CDATA[&lt;!–]]></summary></entry><entry><title type="html">Apache Arrow DataFusion 16.0.0 Project Update</title><link href="https://datafusion.apache.org/blog/2023/01/19/datafusion-16.0.0/" rel="alternate" type="text/html" title="Apache Arrow DataFusion 16.0.0 Project Update" /><published>2023-01-19T00:00:00+00:00</published><updated>2023-01-19T00:00:00+00:00</updated><id>https://datafusion.apache.org/blog/2023/01/19/datafusion-16.0.0</id><content type="html" xml:base="https://datafusion.apache.org/blog/2023/01/19/datafusion-16.0.0/"><![CDATA[<!--
-
--->
-
-<h1 id="introduction">Introduction</h1>
-
-<p><a href="https://arrow.apache.org/datafusion/">DataFusion</a> is an extensible
-query execution framework, written in <a href="https://www.rust-lang.org/">Rust</a>,
-that uses <a href="https://arrow.apache.org">Apache Arrow</a> as its
-in-memory format. It is targeted primarily at developers creating data
-intensive analytics, and offers mature
-<a href="https://arrow.apache.org/datafusion/user-guide/sql/index.html">SQL support</a>,
-a DataFrame API, and many extension points.</p>
-
-<p>Systems based on DataFusion perform very well in benchmarks,
-especially considering they operate directly on parquet files rather
-than first loading into a specialized format.  Some recent highlights
-include <a href="https://benchmark.clickhouse.com/">clickbench</a> and the
-<a href="https://www.cloudfuse.io/dashboards/standalone-engines">Cloudfuse.io standalone query
-engines</a> page.</p>
-
-<p>DataFusion is also part of a longer term trend, articulated clearly by
-<a href="http://www.cs.cmu.edu/~pavlo/">Andy Pavlo</a> in his <a href="https://ottertune.com/blog/2022-databases-retrospective/">2022 Databases
-Retrospective</a>.
-Database frameworks are proliferating and it is likely that all OLAP
-DBMSs and other data heavy applications, such as machine learning,
-will <strong>require</strong> a vectorized, highly performant query engine in the next
-5 years to remain relevant.  The only practical way to make such
-technology so widely available without many millions of dollars of
-investment is though open source engine such as DataFusion or
-<a href="https://github.com/facebookincubator/velox">Velox</a>.</p>
-
-<p>The rest of this post describes the improvements made to DataFusion
-over the last three months and some hints of where we are heading.</p>
-
-<h2 id="community-growth">Community Growth</h2>
-
-<p>We again saw significant growth in the DataFusion community since <a href="https://arrow.apache.org/blog/2022/10/25/datafusion-13.0.0/">our last update</a>. There are some interesting metrics on <a href="https://ossrank.com/p/1573-apache-arrow-datafusion">OSSRank</a>.</p>
-
-<p>The DataFusion 16.0.0 release consists of 543 PRs from 73 distinct contributors, not including all the work that goes into dependencies such as <a href="https://crates.io/crates/arrow">arrow</a>, <a href="https://crates.io/crates/parquet">parquet</a>, and <a href="https://crates.io/crates/object_store">object_store</a>, that much of the same community helps support. Thank you all for your help</p>
-
-<!--
-$ git log --pretty=oneline 13.0.0..16.0.0 . | wc -l
-     543
-
-$ git shortlog -sn 13.0.0..16.0.0 . | wc -l
-      73
--->
-<p>Several <a href="https://github.com/apache/arrow-datafusion#known-uses">new systems based on DataFusion</a> were recently added:</p>
-
-<ul>
-  <li><a href="https://github.com/GreptimeTeam/greptimedb">Greptime DB</a></li>
-  <li><a href="https://synnada.ai/">Synnada</a></li>
-  <li><a href="https://github.com/PRQL/prql-query">PRQL</a></li>
-  <li><a href="https://github.com/parseablehq/parseable">Parseable</a></li>
-  <li><a href="https://github.com/splitgraph/seafowl">SeaFowl</a></li>
-</ul>
-
-<h2 id="performance-">Performance 🚀</h2>
-
-<p>Performance and efficiency are core values for
-DataFusion. While there is still a gap between DataFusion and the best of
-breed, tightly integrated systems such as <a href="https://duckdb.org">DuckDB</a>
-and <a href="https://www.pola.rs/">Polars</a>, DataFusion is
-closing the gap quickly. Performance highlights from the last three
-months:</p>
-
-<ul>
-  <li>Up to 30% Faster Sorting and Merging using the new <a href="https://arrow.apache.org/blog/2022/11/07/multi-column-sorts-in-arrow-rust-part-1/">Row Format</a></li>
-  <li><a href="https://arrow.apache.org/blog/2022/12/26/querying-parquet-with-millisecond-latency/">Advanced predicate pushdown</a>, directly on parquet, directly from object storage, enabling sub millisecond filtering. <!-- Andrew nots: we should really get this turned on by default --></li>
-  <li><code class="language-plaintext highlighter-rouge">70%</code> faster <code class="language-plaintext highlighter-rouge">IN</code> expressions evaluation (<a href="https://github.com/apache/arrow-datafusion/issues/4057">#4057</a>)</li>
-  <li>Sort and partition aware optimizations (<a href="https://github.com/apache/arrow-datafusion/issues/3969">#3969</a> and  <a href="https://github.com/apache/arrow-datafusion/issues/4691">#4691</a>)</li>
-  <li>Filter selectivity analysis (<a href="https://github.com/apache/arrow-datafusion/issues/3868">#3868</a>)</li>
-</ul>
-
-<h2 id="runtime-resource-limits">Runtime Resource Limits</h2>
-
-<p>Previously, DataFusion could potentially use unbounded amounts of memory for certain queries that included Sorts, Grouping or Joins.</p>
-
-<p>In version 16.0.0, it is possible to limit DataFusion’s memory usage for Sorting and Grouping. We are looking for help adding similar limiting for Joins as well as expanding our algorithms to optionally spill to secondary storage. See <a href="https://github.com/apache/arrow-datafusion/issues/3941">#3941</a> for more detail.</p>
-
-<h2 id="sql-window-functions">SQL Window Functions</h2>
-
-<p><a href="https://en.wikipedia.org/wiki/Window_function_(SQL)">SQL Window Functions</a> are useful for a variety of analysis and DataFusion’s implementation support expanded significantly:</p>
-
-<ul>
-  <li>Custom window frames such as <code class="language-plaintext highlighter-rouge">... OVER (ORDER BY ... RANGE BETWEEN 0.2 PRECEDING AND 0.2 FOLLOWING)</code></li>
-  <li>Unbounded window frames such as <code class="language-plaintext highlighter-rouge">... OVER (ORDER BY ... RANGE UNBOUNDED ROWS PRECEDING)</code></li>
-  <li>Support for the <code class="language-plaintext highlighter-rouge">NTILE</code> window function (<a href="https://github.com/apache/arrow-datafusion/issues/4676">#4676</a>)</li>
-  <li>Support for <code class="language-plaintext highlighter-rouge">GROUPS</code> mode (<a href="https://github.com/apache/arrow-datafusion/issues/4155">#4155</a>)</li>
-</ul>
-
-<h1 id="improved-joins">Improved Joins</h1>
-
-<p>Joins are often the most complicated operations to handle well in
-analytics systems and DataFusion 16.0.0 offers significant improvements
-such as</p>
-
-<ul>
-  <li>Cost based optimizer (CBO) automatically reorders join evaluations, selects algorithms (Merge / Hash), and pick build side based on available statistics and join type (<code class="language-plaintext highlighter-rouge">INNER</code>, <code class="language-plaintext highlighter-rouge">LEFT</code>, etc) (<a href="https://github.com/apache/arrow-datafusion/issues/4219">#4219</a>)</li>
-  <li>Fast non <code class="language-plaintext highlighter-rouge">column=column</code> equijoins such as <code class="language-plaintext highlighter-rouge">JOIN ON a.x + 5 = b.y</code></li>
-  <li>Better performance on non-equijoins (<a href="https://github.com/apache/arrow-datafusion/issues/4562">#4562</a>) <!-- TODO is this a good thing to mention as any time this is usd the query is going to go slow or the data size is small --></li>
-</ul>
-
-<h1 id="streaming-execution">Streaming Execution</h1>
-
-<p>One emerging use case for Datafusion is as a foundation for
-streaming-first data platforms. An important prerequisite
-is support for incremental execution for queries that can be computed
-incrementally.</p>
-
-<p>With this release, DataFusion now supports the following streaming features:</p>
-
-<ul>
-  <li>Data ingestion from infinite files such as FIFOs (<a href="https://github.com/apache/arrow-datafusion/issues/4694">#4694</a>),</li>
-  <li>Detection of pipeline-breaking queries in streaming use cases (<a href="https://github.com/apache/arrow-datafusion/issues/4694">#4694</a>),</li>
-  <li>Automatic input swapping for joins so probe side is a data stream (<a href="https://github.com/apache/arrow-datafusion/issues/4694">#4694</a>),</li>
-  <li>Intelligent elision of pipeline-breaking sort operations whenever possible (<a href="https://github.com/apache/arrow-datafusion/issues/4691">#4691</a>),</li>
-  <li>Incremental execution for more types of queries; e.g. queries involving finite window frames (<a href="https://github.com/apache/arrow-datafusion/issues/4777">#4777</a>).</li>
-</ul>
-
-<p>These are a major steps forward, and we plan even more improvements over the next few releases.</p>
-
-<h1 id="better-support-for-distributed-catalogs">Better Support for Distributed Catalogs</h1>
-
-<p>16.0.0 has been enhanced support for asynchronous catalogs (<a href="https://github.com/apache/arrow-datafusion/issues/4607">#4607</a>)
-to better support distributed metadata stores such as
-<a href="https://delta.io/">Delta.io</a> and <a href="https://iceberg.apache.org/">Apache
-Iceberg</a> which require asynchronous I/O
-during planning to access remote catalogs. Previously, DataFusion
-required synchronous access to all relevant catalog information.</p>
-
-<h1 id="additional-sql-support">Additional SQL Support</h1>
-<p>SQL support continues to improve, including some of these highlights:</p>
-
-<ul>
-  <li>Add TPC-DS query planning regression tests <a href="https://github.com/apache/arrow-datafusion/issues/4719">#4719</a></li>
-  <li>Support for <code class="language-plaintext highlighter-rouge">PREPARE</code> statement <a href="https://github.com/apache/arrow-datafusion/issues/4490">#4490</a></li>
-  <li>Automatic coercions ast between Date and Timestamp <a href="https://github.com/apache/arrow-datafusion/issues/4726">#4726</a></li>
-  <li>Support type coercion for timestamp and utf8 <a href="https://github.com/apache/arrow-datafusion/issues/4312">#4312</a></li>
-  <li>Full support for time32 and time64 literal values (<code class="language-plaintext highlighter-rouge">ScalarValue</code>) <a href="https://github.com/apache/arrow-datafusion/issues/4156">#4156</a></li>
-  <li>New functions, incuding <code class="language-plaintext highlighter-rouge">uuid()</code>  <a href="https://github.com/apache/arrow-datafusion/issues/4041">#4041</a>, <code class="language-plaintext highlighter-rouge">current_time</code>  <a href="https://github.com/apache/arrow-datafusion/issues/4054">#4054</a>, <code class="language-plaintext highlighter-rouge">current_date</code> <a href="https://github.com/apache/arrow-datafusion/issues/4022">#4022</a></li>
-  <li>Compressed CSV/JSON support <a href="https://github.com/apache/arrow-datafusion/issues/3642">#3642</a></li>
-</ul>
-
-<p>The community has also invested in new <a href="https://github.com/apache/arrow-datafusion/blob/master/datafusion/core/tests/sqllogictests/README.md">sqllogic based</a> tests to keep improving DataFusion’s quality with less effort.</p>
-
-<h1 id="plan-serialization-and-substrait">Plan Serialization and Substrait</h1>
-
-<p>DataFusion now supports serialization of physical plans, with a custom protocol buffers format. In addition, we are adding initial support for <a href="https://substrait.io/">Substrait</a>, a Cross-Language Serialization for Relational Algebra</p>
-
-<h1 id="how-to-get-involved">How to Get Involved</h1>
-
-<p>Kudos to everyone in the community who contributed ideas, discussions, bug reports, documentation and code. It is exciting to be building something so cool together!</p>
-
-<p>If you are interested in contributing to DataFusion, we would love to
-have you join us. You can try out DataFusion on some of your own
-data and projects and let us know how it goes or contribute a PR with
-documentation, tests or code. A list of open issues suitable for
-beginners is
-<a href="https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22">here</a>.</p>
-
-<p>Check out our <a href="https://arrow.apache.org/datafusion/community/communication.html">Communication Doc</a> on more
-ways to engage with the community.</p>
-
-<h2 id="appendix-contributor-shoutout">Appendix: Contributor Shoutout</h2>
-
-<p>Here is a list of people who have contributed PRs to this project over the last three releases, derived from <code class="language-plaintext highlighter-rouge">git shortlog -sn 13.0.0..16.0.0 .</code> Thank you all!</p>
-
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>   113	Andrew Lamb
-    58	jakevin
-    46	Raphael Taylor-Davies
-    30	Andy Grove
-    19	Batuhan Taskaya
-    19	Remzi Yang
-    17	ygf11
-    16	Burak
-    16	Jeffrey
-    16	Marco Neumann
-    14	Kun Liu
-    12	Yang Jiang
-    10	mingmwang
-     9	Daniël Heres
-     9	Mustafa akur
-     9	comphead
-     9	mvanschellebeeck
-     9	xudong.w
-     7	dependabot[bot]
-     7	yahoNanJing
-     6	Brent Gardner
-     5	AssHero
-     4	Jiayu Liu
-     4	Wei-Ting Kuo
-     4	askoa
-     3	André Calado Coroado
-     3	Jie Han
-     3	Jon Mease
-     3	Metehan Yıldırım
-     3	Nga Tran
-     3	Ruihang Xia
-     3	baishen
-     2	Berkay Şahin
-     2	Dan Harris
-     2	Dongyan Zhou
-     2	Eduard Karacharov
-     2	Kikkon
-     2	Liang-Chi Hsieh
-     2	Marko Milenković
-     2	Martin Grigorov
-     2	Roman Nozdrin
-     2	Tim Van Wassenhove
-     2	r.4ntix
-     2	unconsolable
-     2	unvalley
-     1	Ajaya Agrawal
-     1	Alexander Spies
-     1	ArkashaJavelin
-     1	Artjoms Iskovs
-     1	BoredPerson
-     1	Christian Salvati
-     1	Creampanda
-     1	Data Psycho
-     1	Francis Du
-     1	Francis Le Roy
-     1	LFC
-     1	Marko Grujic
-     1	Matt Willian
-     1	Matthijs Brobbel
-     1	Max Burke
-     1	Mehmet Ozan Kabak
-     1	Rito Takeuchi
-     1	Roman Zeyde
-     1	Vrishabh
-     1	Zhang Li
-     1	ZuoTiJia
-     1	byteink
-     1	cfraz89
-     1	nbr
-     1	xxchan
-     1	yujie.zhang
-     1	zembunia
-     1	哇呜哇呜呀咦耶
-</code></pre></div></div>]]></content><author><name>pmc</name></author><category term="release" /><summary type="html"><![CDATA[&lt;!–]]></summary></entry></feed>
+</div>]]></content><author><name>alamb, Dandandan, tustvold</name></author><category term="release" /><summary type="html"><![CDATA[&lt;!–]]></summary></entry></feed>
