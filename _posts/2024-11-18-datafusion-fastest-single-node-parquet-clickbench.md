@@ -180,7 +180,7 @@ working on the [final piece] (no pressure😅)
 [DataFusion ParquetExec]: https://docs.rs/datafusion/latest/datafusion/datasource/physical_plan/parquet/struct.ParquetExec.html
 [Rust Parquet Implementation]: https://crates.io/crates/parquet
 
-## Skipping Partial Aggregation When Doesn't Help
+## Skipping Partial Aggregation When It Doesn't Help
 
 Many ClickBench queries are aggregations that summarize millions of rows, a
 common task for reporting and dashboarding. DataFusion uses state of the art
