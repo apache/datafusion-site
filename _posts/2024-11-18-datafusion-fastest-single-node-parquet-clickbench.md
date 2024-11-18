@@ -100,7 +100,7 @@ alt="ClickBench performance results over time for DataFusion"
 (released Dec 2023) and DataFusion 43 (released Nov 2024).
 
 Like all good optimization efforts, ours took sustained effort as DataFusion ran
-out [single 2x performance improvements] several years ago. Working together our
+out of [single 2x performance improvements] several years ago. Working together our
 community of engineers from around the world[^3] and all experience levels[^4]
 pulled it off (check out [this discussion] to get a sense). It may be a "[hobo
 sandwich]" [^5], but it is a tasty one!
@@ -115,7 +115,7 @@ but until now they were only available in proprietary systems such as
 Photon](https://www.databricks.com/product/photon), or
 [Snowflake](https://www.snowflake.com/en/) or in tightly integrated open source
 systems such as [DuckDB](https://duckdb.org/) or
-[ClickHouse](https://clickhouse.com/) which were not designed to extend.
+[ClickHouse](https://clickhouse.com/) which were not designed to be extended.
 
 
 ## StringView
@@ -159,9 +159,9 @@ Here is a partial list of people involved in the project (I am sorry to those wh
 
 ## Parquet
 
-Part DataFusion's speed in ClickBench is reading Parquet files (really) quickly,
+Part of the reason for DataFusion's speed in ClickBench is reading Parquet files (really) quickly,
 which reflects invested effort in the Parquet reading system (see [Querying
-Parquet with Millisecond Latency]
+Parquet with Millisecond Latency] )
 
 The [DataFusion ParquetExec] (built on the [Rust Parquet Implementation]) is now the most
 sophisticated open source Parquet reader I know of. It has every optimization we
