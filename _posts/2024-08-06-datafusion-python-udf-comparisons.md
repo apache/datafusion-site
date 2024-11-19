@@ -30,8 +30,8 @@ limitations under the License.
 
 For a few months now I’ve been working with [Apache DataFusion](https://datafusion.apache.org/), a
 fast query engine written in Rust. From my experience the language that nearly all data scientists
-are working in is Python. In general, often stick to [pandas](https://pandas.pydata.org/) for
-in-memory tasks and [pyspark](https://spark.apache.org/) for larger tasks that require distributed
+are working in is Python. In general, often stick to [Pandas](https://pandas.pydata.org/) for
+in-memory tasks and [PySpark](https://spark.apache.org/) for larger tasks that require distributed
 processing.
 
 In addition to DataFusion, there is another Rust based newcomer to the DataFrame world,
@@ -42,7 +42,8 @@ recommend evaluating Polars for in memory work.
 
 Personally, I would love a single query approach that is fast for both in memory usage and can
 extend to large batch processing to exploit parallelization. I think DataFusion, coupled with
-Ballista, may provide this solution.
+[Ballista](https://datafusion.apache.org/ballista/) or
+[DataFusion-Ray](https://github.com/apache/datafusion-ray), may provide this solution.
 
 As I’m testing, I’m primarily limiting my work to the
 [datafusion-python](https://datafusion.apache.org/python/) project, a wrapper around the Rust
@@ -65,16 +66,16 @@ functions to achieve your goals.
 
 In the following, I’m going to demonstrate two example use cases. These are based on real world
 problems I’ve encountered. Also I want to demonstrate the approach of “make it work, make it work
-well, make it fast” that is a motto I’ve seen thrown around in data science.
+well, make it work fast” that is a motto I’ve seen thrown around in data science.
 
 I will demonstrate three approaches to writing UDFs. In order of increasing performance they are
 
 - Writing a pure Python function to do your computation
-- Using the pyarrow libraries in Python to accelerate your processing
+- Using the PyArrow libraries in Python to accelerate your processing
 - Writing a UDF in Rust and exposing it to Python
 
 Additionally I will demonstrate two variants of this. The first will be nearly identical to the
-pyarrow library approach to simplicity of understanding how to connect the Rust code to Python. The
+PyArrow library approach to simplicity of understanding how to connect the Rust code to Python. The
 second version we will do the iteration through the input arrays ourselves to give even greater
 flexibility to the user.
 
@@ -95,11 +96,11 @@ handful of these combinations I want to return.
 
 Probably the most ergonomic way to do this without UDF is to turn that list of tuples into a
 DataFrame itself, perform a join, and select the columns from the original DataFrame. If we were
-working in pyspark we would probably broadcast join the DataFrame created from the tuple list since
+working in PySpark we would probably broadcast join the DataFrame created from the tuple list since
 it is tiny. In practice, I have found that with some DataFrame libraries performing a filter rather
 than a join can be significantly faster. This is worth profiling for your specific use case.
 
-### Use Case 2: Aggregate or Window Function
+### Use Case 2: Aggregate Function
 
 I have a DataFrame with many values that I want to aggregate. I have already analyzed it and
 determined there is a noise level below which I do not want to include in my analysis. I want to
@@ -108,7 +109,7 @@ compute a sum of only values that are above my noise threshold.
 This can be done fairly easy without leaning on a User Defined Aggegate Function (UDAF). You can
 simply filter the DataFrame and then aggregate using the built-in `sum` function. Here, we
 demonstrate doing this as a UDF primarily as an example of how to write UDAFs. We will use the
-pyarrow compute approach.
+PyArrow compute approach.
 
 ## Pure Python approach
 
@@ -158,7 +159,7 @@ df_udf_filter = df_lineitem.filter(
 
 When working with a DataFusion UDF in Python, you define your function to take in some number of
 expressions. During the evaluation, these will get computed into their corresponding values and
-passed to your UDF as a pyarrow Array. We must return an Array also with the same number of
+passed to your UDF as a PyArrow Array. We must return an Array also with the same number of
 elements (rows). So the UDF example just iterates through all of the arrays and checks to see if
 the tuple created from these columns matches any of those that we’re looking for.
 
@@ -176,11 +177,11 @@ code. Any time you have to cross the barrier where you change values inside the 
 Python objects or vice versa you will pay **heavy** cost in that transformation. You will want to
 design your UDFs to avoid this as much as possible.
 
-## Python approach using pyarrow compute
+## Python approach using PyArrow compute
 
 DataFusion uses [Apache Arrow](https://arrow.apache.org/) as its in-memory data format. This can
 be seen in the way that Arrow Arrays are passed into the UDFs. We can take advantage of the fact
-that [pyarrow](https://arrow.apache.org/docs/python/), the canonical Python Arrow implementation,
+that [PyArrow](https://arrow.apache.org/docs/python/), the canonical Python Arrow implementation,
 provides a variety of
 useful functions. In the example below, we are only using a few of the boolean functions and the
 equality function. Each of these functions takes two arrays and analyzes them row by row. In the
@@ -233,10 +234,10 @@ of tuples exists, so we take the result from the current loop and perform a `pya
 on it.
 
 From my benchmarking, switching from approach of converting values into Python objects to this
-approach of using the pyarrow built-in functions leads to about a 10x speed improvement in this
+approach of using the PyArrow built-in functions leads to about a 10x speed improvement in this
 simple problem.
 
-It’s worth noting that almost all of the pyarrow compute functions expect to take one or two arrays
+It’s worth noting that almost all of the PyArrow compute functions expect to take one or two arrays
 as their arguments. If you need to write a UDF that is evaluating three or more columns, you’ll
 need to do something akin to what we’ve shown here.
 
@@ -245,7 +246,7 @@ need to do something akin to what we’ve shown here.
 This is the most complicated approach, but has the potential to be the most performant. What we
 will do here is write a Rust function to perform our computation and then expose that function to
 Python. I know of two use cases where I would recommend this approach. The first is the case when
-the pyarrow compute functions are insufficient for your needs. Perhaps your code is too complex or
+the PyArrow compute functions are insufficient for your needs. Perhaps your code is too complex or
 could be greatly simplified if you pulled in some outside dependency. The second use case is when
 you have written a UDF that you’re sharing across multiple projects and have hardened the approach.
 It is possible that you can implement your function in Rust to give a speed improvement and then
@@ -277,18 +278,21 @@ For the conversion to and from Python objects, we can take advantage of the
 perform your computation.
 
 We are going to demonstrate doing this computation in two ways. The first is to mimic what we’ve
-done in the above approach using pyarrow. In the second we demonstrate iterating through the three
+done in the above approach using PyArrow. In the second we demonstrate iterating through the three
 arrays ourselves.
 
 In our first approach, we can expect the performance to be nearly identical to when we used the
-pyarrow compute functions. On the Rust side we will have slightly less overhead but the heavy
+PyArrow compute functions. On the Rust side we will have slightly less overhead but the heavy
 lifting portions of the code are essentially the same between this Rust implementation and the
-pyarrow approach above.
+PyArrow approach above.
 
 The reason for demonstrating this, even though it doesn’t provide a significant speedup over
 Python, is to primarily demonstrate how to make the Python to Rust with Python wrapper
 transition. In the second implementation you can see how we can iterate through all of the arrays
 ourselves.
+
+In this first example, we are hard coding the values of interest, but in the following section
+we demonstrate passing these in during initalization.
 
 ```rust
 #[pyfunction]
@@ -527,7 +531,7 @@ batch will contain off the values we are aggregating over. For this we need to d
 - Return the final result
 
 In the example below, we're going to look at customer orders and we want to know per customer ID,
-how much they have ordered total. We want to ignore small orders, which we define as anything over
+how much they have ordered total. We want to ignore small orders, which we define as anything under
 5000.
 
 ```python
@@ -536,7 +540,7 @@ import pyarrow as pa
 import pyarrow.compute as pc
 
 IGNORE_THESHOLD = 5000.0
-class AboveThersholdAccum(Accumulator):
+class AboveThresholdAccum(Accumulator):
     def __init__(self) -> None:
         self._sum = 0.0
 
@@ -556,7 +560,7 @@ class AboveThersholdAccum(Accumulator):
     def evaluate(self) -> pa.Scalar:
         return pa.scalar(self._sum)
 
-sum_above_threshold = udaf(AboveThersholdAccum, [pa.float64()], pa.float64(), [pa.float64()], 'stable')
+sum_above_threshold = udaf(AboveThresholdAccum, [pa.float64()], pa.float64(), [pa.float64()], 'stable')
 
 df_orders.aggregate([col("o_custkey")],[sum_above_threshold(col("o_totalprice")).alias("sales")]).show()
 ```
@@ -567,6 +571,14 @@ function. For larger batches we may `merge()` these states. It is important to n
 `states` in the `merge()` function are an array of the values returned from `state()`. It is
 entirely possible that the `merge` function is significantly different than the `update`, though in
 our example they are very similar.
+
+## User Defined Window Functions
+
+Writing a user defined window function is slighlty more complex than an aggregate function due
+to the variety of ways that window functions are called. I recommend reviewing the
+[online documentation](https://datafusion.apache.org/python/user-guide/common-operations/udf-and-udfa.html)
+for a description of which functions need to be implemented. The details of how to implement
+these generally follow the same patterns as described above for aggregate functions.
 
 ## Performance Comparison
 
@@ -589,9 +601,9 @@ times. For this simple example these are our results.
 
 As expected, the conversion to Python objects is by far the worst performance. As soon as we drop
 into using any functions that keep the data entirely on the Rust side we see a near 10x speed
-improvement. Then as we increase our complexity from using pyarrow compute functions to
+improvement. Then as we increase our complexity from using PyArrow compute functions to
 implementing the UDF in Rust we see incremental improvements. Our fastest approach - iterating
-through the arrays ourselves does operate nearly 10% faster than the pyarrow compute approach.
+through the arrays ourselves does operate nearly 10% faster than the PyArrow compute approach.
 
 ## Final Thoughts and Recommendations
 
@@ -600,12 +612,12 @@ giving it a try. This post was designed to make it easier for new users to the P
 to work with User Defined Functions by giving a few examples of how one might implement these.
 
 When it comes to designing UDFs, I strongly recommend seeing if you can write your UDF using
-[pyarrow functions](https://arrow.apache.org/docs/python/api/compute.html) rather than pure Python
+[PyArrow functions](https://arrow.apache.org/docs/python/api/compute.html) rather than pure Python
 objects. These will give you enormous speed benefits. If you must do something that isn't well
-represented by the pyarrow compute functions, then I would consider using a Rust based UDF in the
+represented by the PyArrow compute functions, then I would consider using a Rust based UDF in the
 manner shown above.
 
 Lastly, the Apache Arrow and DataFusion community is an active group of very helpful people working
 to make a great tool. If you want to get involved, please take a look at the
 [online documentation](https://datafusion.apache.org/python/) and jump in to help with one of the
-(open issues)[https://github.com/apache/datafusion-python/issues].
+[open issues](https://github.com/apache/datafusion-python/issues).
