@@ -1,4 +1,607 @@
-<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" ><generator uri="https://jekyllrb.com/" version="4.3.3">Jekyll</generator><link href="https://datafusion.apache.org/blog/feed.xml" rel="self" type="application/atom+xml" /><link href="https://datafusion.apache.org/blog/" rel="alternate" type="text/html" /><updated>2024-10-08T02:34:20+00:00</updated><id>https://datafusion.apache.org/blog/feed.xml</id><title type="html">Apache DataFusion Project News &amp;amp; Blog</title><subtitle>Apache DataFusion is a very fast, extensible query engine for building high-quality  data-centric systems in Rust, using the Apache Arrow in-memory format.</subtitle><entry><title type="html">Apache DataFusion Comet 0.3.0 Release</title><link href="https://datafusion.apache.org/blog/2024/09/27/datafusion-comet-0.3.0/" rel="alternate" type="text/html" title="Apache DataFusion Comet 0.3.0 Release" /><published>2024-09-27T00:00:00+00:00</published><updated>2024-09-27T00:00:00+00:00</updated><id>https://datafusion.apache.org/blog/2024/09/27/datafusion-comet-0.3.0</id><content type="html" xml:base="https://datafusion.apache.org/blog/2024/09/27/datafusion-comet-0.3.0/"><![CDATA[<!--
+<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" ><generator uri="https://jekyllrb.com/" version="4.3.3">Jekyll</generator><link href="https://datafusion.apache.org/blog/feed.xml" rel="self" type="application/atom+xml" /><link href="https://datafusion.apache.org/blog/" rel="alternate" type="text/html" /><updated>2024-11-19T22:33:58+00:00</updated><id>https://datafusion.apache.org/blog/feed.xml</id><title type="html">Apache DataFusion Project News &amp;amp; Blog</title><subtitle>Apache DataFusion is a very fast, extensible query engine for building high-quality  data-centric systems in Rust, using the Apache Arrow in-memory format.</subtitle><entry><title type="html">Comparing approaches to User Defined Functions in Apache DataFusion using Python</title><link href="https://datafusion.apache.org/blog/2024/11/19/datafusion-python-udf-comparisons/" rel="alternate" type="text/html" title="Comparing approaches to User Defined Functions in Apache DataFusion using Python" /><published>2024-11-19T00:00:00+00:00</published><updated>2024-11-19T00:00:00+00:00</updated><id>https://datafusion.apache.org/blog/2024/11/19/datafusion-python-udf-comparisons</id><content type="html" xml:base="https://datafusion.apache.org/blog/2024/11/19/datafusion-python-udf-comparisons/"><![CDATA[<!--
+
+-->
+<h1 id="writing-user-defined-functions-in-apache-datafusion-using-python">Writing User Defined Functions in Apache DataFusion using Python</h1>
+
+<h2 id="personal-context">Personal Context</h2>
+
+<p>For a few months now I’ve been working with <a href="https://datafusion.apache.org/">Apache DataFusion</a>, a
+fast query engine written in Rust. From my experience the language that nearly all data scientists
+are working in is Python. In general, data scientists often use <a href="https://pandas.pydata.org/">Pandas</a>
+for in-memory tasks and <a href="https://spark.apache.org/">PySpark</a> for larger tasks that require
+distributed processing.</p>
+
+<p>In addition to DataFusion, there is another Rust based newcomer to the DataFrame world,
+<a href="https://pola.rs/">Polars</a>. The latter is growing extremely fast, and it serves many of the same
+use cases as DataFusion. For my use cases, I’m interested in DataFusion because I want to be able
+to build small scale tests rapidly and then scale them up to larger distributed systems with ease.
+I do recommend evaluating Polars for in-memory work.</p>
+
+<p>Personally, I would love a single query approach that is fast for both in-memory usage and can
+extend to large batch processing to exploit parallelization. I think DataFusion, coupled with
+<a href="https://datafusion.apache.org/ballista/">Ballista</a> or
+<a href="https://github.com/apache/datafusion-ray">DataFusion-Ray</a>, may provide this solution.</p>
+
+<p>As I’m testing, I’m primarily limiting my work to the
+<a href="https://datafusion.apache.org/python/">datafusion-python</a> project, a wrapper around the Rust
+DataFusion library. This wrapper gives you the speed advantages of keeping all of the data in the
+Rust implementation and the ergonomics of working in Python. Personally, I would prefer to work
+purely in Rust, but I also recognize that since the industry works in Python we should meet the
+people where they are.</p>
+
+<h2 id="user-defined-functions">User-Defined Functions</h2>
+
+<p>The focus of this post is User-Defined Functions (UDFs). The DataFusion library gives a lot of
+useful functions already for doing DataFrame manipulation. These are going to be similar to those
+you find in other DataFrame libraries. You’ll be able to do simple arithmetic, create substrings of
+columns, or find the average value across a group of rows. These cover most of the use cases
+you’ll need in a DataFrame.</p>
+
+<p>However, there will always arise times when you want a custom function. With UDFs you open a
+world of possibilities in your code. Sometimes there simply isn’t an easy way to use built-in
+functions to achieve your goals.</p>
+
+<p>In the following, I’m going to demonstrate two example use cases. These are based on real world
+problems I’ve encountered. Also I want to demonstrate the approach of “make it work, make it work
+well, make it work fast” that is a motto I’ve seen thrown around in data science.</p>
+
+<p>I will demonstrate three approaches to writing UDFs. In order of increasing performance they are</p>
+
+<ul>
+  <li>Writing a pure Python function to do your computation</li>
+  <li>Using the PyArrow libraries in Python to accelerate your processing</li>
+  <li>Writing a UDF in Rust and exposing it to Python</li>
+</ul>
+
+<p>Additionally I will demonstrate two variants of this. The first will be nearly identical to the
+PyArrow library approach to simplify understanding how to connect the Rust code to Python. In the
+second version we will do the iteration through the input arrays ourselves to give even greater
+flexibility to the user.</p>
+
+<p>Here are the two example use cases, taken from my own work but generalized.</p>
+
+<h3 id="use-case-1-scalar-function">Use Case 1: Scalar Function</h3>
+
+<p>I have a DataFrame and a list of tuples that I’m interested in. I want to filter out the DataFrame
+to only have values that match those tuples from certain columns in the DataFrame.</p>
+
+<p>To give a concrete example, we will use data generated for the <a href="https://www.tpc.org/tpch/">TPC-H benchmarks</a>.
+Suppose I have a table of sales line items. There are many columns, but I am interested in three: a
+part key (<code class="language-plaintext highlighter-rouge">p_partkey</code>), supplier key (<code class="language-plaintext highlighter-rouge">p_suppkey</code>), and return status (<code class="language-plaintext highlighter-rouge">p_returnflag</code>). I want
+only to return a DataFrame with a specific combination of these three values. That is, I want
+to know if part number 1530 from supplier 4031 was sold (not returned), so I want a specific
+combination of <code class="language-plaintext highlighter-rouge">p_partkey = 1530</code>, <code class="language-plaintext highlighter-rouge">p_suppkey = 4031</code>, and <code class="language-plaintext highlighter-rouge">p_returnflag = 'N'</code>. I have a small
+handful of these combinations I want to return.</p>
+
+<p>Probably the most ergonomic way to do this without UDF is to turn that list of tuples into a
+DataFrame itself, perform a join, and select the columns from the original DataFrame. If we were
+working in PySpark we would probably broadcast join the DataFrame created from the tuple list since
+it is tiny. In practice, I have found that with some DataFrame libraries performing a filter rather
+than a join can be significantly faster. This is worth profiling for your specific use case.</p>
+
+<h3 id="use-case-2-aggregate-function">Use Case 2: Aggregate Function</h3>
+
+<p>I have a DataFrame with many values that I want to aggregate. I have already analyzed it and
+determined there is a noise level below which I do not want to include in my analysis. I want to
+compute a sum of only values that are above my noise threshold.</p>
+
+<p>This can be done fairly easy without leaning on a User Defined Aggegate Function (UDAF). You can
+simply filter the DataFrame and then aggregate using the built-in <code class="language-plaintext highlighter-rouge">sum</code> function. Here, we
+demonstrate doing this as a UDF primarily as an example of how to write UDAFs. We will use the
+PyArrow compute approach.</p>
+
+<h2 id="pure-python-approach">Pure Python approach</h2>
+
+<p>The fastest way (developer time, not code time) for me to implement the scalar problem solution
+was to do something along the lines of “for each row, check the values of interest contains that
+tuple”. I’ve published this as
+<a href="https://github.com/apache/datafusion-python/blob/main/examples/python-udf-comparisons.py">an example</a>
+in the <a href="https://github.com/apache/datafusion-python">datafusion-python repository</a>. Here is an
+example of how this can be done:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">values_of_interest</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="p">(</span><span class="mi">1530</span><span class="p">,</span> <span class="mi">4031</span><span class="p">,</span> <span class="sh">"</span><span class="s">N</span><span class="sh">"</span><span class="p">),</span>
+    <span class="p">(</span><span class="mi">6530</span><span class="p">,</span> <span class="mi">1531</span><span class="p">,</span> <span class="sh">"</span><span class="s">N</span><span class="sh">"</span><span class="p">),</span>
+    <span class="p">(</span><span class="mi">5618</span><span class="p">,</span> <span class="mi">619</span><span class="p">,</span> <span class="sh">"</span><span class="s">N</span><span class="sh">"</span><span class="p">),</span>
+    <span class="p">(</span><span class="mi">8118</span><span class="p">,</span> <span class="mi">8119</span><span class="p">,</span> <span class="sh">"</span><span class="s">N</span><span class="sh">"</span><span class="p">),</span>
+<span class="p">]</span>
+
+<span class="k">def</span> <span class="nf">is_of_interest_impl</span><span class="p">(</span>
+    <span class="n">partkey_arr</span><span class="p">:</span> <span class="n">pa</span><span class="p">.</span><span class="n">Array</span><span class="p">,</span>
+    <span class="n">suppkey_arr</span><span class="p">:</span> <span class="n">pa</span><span class="p">.</span><span class="n">Array</span><span class="p">,</span>
+    <span class="n">returnflag_arr</span><span class="p">:</span> <span class="n">pa</span><span class="p">.</span><span class="n">Array</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pa</span><span class="p">.</span><span class="n">Array</span><span class="p">:</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">partkey</span> <span class="ow">in</span> <span class="nf">enumerate</span><span class="p">(</span><span class="n">partkey_arr</span><span class="p">):</span>
+        <span class="n">partkey</span> <span class="o">=</span> <span class="n">partkey</span><span class="p">.</span><span class="nf">as_py</span><span class="p">()</span>
+        <span class="n">suppkey</span> <span class="o">=</span> <span class="n">suppkey_arr</span><span class="p">[</span><span class="n">idx</span><span class="p">].</span><span class="nf">as_py</span><span class="p">()</span>
+        <span class="n">returnflag</span> <span class="o">=</span> <span class="n">returnflag_arr</span><span class="p">[</span><span class="n">idx</span><span class="p">].</span><span class="nf">as_py</span><span class="p">()</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="p">(</span><span class="n">partkey</span><span class="p">,</span> <span class="n">suppkey</span><span class="p">,</span> <span class="n">returnflag</span><span class="p">)</span>
+        <span class="n">result</span><span class="p">.</span><span class="nf">append</span><span class="p">(</span><span class="n">value</span> <span class="ow">in</span> <span class="n">values_of_interest</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">pa</span><span class="p">.</span><span class="nf">array</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+
+<span class="c1"># Wrap our custom function with `datafusion.udf`, annotating expected 
+# parameter and return types
+</span><span class="n">is_of_interest</span> <span class="o">=</span> <span class="nf">udf</span><span class="p">(</span>
+    <span class="n">is_of_interest_impl</span><span class="p">,</span>
+    <span class="p">[</span><span class="n">pa</span><span class="p">.</span><span class="nf">int64</span><span class="p">(),</span> <span class="n">pa</span><span class="p">.</span><span class="nf">int64</span><span class="p">(),</span> <span class="n">pa</span><span class="p">.</span><span class="nf">utf8</span><span class="p">()],</span>
+    <span class="n">pa</span><span class="p">.</span><span class="nf">bool_</span><span class="p">(),</span>
+    <span class="sh">"</span><span class="s">stable</span><span class="sh">"</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">df_udf_filter</span> <span class="o">=</span> <span class="n">df_lineitem</span><span class="p">.</span><span class="nf">filter</span><span class="p">(</span>
+    <span class="nf">is_of_interest</span><span class="p">(</span><span class="nf">col</span><span class="p">(</span><span class="sh">"</span><span class="s">l_partkey</span><span class="sh">"</span><span class="p">),</span> <span class="nf">col</span><span class="p">(</span><span class="sh">"</span><span class="s">l_suppkey</span><span class="sh">"</span><span class="p">),</span> <span class="nf">col</span><span class="p">(</span><span class="sh">"</span><span class="s">l_returnflag</span><span class="sh">"</span><span class="p">))</span>
+<span class="p">)</span>
+</code></pre></div></div>
+
+<p>When working with a DataFusion UDF in Python, you define your function to take in some number of
+expressions. During the evaluation, these will get computed into their corresponding values and
+passed to your UDF as a PyArrow Array. We must return an Array also with the same number of
+elements (rows). So the UDF example just iterates through all of the arrays and checks to see if
+the tuple created from these columns matches any of those that we’re looking for.</p>
+
+<p>I’ll repeat because this is something that tripped me up the first time I wrote a UDF for
+datafusion: <strong>DataFusion UDFs, even scalar UDFs, process an array of values at a time not a single
+row.</strong> This is different from some other DataFrame libraries and you may need to recognize a slight
+change in mentality.</p>
+
+<p>Some important lines here are the lines like <code class="language-plaintext highlighter-rouge">partkey = partkey.as_py()</code>. When we do this, we pay a
+heavy cost. Now instead of keeping the analysis in the Rust code, we have to take the values in the
+array and convert them over to Python objects. In this case we end up getting two numbers and a
+string as real Python objects, complete with reference counting and all. Also we are iterating
+through the array in Python rather than Rust native. These will <strong>significantly</strong> slow down your
+code. Any time you have to cross the barrier where you change values inside the Rust arrays into
+Python objects or vice versa you will pay <strong>heavy</strong> cost in that transformation. You will want to
+design your UDFs to avoid this as much as possible.</p>
+
+<h2 id="python-approach-using-pyarrow-compute">Python approach using PyArrow compute</h2>
+
+<p>DataFusion uses <a href="https://arrow.apache.org/">Apache Arrow</a> as its in-memory data format. This can
+be seen in the way that Arrow Arrays are passed into the UDFs. We can take advantage of the fact
+that <a href="https://arrow.apache.org/docs/python/">PyArrow</a>, the canonical Python Arrow implementation,
+provides a variety of
+useful functions. In the example below, we are only using a few of the boolean functions and the
+equality function. Each of these functions takes two arrays and analyzes them row by row. In the
+below example, we shift the logic around a little since we are now operating on an entire array of
+values instead of checking a single row ourselves.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="n">pyarrow.compute</span> <span class="k">as</span> <span class="n">pc</span>
+
+<span class="k">def</span> <span class="nf">udf_using_pyarrow_compute_impl</span><span class="p">(</span>
+    <span class="n">partkey_arr</span><span class="p">:</span> <span class="n">pa</span><span class="p">.</span><span class="n">Array</span><span class="p">,</span>
+    <span class="n">suppkey_arr</span><span class="p">:</span> <span class="n">pa</span><span class="p">.</span><span class="n">Array</span><span class="p">,</span>
+    <span class="n">returnflag_arr</span><span class="p">:</span> <span class="n">pa</span><span class="p">.</span><span class="n">Array</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pa</span><span class="p">.</span><span class="n">Array</span><span class="p">:</span>
+    <span class="n">results</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="k">for</span> <span class="n">partkey</span><span class="p">,</span> <span class="n">suppkey</span><span class="p">,</span> <span class="n">returnflag</span> <span class="ow">in</span> <span class="n">values_of_interest</span><span class="p">:</span>
+        <span class="n">filtered_partkey_arr</span> <span class="o">=</span> <span class="n">pc</span><span class="p">.</span><span class="nf">equal</span><span class="p">(</span><span class="n">partkey_arr</span><span class="p">,</span> <span class="n">partkey</span><span class="p">)</span>
+        <span class="n">filtered_suppkey_arr</span> <span class="o">=</span> <span class="n">pc</span><span class="p">.</span><span class="nf">equal</span><span class="p">(</span><span class="n">suppkey_arr</span><span class="p">,</span> <span class="n">suppkey</span><span class="p">)</span>
+        <span class="n">filtered_returnflag_arr</span> <span class="o">=</span> <span class="n">pc</span><span class="p">.</span><span class="nf">equal</span><span class="p">(</span><span class="n">returnflag_arr</span><span class="p">,</span> <span class="n">returnflag</span><span class="p">)</span>
+
+        <span class="n">resultant_arr</span> <span class="o">=</span> <span class="n">pc</span><span class="p">.</span><span class="nf">and_</span><span class="p">(</span><span class="n">filtered_partkey_arr</span><span class="p">,</span> <span class="n">filtered_suppkey_arr</span><span class="p">)</span>
+        <span class="n">resultant_arr</span> <span class="o">=</span> <span class="n">pc</span><span class="p">.</span><span class="nf">and_</span><span class="p">(</span><span class="n">resultant_arr</span><span class="p">,</span> <span class="n">filtered_returnflag_arr</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">results</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">results</span> <span class="o">=</span> <span class="n">resultant_arr</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">results</span> <span class="o">=</span> <span class="n">pc</span><span class="p">.</span><span class="nf">or_</span><span class="p">(</span><span class="n">results</span><span class="p">,</span> <span class="n">resultant_arr</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">results</span>
+
+
+<span class="n">udf_using_pyarrow_compute</span> <span class="o">=</span> <span class="nf">udf</span><span class="p">(</span>
+    <span class="n">udf_using_pyarrow_compute_impl</span><span class="p">,</span>
+    <span class="p">[</span><span class="n">pa</span><span class="p">.</span><span class="nf">int64</span><span class="p">(),</span> <span class="n">pa</span><span class="p">.</span><span class="nf">int64</span><span class="p">(),</span> <span class="n">pa</span><span class="p">.</span><span class="nf">utf8</span><span class="p">()],</span>
+    <span class="n">pa</span><span class="p">.</span><span class="nf">bool_</span><span class="p">(),</span>
+    <span class="sh">"</span><span class="s">stable</span><span class="sh">"</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">df_udf_pyarrow_compute</span> <span class="o">=</span> <span class="n">df_lineitem</span><span class="p">.</span><span class="nf">filter</span><span class="p">(</span>
+    <span class="nf">udf_using_pyarrow_compute</span><span class="p">(</span><span class="nf">col</span><span class="p">(</span><span class="sh">"</span><span class="s">l_partkey</span><span class="sh">"</span><span class="p">),</span> <span class="nf">col</span><span class="p">(</span><span class="sh">"</span><span class="s">l_suppkey</span><span class="sh">"</span><span class="p">),</span> <span class="nf">col</span><span class="p">(</span><span class="sh">"</span><span class="s">l_returnflag</span><span class="sh">"</span><span class="p">))</span>
+<span class="p">)</span>
+</code></pre></div></div>
+
+<p>The idea in the code above is that we will iterate through each of the values of interest, which we
+expect to be small. For each of the columns, we compare the value of interest to it’s corresponding
+array using <code class="language-plaintext highlighter-rouge">pyarrow.compute.equal</code>. This will give use three boolean arrays. We have a match to
+the tuple if we have a row in all three arrays that is true, so we use <code class="language-plaintext highlighter-rouge">pyarrow.compute.and_</code>. Now
+our return value from the UDF needs to include arrays for which any of the values of interest list
+of tuples exists, so we take the result from the current loop and perform a <code class="language-plaintext highlighter-rouge">pyarrow.compute.or_</code>
+on it.</p>
+
+<p>From my benchmarking, switching from approach of converting values into Python objects to this
+approach of using the PyArrow built-in functions leads to about a 10x speed improvement in this
+simple problem.</p>
+
+<p>It’s worth noting that almost all of the PyArrow compute functions expect to take one or two arrays
+as their arguments. If you need to write a UDF that is evaluating three or more columns, you’ll
+need to do something akin to what we’ve shown here.</p>
+
+<h2 id="rust-udf-with-python-wrapper">Rust UDF with Python wrapper</h2>
+
+<p>This is the most complicated approach, but has the potential to be the most performant. What we
+will do here is write a Rust function to perform our computation and then expose that function to
+Python. I know of two use cases where I would recommend this approach. The first is the case when
+the PyArrow compute functions are insufficient for your needs. Perhaps your code is too complex or
+could be greatly simplified if you pulled in some outside dependency. The second use case is when
+you have written a UDF that you’re sharing across multiple projects and have hardened the approach.
+It is possible that you can implement your function in Rust to give a speed improvement and then
+every project that is using this shared UDF will benefit from those updates.</p>
+
+<p>When deciding to use this approach, it’s worth considering how much you think you’ll actually
+benefit from the Rust implementation to decide if it’s worth the additional effort to maintain and
+deploy the Python wheels you generate. It is certainly not necessary for every use case.</p>
+
+<p>Due to the excellent work by the Python arrow team, we can simplify our work to needing only two
+dependencies on the Rust side, <a href="https://github.com/apache/arrow-rs">arrow-rs</a> and
+<a href="https://pyo3.rs/">pyo3</a>. I have posted a <a href="https://github.com/timsaucer/tuple_filter_example">minimal example</a>.
+You’ll need <a href="https://github.com/PyO3/maturin">maturin</a> to build the project, and you must use
+release mode when building to get the expected performance.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>maturin develop <span class="nt">--release</span>
+</code></pre></div></div>
+
+<p>When you write your UDF in Rust you generally will need to take these steps</p>
+
+<ol>
+  <li>Write a function description that takes in some number of Python generic objects.</li>
+  <li>Convert these objects to Arrow Arrays of the appropriate type(s).</li>
+  <li>Perform your computation and create a resultant Array.</li>
+  <li>Convert the array into a Python generic object.</li>
+</ol>
+
+<p>For the conversion to and from Python objects, we can take advantage of the
+<code class="language-plaintext highlighter-rouge">ArrayData::from_pyarrow_bound</code> and <code class="language-plaintext highlighter-rouge">ArrayData::to_pyarrow</code> functions.  All that remains is to
+perform your computation.</p>
+
+<p>We are going to demonstrate doing this computation in two ways. The first is to mimic what we’ve
+done in the above approach using PyArrow. In the second we demonstrate iterating through the three
+arrays ourselves.</p>
+
+<p>In our first approach, we can expect the performance to be nearly identical to when we used the
+PyArrow compute functions. On the Rust side we will have slightly less overhead but the heavy
+lifting portions of the code are essentially the same between this Rust implementation and the
+PyArrow approach above.</p>
+
+<p>The reason for demonstrating this, even though it doesn’t provide a significant speedup over
+Python, is to primarily demonstrate how to make the Python to Rust with Python wrapper
+transition. In the second implementation you can see how we can iterate through all of the arrays
+ourselves.</p>
+
+<p>In this first example, we are hard coding the values of interest, but in the following section
+we demonstrate passing these in during initalization.</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nd">#[pyfunction]</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="nf">tuple_filter_fn</span><span class="p">(</span>
+    <span class="n">py</span><span class="p">:</span> <span class="n">Python</span><span class="o">&lt;</span><span class="nv">'_</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="n">partkey_expr</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">Bound</span><span class="o">&lt;</span><span class="nv">'_</span><span class="p">,</span> <span class="n">PyAny</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="n">suppkey_expr</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">Bound</span><span class="o">&lt;</span><span class="nv">'_</span><span class="p">,</span> <span class="n">PyAny</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="n">returnflag_expr</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">Bound</span><span class="o">&lt;</span><span class="nv">'_</span><span class="p">,</span> <span class="n">PyAny</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">)</span> <span class="k">-&gt;</span> <span class="n">PyResult</span><span class="o">&lt;</span><span class="n">Py</span><span class="o">&lt;</span><span class="n">PyAny</span><span class="o">&gt;&gt;</span> <span class="p">{</span>
+    <span class="k">let</span> <span class="n">partkey_arr</span><span class="p">:</span> <span class="n">PrimitiveArray</span><span class="o">&lt;</span><span class="n">Int64Type</span><span class="o">&gt;</span> <span class="o">=</span>
+        <span class="nn">ArrayData</span><span class="p">::</span><span class="nf">from_pyarrow_bound</span><span class="p">(</span><span class="n">partkey_expr</span><span class="p">)</span><span class="o">?</span><span class="nf">.into</span><span class="p">();</span>
+    <span class="k">let</span> <span class="n">suppkey_arr</span><span class="p">:</span> <span class="n">PrimitiveArray</span><span class="o">&lt;</span><span class="n">Int64Type</span><span class="o">&gt;</span> <span class="o">=</span>
+        <span class="nn">ArrayData</span><span class="p">::</span><span class="nf">from_pyarrow_bound</span><span class="p">(</span><span class="n">suppkey_expr</span><span class="p">)</span><span class="o">?</span><span class="nf">.into</span><span class="p">();</span>
+    <span class="k">let</span> <span class="n">returnflag_arr</span><span class="p">:</span> <span class="n">StringArray</span> <span class="o">=</span> <span class="nn">ArrayData</span><span class="p">::</span><span class="nf">from_pyarrow_bound</span><span class="p">(</span><span class="n">returnflag_expr</span><span class="p">)</span><span class="o">?</span><span class="nf">.into</span><span class="p">();</span>
+
+    <span class="k">let</span> <span class="n">values_of_interest</span> <span class="o">=</span> <span class="nd">vec!</span><span class="p">[</span>
+        <span class="p">(</span><span class="mi">1530</span><span class="p">,</span> <span class="mi">4031</span><span class="p">,</span> <span class="s">"N"</span><span class="nf">.to_string</span><span class="p">()),</span>
+        <span class="p">(</span><span class="mi">6530</span><span class="p">,</span> <span class="mi">1531</span><span class="p">,</span> <span class="s">"N"</span><span class="nf">.to_string</span><span class="p">()),</span>
+        <span class="p">(</span><span class="mi">5618</span><span class="p">,</span> <span class="mi">619</span><span class="p">,</span> <span class="s">"N"</span><span class="nf">.to_string</span><span class="p">()),</span>
+        <span class="p">(</span><span class="mi">8118</span><span class="p">,</span> <span class="mi">8119</span><span class="p">,</span> <span class="s">"N"</span><span class="nf">.to_string</span><span class="p">()),</span>
+    <span class="p">];</span>
+
+    <span class="k">let</span> <span class="k">mut</span> <span class="n">res</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="n">BooleanArray</span><span class="o">&gt;</span> <span class="o">=</span> <span class="nb">None</span><span class="p">;</span>
+
+    <span class="k">for</span> <span class="p">(</span><span class="n">partkey</span><span class="p">,</span> <span class="n">suppkey</span><span class="p">,</span> <span class="n">returnflag</span><span class="p">)</span> <span class="k">in</span> <span class="o">&amp;</span><span class="n">values_of_interest</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="n">filtered_partkey_arr</span> <span class="o">=</span> <span class="nn">BooleanArray</span><span class="p">::</span><span class="nf">from_unary</span><span class="p">(</span><span class="o">&amp;</span><span class="n">partkey_arr</span><span class="p">,</span> <span class="p">|</span><span class="n">p</span><span class="p">|</span> <span class="n">p</span> <span class="o">==</span> <span class="o">*</span><span class="n">partkey</span><span class="p">);</span>
+        <span class="k">let</span> <span class="n">filtered_suppkey_arr</span> <span class="o">=</span> <span class="nn">BooleanArray</span><span class="p">::</span><span class="nf">from_unary</span><span class="p">(</span><span class="o">&amp;</span><span class="n">suppkey_arr</span><span class="p">,</span> <span class="p">|</span><span class="n">s</span><span class="p">|</span> <span class="n">s</span> <span class="o">==</span> <span class="o">*</span><span class="n">suppkey</span><span class="p">);</span>
+        <span class="k">let</span> <span class="n">filtered_returnflag_arr</span> <span class="o">=</span>
+            <span class="nn">BooleanArray</span><span class="p">::</span><span class="nf">from_unary</span><span class="p">(</span><span class="o">&amp;</span><span class="n">returnflag_arr</span><span class="p">,</span> <span class="p">|</span><span class="n">s</span><span class="p">|</span> <span class="n">s</span> <span class="o">==</span> <span class="n">returnflag</span><span class="p">);</span>
+
+        <span class="k">let</span> <span class="n">part_and_supp</span> <span class="o">=</span> <span class="nn">compute</span><span class="p">::</span><span class="nf">and</span><span class="p">(</span><span class="o">&amp;</span><span class="n">filtered_partkey_arr</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">filtered_suppkey_arr</span><span class="p">)</span>
+            <span class="nf">.map_err</span><span class="p">(|</span><span class="n">e</span><span class="p">|</span> <span class="nn">PyValueError</span><span class="p">::</span><span class="nf">new_err</span><span class="p">(</span><span class="n">e</span><span class="nf">.to_string</span><span class="p">()))</span><span class="o">?</span><span class="p">;</span>
+        <span class="k">let</span> <span class="n">resultant_arr</span> <span class="o">=</span> <span class="nn">compute</span><span class="p">::</span><span class="nf">and</span><span class="p">(</span><span class="o">&amp;</span><span class="n">part_and_supp</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">filtered_returnflag_arr</span><span class="p">)</span>
+            <span class="nf">.map_err</span><span class="p">(|</span><span class="n">e</span><span class="p">|</span> <span class="nn">PyValueError</span><span class="p">::</span><span class="nf">new_err</span><span class="p">(</span><span class="n">e</span><span class="nf">.to_string</span><span class="p">()))</span><span class="o">?</span><span class="p">;</span>
+
+        <span class="n">res</span> <span class="o">=</span> <span class="k">match</span> <span class="n">res</span> <span class="p">{</span>
+            <span class="nf">Some</span><span class="p">(</span><span class="n">r</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="nn">compute</span><span class="p">::</span><span class="nf">or</span><span class="p">(</span><span class="o">&amp;</span><span class="n">r</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">resultant_arr</span><span class="p">)</span><span class="nf">.ok</span><span class="p">(),</span>
+            <span class="nb">None</span> <span class="k">=&gt;</span> <span class="nf">Some</span><span class="p">(</span><span class="n">resultant_arr</span><span class="p">),</span>
+        <span class="p">};</span>
+    <span class="p">}</span>
+
+    <span class="n">res</span><span class="nf">.unwrap</span><span class="p">()</span><span class="nf">.into_data</span><span class="p">()</span><span class="nf">.to_pyarrow</span><span class="p">(</span><span class="n">py</span><span class="p">)</span>
+<span class="p">}</span>
+
+
+<span class="nd">#[pymodule]</span>
+<span class="k">fn</span> <span class="nf">tuple_filter_example</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">Bound</span><span class="o">&lt;</span><span class="nv">'_</span><span class="p">,</span> <span class="n">PyModule</span><span class="o">&gt;</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">PyResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span>
+    <span class="n">module</span><span class="nf">.add_function</span><span class="p">(</span><span class="nd">wrap_pyfunction!</span><span class="p">(</span><span class="n">tuple_filter_fn</span><span class="p">,</span> <span class="n">module</span><span class="p">)</span><span class="o">?</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+    <span class="nf">Ok</span><span class="p">(())</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>To use this we use the <code class="language-plaintext highlighter-rouge">udf</code> function in <code class="language-plaintext highlighter-rouge">datafusion-python</code> just as before.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="n">datafusion</span> <span class="kn">import</span> <span class="n">udf</span>
+<span class="kn">import</span> <span class="n">pyarrow</span> <span class="k">as</span> <span class="n">pa</span>
+<span class="kn">from</span> <span class="n">tuple_filter_example</span> <span class="kn">import</span> <span class="n">tuple_filter_fn</span>
+
+<span class="n">udf_using_custom_rust_fn</span> <span class="o">=</span> <span class="nf">udf</span><span class="p">(</span>
+    <span class="n">tuple_filter_fn</span><span class="p">,</span>
+    <span class="p">[</span><span class="n">pa</span><span class="p">.</span><span class="nf">int64</span><span class="p">(),</span> <span class="n">pa</span><span class="p">.</span><span class="nf">int64</span><span class="p">(),</span> <span class="n">pa</span><span class="p">.</span><span class="nf">utf8</span><span class="p">()],</span>
+    <span class="n">pa</span><span class="p">.</span><span class="nf">bool_</span><span class="p">(),</span>
+    <span class="sh">"</span><span class="s">stable</span><span class="sh">"</span><span class="p">,</span>
+<span class="p">)</span>
+</code></pre></div></div>
+
+<p>That’s it! We’ve now got a third party Rust UDF with Python wrappers working with DataFusion’s
+Python bindings!</p>
+
+<h3 id="rust-udf-with-initialization">Rust UDF with initialization</h3>
+
+<p>Looking at the code above, you can see that it is hard coding the values we’re interested in. There
+are many types of UDFs that don’t require any additional data provided to them before they start
+the computation. The code above is sloppy, so let’s clean it up.</p>
+
+<p>We want to write the function to take some additional data. A limitation of the UDFs we create is
+that they expect to operate on entire arrays of data at a time. We can get around this problem by
+creating an initializer for our UDF. We do this by defining a Rust struct that contains the data we
+need and implement two methods on this struct, <code class="language-plaintext highlighter-rouge">new</code> and <code class="language-plaintext highlighter-rouge">__call__</code>. By doing this we will create a
+Python object that is callable, so it can be the function we provide to <code class="language-plaintext highlighter-rouge">udf</code>.</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nd">#[pyclass]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">TupleFilterClass</span> <span class="p">{</span>
+    <span class="n">values_of_interest</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="p">(</span><span class="nb">i64</span><span class="p">,</span> <span class="nb">i64</span><span class="p">,</span> <span class="nb">String</span><span class="p">)</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="nd">#[pymethods]</span>
+<span class="k">impl</span> <span class="n">TupleFilterClass</span> <span class="p">{</span>
+    <span class="nd">#[new]</span>
+    <span class="k">fn</span> <span class="nf">new</span><span class="p">(</span><span class="n">values_of_interest</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="p">(</span><span class="nb">i64</span><span class="p">,</span> <span class="nb">i64</span><span class="p">,</span> <span class="nb">String</span><span class="p">)</span><span class="o">&gt;</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="k">Self</span> <span class="p">{</span>
+        <span class="k">Self</span> <span class="p">{</span>
+            <span class="n">values_of_interest</span><span class="p">,</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+
+    <span class="k">fn</span> <span class="nf">__call__</span><span class="p">(</span>
+        <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span>
+        <span class="n">py</span><span class="p">:</span> <span class="n">Python</span><span class="o">&lt;</span><span class="nv">'_</span><span class="o">&gt;</span><span class="p">,</span>
+        <span class="n">partkey_expr</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">Bound</span><span class="o">&lt;</span><span class="nv">'_</span><span class="p">,</span> <span class="n">PyAny</span><span class="o">&gt;</span><span class="p">,</span>
+        <span class="n">suppkey_expr</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">Bound</span><span class="o">&lt;</span><span class="nv">'_</span><span class="p">,</span> <span class="n">PyAny</span><span class="o">&gt;</span><span class="p">,</span>
+        <span class="n">returnflag_expr</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">Bound</span><span class="o">&lt;</span><span class="nv">'_</span><span class="p">,</span> <span class="n">PyAny</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="p">)</span> <span class="k">-&gt;</span> <span class="n">PyResult</span><span class="o">&lt;</span><span class="n">Py</span><span class="o">&lt;</span><span class="n">PyAny</span><span class="o">&gt;&gt;</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="n">partkey_arr</span><span class="p">:</span> <span class="n">PrimitiveArray</span><span class="o">&lt;</span><span class="n">Int64Type</span><span class="o">&gt;</span> <span class="o">=</span>
+            <span class="nn">ArrayData</span><span class="p">::</span><span class="nf">from_pyarrow_bound</span><span class="p">(</span><span class="n">partkey_expr</span><span class="p">)</span><span class="o">?</span><span class="nf">.into</span><span class="p">();</span>
+        <span class="k">let</span> <span class="n">suppkey_arr</span><span class="p">:</span> <span class="n">PrimitiveArray</span><span class="o">&lt;</span><span class="n">Int64Type</span><span class="o">&gt;</span> <span class="o">=</span>
+            <span class="nn">ArrayData</span><span class="p">::</span><span class="nf">from_pyarrow_bound</span><span class="p">(</span><span class="n">suppkey_expr</span><span class="p">)</span><span class="o">?</span><span class="nf">.into</span><span class="p">();</span>
+        <span class="k">let</span> <span class="n">returnflag_arr</span><span class="p">:</span> <span class="n">StringArray</span> <span class="o">=</span> <span class="nn">ArrayData</span><span class="p">::</span><span class="nf">from_pyarrow_bound</span><span class="p">(</span><span class="n">returnflag_expr</span><span class="p">)</span><span class="o">?</span><span class="nf">.into</span><span class="p">();</span>
+
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">res</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="n">BooleanArray</span><span class="o">&gt;</span> <span class="o">=</span> <span class="nb">None</span><span class="p">;</span>
+
+        <span class="k">for</span> <span class="p">(</span><span class="n">partkey</span><span class="p">,</span> <span class="n">suppkey</span><span class="p">,</span> <span class="n">returnflag</span><span class="p">)</span> <span class="k">in</span> <span class="o">&amp;</span><span class="k">self</span><span class="py">.values_of_interest</span> <span class="p">{</span>
+            <span class="k">let</span> <span class="n">filtered_partkey_arr</span> <span class="o">=</span> <span class="nn">BooleanArray</span><span class="p">::</span><span class="nf">from_unary</span><span class="p">(</span><span class="o">&amp;</span><span class="n">partkey_arr</span><span class="p">,</span> <span class="p">|</span><span class="n">p</span><span class="p">|</span> <span class="n">p</span> <span class="o">==</span> <span class="o">*</span><span class="n">partkey</span><span class="p">);</span>
+            <span class="k">let</span> <span class="n">filtered_suppkey_arr</span> <span class="o">=</span> <span class="nn">BooleanArray</span><span class="p">::</span><span class="nf">from_unary</span><span class="p">(</span><span class="o">&amp;</span><span class="n">suppkey_arr</span><span class="p">,</span> <span class="p">|</span><span class="n">s</span><span class="p">|</span> <span class="n">s</span> <span class="o">==</span> <span class="o">*</span><span class="n">suppkey</span><span class="p">);</span>
+            <span class="k">let</span> <span class="n">filtered_returnflag_arr</span> <span class="o">=</span>
+                <span class="nn">BooleanArray</span><span class="p">::</span><span class="nf">from_unary</span><span class="p">(</span><span class="o">&amp;</span><span class="n">returnflag_arr</span><span class="p">,</span> <span class="p">|</span><span class="n">s</span><span class="p">|</span> <span class="n">s</span> <span class="o">==</span> <span class="n">returnflag</span><span class="p">);</span>
+
+            <span class="k">let</span> <span class="n">part_and_supp</span> <span class="o">=</span> <span class="nn">compute</span><span class="p">::</span><span class="nf">and</span><span class="p">(</span><span class="o">&amp;</span><span class="n">filtered_partkey_arr</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">filtered_suppkey_arr</span><span class="p">)</span>
+                <span class="nf">.map_err</span><span class="p">(|</span><span class="n">e</span><span class="p">|</span> <span class="nn">PyValueError</span><span class="p">::</span><span class="nf">new_err</span><span class="p">(</span><span class="n">e</span><span class="nf">.to_string</span><span class="p">()))</span><span class="o">?</span><span class="p">;</span>
+            <span class="k">let</span> <span class="n">resultant_arr</span> <span class="o">=</span> <span class="nn">compute</span><span class="p">::</span><span class="nf">and</span><span class="p">(</span><span class="o">&amp;</span><span class="n">part_and_supp</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">filtered_returnflag_arr</span><span class="p">)</span>
+                <span class="nf">.map_err</span><span class="p">(|</span><span class="n">e</span><span class="p">|</span> <span class="nn">PyValueError</span><span class="p">::</span><span class="nf">new_err</span><span class="p">(</span><span class="n">e</span><span class="nf">.to_string</span><span class="p">()))</span><span class="o">?</span><span class="p">;</span>
+
+            <span class="n">res</span> <span class="o">=</span> <span class="k">match</span> <span class="n">res</span> <span class="p">{</span>
+                <span class="nf">Some</span><span class="p">(</span><span class="n">r</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="nn">compute</span><span class="p">::</span><span class="nf">or</span><span class="p">(</span><span class="o">&amp;</span><span class="n">r</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">resultant_arr</span><span class="p">)</span><span class="nf">.ok</span><span class="p">(),</span>
+                <span class="nb">None</span> <span class="k">=&gt;</span> <span class="nf">Some</span><span class="p">(</span><span class="n">resultant_arr</span><span class="p">),</span>
+            <span class="p">};</span>
+        <span class="p">}</span>
+
+        <span class="n">res</span><span class="nf">.unwrap</span><span class="p">()</span><span class="nf">.into_data</span><span class="p">()</span><span class="nf">.to_pyarrow</span><span class="p">(</span><span class="n">py</span><span class="p">)</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="nd">#[pymodule]</span>
+<span class="k">fn</span> <span class="nf">tuple_filter_example</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">Bound</span><span class="o">&lt;</span><span class="nv">'_</span><span class="p">,</span> <span class="n">PyModule</span><span class="o">&gt;</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">PyResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span>
+    <span class="n">module</span><span class="py">.add_class</span><span class="p">::</span><span class="o">&lt;</span><span class="n">TupleFilterClass</span><span class="o">&gt;</span><span class="p">()</span><span class="o">?</span><span class="p">;</span>
+    <span class="nf">Ok</span><span class="p">(())</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>When you write this, you don’t have to call your constructor <code class="language-plaintext highlighter-rouge">new</code>. The more important part is that
+you have <code class="language-plaintext highlighter-rouge">#[new]</code> designated on the function. With this you can provide any kinds of data you need
+during processing. Using this initializer in Python is fairly straightforward.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="n">datafusion</span> <span class="kn">import</span> <span class="n">udf</span>
+<span class="kn">import</span> <span class="n">pyarrow</span> <span class="k">as</span> <span class="n">pa</span>
+<span class="kn">from</span> <span class="n">tuple_filter_example</span> <span class="kn">import</span> <span class="n">TupleFilterClass</span>
+
+<span class="n">tuple_filter_class</span> <span class="o">=</span> <span class="nc">TupleFilterClass</span><span class="p">(</span><span class="n">values_of_interest</span><span class="p">)</span>
+
+<span class="n">udf_using_custom_rust_fn_with_data</span> <span class="o">=</span> <span class="nf">udf</span><span class="p">(</span>
+    <span class="n">tuple_filter_class</span><span class="p">,</span>
+    <span class="p">[</span><span class="n">pa</span><span class="p">.</span><span class="nf">int64</span><span class="p">(),</span> <span class="n">pa</span><span class="p">.</span><span class="nf">int64</span><span class="p">(),</span> <span class="n">pa</span><span class="p">.</span><span class="nf">utf8</span><span class="p">()],</span>
+    <span class="n">pa</span><span class="p">.</span><span class="nf">bool_</span><span class="p">(),</span>
+    <span class="sh">"</span><span class="s">stable</span><span class="sh">"</span><span class="p">,</span>
+    <span class="n">name</span><span class="o">=</span><span class="sh">"</span><span class="s">tuple_filter_with_data</span><span class="sh">"</span>
+<span class="p">)</span>
+</code></pre></div></div>
+
+<p>When you use this approach you will need to provide a <code class="language-plaintext highlighter-rouge">name</code> argument to <code class="language-plaintext highlighter-rouge">udf</code>. This is because our
+class/struct does not get the <code class="language-plaintext highlighter-rouge">__qualname__</code> attribute that the <code class="language-plaintext highlighter-rouge">udf</code> function is looking for. You
+can give this udf any name you choose.</p>
+
+<h3 id="rust-udf-with-direct-iteration">Rust UDF with direct iteration</h3>
+
+<p>The final version of our scalar UDF is one where we implement it in Rust and iterate through all of
+the arrays ourselves. If you are iterating through more than 3 arrays at a time I recommend looking
+at <a href="https://docs.rs/itertools/latest/itertools/macro.izip.html">izip</a> in the
+<a href="https://crates.io/crates/itertools">itertools crate</a>. For ease of understanding and since we only
+have 3 arrays here I will just explicitly create my own tuple here.</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nd">#[pyclass]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">TupleFilterDirectIterationClass</span> <span class="p">{</span>
+    <span class="n">values_of_interest</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="p">(</span><span class="nb">i64</span><span class="p">,</span> <span class="nb">i64</span><span class="p">,</span> <span class="nb">String</span><span class="p">)</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="nd">#[pymethods]</span>
+<span class="k">impl</span> <span class="n">TupleFilterDirectIterationClass</span> <span class="p">{</span>
+    <span class="nd">#[new]</span>
+    <span class="k">fn</span> <span class="nf">new</span><span class="p">(</span><span class="n">values_of_interest</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="p">(</span><span class="nb">i64</span><span class="p">,</span> <span class="nb">i64</span><span class="p">,</span> <span class="nb">String</span><span class="p">)</span><span class="o">&gt;</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="k">Self</span> <span class="p">{</span>
+        <span class="k">Self</span> <span class="p">{</span> <span class="n">values_of_interest</span> <span class="p">}</span>
+    <span class="p">}</span>
+
+    <span class="k">fn</span> <span class="nf">__call__</span><span class="p">(</span>
+        <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span>
+        <span class="n">py</span><span class="p">:</span> <span class="n">Python</span><span class="o">&lt;</span><span class="nv">'_</span><span class="o">&gt;</span><span class="p">,</span>
+        <span class="n">partkey_expr</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">Bound</span><span class="o">&lt;</span><span class="nv">'_</span><span class="p">,</span> <span class="n">PyAny</span><span class="o">&gt;</span><span class="p">,</span>
+        <span class="n">suppkey_expr</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">Bound</span><span class="o">&lt;</span><span class="nv">'_</span><span class="p">,</span> <span class="n">PyAny</span><span class="o">&gt;</span><span class="p">,</span>
+        <span class="n">returnflag_expr</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">Bound</span><span class="o">&lt;</span><span class="nv">'_</span><span class="p">,</span> <span class="n">PyAny</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="p">)</span> <span class="k">-&gt;</span> <span class="n">PyResult</span><span class="o">&lt;</span><span class="n">Py</span><span class="o">&lt;</span><span class="n">PyAny</span><span class="o">&gt;&gt;</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="n">partkey_arr</span><span class="p">:</span> <span class="n">PrimitiveArray</span><span class="o">&lt;</span><span class="n">Int64Type</span><span class="o">&gt;</span> <span class="o">=</span>
+            <span class="nn">ArrayData</span><span class="p">::</span><span class="nf">from_pyarrow_bound</span><span class="p">(</span><span class="n">partkey_expr</span><span class="p">)</span><span class="o">?</span><span class="nf">.into</span><span class="p">();</span>
+        <span class="k">let</span> <span class="n">suppkey_arr</span><span class="p">:</span> <span class="n">PrimitiveArray</span><span class="o">&lt;</span><span class="n">Int64Type</span><span class="o">&gt;</span> <span class="o">=</span>
+            <span class="nn">ArrayData</span><span class="p">::</span><span class="nf">from_pyarrow_bound</span><span class="p">(</span><span class="n">suppkey_expr</span><span class="p">)</span><span class="o">?</span><span class="nf">.into</span><span class="p">();</span>
+        <span class="k">let</span> <span class="n">returnflag_arr</span><span class="p">:</span> <span class="n">StringArray</span> <span class="o">=</span> <span class="nn">ArrayData</span><span class="p">::</span><span class="nf">from_pyarrow_bound</span><span class="p">(</span><span class="n">returnflag_expr</span><span class="p">)</span><span class="o">?</span><span class="nf">.into</span><span class="p">();</span>
+
+        <span class="k">let</span> <span class="n">values_to_search</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="p">(</span><span class="o">&amp;</span><span class="nb">i64</span><span class="p">,</span> <span class="o">&amp;</span><span class="nb">i64</span><span class="p">,</span> <span class="o">&amp;</span><span class="nb">str</span><span class="p">)</span><span class="o">&gt;</span> <span class="o">=</span> <span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="py">.values_of_interest</span><span class="p">)</span>
+            <span class="nf">.iter</span><span class="p">()</span>
+            <span class="nf">.map</span><span class="p">(|(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">c</span><span class="p">)|</span> <span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">c</span><span class="nf">.as_str</span><span class="p">()))</span>
+            <span class="nf">.collect</span><span class="p">();</span>
+
+        <span class="k">let</span> <span class="n">values</span> <span class="o">=</span> <span class="n">partkey_arr</span>
+            <span class="nf">.values</span><span class="p">()</span>
+            <span class="nf">.iter</span><span class="p">()</span>
+            <span class="nf">.zip</span><span class="p">(</span><span class="n">suppkey_arr</span><span class="nf">.values</span><span class="p">()</span><span class="nf">.iter</span><span class="p">())</span>
+            <span class="nf">.zip</span><span class="p">(</span><span class="n">returnflag_arr</span><span class="nf">.iter</span><span class="p">())</span>
+            <span class="nf">.map</span><span class="p">(|((</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">),</span> <span class="n">c</span><span class="p">)|</span> <span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">c</span><span class="nf">.unwrap_or_default</span><span class="p">()))</span>
+            <span class="nf">.map</span><span class="p">(|</span><span class="n">v</span><span class="p">|</span> <span class="n">values_to_search</span><span class="nf">.contains</span><span class="p">(</span><span class="o">&amp;</span><span class="n">v</span><span class="p">));</span>
+
+        <span class="k">let</span> <span class="n">res</span><span class="p">:</span> <span class="n">BooleanArray</span> <span class="o">=</span> <span class="nn">BooleanBuffer</span><span class="p">::</span><span class="nf">from_iter</span><span class="p">(</span><span class="n">values</span><span class="p">)</span><span class="nf">.into</span><span class="p">();</span>
+
+        <span class="n">res</span><span class="nf">.into_data</span><span class="p">()</span><span class="nf">.to_pyarrow</span><span class="p">(</span><span class="n">py</span><span class="p">)</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>We convert the <code class="language-plaintext highlighter-rouge">values_of_interest</code> into a vector of borrowed types so that we can do a fast search
+without creating additional memory. The other option is to turn the <code class="language-plaintext highlighter-rouge">returnflag</code> into a <code class="language-plaintext highlighter-rouge">String</code>
+but that memory allocation is unnecessary. After that we use two <code class="language-plaintext highlighter-rouge">zip</code> operations so that we can
+iterate over all three columns in a single pass. Since each <code class="language-plaintext highlighter-rouge">zip</code> will return a tuple of two
+elements, a quick <code class="language-plaintext highlighter-rouge">map</code> turns them into the tuple format we need. Also, <code class="language-plaintext highlighter-rouge">StringArray</code> is a little
+different in the buffer it uses, so it is treated slightly differently from the others.</p>
+
+<h2 id="user-defined-aggregate-function">User Defined Aggregate Function</h2>
+
+<p>Writing a user defined aggregate function or user defined window function is slightly more complex
+than scalar functions. This is because we must accumulate values and there is no guarantee that one
+batch will contain all the values we are aggregating over. For this we need to define an
+<code class="language-plaintext highlighter-rouge">Accumulator</code> which will do a few things.</p>
+
+<ul>
+  <li>Process a batch and compute an internal state</li>
+  <li>Share the state so that we can combine multiple batches</li>
+  <li>Merge the results across multiple batches</li>
+  <li>Return the final result</li>
+</ul>
+
+<p>In the example below, we’re going to look at customer orders and we want to know per customer ID,
+how much they have ordered total. We want to ignore small orders, which we define as anything under
+5000.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="n">datafusion</span> <span class="kn">import</span> <span class="n">Accumulator</span><span class="p">,</span> <span class="n">udaf</span>
+<span class="kn">import</span> <span class="n">pyarrow</span> <span class="k">as</span> <span class="n">pa</span>
+<span class="kn">import</span> <span class="n">pyarrow.compute</span> <span class="k">as</span> <span class="n">pc</span>
+
+<span class="n">IGNORE_THESHOLD</span> <span class="o">=</span> <span class="mf">5000.0</span>
+<span class="k">class</span> <span class="nc">AboveThresholdAccum</span><span class="p">(</span><span class="n">Accumulator</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="n">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">self</span><span class="p">.</span><span class="n">_sum</span> <span class="o">=</span> <span class="mf">0.0</span>
+
+    <span class="k">def</span> <span class="nf">update</span><span class="p">(</span><span class="n">self</span><span class="p">,</span> <span class="n">values</span><span class="p">:</span> <span class="n">pa</span><span class="p">.</span><span class="n">Array</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">over_threshold</span> <span class="o">=</span> <span class="n">pc</span><span class="p">.</span><span class="nf">greater</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="n">pa</span><span class="p">.</span><span class="nf">scalar</span><span class="p">(</span><span class="n">IGNORE_THESHOLD</span><span class="p">))</span>
+        <span class="n">sum_above</span> <span class="o">=</span> <span class="n">pc</span><span class="p">.</span><span class="nf">sum</span><span class="p">(</span><span class="n">values</span><span class="p">.</span><span class="nf">filter</span><span class="p">(</span><span class="n">over_threshold</span><span class="p">)).</span><span class="nf">as_py</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">sum_above</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">sum_above</span> <span class="o">=</span> <span class="mf">0.0</span>
+        <span class="n">self</span><span class="p">.</span><span class="n">_sum</span> <span class="o">=</span> <span class="n">self</span><span class="p">.</span><span class="n">_sum</span> <span class="o">+</span> <span class="n">sum_above</span>
+
+    <span class="k">def</span> <span class="nf">merge</span><span class="p">(</span><span class="n">self</span><span class="p">,</span> <span class="n">states</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">pa</span><span class="p">.</span><span class="n">Array</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">self</span><span class="p">.</span><span class="n">_sum</span> <span class="o">=</span> <span class="n">self</span><span class="p">.</span><span class="n">_sum</span> <span class="o">+</span> <span class="n">pc</span><span class="p">.</span><span class="nf">sum</span><span class="p">(</span><span class="n">states</span><span class="p">[</span><span class="mi">0</span><span class="p">]).</span><span class="nf">as_py</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">state</span><span class="p">(</span><span class="n">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">pa</span><span class="p">.</span><span class="n">Scalar</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">pa</span><span class="p">.</span><span class="nf">scalar</span><span class="p">(</span><span class="n">self</span><span class="p">.</span><span class="n">_sum</span><span class="p">)]</span>
+
+    <span class="k">def</span> <span class="nf">evaluate</span><span class="p">(</span><span class="n">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pa</span><span class="p">.</span><span class="n">Scalar</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">pa</span><span class="p">.</span><span class="nf">scalar</span><span class="p">(</span><span class="n">self</span><span class="p">.</span><span class="n">_sum</span><span class="p">)</span>
+
+<span class="n">sum_above_threshold</span> <span class="o">=</span> <span class="nf">udaf</span><span class="p">(</span><span class="n">AboveThresholdAccum</span><span class="p">,</span> <span class="p">[</span><span class="n">pa</span><span class="p">.</span><span class="nf">float64</span><span class="p">()],</span> <span class="n">pa</span><span class="p">.</span><span class="nf">float64</span><span class="p">(),</span> <span class="p">[</span><span class="n">pa</span><span class="p">.</span><span class="nf">float64</span><span class="p">()],</span> <span class="sh">'</span><span class="s">stable</span><span class="sh">'</span><span class="p">)</span>
+
+<span class="n">df_orders</span><span class="p">.</span><span class="nf">aggregate</span><span class="p">([</span><span class="nf">col</span><span class="p">(</span><span class="sh">"</span><span class="s">o_custkey</span><span class="sh">"</span><span class="p">)],[</span><span class="nf">sum_above_threshold</span><span class="p">(</span><span class="nf">col</span><span class="p">(</span><span class="sh">"</span><span class="s">o_totalprice</span><span class="sh">"</span><span class="p">)).</span><span class="nf">alias</span><span class="p">(</span><span class="sh">"</span><span class="s">sales</span><span class="sh">"</span><span class="p">)]).</span><span class="nf">show</span><span class="p">()</span>
+</code></pre></div></div>
+
+<p>Since we are doing a <code class="language-plaintext highlighter-rouge">sum</code> we can keep a single value as our internal state. When we call <code class="language-plaintext highlighter-rouge">update()</code>
+we will process a single array and update the internal state, which we share with the <code class="language-plaintext highlighter-rouge">state()</code>
+function. For larger batches we may <code class="language-plaintext highlighter-rouge">merge()</code> these states. It is important to note that the
+<code class="language-plaintext highlighter-rouge">states</code> in the <code class="language-plaintext highlighter-rouge">merge()</code> function are an array of the values returned from <code class="language-plaintext highlighter-rouge">state()</code>. It is
+entirely possible that the <code class="language-plaintext highlighter-rouge">merge</code> function is significantly different than the <code class="language-plaintext highlighter-rouge">update</code>, though in
+our example they are very similar.</p>
+
+<p>One example of implementing a user defined aggregate function where the <code class="language-plaintext highlighter-rouge">update()</code> and <code class="language-plaintext highlighter-rouge">merge()</code>
+operations are different is computing an average. In <code class="language-plaintext highlighter-rouge">update()</code> we would create a state that is both
+a sum and a count. <code class="language-plaintext highlighter-rouge">state()</code> would return a list of these two values, and <code class="language-plaintext highlighter-rouge">merge()</code> would compute
+the final result.</p>
+
+<h2 id="user-defined-window-functions">User Defined Window Functions</h2>
+
+<p>Writing a user defined window function is slightly more complex than an aggregate function due
+to the variety of ways that window functions are called. I recommend reviewing the
+<a href="https://datafusion.apache.org/python/user-guide/common-operations/udf-and-udfa.html">online documentation</a>
+for a description of which functions need to be implemented. The details of how to implement
+these generally follow the same patterns as described above for aggregate functions.</p>
+
+<h2 id="performance-comparison">Performance Comparison</h2>
+
+<p>For the scalar functions above, we performed a timing evaluation, repeating the operation 100
+times. For this simple example these are our results.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>+-----------------------------+--------------+---------+
+| approach                    | Average Time | Std Dev |
++-----------------------------+--------------+---------+
+| python udf                  | 4.969        | 0.062   |
+| simple filter               | 1.075        | 0.022   |
+| explicit filter             | 0.685        | 0.063   |
+| pyarrow compute             | 0.529        | 0.017   |
+| arrow rust compute          | 0.511        | 0.034   |
+| arrow rust compute as class | 0.502        | 0.011   |
+| rust custom iterator        | 0.478        | 0.009   |
++-----------------------------+--------------+---------+
+</code></pre></div></div>
+
+<p>As expected, the conversion to Python objects is by far the worst performance. As soon as we drop
+into using any functions that keep the data entirely on the Native (Rust or C/C++) side we see a
+near 10x speed improvement. Then as we increase our complexity from using PyArrow compute functions
+to implementing the UDF in Rust we see incremental improvements. Our fastest approach - iterating
+through the arrays ourselves does operate nearly 10% faster than the PyArrow compute approach.</p>
+
+<h2 id="final-thoughts-and-recommendations">Final Thoughts and Recommendations</h2>
+
+<p>For anyone who is curious about <a href="https://datafusion.apache.org/">DataFusion</a> I highly recommend
+giving it a try. This post was designed to make it easier for new users to the Python implementation
+to work with User Defined Functions by giving a few examples of how one might implement these.</p>
+
+<p>When it comes to designing UDFs, I strongly recommend seeing if you can write your UDF using
+<a href="https://arrow.apache.org/docs/python/api/compute.html">PyArrow functions</a> rather than pure Python
+objects. As shown in the scalar example above, you can achieve a 10x speedup by using PyArrow
+functions. If you must do something that isn’t well represented by the PyArrow compute functions,
+then I would consider using a Rust based UDF in the manner shown above.</p>
+
+<p>I would like to thank <a href="https://github.com/alamb">@alamb</a>, <a href="https://github.com/andygrove">@andygrove</a>, <a href="https://github.com/comphead">@comphead</a>, <a href="https://github.com/emgeee">@emgeee</a>, <a href="https://github.com/kylebarron">@kylebarron</a>, and <a href="https://github.com/Omega359">@Omega359</a>
+for their helpful reviews and feedback.</p>
+
+<p>Lastly, the Apache Arrow and DataFusion community is an active group of very helpful people working
+to make a great tool. If you want to get involved, please take a look at the
+<a href="https://datafusion.apache.org/python/">online documentation</a> and jump in to help with one of the
+<a href="https://github.com/apache/datafusion-python/issues">open issues</a>.</p>]]></content><author><name>timsaucer</name></author><category term="tutorial" /><summary type="html"><![CDATA[&lt;!–]]></summary></entry><entry><title type="html">Apache DataFusion Comet 0.3.0 Release</title><link href="https://datafusion.apache.org/blog/2024/09/27/datafusion-comet-0.3.0/" rel="alternate" type="text/html" title="Apache DataFusion Comet 0.3.0 Release" /><published>2024-09-27T00:00:00+00:00</published><updated>2024-09-27T00:00:00+00:00</updated><id>https://datafusion.apache.org/blog/2024/09/27/datafusion-comet-0.3.0</id><content type="html" xml:base="https://datafusion.apache.org/blog/2024/09/27/datafusion-comet-0.3.0/"><![CDATA[<!--
 
 -->
 
@@ -1189,278 +1792,4 @@ discussion</a> about the initial donation.</p>
   <li>
     <p>Try out the project and provide feedback, file issues, and contribute code.</p>
   </li>
-</ul>]]></content><author><name>pmc</name></author><category term="release" /><summary type="html"><![CDATA[&lt;!–]]></summary></entry><entry><title type="html">Apache Arrow DataFusion 34.0.0 Released, Looking Forward to 2024</title><link href="https://datafusion.apache.org/blog/2024/01/19/datafusion-34.0.0/" rel="alternate" type="text/html" title="Apache Arrow DataFusion 34.0.0 Released, Looking Forward to 2024" /><published>2024-01-19T00:00:00+00:00</published><updated>2024-01-19T00:00:00+00:00</updated><id>https://datafusion.apache.org/blog/2024/01/19/datafusion-34.0.0</id><content type="html" xml:base="https://datafusion.apache.org/blog/2024/01/19/datafusion-34.0.0/"><![CDATA[<!--
-
--->
-
-<h2 id="introduction">Introduction</h2>
-
-<p>We recently <a href="https://crates.io/crates/datafusion/34.0.0">released DataFusion 34.0.0</a>. This blog highlights some of the major
-improvements since we <a href="https://arrow.apache.org/blog/2023/06/24/datafusion-25.0.0/.">released DataFusion 26.0.0</a> (spoiler alert there are many)
-and a preview of where the community plans to focus in the next 6 months.</p>
-
-<p><a href="https://arrow.apache.org/datafusion/">Apache Arrow DataFusion</a> is an extensible query engine, written in <a href="https://www.rust-lang.org/">Rust</a>, that
-uses <a href="https://arrow.apache.org">Apache Arrow</a> as its in-memory format. DataFusion is used by developers to
-create new, fast data centric systems such as databases, dataframe libraries,
-machine learning and streaming applications. While <a href="https://arrow.apache.org/datafusion/user-guide/introduction.html#project-goals">DataFusion’s primary design
-goal</a> is to accelerate creating other data centric systems, it has a
-reasonable experience directly out of the box as a <a href="https://arrow.apache.org/datafusion-python/">dataframe library</a> and
-<a href="https://arrow.apache.org/datafusion/user-guide/cli.html">command line SQL tool</a>.</p>
-
-<p>This may also be our last update on the Apache Arrow Site. Future
-updates will likely be on the DataFusion website as we are working to <a href="https://github.com/apache/arrow-datafusion/discussions/6475">graduate
-to a top level project</a> (Apache Arrow DataFusion → Apache DataFusion!) which
-will help focus governance and project growth. Also exciting, our <a href="https://github.com/apache/arrow-datafusion/discussions/8522">first
-DataFusion in person meetup</a> is planned for March 2024.</p>
-
-<p>DataFusion is very much a community endeavor. Our core thesis is that as a
-community we can build much more advanced technology than any of us as
-individuals or companies could alone. In the last 6 months between <code class="language-plaintext highlighter-rouge">26.0.0</code> and
-<code class="language-plaintext highlighter-rouge">34.0.0</code>, community growth has been strong. We accepted and reviewed over a
-thousand PRs from 124 different committers, created over 650 issues and closed 517
-of them.
-You can find a list of all changes in the detailed <a href="https://github.com/apache/arrow-datafusion/blob/main/datafusion/CHANGELOG.md">CHANGELOG</a>.</p>
-
-<!--
-$ git log --pretty=oneline 26.0.0..34.0.0 . | wc -l
-     1009
-
-$ git shortlog -sn 26.0.0..34.0.0 . | wc -l
-      124
-
-https://crates.io/crates/datafusion/26.0.0
-DataFusion 26 released June 7, 2023
-
-https://crates.io/crates/datafusion/34.0.0
-DataFusion 34 released Dec 17, 2023
-
-Issues created in this time: 214 open, 437 closed
-https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+created%3A2023-06-23..2023-12-17
-
-Issues closes: 517
-https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+closed%3A2023-06-23..2023-12-17+
-
-PRs merged in this time 908
-https://github.com/apache/arrow-datafusion/pulls?q=is%3Apr+merged%3A2023-06-23..2023-12-17
--->
-
-<h1 id="improved-performance-">Improved Performance 🚀</h1>
-
-<p>Performance is a key feature of DataFusion, DataFusion is 
-more than 2x faster on <a href="https://benchmark.clickhouse.com/">ClickBench</a> compared to version <code class="language-plaintext highlighter-rouge">25.0.0</code>, as shown below:</p>
-
-<!--
-  Scripts: https://github.com/alamb/datafusion-duckdb-benchmark/tree/datafusion-25-34
-  Spreadsheet: https://docs.google.com/spreadsheets/d/1FtI3652WIJMC5LmJbLfT3G06w0JQIxEPG4yfMafexh8/edit#gid=1879366976
-  Average runtime on 25.0.0: 7.2s (for the queries that actually ran)
-  Average runtime on 34.0.0: 3.6s (for the same queries that ran in 25.0.0)
--->
-
-<figure style="text-align: center;">
-  <img src="/blog/img/datafusion-34.0.0/compare-new.png" width="100%" class="img-responsive" alt="Fig 1: Adaptive Arrow schema architecture overview." />
-  <figcaption>
-    <b>Figure 1</b>: Performance improvement between <code>25.0.0</code> and <code>34.0.0</code> on ClickBench. 
-    Note that DataFusion <code>25.0.0</code>, could not run several queries due to 
-    unsupported SQL (Q9, Q11, Q12, Q14) or memory requirements (Q33).
-  </figcaption>
-</figure>
-
-<figure style="text-align: center;">
-  <img src="/blog/img/datafusion-34.0.0/compare.png" width="100%" class="img-responsive" alt="Fig 1: Adaptive Arrow schema architecture overview." />
-  <figcaption>
-    <b>Figure 2</b>: Total query runtime for DataFusion <code>34.0.0</code> and DataFusion <code>25.0.0</code>.
-  </figcaption>
-</figure>
-
-<p>Here are some specific enhancements we have made to improve performance:</p>
-<ul>
-  <li><a href="https://arrow.apache.org/blog/2023/08/05/datafusion_fast_grouping/">2-3x better aggregation performance with many distinct groups</a></li>
-  <li>Partially ordered grouping / streaming grouping</li>
-  <li><a href="https://github.com/apache/arrow-datafusion/pull/7721">Specialized operator for “TopK” <code class="language-plaintext highlighter-rouge">ORDER BY LIMIT XXX</code></a></li>
-  <li><a href="https://github.com/apache/arrow-datafusion/pull/7192">Specialized operator for <code class="language-plaintext highlighter-rouge">min(col) GROUP BY .. ORDER by min(col) LIMIT XXX</code></a></li>
-  <li><a href="https://github.com/apache/arrow-datafusion/pull/8126">Improved join performance</a></li>
-  <li>Eliminate redundant sorting with sort order aware optimizers</li>
-</ul>
-
-<h1 id="new-features-">New Features ✨</h1>
-
-<h2 id="dml--insert--creating-files">DML / Insert / Creating Files</h2>
-
-<p>DataFusion now supports writing data in parallel, to individual or multiple
-files, using <code class="language-plaintext highlighter-rouge">Parquet</code>, <code class="language-plaintext highlighter-rouge">CSV</code>, <code class="language-plaintext highlighter-rouge">JSON</code>, <code class="language-plaintext highlighter-rouge">ARROW</code> and user defined formats.
-<a href="https://github.com/apache/arrow-datafusion/pull/7655">Benchmark results</a> show improvements up to 5x in some cases.</p>
-
-<p>Similarly to reading, data can now be written to any <a href="https://docs.rs/object_store/0.9.0/object_store/index.html"><code class="language-plaintext highlighter-rouge">ObjectStore</code></a>
-implementation, including AWS S3, Azure Blob Storage, GCP Cloud Storage, local
-files, and user defined implementations. While reading from <a href="https://docs.rs/datafusion/latest/datafusion/datasource/listing/struct.ListingTable.html#features">hive style
-partitioned tables</a> has long been supported, it is now possible to write to such
-tables as well.</p>
-
-<p>For example, to write to a local file:</p>
-
-<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">❯</span> <span class="k">CREATE</span> <span class="k">EXTERNAL</span> <span class="k">TABLE</span> <span class="n">awesome_table</span><span class="p">(</span><span class="n">x</span> <span class="nb">INT</span><span class="p">)</span> <span class="n">STORED</span> <span class="k">AS</span> <span class="n">PARQUET</span> <span class="k">LOCATION</span> <span class="s1">'/tmp/my_awesome_table'</span><span class="p">;</span>
-<span class="mi">0</span> <span class="k">rows</span> <span class="k">in</span> <span class="k">set</span><span class="p">.</span> <span class="n">Query</span> <span class="n">took</span> <span class="mi">0</span><span class="p">.</span><span class="mi">003</span> <span class="n">seconds</span><span class="p">.</span>
-
-<span class="err">❯</span> <span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">awesome_table</span> <span class="k">SELECT</span> <span class="n">x</span> <span class="o">*</span> <span class="mi">10</span> <span class="k">FROM</span> <span class="n">my_source_table</span><span class="p">;</span>
-<span class="o">+</span><span class="c1">-------+</span>
-<span class="o">|</span> <span class="k">count</span> <span class="o">|</span>
-<span class="o">+</span><span class="c1">-------+</span>
-<span class="o">|</span> <span class="mi">3</span>     <span class="o">|</span>
-<span class="o">+</span><span class="c1">-------+</span>
-<span class="mi">1</span> <span class="k">row</span> <span class="k">in</span> <span class="k">set</span><span class="p">.</span> <span class="n">Query</span> <span class="n">took</span> <span class="mi">0</span><span class="p">.</span><span class="mi">024</span> <span class="n">seconds</span><span class="p">.</span>
-</code></pre></div></div>
-
-<p>You can also write to files with the <a href="https://arrow.apache.org/datafusion/user-guide/sql/dml.html#copy"><code class="language-plaintext highlighter-rouge">COPY</code></a>, similarly to <a href="https://duckdb.org/docs/sql/statements/copy.html">DuckDB’s <code class="language-plaintext highlighter-rouge">COPY</code></a>:</p>
-
-<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">❯</span> <span class="k">COPY</span> <span class="p">(</span><span class="k">SELECT</span> <span class="n">x</span> <span class="o">+</span> <span class="mi">1</span> <span class="k">FROM</span> <span class="n">my_source_table</span><span class="p">)</span> <span class="k">TO</span> <span class="s1">'/tmp/output.json'</span><span class="p">;</span>
-<span class="o">+</span><span class="c1">-------+</span>
-<span class="o">|</span> <span class="k">count</span> <span class="o">|</span>
-<span class="o">+</span><span class="c1">-------+</span>
-<span class="o">|</span> <span class="mi">3</span>     <span class="o">|</span>
-<span class="o">+</span><span class="c1">-------+</span>
-<span class="mi">1</span> <span class="k">row</span> <span class="k">in</span> <span class="k">set</span><span class="p">.</span> <span class="n">Query</span> <span class="n">took</span> <span class="mi">0</span><span class="p">.</span><span class="mi">014</span> <span class="n">seconds</span><span class="p">.</span>
-</code></pre></div></div>
-
-<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span><span class="nb">cat</span> /tmp/output.json
-<span class="o">{</span><span class="s2">"x"</span>:1<span class="o">}</span>
-<span class="o">{</span><span class="s2">"x"</span>:2<span class="o">}</span>
-<span class="o">{</span><span class="s2">"x"</span>:3<span class="o">}</span>
-</code></pre></div></div>
-
-<h2 id="improved-struct-and-array-support">Improved <code class="language-plaintext highlighter-rouge">STRUCT</code> and <code class="language-plaintext highlighter-rouge">ARRAY</code> support</h2>
-
-<p>DataFusion <code class="language-plaintext highlighter-rouge">34.0.0</code> has much improved <code class="language-plaintext highlighter-rouge">STRUCT</code> and <code class="language-plaintext highlighter-rouge">ARRAY</code>
-support, including a full range of <a href="https://arrow.apache.org/datafusion/user-guide/sql/scalar_functions.html#struct-functions">struct functions</a> and <a href="https://arrow.apache.org/datafusion/user-guide/sql/scalar_functions.html#array-functions">array functions</a>.</p>
-
-<!--
-❯ create table my_table as values ([1,2,3]), ([2]), ([4,5]);
--->
-
-<p>For example, you can now use <code class="language-plaintext highlighter-rouge">[]</code> syntax and <code class="language-plaintext highlighter-rouge">array_length</code> to access and inspect arrays:</p>
-<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">❯</span> <span class="k">SELECT</span> <span class="n">column1</span><span class="p">,</span> 
-         <span class="n">column1</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">AS</span> <span class="n">first_element</span><span class="p">,</span> 
-         <span class="n">array_length</span><span class="p">(</span><span class="n">column1</span><span class="p">)</span> <span class="k">AS</span> <span class="n">len</span> 
-  <span class="k">FROM</span> <span class="n">my_table</span><span class="p">;</span>
-<span class="o">+</span><span class="c1">-----------+---------------+-----+</span>
-<span class="o">|</span> <span class="n">column1</span>   <span class="o">|</span> <span class="n">first_element</span> <span class="o">|</span> <span class="n">len</span> <span class="o">|</span>
-<span class="o">+</span><span class="c1">-----------+---------------+-----+</span>
-<span class="o">|</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">]</span> <span class="o">|</span> <span class="mi">1</span>             <span class="o">|</span> <span class="mi">3</span>   <span class="o">|</span>
-<span class="o">|</span> <span class="p">[</span><span class="mi">2</span><span class="p">]</span>       <span class="o">|</span> <span class="mi">2</span>             <span class="o">|</span> <span class="mi">1</span>   <span class="o">|</span>
-<span class="o">|</span> <span class="p">[</span><span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">]</span>    <span class="o">|</span> <span class="mi">4</span>             <span class="o">|</span> <span class="mi">2</span>   <span class="o">|</span>
-<span class="o">+</span><span class="c1">-----------+---------------+-----+</span>
-</code></pre></div></div>
-
-<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">❯</span> <span class="k">SELECT</span> <span class="n">column1</span><span class="p">,</span> <span class="n">column1</span><span class="p">[</span><span class="s1">'c0'</span><span class="p">]</span> <span class="k">FROM</span>  <span class="n">my_table</span><span class="p">;</span>
-<span class="o">+</span><span class="c1">------------------+----------------------+</span>
-<span class="o">|</span> <span class="n">column1</span>          <span class="o">|</span> <span class="n">my_table</span><span class="p">.</span><span class="n">column1</span><span class="p">[</span><span class="n">c0</span><span class="p">]</span> <span class="o">|</span>
-<span class="o">+</span><span class="c1">------------------+----------------------+</span>
-<span class="o">|</span> <span class="p">{</span><span class="n">c0</span><span class="p">:</span> <span class="n">foo</span><span class="p">,</span> <span class="n">c1</span><span class="p">:</span> <span class="mi">1</span><span class="p">}</span> <span class="o">|</span> <span class="n">foo</span>                  <span class="o">|</span>
-<span class="o">|</span> <span class="p">{</span><span class="n">c0</span><span class="p">:</span> <span class="n">bar</span><span class="p">,</span> <span class="n">c1</span><span class="p">:</span> <span class="mi">2</span><span class="p">}</span> <span class="o">|</span> <span class="n">bar</span>                  <span class="o">|</span>
-<span class="o">+</span><span class="c1">------------------+----------------------+</span>
-<span class="mi">2</span> <span class="k">rows</span> <span class="k">in</span> <span class="k">set</span><span class="p">.</span> <span class="n">Query</span> <span class="n">took</span> <span class="mi">0</span><span class="p">.</span><span class="mi">002</span> <span class="n">seconds</span><span class="p">.</span>
-</code></pre></div></div>
-
-<h2 id="other-features">Other Features</h2>
-<p>Other notable features include:</p>
-<ul>
-  <li>Support aggregating datasets that exceed memory size, with <a href="https://github.com/apache/arrow-datafusion/pull/7400">group by spill to disk</a></li>
-  <li>All operators now track and limit their memory consumption, including Joins</li>
-</ul>
-
-<h1 id="building-systems-is-easier-with-datafusion-️">Building Systems is Easier with DataFusion 🛠️</h1>
-
-<h2 id="documentation">Documentation</h2>
-<p>It is easier than ever to get started using DataFusion with the
-new <a href="https://arrow.apache.org/datafusion/library-user-guide/index.html">Library Users Guide</a> as well as significantly improved the <a href="https://docs.rs/datafusion/latest/datafusion/index.html">API documentation</a>.</p>
-
-<h2 id="user-defined-window-and-table-functions">User Defined Window and Table Functions</h2>
-<p>In addition to DataFusion’s <a href="https://arrow.apache.org/datafusion/library-user-guide/adding-udfs.html#adding-a-scalar-udf">User Defined Scalar Functions</a>, and <a href="https://arrow.apache.org/datafusion/library-user-guide/adding-udfs.html#adding-an-aggregate-udf">User Defined Aggregate Functions</a>, DataFusion now supports <a href="https://arrow.apache.org/datafusion/library-user-guide/adding-udfs.html#adding-a-window-udf">User Defined Window Functions</a> 
- and <a href="https://arrow.apache.org/datafusion/library-user-guide/adding-udfs.html#adding-a-user-defined-table-function">User Defined Table Functions</a>.</p>
-
-<p>For example, <a href="https://arrow.apache.org/datafusion/user-guide/cli.html">the <code class="language-plaintext highlighter-rouge">datafusion-cli</code></a> implements a DuckDB style <a href="https://arrow.apache.org/datafusion/user-guide/cli.html#supported-sql"><code class="language-plaintext highlighter-rouge">parquet_metadata</code></a>
-function as a user defined table function (<a href="https://github.com/apache/arrow-datafusion/blob/3f219bc929cfd418b0e3d3501f8eba1d5a2c87ae/datafusion-cli/src/functions.rs#L222-L248">source code here</a>):</p>
-
-<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">❯</span> <span class="k">SELECT</span> 
-      <span class="n">path_in_schema</span><span class="p">,</span> <span class="n">row_group_id</span><span class="p">,</span> <span class="n">row_group_num_rows</span><span class="p">,</span> <span class="n">stats_min</span><span class="p">,</span> <span class="n">stats_max</span><span class="p">,</span> <span class="n">total_compressed_size</span> 
-<span class="k">FROM</span> 
-      <span class="n">parquet_metadata</span><span class="p">(</span><span class="s1">'hits.parquet'</span><span class="p">)</span>
-<span class="k">WHERE</span> <span class="n">path_in_schema</span> <span class="o">=</span> <span class="s1">'"WatchID"'</span> 
-<span class="k">LIMIT</span> <span class="mi">3</span><span class="p">;</span>
-
-<span class="o">+</span><span class="c1">----------------+--------------+--------------------+---------------------+---------------------+-----------------------+</span>
-<span class="o">|</span> <span class="n">path_in_schema</span> <span class="o">|</span> <span class="n">row_group_id</span> <span class="o">|</span> <span class="n">row_group_num_rows</span> <span class="o">|</span> <span class="n">stats_min</span>           <span class="o">|</span> <span class="n">stats_max</span>           <span class="o">|</span> <span class="n">total_compressed_size</span> <span class="o">|</span>
-<span class="o">+</span><span class="c1">----------------+--------------+--------------------+---------------------+---------------------+-----------------------+</span>
-<span class="o">|</span> <span class="nv">"WatchID"</span>      <span class="o">|</span> <span class="mi">0</span>            <span class="o">|</span> <span class="mi">450560</span>             <span class="o">|</span> <span class="mi">4611687214012840539</span> <span class="o">|</span> <span class="mi">9223369186199968220</span> <span class="o">|</span> <span class="mi">3883759</span>               <span class="o">|</span>
-<span class="o">|</span> <span class="nv">"WatchID"</span>      <span class="o">|</span> <span class="mi">1</span>            <span class="o">|</span> <span class="mi">612174</span>             <span class="o">|</span> <span class="mi">4611689135232456464</span> <span class="o">|</span> <span class="mi">9223371478009085789</span> <span class="o">|</span> <span class="mi">5176803</span>               <span class="o">|</span>
-<span class="o">|</span> <span class="nv">"WatchID"</span>      <span class="o">|</span> <span class="mi">2</span>            <span class="o">|</span> <span class="mi">344064</span>             <span class="o">|</span> <span class="mi">4611692774829951781</span> <span class="o">|</span> <span class="mi">9223363791697310021</span> <span class="o">|</span> <span class="mi">3031680</span>               <span class="o">|</span>
-<span class="o">+</span><span class="c1">----------------+--------------+--------------------+---------------------+---------------------+-----------------------+</span>
-<span class="mi">3</span> <span class="k">rows</span> <span class="k">in</span> <span class="k">set</span><span class="p">.</span> <span class="n">Query</span> <span class="n">took</span> <span class="mi">0</span><span class="p">.</span><span class="mi">053</span> <span class="n">seconds</span><span class="p">.</span>
-</code></pre></div></div>
-
-<h3 id="growth-of-datafusion-">Growth of DataFusion 📈</h3>
-<p>DataFusion has been appearing more publically in the wild. For example</p>
-<ul>
-  <li>New projects built using DataFusion such as <a href="https://lancedb.com/">lancedb</a>, <a href="https://glaredb.com/">GlareDB</a>, <a href="https://www.arroyo.dev/">Arroyo</a>, and <a href="https://github.com/cmu-db/optd">optd</a>.</li>
-  <li>Public talks such as <a href="https://www.youtube.com/watch?v=AJU9rdRNk9I">Apache Arrow Datafusion: Vectorized
-Execution Framework For Maximum Performance</a> in <a href="https://www.bagevent.com/event/8432178">CommunityOverCode Asia 2023</a></li>
-  <li>Blogs posts such as <a href="https://www.synnada.ai/blog/apache-arrow-arrow-datafusion-ai-native-data-infra-an-interview-with-our-ceo-ozan">Apache Arrow, Arrow/DataFusion, AI-native Data Infra</a>,
-<a href="https://www.influxdata.com/blog/flight-datafusion-arrow-parquet-fdap-architecture-influxdb/">Flight, DataFusion, Arrow, and Parquet: Using the FDAP Architecture to build InfluxDB 3.0</a>, and 
-<a href="https://www.linkedin.com/pulse/guide-user-defined-functions-apache-arrow-datafusion-dade-aderemi/">A Guide to User-Defined Functions in Apache Arrow DataFusion</a></li>
-</ul>
-
-<p>We have also <a href="https://github.com/apache/arrow-datafusion/issues/6782">submitted a paper</a> to <a href="https://2024.sigmod.org/">SIGMOD 2024</a>, one of the
-premiere database conferences, describing DataFusion in a technically formal
-style and making the case that it is possible to create a modular and extensive query engine 
-without sacrificing performance. We hope this paper helps people 
-evaluating DataFusion for their needs understand it better.</p>
-
-<h1 id="datafusion-in-2024-">DataFusion in 2024 🥳</h1>
-
-<p>Some major initiatives from contributors we know of this year are:</p>
-
-<ol>
-  <li>
-    <p><em>Modularity</em>: Make DataFusion even more modular, such as <a href="https://github.com/apache/arrow-datafusion/issues/8045">unifying
-built in and user functions</a>, making it easier to customize 
-DataFusion’s behavior.</p>
-  </li>
-  <li>
-    <p><em>Community Growth</em>: Graduate to our own top level Apache project, and
-subsequently add more committers and PMC members to keep pace with project
-growth.</p>
-  </li>
-  <li>
-    <p><em>Use case white papers</em>: Write blog posts and videos explaining
-how to use DataFusion for real-world use cases.</p>
-  </li>
-  <li>
-    <p><em>Testing</em>: Improve CI infrastructure and test coverage, more fuzz
-testing, and better functional and performance regression testing.</p>
-  </li>
-  <li>
-    <p><em>Planning Time</em>: Reduce the time taken to plan queries, both <a href="https://github.com/apache/arrow-datafusion/issues/7698">wide
-tables of 1000s of columns</a>, and in <a href="https://github.com/apache/arrow-datafusion/issues/5637">general</a>.</p>
-  </li>
-  <li>
-    <p><em>Aggregate Performance</em>: Improve the speed of <a href="https://github.com/apache/arrow-datafusion/issues/7000">aggregating “high cardinality”</a> data
-when there are many (e.g. millions) of distinct groups.</p>
-  </li>
-  <li>
-    <p><em>Statistics</em>: <a href="https://github.com/apache/arrow-datafusion/issues/8227">Improved statistics handling</a> with an eye towards more
-sophisticated expression analysis and cost models.</p>
-  </li>
-</ol>
-
-<h1 id="how-to-get-involved">How to Get Involved</h1>
-
-<p>If you are interested in contributing to DataFusion we would love to have you
-join us. You can try out DataFusion on some of your own data and projects and
-let us know how it goes, contribute suggestions, documentation, bug reports, or
-a PR with documentation, tests or code. A list of open issues
-suitable for beginners is <a href="https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22">here</a>.</p>
-
-<p>As the community grows, we are also looking to restart biweekly calls /
-meetings. Timezones are always a challenge for such meetings, but we hope to
-have two calls that can work for most attendees. If you are interested
-in helping, or just want to say hi, please drop us a note via one of 
-the methods listed in our <a href="https://arrow.apache.org/datafusion/contributor-guide/communication.html">Communication Doc</a>.</p>]]></content><author><name>pmc</name></author><category term="release" /><summary type="html"><![CDATA[&lt;!–]]></summary></entry></feed>
+</ul>]]></content><author><name>pmc</name></author><category term="release" /><summary type="html"><![CDATA[&lt;!–]]></summary></entry></feed>
