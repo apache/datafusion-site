@@ -30,15 +30,15 @@ limitations under the License.
 
 For a few months now I’ve been working with [Apache DataFusion](https://datafusion.apache.org/), a
 fast query engine written in Rust. From my experience the language that nearly all data scientists
-are working in is Python. In general, often stick to [Pandas](https://pandas.pydata.org/) for
-in-memory tasks and [PySpark](https://spark.apache.org/) for larger tasks that require distributed
-processing.
+are working in is Python. In general, data scientists often use [Pandas](https://pandas.pydata.org/)
+for in-memory tasks and [PySpark](https://spark.apache.org/) for larger tasks that require
+distributed processing.
 
 In addition to DataFusion, there is another Rust based newcomer to the DataFrame world,
-[Polars](https://pola.rs/). It is growing extremely fast, and it serves many of the same use cases
-as DataFusion. For my use cases, I'm interested in DataFusion because I want to be able to build
-small scale tests rapidly and then scale them up to larger distributed systems with ease. I do
-recommend evaluating Polars for in-memory work.
+[Polars](https://pola.rs/). The latter is growing extremely fast, and it serves many of the same
+use cases as DataFusion. For my use cases, I'm interested in DataFusion because I want to be able
+to build small scale tests rapidly and then scale them up to larger distributed systems with ease.
+I do recommend evaluating Polars for in-memory work.
 
 Personally, I would love a single query approach that is fast for both in-memory usage and can
 extend to large batch processing to exploit parallelization. I think DataFusion, coupled with
@@ -75,7 +75,7 @@ I will demonstrate three approaches to writing UDFs. In order of increasing perf
 - Writing a UDF in Rust and exposing it to Python
 
 Additionally I will demonstrate two variants of this. The first will be nearly identical to the
-PyArrow library approach to simplicity of understanding how to connect the Rust code to Python. The
+PyArrow library approach to simplify understanding how to connect the Rust code to Python. In the
 second version we will do the iteration through the input arrays ourselves to give even greater
 flexibility to the user.
 
@@ -572,9 +572,14 @@ function. For larger batches we may `merge()` these states. It is important to n
 entirely possible that the `merge` function is significantly different than the `update`, though in
 our example they are very similar.
 
+One example of implementing a user defined aggregate function where the `update()` and `merge()`
+operations are different is computing an average. In `update()` we would create a state that is both
+a sum and a count. `state()` would return a list of these two values, and `merge()` would compute
+the final result.
+
 ## User Defined Window Functions
 
-Writing a user defined window function is slighlty more complex than an aggregate function due
+Writing a user defined window function is slightly more complex than an aggregate function due
 to the variety of ways that window functions are called. I recommend reviewing the
 [online documentation](https://datafusion.apache.org/python/user-guide/common-operations/udf-and-udfa.html)
 for a description of which functions need to be implemented. The details of how to implement
@@ -600,9 +605,9 @@ times. For this simple example these are our results.
 ```
 
 As expected, the conversion to Python objects is by far the worst performance. As soon as we drop
-into using any functions that keep the data entirely on the Rust side we see a near 10x speed
-improvement. Then as we increase our complexity from using PyArrow compute functions to
-implementing the UDF in Rust we see incremental improvements. Our fastest approach - iterating
+into using any functions that keep the data entirely on the Native (Rust or C/C++) side we see a
+near 10x speed improvement. Then as we increase our complexity from using PyArrow compute functions
+to implementing the UDF in Rust we see incremental improvements. Our fastest approach - iterating
 through the arrays ourselves does operate nearly 10% faster than the PyArrow compute approach.
 
 ## Final Thoughts and Recommendations
@@ -613,11 +618,21 @@ to work with User Defined Functions by giving a few examples of how one might im
 
 When it comes to designing UDFs, I strongly recommend seeing if you can write your UDF using
 [PyArrow functions](https://arrow.apache.org/docs/python/api/compute.html) rather than pure Python
-objects. These will give you enormous speed benefits. If you must do something that isn't well
-represented by the PyArrow compute functions, then I would consider using a Rust based UDF in the
-manner shown above.
+objects. As shown in the scalar example above, you can achieve a 10x speedup by using PyArrow
+functions. If you must do something that isn't well represented by the PyArrow compute functions,
+then I would consider using a Rust based UDF in the manner shown above.
+
+I would like to thank [@alamb], [@andygrove], [@comphead], [@emgeee], [@kylebarron], and [@Omega359]
+for their helpful reviews and feedback.
 
 Lastly, the Apache Arrow and DataFusion community is an active group of very helpful people working
 to make a great tool. If you want to get involved, please take a look at the
 [online documentation](https://datafusion.apache.org/python/) and jump in to help with one of the
 [open issues](https://github.com/apache/datafusion-python/issues).
+
+[@kylebarron]: https://github.com/kylebarron
+[@emgeee]: https://github.com/emgeee
+[@Omega359]: https://github.com/Omega359
+[@comphead]: https://github.com/comphead
+[@andygrove]: https://github.com/andygrove
+[@alamb]: https://github.com/alamb
