@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "Comparing approaches to User Defined Functions in Apache DataFusion using Python"
-date: "2024-08-06 00:00:00"
+date: "2024-11-19 00:00:00"
 author: timsaucer
 categories: [tutorial]
 ---
