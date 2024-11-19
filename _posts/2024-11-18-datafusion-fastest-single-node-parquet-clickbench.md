@@ -153,7 +153,7 @@ pull requests linked to the epic in arrow-rs
 Here is a partial list of people involved in the project (I am sorry to those whom I forgot)
 
 * **Arrow**:  [Xiangpeng Hao](https://github.com/XiangpengHao) (InfluxData’s amazing 2024 summer intern and UW Madison PhD), [Yijun Zhao](https://github.com/ariesdevil) from DataBend Labs, and [Raphael Taylor-Davies](https://github.com/tustvold) laid the foundation.  [RinChanNOW](https://github.com/RinChanNOWWW) from Tencent and [Andrew Duffy](https://github.com/a10y) from SpiralDB helped push it along in the early days, and [Liang-Chi Hsieh](https://github.com/viirya), [Daniël Heres](https://github.com/Dandandan) reviewed and provided guidance.
-* **DataFusion**:  [Xiangpeng Hao](https://github.com/XiangpengHao), again charted the initial path and [Alex Huang](https://github.com/Weijun-H), [Dharan Aditya](https://github.com/dharanad) [Lordworms](https://github.com/Lordworms), [Jax Liu](https://github.com/goldmedal),  [wiedld](https://github.com/wiedld), [Tai Le Manh](https://github.com/tlm365), [yi wang](https://github.com/my-vegetable-has-exploded), [doupache](https://github.com/doupache), [Jay Zhan](https://github.com/jayzhan211) , [Xin Li](https://github.com/xinlifoobar)  and [Kaifeng Zheng](https://github.com/Kev1n8) made it real.
+* **DataFusion**:  [Xiangpeng Hao](https://github.com/XiangpengHao), again charted the initial path and [Weijun Huang](https://github.com/Weijun-H), [Dharan Aditya](https://github.com/dharanad) [Lordworms](https://github.com/Lordworms), [Jax Liu](https://github.com/goldmedal),  [wiedld](https://github.com/wiedld), [Tai Le Manh](https://github.com/tlm365), [yi wang](https://github.com/my-vegetable-has-exploded), [doupache](https://github.com/doupache), [Jay Zhan](https://github.com/jayzhan211) , [Xin Li](https://github.com/xinlifoobar)  and [Kaifeng Zheng](https://github.com/Kev1n8) made it real.
 * **DataFusion String Function Migration**:  [Trent Hauck](https://github.com/tshauck) organized the effort and set the patterns, [Jax Liu](https://github.com/goldmedal) made a clever testing framework, and [Austin Liu](https://github.com/austin362667), [Dmitrii Bu](https://github.com/demetribu), [Tai Le Manh](https://github.com/tlm365), [Chojan Shang](https://github.com/PsiACE), [WeblWabl](https://github.com/devanbenz), [Lordworms](https://github.com/Lordworms), [iamthinh](https://github.com/thinh2), [Bruce Ritchie](https://github.com/Omega359), [Kaifeng Zheng](https://github.com/Kev1n8), and [Xin Li](https://github.com/xinlifoobar) bashed out the conversions.
 
 
@@ -200,7 +200,7 @@ ORDER BY c DESC
 LIMIT 10;
 ```
 
-For such queries, the first first aggregation phase does not significantly
+For such queries, the first aggregation phase does not significantly
 reduce the number of rows, which wastes significant effort. [Eduard
 Karacharov](https://github.com/korowa) contributed a [dynamic strategy] to
 bypass the first phase when it is not working efficiently, shown in Figure 4.
@@ -261,7 +261,7 @@ Many optimizations in Databases boil down to simply avoiding copies, and this
 was no exception. The trick was to figure out how to avoid copies without
 causing per-column comparison overhead to dominate or complexity to get out of
 hand. In a great example of diligent and disciplined engineering, [Jay
-Zhan](http://jayzhan211) tried [several], [different] approaches until arriving
+Zhan](https://github.com/jayzhan211) tried [several], [different] approaches until arriving
 at the [one shipped in DataFusion `43.0.0`], shown in Figure 6.
 
 [several]: https://github.com/apache/datafusion/pull/10937
