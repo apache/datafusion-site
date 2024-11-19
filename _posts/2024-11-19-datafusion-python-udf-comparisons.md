@@ -522,7 +522,7 @@ different in the buffer it uses, so it is treated slightly differently from the 
 
 Writing a user defined aggregate function or user defined window function is slightly more complex
 than scalar functions. This is because we must accumulate values and there is no guarantee that one
-batch will contain off the values we are aggregating over. For this we need to define an
+batch will contain all the values we are aggregating over. For this we need to define an
 `Accumulator` which will do a few things.
 
 - Process a batch and compute an internal state
