@@ -38,9 +38,9 @@ In addition to DataFusion, there is another Rust based newcomer to the DataFrame
 [Polars](https://pola.rs/). It is growing extremely fast, and it serves many of the same use cases
 as DataFusion. For my use cases, I'm interested in DataFusion because I want to be able to build
 small scale tests rapidly and then scale them up to larger distributed systems with ease. I do
-recommend evaluating Polars for in memory work.
+recommend evaluating Polars for in-memory work.
 
-Personally, I would love a single query approach that is fast for both in memory usage and can
+Personally, I would love a single query approach that is fast for both in-memory usage and can
 extend to large batch processing to exploit parallelization. I think DataFusion, coupled with
 [Ballista](https://datafusion.apache.org/ballista/) or
 [DataFusion-Ray](https://github.com/apache/datafusion-ray), may provide this solution.
