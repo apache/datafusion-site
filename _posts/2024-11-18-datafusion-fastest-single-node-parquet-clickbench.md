@@ -28,8 +28,8 @@ limitations under the License.
 I am extremely excited to announce that [Apache DataFusion] [43.0.0]  is the
 fastest engine for querying Apache Parquet files in [ClickBench]. It is faster
 than [DuckDB], [chDB] and [Clickhouse] using the same hardware. It also marks
-the first time a [Rust] based engine holds the top spot, which has previously
-been held by traditional C/C++ based engines.
+the first time a [Rust]-based engine holds the top spot, which has previously
+been held by traditional C/C++-based engines.
 
 [Apache DataFusion]: https://datafusion.apache.org/
 [43.0.0]: https://crates.io/crates/datafusion
@@ -97,7 +97,7 @@ alt="ClickBench performance results over time for DataFusion"
 />
 
 **Figure 2**: ClickBench performance improved over 30% between DataFusion 34
-(released Dec 2023) and DataFusion 43 (released Nov 2024).
+(released Dec. 2023) and DataFusion 43 (released Nov. 2024).
 
 Like all good optimization efforts, ours took sustained effort as DataFusion ran
 out [single 2x performance improvements] several years ago. Working together our
