@@ -112,7 +112,7 @@ version based on Comet, and we hope to update this to leverage the improvements 
 ## Getting Involved
 
 The Comet project welcomes new contributors. We use the same [Slack and Discord] channels as the main DataFusion
-project and have a weekly DataFusion video call.
+project and have a weekly [DataFusion video call].
 
 [Slack and Discord]: https://datafusion.apache.org/contributor-guide/communication.html#slack-and-discord
 [DataFusion video call]: https://docs.google.com/document/d/1NBpkIAuU7O9h8Br5CbFksDhX-L9TyO9wmGLPMe0Plc8/edit?usp=sharing
