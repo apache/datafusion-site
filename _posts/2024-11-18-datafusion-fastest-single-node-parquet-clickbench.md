@@ -80,17 +80,17 @@ performance, and celebrates the teamwork involved.
 
 # A Strong History of Performance Improvements 
 
-Performance has long been a core focus for DataFusion's community, and the
-engine's speed attracts users and contributors. Recently, we seem to have been
+Performance has long been a core focus for DataFusion's community, and 
+speed attracts users and contributors. Recently, we seem to have been
 even more focused on performance, including in July, 2024 when [Mehmet Ozan
-Kabak], CEO of [Synnada], [suggested focusing on DataFusion’s performance]. This
+Kabak], CEO of [Synnada], again [suggested focusing on performance]. This
 got many of us excited (who doesn’t love a challenge!), and we have subsequently
 rallied to steadily improve the performance release on release as shown in
 Figure 2.
 
 [Mehmet Ozan Kabak]: https://www.linkedin.com/in/mehmet-ozan-kabak/
 [Synnada]: https://www.synnada.ai/
-[suggested focusing on DataFusion’s performance]: https://github.com/apache/datafusion/issues/11442#issuecomment-2226834443
+[suggested focusing on performance]: https://github.com/apache/datafusion/issues/11442#issuecomment-2226834443
 
 <img
 src="{{ site.baseurl }}/img/clickbench-datafusion-43/perf-over-time.png"
