@@ -85,7 +85,7 @@ improve DataFusion’s performance]. This got many of us excited (who doesn’t 
 a challenge!), and we have subsequently rallied to steadily improve the
 performance release on release as shown in Figure 2.
 
-[Mehmet Ozan Kabak]: https://www.linkedin.com/in/mehmet-ozan-kabak/)
+[Mehmet Ozan Kabak]: https://www.linkedin.com/in/mehmet-ozan-kabak/
 [Synnada]: https://www.synnada.ai/
 [called on the community to improve DataFusion’s performance]: https://github.com/apache/datafusion/issues/11442#issuecomment-2226834443
 
