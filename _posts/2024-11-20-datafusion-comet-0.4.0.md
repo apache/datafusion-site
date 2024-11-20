@@ -53,7 +53,7 @@ larger changes. Current benchmarking results can be found in the [Comet Benchmar
 #### Unified Memory Management
 
 Comet now uses a unified memory management approach that shares an off-heap memory pool with Apache Spark, resulting
-in a much simpler configuration. Comet now requires spark.memory.offHeap.enabled=true. This approach provides a
+in a much simpler configuration. Comet now requires `spark.memory.offHeap.enabled=true`. This approach provides a
 holistic view of memory usage in Spark and Comet and makes it easier to optimize system performance.
 
 #### Faster Joins
@@ -74,7 +74,7 @@ after previously supporting Bloom filter testing. Users no longer need to set
 
 #### Complex Type support
 
-Adding support for complex types is a significant focus in Comet. This release has the following improvements:
+This release has the following improvements to complex type support:
 
 - Implemented `ArrayAppend` and `GetArrayStructFields`.
 - Implemented native cast between structs
@@ -93,12 +93,13 @@ in JVM code, and Parquet pages are passed on to native code for decoding.
 Rather than add complex type support to this existing code, we are exploring two main options to allow us to
 leverage more of the upstream Arrow and DataFusion code.
 
-Use DataFusion’s ParquetExec
+### Use DataFusion’s ParquetExec
+
 For use cases where DataFusion can support reading a Parquet source, Comet could create a native plan that uses
 DataFusion’s ParquetExec. We are investigating using DataFusion’s SchemaAdapter to handle some Spark-specific
 handling of timestamps and decimals.
 
-Use Arrow’s Parquet Batch Reader
+### Use Arrow’s Parquet Batch Reader
 
 For use cases not supported by DataFusion’s ParquetExec, such as integrating with Iceberg, we are exploring
 replacing our current native Parquet decoding logic with the Arrow readers provided by the Parquet crate.
