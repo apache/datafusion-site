@@ -1,4 +1,95 @@
-<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" ><generator uri="https://jekyllrb.com/" version="4.3.3">Jekyll</generator><link href="https://datafusion.apache.org/blog/feed.xml" rel="self" type="application/atom+xml" /><link href="https://datafusion.apache.org/blog/" rel="alternate" type="text/html" /><updated>2024-11-20T12:54:55+00:00</updated><id>https://datafusion.apache.org/blog/feed.xml</id><title type="html">Apache DataFusion Project News &amp;amp; Blog</title><subtitle>Apache DataFusion is a very fast, extensible query engine for building high-quality  data-centric systems in Rust, using the Apache Arrow in-memory format.</subtitle><entry><title type="html">Comparing approaches to User Defined Functions in Apache DataFusion using Python</title><link href="https://datafusion.apache.org/blog/2024/11/19/datafusion-python-udf-comparisons/" rel="alternate" type="text/html" title="Comparing approaches to User Defined Functions in Apache DataFusion using Python" /><published>2024-11-19T00:00:00+00:00</published><updated>2024-11-19T00:00:00+00:00</updated><id>https://datafusion.apache.org/blog/2024/11/19/datafusion-python-udf-comparisons</id><content type="html" xml:base="https://datafusion.apache.org/blog/2024/11/19/datafusion-python-udf-comparisons/"><![CDATA[<!--
+<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" ><generator uri="https://jekyllrb.com/" version="4.3.3">Jekyll</generator><link href="https://datafusion.apache.org/blog/feed.xml" rel="self" type="application/atom+xml" /><link href="https://datafusion.apache.org/blog/" rel="alternate" type="text/html" /><updated>2024-11-20T21:23:41+00:00</updated><id>https://datafusion.apache.org/blog/feed.xml</id><title type="html">Apache DataFusion Project News &amp;amp; Blog</title><subtitle>Apache DataFusion is a very fast, extensible query engine for building high-quality  data-centric systems in Rust, using the Apache Arrow in-memory format.</subtitle><entry><title type="html">Apache DataFusion Comet 0.4.0 Release</title><link href="https://datafusion.apache.org/blog/2024/11/20/datafusion-comet-0.4.0/" rel="alternate" type="text/html" title="Apache DataFusion Comet 0.4.0 Release" /><published>2024-11-20T00:00:00+00:00</published><updated>2024-11-20T00:00:00+00:00</updated><id>https://datafusion.apache.org/blog/2024/11/20/datafusion-comet-0.4.0</id><content type="html" xml:base="https://datafusion.apache.org/blog/2024/11/20/datafusion-comet-0.4.0/"><![CDATA[<!--
+
+-->
+
+<p>The Apache DataFusion PMC is pleased to announce version 0.4.0 of the <a href="https://datafusion.apache.org/comet/">Comet</a> subproject.</p>
+
+<p>Comet is an accelerator for Apache Spark that translates Spark physical plans to DataFusion physical plans for
+improved performance and efficiency without requiring any code changes.</p>
+
+<p>Comet runs on commodity hardware and aims to provide 100% compatibility with Apache Spark. Any operators or
+expressions that are not fully compatible will fall back to Spark unless explicitly enabled by the user. Refer
+to the <a href="https://datafusion.apache.org/comet/user-guide/compatibility.html">compatibility guide</a> for more information.</p>
+
+<p>This release covers approximately six weeks of development work and is the result of merging 51 PRs from 10
+contributors. See the <a href="https://github.com/apache/datafusion-comet/blob/main/dev/changelog/0.4.0.md">change log</a> for more information.</p>
+
+<h2 id="release-highlights">Release Highlights</h2>
+
+<h3 id="performance--stability">Performance &amp; Stability</h3>
+
+<p>There are a number of performance and stability improvements in this release. Here is a summary of some of the
+larger changes. Current benchmarking results can be found in the <a href="https://datafusion.apache.org/comet/contributor-guide/benchmarking.html">Comet Benchmarking Guide</a>.</p>
+
+<h4 id="unified-memory-management">Unified Memory Management</h4>
+
+<p>Comet now uses a unified memory management approach that shares an off-heap memory pool with Apache Spark, resulting
+in a much simpler configuration. Comet now requires <code class="language-plaintext highlighter-rouge">spark.memory.offHeap.enabled=true</code>. This approach provides a
+holistic view of memory usage in Spark and Comet and makes it easier to optimize system performance.</p>
+
+<h4 id="faster-joins">Faster Joins</h4>
+
+<p>Apache Spark supports sort-merge and hash joins, which have similar performance characteristics. Spark defaults to
+using sort-merge joins because they are less likely to result in OutOfMemory exceptions. In vectorized query
+engines such as DataFusion, hash joins outperform sort-merge joins. Comet now has an experimental feature to
+replace Spark sort-merge joins with hash joins for improved performance. This feature is experimental because
+there is currently no spill-to-disk support in the hash join implementation. This feature can be enabled by
+setting <code class="language-plaintext highlighter-rouge">spark.comet.exec.replaceSortMergeJoin=true</code>.</p>
+
+<h4 id="bloom-filter-aggregates">Bloom Filter Aggregates</h4>
+
+<p>Spark’s optimizer can insert Bloom filter aggregations and filters to prune large result sets before a shuffle. However,
+Comet would fall back to Spark for the aggregation. Comet now has native support for Bloom filter aggregations
+after previously supporting Bloom filter testing. Users no longer need to set
+<code class="language-plaintext highlighter-rouge">spark.sql.optimizer.runtime.bloomFilter.enabled=false</code> when using Comet.</p>
+
+<h4 id="complex-type-support">Complex Type support</h4>
+
+<p>This release has the following improvements to complex type support:</p>
+
+<ul>
+  <li>Implemented <code class="language-plaintext highlighter-rouge">ArrayAppend</code> and <code class="language-plaintext highlighter-rouge">GetArrayStructFields</code>.</li>
+  <li>Implemented native cast between structs</li>
+  <li>Implemented native cast from structs to string</li>
+</ul>
+
+<h2 id="roadmap">Roadmap</h2>
+
+<p>One of the highest priority items on the roadmap is to add support for reading complex types (maps, structs, and arrays)
+from Parquet sources, both when reading Parquet directly and from Iceberg.</p>
+
+<p>Comet currently has proprietary native code for decoding Parquet pages, native column readers for all of Spark’s
+primitive types, and special handling for Spark-specific use cases such as timestamp rebasing and decimal type
+promotion. This implementation does not yet support complex types. File IO, decryption, and decompression are handled
+in JVM code, and Parquet pages are passed on to native code for decoding.</p>
+
+<p>Rather than add complex type support to this existing code, we are exploring two main options to allow us to
+leverage more of the upstream Arrow and DataFusion code.</p>
+
+<h3 id="use-datafusions-parquetexec">Use DataFusion’s ParquetExec</h3>
+
+<p>For use cases where DataFusion can support reading a Parquet source, Comet could create a native plan that uses
+DataFusion’s ParquetExec. We are investigating using DataFusion’s SchemaAdapter to handle some Spark-specific
+handling of timestamps and decimals.</p>
+
+<h3 id="use-arrows-parquet-batch-reader">Use Arrow’s Parquet Batch Reader</h3>
+
+<p>For use cases not supported by DataFusion’s ParquetExec, such as integrating with Iceberg, we are exploring
+replacing our current native Parquet decoding logic with the Arrow readers provided by the Parquet crate.</p>
+
+<p>Iceberg already provides a vectorized Spark reader for Parquet. A <a href="https://github.com/apache/iceberg/pull/9841">PR</a> is open against Iceberg for adding a native
+version based on Comet, and we hope to update this to leverage the improvements outlined above.</p>
+
+<h2 id="getting-involved">Getting Involved</h2>
+
+<p>The Comet project welcomes new contributors. We use the same <a href="https://datafusion.apache.org/contributor-guide/communication.html#slack-and-discord">Slack and Discord</a> channels as the main DataFusion
+project and have a weekly <a href="https://docs.google.com/document/d/1NBpkIAuU7O9h8Br5CbFksDhX-L9TyO9wmGLPMe0Plc8/edit?usp=sharing">DataFusion video call</a>.</p>
+
+<p>The easiest way to get involved is to test Comet with your current Spark jobs and file issues for any bugs or
+performance regressions that you find. See the <a href="https://datafusion.apache.org/comet/user-guide/installation.html">Getting Started</a> guide for instructions on downloading and installing
+Comet.</p>
+
+<p>There are also many <a href="https://github.com/apache/datafusion-comet/contribute">good first issues</a> waiting for contributions.</p>]]></content><author><name>pmc</name></author><category term="subprojects" /><summary type="html"><![CDATA[&lt;!–]]></summary></entry><entry><title type="html">Comparing approaches to User Defined Functions in Apache DataFusion using Python</title><link href="https://datafusion.apache.org/blog/2024/11/19/datafusion-python-udf-comparisons/" rel="alternate" type="text/html" title="Comparing approaches to User Defined Functions in Apache DataFusion using Python" /><published>2024-11-19T00:00:00+00:00</published><updated>2024-11-19T00:00:00+00:00</updated><id>https://datafusion.apache.org/blog/2024/11/19/datafusion-python-udf-comparisons</id><content type="html" xml:base="https://datafusion.apache.org/blog/2024/11/19/datafusion-python-udf-comparisons/"><![CDATA[<!--
 
 -->
 <h1 id="writing-user-defined-functions-in-apache-datafusion-using-python">Writing User Defined Functions in Apache DataFusion using Python</h1>
@@ -1740,56 +1831,4 @@ DataFusion</a> website.</p>
 us. Get in touch using <a href="https://datafusion.apache.org/contributor-guide/communication.html">Communication Doc</a> and learn how to get involved in the
 <a href="https://datafusion.apache.org/contributor-guide/index.html">Contributor Guide</a>. We welcome everyone to try DataFusion on their
 own data and projects and let us know how it goes, contribute suggestions,
-documentation, bug reports, or a PR with documentation, tests or code.</p>]]></content><author><name>pmc</name></author><category term="subprojects" /><summary type="html"><![CDATA[&lt;!–]]></summary></entry><entry><title type="html">Announcing Apache Arrow DataFusion Comet</title><link href="https://datafusion.apache.org/blog/2024/03/06/comet-donation/" rel="alternate" type="text/html" title="Announcing Apache Arrow DataFusion Comet" /><published>2024-03-06T00:00:00+00:00</published><updated>2024-03-06T00:00:00+00:00</updated><id>https://datafusion.apache.org/blog/2024/03/06/comet-donation</id><content type="html" xml:base="https://datafusion.apache.org/blog/2024/03/06/comet-donation/"><![CDATA[<!--
-
--->
-
-<h1 id="introduction">Introduction</h1>
-<p>The Apache Arrow PMC is pleased to announce the donation of the <a href="https://github.com/apache/arrow-datafusion-comet">Comet project</a>,
-a native Spark SQL Accelerator built on <a href="https://arrow.apache.org/datafusion">Apache Arrow DataFusion</a>.</p>
-
-<p>Comet is an Apache Spark plugin that uses Apache Arrow DataFusion to
-accelerate Spark workloads. It is designed as a drop-in
-replacement for Spark’s JVM based SQL execution engine and offers significant
-performance improvements for some workloads as shown below.</p>
-
-<figure style="text-align: center;">
-  <img src="/blog/img/datafusion-comet/comet-architecture.png" width="100%" class="img-responsive" alt="Fig 1: Adaptive Arrow schema architecture overview." />
-  <figcaption>
-   <b>Figure 1</b>: With Comet, users interact with the same Spark ecosystem, tools
-    and APIs such as Spark SQL. Queries still run through Spark's query optimizer and planner. 
-    However, the execution is delegated to Comet,
-    which is significantly faster and more resource efficient than a JVM based
-    implementation.
-</figcaption>
-</figure>
-
-<p>Comet is one of a growing class of projects that aim to accelerate Spark using
-native columnar engines such as the proprietary <a href="https://www.databricks.com/product/photon">Databricks Photon Engine</a> and
-open source projects <a href="https://incubator.apache.org/projects/gluten.html">Gluten</a>, <a href="https://github.com/NVIDIA/spark-rapids">Spark RAPIDS</a>, and <a href="https://github.com/kwai/blaze">Blaze</a> (also built using
-DataFusion).</p>
-
-<p>Comet was originally implemented at Apple and the engineers who worked on the
-project are also significant contributors to Arrow and DataFusion. Bringing 
-Comet into the Apache Software Foundation will accelerate its development and 
-grow its community of contributors and users.</p>
-
-<h1 id="get-involved">Get Involved</h1>
-<p>Comet is still in the early stages of development and we would love to have you
-join us and help shape the project. We are working on an initial release, and 
-expect to post another update with more details at that time.</p>
-
-<p>Before then, here are some ways to get involved:</p>
-
-<ul>
-  <li>
-    <p>Learn more by visiting the <a href="https://github.com/apache/arrow-datafusion-comet">Comet project</a> page and reading the <a href="https://lists.apache.org/thread/0q1rb11jtpopc7vt1ffdzro0omblsh0s">mailing list
-discussion</a> about the initial donation.</p>
-  </li>
-  <li>
-    <p>Help us plan out the <a href="https://github.com/apache/arrow-datafusion-comet/issues/19">roadmap</a></p>
-  </li>
-  <li>
-    <p>Try out the project and provide feedback, file issues, and contribute code.</p>
-  </li>
-</ul>]]></content><author><name>pmc</name></author><category term="release" /><summary type="html"><![CDATA[&lt;!–]]></summary></entry></feed>
+documentation, bug reports, or a PR with documentation, tests or code.</p>]]></content><author><name>pmc</name></author><category term="subprojects" /><summary type="html"><![CDATA[&lt;!–]]></summary></entry></feed>
