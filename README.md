@@ -84,6 +84,5 @@ For example, see https://github.com/apache/datafusion-site/pull/9
 
 #### Check site status
 
-The website is updated from the `asf-site` branch on a schedule, so it may take
-some time for the  changes to be reflected. You can check the status at 
+The website is updated from the `asf-site` branch. You can check the status at 
 [ASF Infra sitesource](https://infra-reports.apache.org/#sitesource)
