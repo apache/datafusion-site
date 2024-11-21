@@ -72,13 +72,17 @@ git checkout asf-site
 git pull
 # create a branch for the publishing
 git checkout -b publish_blog
-# push code upstream
-git push 
 # copy content built from _site directory
 cp -R ../datafusion-site/_site/* .
 git commit -a -m 'Publish blog content'
+# push code upstream
+git push 
 ```
 
 #### Make PR, targeting the `asf-site` branch
 For example, see https://github.com/apache/datafusion-site/pull/9
 
+#### Check site status
+
+The website is updated from the `asf-site` branch. You can check the status at 
+[ASF Infra sitesource](https://infra-reports.apache.org/#sitesource)
