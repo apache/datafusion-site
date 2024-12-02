@@ -62,4 +62,4 @@ ASF_GENID = {
 # blogs/README.md is not intended for publication
 IGNORE_FILES = [ 'theme', 'README.md' ]
 
-FEED_RSS = "blog/rss.xml"
+FEED_RSS = "blog/feed.xml"
