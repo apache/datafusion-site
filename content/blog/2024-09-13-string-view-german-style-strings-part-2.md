@@ -33,7 +33,7 @@ In this second part of the post, we describe the rest of the journey: implementi
 
 [Xiangpeng Hao]: https://haoxp.xyz/
 [InfluxData blog]: https://www.influxdata.com/blog/faster-queries-with-stringview-part-two-influxdb/
-[first post]: {{ site.baseurl }}/2024/09/13/string-view-german-style-strings-part-1/
+[first post]: {filename}./2024-09-13-string-view-german-style-strings-part-1.md
 
 ## Faster String Operations
 
@@ -63,7 +63,7 @@ Figure 1 illustrates the difference between the output of both string representa
 
 
 <img
-src="{{ site.baseurl }}/img/string-view-2/figure1-zero-copy-take.png"
+src="../images/string-view-2/figure1-zero-copy-take.png"
 width="100%"
 class="img-responsive"
 alt="Diagram showing Zero-copy `take`/`filter` for StringViewArray"
@@ -118,7 +118,7 @@ To eliminate the impact of the faster Parquet reading using StringViewArray (see
 
 
 <img
-src="{{ site.baseurl }}/img/string-view-2/figure2-filter-time.png"
+src="../images/string-view-2/figure2-filter-time.png"
 width="100%"
 class="img-responsive"
 alt="Figure showing StringViewArray reduces the filter time by 32% on ClickBench query 22."

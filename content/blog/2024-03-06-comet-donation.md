@@ -35,7 +35,7 @@ performance improvements for some workloads as shown below.
 
 <figure style="text-align: center;">
   <img 
-    src="{{ site.baseurl }}/img/datafusion-comet/comet-architecture.png" 
+    src="../images/datafusion-comet/comet-architecture.png" 
     width="100%" 
     class="img-responsive" 
     alt="Fig 1: Adaptive Arrow schema architecture overview."

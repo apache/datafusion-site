@@ -68,7 +68,7 @@ release, users can fully use these tools in their workflow.
 
 <figure style="text-align: center;">
   <img 
-    src="{{ site.baseurl }}/img/python-datafusion-40.0.0/vscode_hover_tooltip.png" 
+    src="../images/python-datafusion-40.0.0/vscode_hover_tooltip.png" 
     width="100%"
     class="img-responsive"
     alt="Fig 1: Enhanced tooltips in an IDE."
@@ -84,7 +84,7 @@ used a function's arguments as shown in Figure 2.
 
 <figure style="text-align: center;">
   <img 
-    src="{{ site.baseurl }}/img/python-datafusion-40.0.0/pylance_error_checking.png"
+    src="../images/python-datafusion-40.0.0/pylance_error_checking.png"
     width="100%"
     class="img-responsive"
     alt="Fig 2: Error checking in static analysis"

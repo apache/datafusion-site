@@ -42,7 +42,7 @@ Improving aggregation performance matters to all users of DataFusion. For exampl
 
 With the new optimizations, DataFusion’s grouping speed is now close to DuckDB, a system that regularly reports [great](https://duckdblabs.github.io/db-benchmark/) [grouping](https://duckdb.org/2022/03/07/aggregate-hashtable.html#experiments) benchmark performance numbers. Figure 1 contains a representative sample of [ClickBench](https://github.com/ClickHouse/ClickBench/tree/main) on a single Parquet file, and the full results are at the end of this article.
 
-<img src="{{ site.baseurl }}/assets/datafusion_fast_grouping/summary.png" width="700">
+<img src="../images/datafusion_fast_grouping/summary.png" width="700">
 
 **Figure 1**: Query performance for ClickBench queries on queries 16, 17, 18 and 19 on a single Parquet file for DataFusion `27.0.0`, DataFusion `28.0.0` and DuckDB `0.8.1`.
 
@@ -362,7 +362,7 @@ As the industry moves towards data systems assembled from components, it is incr
 
 DataFusion now reaches near-DuckDB-speeds querying Parquet data. While we don’t plan to engage in a benchmarking shootout with a team that literally wrote [Fair Benchmarking Considered Difficult](https://dl.acm.org/doi/abs/10.1145/3209950.3209955), hopefully everyone can agree that DataFusion `28.0.0` is a significant improvement.
 
-<img src="{{ site.baseurl }}/assets/datafusion_fast_grouping/full.png" width="700">
+<img src="../images/datafusion_fast_grouping/full.png" width="700">
 
 **Figure 6**: Performance of DataFusion `27.0.0`, DataFusion `28.0.0`, and DuckDB `0.8.1` on all 43 ClickBench queries against a single `hits.parquet` file. Lower is better.
 

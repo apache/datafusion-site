@@ -41,14 +41,14 @@ been held by traditional C/C++-based engines.
 
 
 <img
-src="{{ site.baseurl }}/img/2x_bgwhite_original.png"
+src="../images/2x_bgwhite_original.png"
 width="80%"
 class="img-responsive"
 alt="Apache DataFusion Logo"
 />
 
 <img
-src="{{ site.baseurl }}/img/clickbench-datafusion-43/perf.png"
+src="../images/clickbench-datafusion-43/perf.png"
 width="100%"
 class="img-responsive"
 alt="ClickBench performance for DataFusion 43.0.0"
@@ -93,7 +93,7 @@ Figure 2.
 [suggested focusing on performance]: https://github.com/apache/datafusion/issues/11442#issuecomment-2226834443
 
 <img
-src="{{ site.baseurl }}/img/clickbench-datafusion-43/perf-over-time.png"
+src="../images/clickbench-datafusion-43/perf-over-time.png"
 width="100%"
 class="img-responsive"
 alt="ClickBench performance results over time for DataFusion"
@@ -130,7 +130,7 @@ occur in many of the hottest loops during query processing, so optimizing them
 resulted in measurable performance improvements.
 
 <img
-src="{{ site.baseurl }}/img/clickbench-datafusion-43/string-view-take.png"
+src="../images/clickbench-datafusion-43/string-view-take.png"
 width="80%"
 class="img-responsive"
 alt="Illustration of how take works with StringView"
@@ -212,7 +212,7 @@ bypass the first phase when it is not working efficiently, shown in Figure 4.
 [dynamic strategy]: https://github.com/apache/datafusion/pull/11627
 
 <img
-src="{{ site.baseurl }}/img/clickbench-datafusion-43/skipping-partial-aggregation.png"
+src="../images/clickbench-datafusion-43/skipping-partial-aggregation.png"
 width="100%"
 class="img-responsive"
 alt="Two phase aggregation diagram from DataFusion API docs annotated to show first phase not helping"
@@ -249,7 +249,7 @@ length strings and binary data].
 [is especially high for variable length strings and binary data]: https://github.com/apache/datafusion/issues/9403
 
 <img
-src="{{ site.baseurl }}/img/clickbench-datafusion-43/row-based-storage.png"
+src="../images/clickbench-datafusion-43/row-based-storage.png"
 width="100%"
 class="img-responsive"
 alt="Row based storage for multiple group columns"
@@ -272,7 +272,7 @@ at the [one shipped in DataFusion `43.0.0`], shown in Figure 6.
 [one shipped in DataFusion `43.0.0`]: https://github.com/apache/datafusion/pull/12269
 
 <img
-src="{{ site.baseurl }}/img/clickbench-datafusion-43/column-based-storage.png"
+src="../images/clickbench-datafusion-43/column-based-storage.png"
 width="100%"
 class="img-responsive"
 alt="Column based storage for multiple group columns"
