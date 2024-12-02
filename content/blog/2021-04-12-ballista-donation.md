@@ -1,8 +1,8 @@
 ---
 layout: post
-title: "Ballista: A Distributed Scheduler for Apache Arrow"
+title: Ballista: A Distributed Scheduler for Apache Arrow
 description: "We are excited to announce that Ballista has been donated to the Apache Arrow project. Ballista is a distributed scheduler for the Rust implementation of Apache Arrow."
-date: "2021-04-12 00:00:00 -0600"
+date: 2021-04-12
 author: agrove
 categories: [application]
 ---

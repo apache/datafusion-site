@@ -1,7 +1,7 @@
 ---
 layout: post
-title: "Announcing Apache Arrow DataFusion is now Apache DataFusion"
-date: "2024-05-07 00:00:00"
+title: Announcing Apache Arrow DataFusion is now Apache DataFusion
+date: 2024-05-07
 author: pmc
 categories: [subprojects]
 ---

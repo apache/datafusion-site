@@ -1,8 +1,8 @@
 ---
 layout: post
-title: "DataFusion: A Rust-native Query Engine for Apache Arrow"
+title: DataFusion: A Rust-native Query Engine for Apache Arrow
 description: "We are excited to announce that DataFusion has been donated to the Apache Arrow project. DataFusion is an in-memory query engine for the Rust implementation of Apache Arrow."
-date: "2019-02-04 00:00:00 -0600"
+date: 2019-02-04
 author: agrove
 categories: [application]
 ---

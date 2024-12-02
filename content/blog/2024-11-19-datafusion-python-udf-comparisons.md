@@ -1,7 +1,7 @@
 ---
 layout: post
-title: "Comparing approaches to User Defined Functions in Apache DataFusion using Python"
-date: "2024-11-19 00:00:00"
+title: Comparing approaches to User Defined Functions in Apache DataFusion using Python
+date: 2024-11-19
 author: timsaucer
 categories: [tutorial]
 ---
@@ -24,7 +24,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 {% endcomment %}
 -->
-# Writing User Defined Functions in Apache DataFusion using Python
 
 ## Personal Context
 

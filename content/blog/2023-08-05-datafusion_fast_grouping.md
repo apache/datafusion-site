@@ -1,7 +1,7 @@
 ---
 layout: post
-title: "Aggregating Millions of Groups Fast in Apache Arrow DataFusion 28.0.0"
-date: "2023-08-05 00:00:00"
+title: Aggregating Millions of Groups Fast in Apache Arrow DataFusion 28.0.0
+date: 2023-08-05
 author: alamb, Dandandan, tustvold
 categories: [release]
 ---

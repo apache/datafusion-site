@@ -1,7 +1,7 @@
 ---
 layout: post
-title: "Apache DataFusion Python 40.1.0 Released, Significant usability updates"
-date: "2024-08-20 00:00:00"
+title: Apache DataFusion Python 40.1.0 Released, Significant usability updates
+date: 2024-08-20
 author: timsaucer
 categories: [release]
 ---

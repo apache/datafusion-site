@@ -1,7 +1,7 @@
 ---
 layout: post
-title: "Using StringView / German Style Strings to make Queries Faster: Part 2 - String Operations"
-date: "2024-09-13 00:00:00"
+title: Using StringView / German Style Strings to make Queries Faster: Part 2 - String Operations
+date: 2024-09-13
 author: Xiangpeng Hao, Andrew Lamb
 categories: [performance]
 ---

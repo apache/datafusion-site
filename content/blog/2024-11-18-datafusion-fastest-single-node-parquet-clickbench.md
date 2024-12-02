@@ -1,7 +1,7 @@
 ---
 layout: post
-title: "Apache DataFusion is now the fastest single node engine for querying Apache Parquet files"
-date: "2024-11-18 00:00:00"
+title: Apache DataFusion is now the fastest single node engine for querying Apache Parquet files
+date: 2024-11-18
 author: Andrew Lamb, Staff Engineer at InfluxData
 categories: [core, performance]
 ---

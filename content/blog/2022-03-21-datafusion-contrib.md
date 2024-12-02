@@ -1,7 +1,7 @@
 ---
 layout: post
 title: Introducing Apache Arrow DataFusion Contrib
-date: "2022-03-21 00:00:00"
+date: 2022-03-21
 author: pmc
 categories: [release]
 ---

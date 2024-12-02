@@ -1,7 +1,7 @@
 ---
 layout: post
-title: "Apache DataFusion Comet 0.2.0 Release"
-date: "2024-08-28 00:00:00"
+title: Apache DataFusion Comet 0.2.0 Release
+date: 2024-08-28
 author: pmc
 categories: [subprojects]
 ---
