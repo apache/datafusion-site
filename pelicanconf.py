@@ -61,3 +61,5 @@ ASF_GENID = {
 # Configure ignore file and directory basenames (paths not checked)
 # blogs/README.md is not intended for publication
 IGNORE_FILES = [ 'theme', 'README.md' ]
+
+FEED_RSS = "blog/rss.xml"
