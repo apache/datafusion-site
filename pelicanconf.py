@@ -16,7 +16,7 @@ PLUGIN_PATHS = [ 'plugins',  ]
 # If the website uses any *.ezmd files, include the 'asfreader' plugin
 # PLUGINS = [ 'toc', 'gfm', 'asfgenid',  ]
 # PLUGINS = ['asfgenid', 'asfdata', 'pelican-gfm', 'asfreader', 'sitemap']
-PLUGINS = ['asfgenid', ]
+PLUGINS = ['asfgenid', 'extract_date_from_filename']
 # All content is located at '.' (aka content/ )
 PAGE_PATHS = [ 'pages' ]
 STATIC_PATHS = [ '.',  ]
@@ -38,8 +38,8 @@ ARCHIVES_SAVE_AS = ''
 # Disable articles by pointing to a (should-be-absent) subdir
 ARTICLE_PATHS = [ 'blog' ]
 # needed to create blogs page
-ARTICLE_URL = 'blog/{slug}.html'
-ARTICLE_SAVE_AS = 'blog/{slug}.html'
+ARTICLE_URL = 'blog/{date:%Y}/{date:%m}/{date:%d}/{filename}'
+ARTICLE_SAVE_AS = 'blog/{date:%Y}/{date:%m}/{date:%d}/{filename}/index.html'
 # Disable all processing of .html files
 READERS = { 'html': None, }
 
