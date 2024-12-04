@@ -3,7 +3,7 @@ import datetime
 SITENAME = 'Apache DataFusion Blog'
 SITEDESC = 'The official new and blog for the Apache DataFusion project'
 SITEDOMAIN = 'datafusion.apache.org'
-SITEURL = 'https://datafusion.apache.org/blog/'
+SITEURL = 'https://datafusion.apache.org/blog'
 SITELOGO = 'https://datafusion.apache.org/favicon.ico'
 SITEREPOSITORY = 'https://github.com/apache/datafusion-site/blob/main/content/'
 CURRENTYEAR = datetime.date.today().year
@@ -16,7 +16,7 @@ PLUGIN_PATHS = [ 'plugins',  ]
 # If the website uses any *.ezmd files, include the 'asfreader' plugin
 # PLUGINS = [ 'toc', 'gfm', 'asfgenid',  ]
 # PLUGINS = ['asfgenid', 'asfdata', 'pelican-gfm', 'asfreader', 'sitemap']
-PLUGINS = ['asfgenid', 'asfdata', ]
+PLUGINS = ['asfgenid', ]
 # All content is located at '.' (aka content/ )
 PAGE_PATHS = [ 'pages' ]
 STATIC_PATHS = [ '.',  ]
@@ -63,3 +63,11 @@ ASF_GENID = {
 IGNORE_FILES = [ 'theme', 'README.md' ]
 
 FEED_RSS = "blog/feed.xml"
+
+MARKDOWN = {
+    'extension_configs': {
+        'markdown.extensions.codehilite': {'linenums': False},
+        'markdown.extensions.fenced_code': {},
+    },
+    'output_format': 'html5',
+}
