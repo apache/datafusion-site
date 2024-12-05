@@ -1,0 +1,29 @@
+# This workflow ensures that any PR targeted at main will build properly.
+# A failure in this workflow should prevent any merging into main. This will
+# build a new branch similar to the PR head branch but with "-staging"
+# appended to the end. If only runs for head branches that match "site/".
+#
+# If you wish to stage your site changes, then you simply need to open
+# a PR with a head branch of `site/` that targets `main`.
+#
+# For example, if you open a PR to merge `site/awesome-update` then this
+# workflow will create a branch `site/awesome-update-staging` that will
+# contain the built contents of the site. A separate ASF process will
+# identify that branch and stage your preview as
+# datafusion-awesome-update.staged.apache.org
+
+name: Stage Site
+on:
+  pull_request:
+    branches: ["main"]
+jobs:
+  build-pelican:
+    if: startsWith(github.head_ref, 'site/')
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: apache/infrastructure-actions/pelican@main
+        with:
+          destination: 'asf-staging'
+          gfm: 'false'

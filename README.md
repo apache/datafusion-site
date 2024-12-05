@@ -2,87 +2,61 @@
 
 This repository contains the Apache DataFusion blog at https://datafusion.apache.org/blog/
 
-## Setup for Mac
-
-Based on instructions at https://jekyllrb.com/docs/installation/macos/
-
-```shell
-brew install chruby ruby-install xz
-ruby-install ruby 3.1.3
-```
-
-Note: I did not have a `~/.zshrc` file so had to create one first.
-
-```
-echo "source $(brew --prefix)/opt/chruby/share/chruby/chruby.sh" >> ~/.zshrc
-echo "source $(brew --prefix)/opt/chruby/share/chruby/auto.sh" >> ~/.zshrc
-echo "chruby ruby-3.1.3" >> ~/.zshrc # run 'chruby' to see actual version
-```
-
-Quit and restart terminal.
-
-```shell
-ruby -v
-```
-Should be `ruby 3.1.3p185 (2022-11-24 revision 1a6b16756e) [arm64-darwin23]` or similar.
-
-```shell
-gem install jekyll bundler
-```
-
-### Preview site locally
-
-```shell
-bundle exec jekyll serve
-```
-
 ## Setup for Docker
 
-If you don't wish to change or install ruby and nodejs locally, you can use docker to build and preview the site with a command like:
-
 ```shell
-docker run -v `pwd`:/datafusion-site -p 4000:4000 -it ruby bash
-cd datafusion-site
-gem install jekyll bundler
-bundle install
-# Serve using local container address
-bundle exec jekyll serve --host 0.0.0.0
+git clone https://github.com/apache/infrastructure-actions.git
+cd infrastructure-actions
+docker build -t df-site-build pelican
 ```
 
-Then open http://localhost:4000/blog/ to see the blog locally
+Then within the directory that contains `datafusion-site` you can build and test
+the site using:
+
+```shell
+docker run --rm -it -p8000:8000 -v $PWD:/site df-site-build:latest
+```
+
+Navigate in your web browser to [http://localhost:8000] to view the live website.
+This page will monitor and rebuild the site when you make any changes to the file
+structure, so you can edit and see the results by just refreshing your browser.
 
 ## Publish site
 
-This is currently a manual process. Basic steps are:
+The site publishes using a GitHub action provided by the ASF Infrastructure team.
+See the [ASF-Pelican](https://infra.apache.org/asf-pelican.html) site for most details
+on how this process works.
 
-#### Check out `main` and build site
-```shell
-# Check out latest code
-git checkout main
-git pull
-# build site (html is left in _site directory)
-bundle exec jekyll build
-```
+To preview your site live, create a branch named `site/my-feature-x`. This should
+auto-publish to https://datafusion.staged.apache.org/blog
 
-#### Check out `asf-site` and copy content
-Checkout a separate copy of `datafusion-site`
-
-```shell
-git checkout asf-site
-git pull
-# create a branch for the publishing
-git checkout -b publish_blog
-# copy content built from _site directory
-cp -R ../datafusion-site/_site/* .
-git commit -a -m 'Publish blog content'
-# push code upstream
-git push 
-```
-
-#### Make PR, targeting the `asf-site` branch
-For example, see https://github.com/apache/datafusion-site/pull/9
+When you are satisfied with the staged branch, merging into `main` should cause
+the site to build via github actions and publish.
 
 #### Check site status
 
 The website is updated from the `asf-site` branch. You can check the status at 
 [ASF Infra sitesource](https://infra-reports.apache.org/#sitesource)
+
+## Updating Dependencies
+
+The JavaScript and CSS files included in this repository are based on the
+example from the [ASF Infra](https://github.com/apache/infrastructure-website)
+and modified slightly for our purposes. If you need to update these, the core
+libraries to use are
+
+- [bootstrap](https://getbootstrap.com/) you can simply download the latest
+    bundled minified version and css file. You will want to also include the
+    associated `.map` file. This is an common library used to provide a host
+    of useful JavaScript functions for websites.
+- [highlight.js](https://highlightjs.org/) provides the code colorization
+    for the blog posts, making them more readable. To generate a new highlight
+    package, you can use the [generator tool](https://highlightjs.org/download).
+    When you download this package, you will want to extract the full js file,
+    not the minified file or you will not get all of the functionality you
+    need.
+- [font awesome](https://fontawesome.com/) provides a variety of improved
+    fonts for readability. You can simply update the provided css files.
+- In addition to these dependencies, we have some custom CSS files to improve
+    the site layout. You can edit these files directly.
+
