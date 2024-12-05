@@ -6,10 +6,14 @@ on:
     branches: ["main"]
 jobs:
   build-pelican:
+    if: startsWith(github.head_ref, 'site/')
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: 'main'
       - uses: apache/infrastructure-actions/pelican@main
         with:
-          publish: 'false'
+          destination: "${{ github.head_ref }}-staging"
+          gfm: 'false'
