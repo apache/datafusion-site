@@ -1,0 +1,304 @@
+<!doctype html>
+<html class="no-js" lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apache Arrow DataFusion 34.0.0 Released, Looking Forward to 2024 - Apache DataFusion Blog</title>
+<link href="/css/bootstrap.min.css" rel="stylesheet">
+<link href="/css/fontawesome.all.min.css" rel="stylesheet">
+<link href="/css/headerlink.css" rel="stylesheet">
+<link href="/highlight/default.min.css" rel="stylesheet">
+<script src="/highlight/highlight.js"></script>
+<script>hljs.highlightAll();</script>  </head>
+  <body class="d-flex flex-column h-100">
+  <main class="flex-shrink-0">
+<!-- nav bar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark" aria-label="Fifth navbar example">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/"><img src="/images/logo_original4x.png" style="height: 32px;"/> Apache DataFusion Blog</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarADP" aria-controls="navbarADP" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarADP">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link" href="/about.html">About</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/feed.xml">RSS</a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>    
+
+
+<!-- page contents -->
+<div id="contents">
+    <div class="bg-white p-5 rounded">
+        <div class="col-sm-8 mx-auto">
+          <h1>
+              Apache Arrow DataFusion 34.0.0 Released, Looking Forward to 2024
+          </h1>
+              <p>Posted on: Fri 19 January 2024 by pmc</p>
+              <!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+-->
+<h2>Introduction</h2>
+<p>We recently <a href="https://crates.io/crates/datafusion/34.0.0">released DataFusion 34.0.0</a>. This blog highlights some of the major
+improvements since we <a href="https://arrow.apache.org/blog/2023/06/24/datafusion-25.0.0/.">released DataFusion 26.0.0</a> (spoiler alert there are many)
+and a preview of where the community plans to focus in the next 6 months.</p>
+<p><a href="https://arrow.apache.org/datafusion/">Apache Arrow DataFusion</a> is an extensible query engine, written in <a href="https://www.rust-lang.org/">Rust</a>, that
+uses <a href="https://arrow.apache.org">Apache Arrow</a> as its in-memory format. DataFusion is used by developers to
+create new, fast data centric systems such as databases, dataframe libraries,
+machine learning and streaming applications. While <a href="https://arrow.apache.org/datafusion/user-guide/introduction.html#project-goals">DataFusion&rsquo;s primary design
+goal</a> is to accelerate creating other data centric systems, it has a
+reasonable experience directly out of the box as a <a href="https://arrow.apache.org/datafusion-python/">dataframe library</a> and
+<a href="https://arrow.apache.org/datafusion/user-guide/cli.html">command line SQL tool</a>.</p>
+<p>This may also be our last update on the Apache Arrow Site. Future
+updates will likely be on the DataFusion website as we are working to <a href="https://github.com/apache/arrow-datafusion/discussions/6475">graduate
+to a top level project</a> (Apache Arrow DataFusion &rarr; Apache DataFusion!) which
+will help focus governance and project growth. Also exciting, our <a href="https://github.com/apache/arrow-datafusion/discussions/8522">first
+DataFusion in person meetup</a> is planned for March 2024.</p>
+<p>DataFusion is very much a community endeavor. Our core thesis is that as a
+community we can build much more advanced technology than any of us as
+individuals or companies could alone. In the last 6 months between <code>26.0.0</code> and
+<code>34.0.0</code>, community growth has been strong. We accepted and reviewed over a
+thousand PRs from 124 different committers, created over 650 issues and closed 517
+of them.
+You can find a list of all changes in the detailed <a href="https://github.com/apache/arrow-datafusion/blob/main/datafusion/CHANGELOG.md">CHANGELOG</a>.</p>
+<!--
+$ git log --pretty=oneline 26.0.0..34.0.0 . | wc -l
+     1009
+
+$ git shortlog -sn 26.0.0..34.0.0 . | wc -l
+      124
+
+https://crates.io/crates/datafusion/26.0.0
+DataFusion 26 released June 7, 2023
+
+https://crates.io/crates/datafusion/34.0.0
+DataFusion 34 released Dec 17, 2023
+
+Issues created in this time: 214 open, 437 closed
+https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+created%3A2023-06-23..2023-12-17
+
+Issues closes: 517
+https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+closed%3A2023-06-23..2023-12-17+
+
+PRs merged in this time 908
+https://github.com/apache/arrow-datafusion/pulls?q=is%3Apr+merged%3A2023-06-23..2023-12-17
+-->
+<h1>Improved Performance 🚀</h1>
+<p>Performance is a key feature of DataFusion, DataFusion is 
+more than 2x faster on <a href="https://benchmark.clickhouse.com/">ClickBench</a> compared to version <code>25.0.0</code>, as shown below:</p>
+<!--
+  Scripts: https://github.com/alamb/datafusion-duckdb-benchmark/tree/datafusion-25-34
+  Spreadsheet: https://docs.google.com/spreadsheets/d/1FtI3652WIJMC5LmJbLfT3G06w0JQIxEPG4yfMafexh8/edit#gid=1879366976
+  Average runtime on 25.0.0: 7.2s (for the queries that actually ran)
+  Average runtime on 34.0.0: 3.6s (for the same queries that ran in 25.0.0)
+-->
+<figure style="text-align: center;">
+<img alt="Fig 1: Adaptive Arrow schema architecture overview." class="img-responsive" src="../images/datafusion-34.0.0/compare-new.png" width="100%"/>
+<figcaption>
+<b>Figure 1</b>: Performance improvement between <code>25.0.0</code> and <code>34.0.0</code> on ClickBench. 
+    Note that DataFusion <code>25.0.0</code>, could not run several queries due to 
+    unsupported SQL (Q9, Q11, Q12, Q14) or memory requirements (Q33).
+  </figcaption>
+</figure>
+<figure style="text-align: center;">
+<img alt="Fig 1: Adaptive Arrow schema architecture overview." class="img-responsive" src="../images/datafusion-34.0.0/compare.png" width="100%"/>
+<figcaption>
+<b>Figure 2</b>: Total query runtime for DataFusion <code>34.0.0</code> and DataFusion <code>25.0.0</code>.
+  </figcaption>
+</figure>
+<p>Here are some specific enhancements we have made to improve performance:
+* <a href="https://arrow.apache.org/blog/2023/08/05/datafusion_fast_grouping/">2-3x better aggregation performance with many distinct groups</a>
+* Partially ordered grouping / streaming grouping
+* [Specialized operator for "TopK" <code>ORDER BY LIMIT XXX</code>] 
+* [Specialized operator for <code>min(col) GROUP BY .. ORDER by min(col) LIMIT XXX</code>]
+* <a href="https://github.com/apache/arrow-datafusion/pull/8126">Improved join performance</a>
+* Eliminate redundant sorting with sort order aware optimizers</p>
+<h1>New Features ✨</h1>
+<h2>DML / Insert / Creating Files</h2>
+<p>DataFusion now supports writing data in parallel, to individual or multiple
+files, using <code>Parquet</code>, <code>CSV</code>, <code>JSON</code>, <code>ARROW</code> and user defined formats.
+<a href="https://github.com/apache/arrow-datafusion/pull/7655">Benchmark results</a> show improvements up to 5x in some cases.</p>
+<p>Similarly to reading, data can now be written to any [<code>ObjectStore</code>]
+implementation, including AWS S3, Azure Blob Storage, GCP Cloud Storage, local
+files, and user defined implementations. While reading from <a href="https://docs.rs/datafusion/latest/datafusion/datasource/listing/struct.ListingTable.html#features">hive style
+partitioned tables</a> has long been supported, it is now possible to write to such
+tables as well.</p>
+<p>For example, to write to a local file:</p>
+<div class="codehilite"><pre><span></span><code><span class="err">❯</span> <span class="k">CREATE</span> <span class="k">EXTERNAL</span> <span class="k">TABLE</span> <span class="n">awesome_table</span><span class="p">(</span><span class="n">x</span> <span class="nb">INT</span><span class="p">)</span> <span class="n">STORED</span> <span class="k">AS</span> <span class="n">PARQUET</span> <span class="k">LOCATION</span> <span class="s1">'/tmp/my_awesome_table'</span><span class="p">;</span>
+<span class="mi">0</span> <span class="k">rows</span> <span class="k">in</span> <span class="k">set</span><span class="p">.</span> <span class="n">Query</span> <span class="n">took</span> <span class="mi">0</span><span class="p">.</span><span class="mi">003</span> <span class="n">seconds</span><span class="p">.</span>
+
+<span class="err">❯</span> <span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">awesome_table</span> <span class="k">SELECT</span> <span class="n">x</span> <span class="o">*</span> <span class="mi">10</span> <span class="k">FROM</span> <span class="n">my_source_table</span><span class="p">;</span>
+<span class="o">+</span><span class="c1">-------+</span>
+<span class="o">|</span> <span class="k">count</span> <span class="o">|</span>
+<span class="o">+</span><span class="c1">-------+</span>
+<span class="o">|</span> <span class="mi">3</span>     <span class="o">|</span>
+<span class="o">+</span><span class="c1">-------+</span>
+<span class="mi">1</span> <span class="k">row</span> <span class="k">in</span> <span class="k">set</span><span class="p">.</span> <span class="n">Query</span> <span class="n">took</span> <span class="mi">0</span><span class="p">.</span><span class="mi">024</span> <span class="n">seconds</span><span class="p">.</span>
+</code></pre></div>
+<p>You can also write to files with the [<code>COPY</code>], similarly to [DuckDB&rsquo;s <code>COPY</code>]:</p>
+<div class="codehilite"><pre><span></span><code><span class="err">❯</span> <span class="k">COPY</span> <span class="p">(</span><span class="k">SELECT</span> <span class="n">x</span> <span class="o">+</span> <span class="mi">1</span> <span class="k">FROM</span> <span class="n">my_source_table</span><span class="p">)</span> <span class="k">TO</span> <span class="s1">'/tmp/output.json'</span><span class="p">;</span>
+<span class="o">+</span><span class="c1">-------+</span>
+<span class="o">|</span> <span class="k">count</span> <span class="o">|</span>
+<span class="o">+</span><span class="c1">-------+</span>
+<span class="o">|</span> <span class="mi">3</span>     <span class="o">|</span>
+<span class="o">+</span><span class="c1">-------+</span>
+<span class="mi">1</span> <span class="k">row</span> <span class="k">in</span> <span class="k">set</span><span class="p">.</span> <span class="n">Query</span> <span class="n">took</span> <span class="mi">0</span><span class="p">.</span><span class="mi">014</span> <span class="n">seconds</span><span class="p">.</span>
+</code></pre></div>
+<div class="codehilite"><pre><span></span><code>$ cat /tmp/output.json
+<span class="o">{</span><span class="s2">"x"</span>:1<span class="o">}</span>
+<span class="o">{</span><span class="s2">"x"</span>:2<span class="o">}</span>
+<span class="o">{</span><span class="s2">"x"</span>:3<span class="o">}</span>
+</code></pre></div>
+<h2>Improved <code>STRUCT</code> and <code>ARRAY</code> support</h2>
+<p>DataFusion <code>34.0.0</code> has much improved <code>STRUCT</code> and <code>ARRAY</code>
+support, including a full range of <a href="https://arrow.apache.org/datafusion/user-guide/sql/scalar_functions.html#struct-functions">struct functions</a> and <a href="https://arrow.apache.org/datafusion/user-guide/sql/scalar_functions.html#array-functions">array functions</a>.</p>
+<!--
+❯ create table my_table as values ([1,2,3]), ([2]), ([4,5]);
+-->
+<p>For example, you can now use <code>[]</code> syntax and <code>array_length</code> to access and inspect arrays:</p>
+<div class="codehilite"><pre><span></span><code><span class="err">❯</span> <span class="k">SELECT</span> <span class="n">column1</span><span class="p">,</span> 
+         <span class="n">column1</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">AS</span> <span class="n">first_element</span><span class="p">,</span> 
+         <span class="n">array_length</span><span class="p">(</span><span class="n">column1</span><span class="p">)</span> <span class="k">AS</span> <span class="n">len</span> 
+  <span class="k">FROM</span> <span class="n">my_table</span><span class="p">;</span>
+<span class="o">+</span><span class="c1">-----------+---------------+-----+</span>
+<span class="o">|</span> <span class="n">column1</span>   <span class="o">|</span> <span class="n">first_element</span> <span class="o">|</span> <span class="n">len</span> <span class="o">|</span>
+<span class="o">+</span><span class="c1">-----------+---------------+-----+</span>
+<span class="o">|</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">]</span> <span class="o">|</span> <span class="mi">1</span>             <span class="o">|</span> <span class="mi">3</span>   <span class="o">|</span>
+<span class="o">|</span> <span class="p">[</span><span class="mi">2</span><span class="p">]</span>       <span class="o">|</span> <span class="mi">2</span>             <span class="o">|</span> <span class="mi">1</span>   <span class="o">|</span>
+<span class="o">|</span> <span class="p">[</span><span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">]</span>    <span class="o">|</span> <span class="mi">4</span>             <span class="o">|</span> <span class="mi">2</span>   <span class="o">|</span>
+<span class="o">+</span><span class="c1">-----------+---------------+-----+</span>
+</code></pre></div>
+<div class="codehilite"><pre><span></span><code><span class="err">❯</span> <span class="k">SELECT</span> <span class="n">column1</span><span class="p">,</span> <span class="n">column1</span><span class="p">[</span><span class="s1">'c0'</span><span class="p">]</span> <span class="k">FROM</span>  <span class="n">my_table</span><span class="p">;</span>
+<span class="o">+</span><span class="c1">------------------+----------------------+</span>
+<span class="o">|</span> <span class="n">column1</span>          <span class="o">|</span> <span class="n">my_table</span><span class="p">.</span><span class="n">column1</span><span class="p">[</span><span class="n">c0</span><span class="p">]</span> <span class="o">|</span>
+<span class="o">+</span><span class="c1">------------------+----------------------+</span>
+<span class="o">|</span> <span class="err">{</span><span class="n">c0</span><span class="p">:</span> <span class="n">foo</span><span class="p">,</span> <span class="n">c1</span><span class="p">:</span> <span class="mi">1</span><span class="err">}</span> <span class="o">|</span> <span class="n">foo</span>                  <span class="o">|</span>
+<span class="o">|</span> <span class="err">{</span><span class="n">c0</span><span class="p">:</span> <span class="n">bar</span><span class="p">,</span> <span class="n">c1</span><span class="p">:</span> <span class="mi">2</span><span class="err">}</span> <span class="o">|</span> <span class="n">bar</span>                  <span class="o">|</span>
+<span class="o">+</span><span class="c1">------------------+----------------------+</span>
+<span class="mi">2</span> <span class="k">rows</span> <span class="k">in</span> <span class="k">set</span><span class="p">.</span> <span class="n">Query</span> <span class="n">took</span> <span class="mi">0</span><span class="p">.</span><span class="mi">002</span> <span class="n">seconds</span><span class="p">.</span>
+</code></pre></div>
+<h2>Other Features</h2>
+<p>Other notable features include:
+* Support aggregating datasets that exceed memory size, with <a href="https://github.com/apache/arrow-datafusion/pull/7400">group by spill to disk</a>
+* All operators now track and limit their memory consumption, including Joins</p>
+<h1>Building Systems is Easier with DataFusion 🛠️</h1>
+<h2>Documentation</h2>
+<p>It is easier than ever to get started using DataFusion with the
+new <a href="https://arrow.apache.org/datafusion/library-user-guide/index.html">Library Users Guide</a> as well as significantly improved the <a href="https://docs.rs/datafusion/latest/datafusion/index.html">API documentation</a>. </p>
+<h2>User Defined Window and Table Functions</h2>
+<p>In addition to DataFusion's <a href="https://arrow.apache.org/datafusion/library-user-guide/adding-udfs.html#adding-a-scalar-udf">User Defined Scalar Functions</a>, and <a href="https://arrow.apache.org/datafusion/library-user-guide/adding-udfs.html#adding-an-aggregate-udf">User Defined Aggregate Functions</a>, DataFusion now supports <a href="https://arrow.apache.org/datafusion/library-user-guide/adding-udfs.html#adding-a-window-udf">User Defined Window Functions</a> 
+ and <a href="https://arrow.apache.org/datafusion/library-user-guide/adding-udfs.html#adding-a-user-defined-table-function">User Defined Table Functions</a>.</p>
+<p>For example, [the <code>datafusion-cli</code>] implements a DuckDB style [<code>parquet_metadata</code>]
+function as a user defined table function (<a href="https://github.com/apache/arrow-datafusion/blob/3f219bc929cfd418b0e3d3501f8eba1d5a2c87ae/datafusion-cli/src/functions.rs#L222-L248">source code here</a>): </p>
+<div class="codehilite"><pre><span></span><code><span class="err">❯</span> <span class="k">SELECT</span> 
+      <span class="n">path_in_schema</span><span class="p">,</span> <span class="n">row_group_id</span><span class="p">,</span> <span class="n">row_group_num_rows</span><span class="p">,</span> <span class="n">stats_min</span><span class="p">,</span> <span class="n">stats_max</span><span class="p">,</span> <span class="n">total_compressed_size</span> 
+<span class="k">FROM</span> 
+      <span class="n">parquet_metadata</span><span class="p">(</span><span class="s1">'hits.parquet'</span><span class="p">)</span>
+<span class="k">WHERE</span> <span class="n">path_in_schema</span> <span class="o">=</span> <span class="s1">'"WatchID"'</span> 
+<span class="k">LIMIT</span> <span class="mi">3</span><span class="p">;</span>
+
+<span class="o">+</span><span class="c1">----------------+--------------+--------------------+---------------------+---------------------+-----------------------+</span>
+<span class="o">|</span> <span class="n">path_in_schema</span> <span class="o">|</span> <span class="n">row_group_id</span> <span class="o">|</span> <span class="n">row_group_num_rows</span> <span class="o">|</span> <span class="n">stats_min</span>           <span class="o">|</span> <span class="n">stats_max</span>           <span class="o">|</span> <span class="n">total_compressed_size</span> <span class="o">|</span>
+<span class="o">+</span><span class="c1">----------------+--------------+--------------------+---------------------+---------------------+-----------------------+</span>
+<span class="o">|</span> <span class="ss">"WatchID"</span>      <span class="o">|</span> <span class="mi">0</span>            <span class="o">|</span> <span class="mi">450560</span>             <span class="o">|</span> <span class="mi">4611687214012840539</span> <span class="o">|</span> <span class="mi">9223369186199968220</span> <span class="o">|</span> <span class="mi">3883759</span>               <span class="o">|</span>
+<span class="o">|</span> <span class="ss">"WatchID"</span>      <span class="o">|</span> <span class="mi">1</span>            <span class="o">|</span> <span class="mi">612174</span>             <span class="o">|</span> <span class="mi">4611689135232456464</span> <span class="o">|</span> <span class="mi">9223371478009085789</span> <span class="o">|</span> <span class="mi">5176803</span>               <span class="o">|</span>
+<span class="o">|</span> <span class="ss">"WatchID"</span>      <span class="o">|</span> <span class="mi">2</span>            <span class="o">|</span> <span class="mi">344064</span>             <span class="o">|</span> <span class="mi">4611692774829951781</span> <span class="o">|</span> <span class="mi">9223363791697310021</span> <span class="o">|</span> <span class="mi">3031680</span>               <span class="o">|</span>
+<span class="o">+</span><span class="c1">----------------+--------------+--------------------+---------------------+---------------------+-----------------------+</span>
+<span class="mi">3</span> <span class="k">rows</span> <span class="k">in</span> <span class="k">set</span><span class="p">.</span> <span class="n">Query</span> <span class="n">took</span> <span class="mi">0</span><span class="p">.</span><span class="mi">053</span> <span class="n">seconds</span><span class="p">.</span>
+</code></pre></div>
+<h3>Growth of DataFusion 📈</h3>
+<p>DataFusion has been appearing more publically in the wild. For example
+* New projects built using DataFusion such as <a href="https://lancedb.com/">lancedb</a>, <a href="https://glaredb.com/">GlareDB</a>, <a href="https://www.arroyo.dev/">Arroyo</a>, and <a href="https://github.com/cmu-db/optd">optd</a>.
+* Public talks such as <a href="https://www.youtube.com/watch?v=AJU9rdRNk9I">Apache Arrow Datafusion: Vectorized
+  Execution Framework For Maximum Performance</a> in <a href="https://www.bagevent.com/event/8432178">CommunityOverCode Asia 2023</a> 
+* Blogs posts such as <a href="https://www.synnada.ai/blog/apache-arrow-arrow-datafusion-ai-native-data-infra-an-interview-with-our-ceo-ozan">Apache Arrow, Arrow/DataFusion, AI-native Data Infra</a>,
+  <a href="https://www.influxdata.com/blog/flight-datafusion-arrow-parquet-fdap-architecture-influxdb/">Flight, DataFusion, Arrow, and Parquet: Using the FDAP Architecture to build InfluxDB 3.0</a>, and 
+  <a href="https://www.linkedin.com/pulse/guide-user-defined-functions-apache-arrow-datafusion-dade-aderemi/">A Guide to User-Defined Functions in Apache Arrow DataFusion</a></p>
+<p>We have also <a href="https://github.com/apache/arrow-datafusion/issues/6782">submitted a paper</a> to <a href="https://2024.sigmod.org/">SIGMOD 2024</a>, one of the
+premiere database conferences, describing DataFusion in a technically formal
+style and making the case that it is possible to create a modular and extensive query engine 
+without sacrificing performance. We hope this paper helps people 
+evaluating DataFusion for their needs understand it better.</p>
+<h1>DataFusion in 2024 🥳</h1>
+<p>Some major initiatives from contributors we know of this year are:</p>
+<ol>
+<li>
+<p><em>Modularity</em>: Make DataFusion even more modular, such as <a href="https://github.com/apache/arrow-datafusion/issues/8045">unifying
+   built in and user functions</a>, making it easier to customize 
+   DataFusion's behavior.</p>
+</li>
+<li>
+<p><em>Community Growth</em>: Graduate to our own top level Apache project, and
+   subsequently add more committers and PMC members to keep pace with project
+   growth.</p>
+</li>
+<li>
+<p><em>Use case white papers</em>: Write blog posts and videos explaining
+   how to use DataFusion for real-world use cases.</p>
+</li>
+<li>
+<p><em>Testing</em>: Improve CI infrastructure and test coverage, more fuzz
+   testing, and better functional and performance regression testing.</p>
+</li>
+<li>
+<p><em>Planning Time</em>: Reduce the time taken to plan queries, both <a href="https://github.com/apache/arrow-datafusion/issues/7698">wide
+   tables of 1000s of columns</a>, and in <a href="https://github.com/apache/arrow-datafusion/issues/5637">general</a>.</p>
+</li>
+<li>
+<p><em>Aggregate Performance</em>: Improve the speed of <a href="https://github.com/apache/arrow-datafusion/issues/7000">aggregating "high cardinality"</a> data
+   when there are many (e.g. millions) of distinct groups.</p>
+</li>
+<li>
+<p><em>Statistics</em>: <a href="https://github.com/apache/arrow-datafusion/issues/8227">Improved statistics handling</a> with an eye towards more
+   sophisticated expression analysis and cost models.</p>
+</li>
+</ol>
+<h1>How to Get Involved</h1>
+<p>If you are interested in contributing to DataFusion we would love to have you
+join us. You can try out DataFusion on some of your own data and projects and
+let us know how it goes, contribute suggestions, documentation, bug reports, or
+a PR with documentation, tests or code. A list of open issues
+suitable for beginners is <a href="https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22">here</a>.</p>
+<p>As the community grows, we are also looking to restart biweekly calls /
+meetings. Timezones are always a challenge for such meetings, but we hope to
+have two calls that can work for most attendees. If you are interested
+in helping, or just want to say hi, please drop us a note via one of 
+the methods listed in our <a href="https://arrow.apache.org/datafusion/contributor-guide/communication.html">Communication Doc</a>.</p>
+        </div>
+      </div>
+    </div>    
+    <!-- footer -->
+    <div class="row">
+      <div class="large-12 medium-12 columns">
+        <p style="font-style: italic; font-size: 0.8rem; text-align: center;">
+          Copyright 2024, <a href="https://www.apache.org/">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a>.<br/>
+          Apache&reg; and the Apache feather logo are trademarks of The Apache Software Foundation.
+        </p>
+      </div>
+    </div>
+    <script src="/js/bootstrap.bundle.min.js"></script>  </main>
+  </body>
+</html>

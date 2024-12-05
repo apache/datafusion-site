@@ -1,0 +1,199 @@
+<!doctype html>
+<html class="no-js" lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apache Arrow DataFusion 7.0.0 Release - Apache DataFusion Blog</title>
+<link href="/css/bootstrap.min.css" rel="stylesheet">
+<link href="/css/fontawesome.all.min.css" rel="stylesheet">
+<link href="/css/headerlink.css" rel="stylesheet">
+<link href="/highlight/default.min.css" rel="stylesheet">
+<script src="/highlight/highlight.js"></script>
+<script>hljs.highlightAll();</script>  </head>
+  <body class="d-flex flex-column h-100">
+  <main class="flex-shrink-0">
+<!-- nav bar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark" aria-label="Fifth navbar example">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/"><img src="/images/logo_original4x.png" style="height: 32px;"/> Apache DataFusion Blog</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarADP" aria-controls="navbarADP" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarADP">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link" href="/about.html">About</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/feed.xml">RSS</a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>    
+
+
+<!-- page contents -->
+<div id="contents">
+    <div class="bg-white p-5 rounded">
+        <div class="col-sm-8 mx-auto">
+          <h1>
+              Apache Arrow DataFusion 7.0.0 Release
+          </h1>
+              <p>Posted on: Mon 28 February 2022 by pmc</p>
+              <!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+-->
+<h1>Introduction</h1>
+<p><a href="https://arrow.apache.org/datafusion/">DataFusion</a> is an extensible query execution framework, written in Rust, that uses Apache Arrow as its in-memory format.</p>
+<p>When you want to extend your Rust project with <a href="https://arrow.apache.org/datafusion/user-guide/sql/sql_status.html">SQL support</a>, a DataFrame API, or the ability to read and process Parquet, JSON, Avro or CSV data, DataFusion is definitely worth checking out.</p>
+<p>DataFusion's  SQL, <code>DataFrame</code>, and manual <code>PlanBuilder</code> API let users access a sophisticated query optimizer and execution engine capable of fast, resource efficient, and parallel execution that takes optimal advantage of todays multicore hardware. Being written in Rust means DataFusion can offer <em>both</em> the safety of dynamic languages as well as the resource efficiency of a compiled language.</p>
+<p>The Apache Arrow team is pleased to announce the DataFusion 7.0.0 release. This covers 4 months of development work
+and includes 195 commits from the following 37 distinct contributors.</p>
+<!--
+git log --pretty=oneline 5.0.0..6.0.0 datafusion datafusion-cli datafusion-examples | wc -l
+     134
+
+git shortlog -sn 5.0.0..6.0.0 datafusion datafusion-cli datafusion-examples | wc -l
+      29
+
+      Carlos and xudong963 are same individual
+-->
+<div class="codehilite"><pre><span></span><code><span class="w">    </span><span class="mi">44</span><span class="w">  </span><span class="n">Andrew</span><span class="w"> </span><span class="n">Lamb</span><span class="w"></span>
+<span class="w">    </span><span class="mi">24</span><span class="w">  </span><span class="n">Kun</span><span class="w"> </span><span class="n">Liu</span><span class="w"></span>
+<span class="w">    </span><span class="mi">23</span><span class="w">  </span><span class="n">Jiayu</span><span class="w"> </span><span class="n">Liu</span><span class="w"></span>
+<span class="w">    </span><span class="mi">17</span><span class="w">  </span><span class="n">xudong</span><span class="p">.</span><span class="n">w</span><span class="w"></span>
+<span class="w">    </span><span class="mi">11</span><span class="w">  </span><span class="n">Yijie</span><span class="w"> </span><span class="n">Shen</span><span class="w"></span>
+<span class="w">     </span><span class="mi">9</span><span class="w">  </span><span class="n">Matthew</span><span class="w"> </span><span class="n">Turner</span><span class="w"></span>
+<span class="w">     </span><span class="mi">7</span><span class="w">  </span><span class="n">Liang</span><span class="o">-</span><span class="n">Chi</span><span class="w"> </span><span class="n">Hsieh</span><span class="w"></span>
+<span class="w">     </span><span class="mi">5</span><span class="w">  </span><span class="n">Lin</span><span class="w"> </span><span class="n">Ma</span><span class="w"></span>
+<span class="w">     </span><span class="mi">4</span><span class="w">  </span><span class="n">Stephen</span><span class="w"> </span><span class="n">Carman</span><span class="w"></span>
+<span class="w">     </span><span class="mi">4</span><span class="w">  </span><span class="n">James</span><span class="w"> </span><span class="n">Katz</span><span class="w"></span>
+<span class="w">     </span><span class="mi">4</span><span class="w">  </span><span class="n">Dmitry</span><span class="w"> </span><span class="n">Patsura</span><span class="w"></span>
+<span class="w">     </span><span class="mi">4</span><span class="w">  </span><span class="n">QP</span><span class="w"> </span><span class="n">Hou</span><span class="w"></span>
+<span class="w">     </span><span class="mi">3</span><span class="w">  </span><span class="n">dependabot</span><span class="o">[</span><span class="n">bot</span><span class="o">]</span><span class="w"></span>
+<span class="w">     </span><span class="mi">3</span><span class="w">  </span><span class="n">Remzi</span><span class="w"> </span><span class="n">Yang</span><span class="w"></span>
+<span class="w">     </span><span class="mi">3</span><span class="w">  </span><span class="n">Yang</span><span class="w"></span>
+<span class="w">     </span><span class="mi">3</span><span class="w">  </span><span class="n">ic4y</span><span class="w"></span>
+<span class="w">     </span><span class="mi">3</span><span class="w">  </span><span class="n">Dani&euml;l</span><span class="w"> </span><span class="n">Heres</span><span class="w"></span>
+<span class="w">     </span><span class="mi">2</span><span class="w">  </span><span class="n">Andy</span><span class="w"> </span><span class="n">Grove</span><span class="w"></span>
+<span class="w">     </span><span class="mi">2</span><span class="w">  </span><span class="n">Raphael</span><span class="w"> </span><span class="n">Taylor</span><span class="o">-</span><span class="n">Davies</span><span class="w"></span>
+<span class="w">     </span><span class="mi">2</span><span class="w">  </span><span class="n">Jason</span><span class="w"> </span><span class="n">Tianyi</span><span class="w"> </span><span class="n">Wang</span><span class="w"></span>
+<span class="w">     </span><span class="mi">2</span><span class="w">  </span><span class="n">Dan</span><span class="w"> </span><span class="n">Harris</span><span class="w"></span>
+<span class="w">     </span><span class="mi">2</span><span class="w">  </span><span class="n">Sergey</span><span class="w"> </span><span class="n">Melnychuk</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">Nitish</span><span class="w"> </span><span class="n">Tiwari</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">Dom</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">Eduard</span><span class="w"> </span><span class="n">Karacharov</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">Javier</span><span class="w"> </span><span class="n">Goday</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">Boaz</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">Marko</span><span class="w"> </span><span class="n">Mikulicic</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="nf">Max</span><span class="w"> </span><span class="n">Burke</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">Carol</span><span class="w"> </span><span class="p">(</span><span class="n">Nichols</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">Goulding</span><span class="p">)</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">Phillip</span><span class="w"> </span><span class="n">Cloud</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">Rich</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">Toby</span><span class="w"> </span><span class="n">Hede</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">Will</span><span class="w"> </span><span class="n">Jones</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">r</span><span class="mf">.4</span><span class="n">ntix</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">rdettai</span><span class="w"></span>
+</code></pre></div>
+<p>The following section highlights some of the improvements in this release. Of course, many other bug fixes and improvements have also been made and we refer you to the complete <a href="https://github.com/apache/arrow-datafusion/blob/7.0.0/datafusion/CHANGELOG.md">changelog</a> for the full detail.</p>
+<h1>Summary</h1>
+<ul>
+<li>DataFusion Crate</li>
+<li>The DataFusion crate is being split into multiple crates to decrease compilation times and improve the development experience. Initially, <code>datafusion-common</code> (the core DataFusion components) and <code>datafusion-expr</code> (DataFusion expressions, functions, and operators) have been split out. There will be additional splits after the 7.0 release.</li>
+<li>Performance Improvements and Optimizations</li>
+<li>Arrow&rsquo;s dyn scalar kernels are now used to enable efficient operations on <code>DictionaryArray</code>s <a href="https://github.com/apache/arrow-datafusion/pull/1685">#1685</a></li>
+<li>Switch from <code>std::sync::Mutex</code> to <code>parking_lot::Mutex</code> <a href="https://github.com/apache/arrow-datafusion/pull/1720">#1720</a></li>
+<li>New Features</li>
+<li>Support for memory tracking and spilling to disk<ul>
+<li>MemoryMananger and DiskManager <a href="https://github.com/apache/arrow-datafusion/pull/1526">#1526</a></li>
+<li>Out of core sort <a href="https://github.com/apache/arrow-datafusion/pull/1526">#1526</a></li>
+<li>New metrics</li>
+<li><code>Gauge</code> and <code>CurrentMemoryUsage</code> <a href="https://github.com/apache/arrow-datafusion/pull/1682">#1682</a></li>
+<li><code>Spill_count</code> and <code>spilled_bytes</code> <a href="https://github.com/apache/arrow-datafusion/pull/1641">#1641</a></li>
+</ul>
+</li>
+<li>New math functions<ul>
+<li><code>Approx_quantile</code> <a href="https://github.com/apache/arrow-datafusion/pull/1539">#1529</a></li>
+<li><code>stddev</code> and <code>variance</code> (sample and population) <a href="https://github.com/apache/arrow-datafusion/pull/1525">#1525</a></li>
+<li><code>corr</code> <a href="https://github.com/apache/arrow-datafusion/pull/1561">#1561</a></li>
+</ul>
+</li>
+<li>Support decimal type <a href="https://github.com/apache/arrow-datafusion/pull/1394">#1394</a><a href="https://github.com/apache/arrow-datafusion/pull/1407">#1407</a><a href="https://github.com/apache/arrow-datafusion/pull/1408">#1408</a><a href="https://github.com/apache/arrow-datafusion/pull/1431">#1431</a><a href="https://github.com/apache/arrow-datafusion/pull/1483">#1483</a><a href="https://github.com/apache/arrow-datafusion/pull/1554">#1554</a><a href="https://github.com/apache/arrow-datafusion/pull/1640">#1640</a></li>
+<li>Support for reading Parquet files with evolved schemas <a href="https://github.com/apache/arrow-datafusion/pull/1622">#1622</a><a href="https://github.com/apache/arrow-datafusion/pull/1709">#1709</a></li>
+<li>Support for registering <code>DataFrame</code> as table <a href="https://github.com/apache/arrow-datafusion/pull/1699">#1699</a></li>
+<li>Support for the <code>substring</code> function <a href="https://github.com/apache/arrow-datafusion/pull/1621">#1621</a></li>
+<li>Support <code>array_agg(distinct ...)</code> <a href="https://github.com/apache/arrow-datafusion/pull/1579">#1579</a></li>
+<li>Support <code>sort</code> on unprojected columns <a href="https://github.com/apache/arrow-datafusion/pull/1415">#1415</a></li>
+<li>Additional Integration Points</li>
+<li>A new public Expression simplification API <a href="https://github.com/apache/arrow-datafusion/pull/1717">#1717</a></li>
+<li><a href="https://github.com/datafusion-contrib">DataFusion-Contrib</a></li>
+<li>A new GitHub organization created as a home for both <code>DataFusion</code> extensions and as a testing ground for new features.<ul>
+<li>Extensions</li>
+<li><a href="https://github.com/datafusion-contrib/datafusion-python">DataFusion-Python</a></li>
+<li><a href="https://github.com/datafusion-contrib/datafusion-java">DataFusion-Java</a></li>
+<li><a href="https://github.com/datafusion-contrib/datafusion-hdfs-native">DataFusion-hdsfs-native</a></li>
+<li><a href="https://github.com/datafusion-contrib/datafusion-objectstore-s3">DataFusion-ObjectStore-s3</a></li>
+<li>New Features</li>
+<li><a href="https://github.com/datafusion-contrib/datafusion-streams">DataFusion-Streams</a></li>
+</ul>
+</li>
+<li><a href="https://github.com/jorgecarleitao/arrow2">Arrow2</a></li>
+<li>An <a href="https://github.com/apache/arrow-datafusion/tree/arrow2">Arrow2 Branch</a> has been created.  There are ongoing discussions in <a href="https://github.com/apache/arrow-datafusion/issues/1532">DataFusion</a> and <a href="https://github.com/apache/arrow-rs/issues/1176">arrow-rs</a> about migrating <code>DataFusion</code> to <code>Arrow2</code></li>
+</ul>
+<h1>Documentation and Roadmap</h1>
+<p>We are working to consolidate the documentation into the <a href="https://arrow.apache.org/datafusion">official site</a>.  You can find more details there on topics such as the <a href="https://arrow.apache.org/datafusion/user-guide/sql/index.html">SQL status</a>  and a <a href="https://arrow.apache.org/datafusion/user-guide/introduction.html#introduction">user guide</a>. This is also an area we would love to get help from the broader community <a href="https://github.com/apache/arrow-datafusion/issues/1821">#1821</a>.</p>
+<p>To provide transparency on DataFusion&rsquo;s priorities to users and developers a three month roadmap will be published at the beginning of each quarter.  This can be found here <a href="https://arrow.apache.org/datafusion/specification/roadmap.html">here</a>.</p>
+<h1>Upcoming Attractions</h1>
+<ul>
+<li>Ballista is gaining momentum, and several groups are now evaluating and contributing to the project.</li>
+<li>Some of the proposed improvements<ul>
+<li><a href="https://github.com/apache/arrow-datafusion/issues/1701">Improvements Overview</a></li>
+<li><a href="https://github.com/apache/arrow-datafusion/issues/1675">Extensibility</a></li>
+<li><a href="https://github.com/apache/arrow-datafusion/issues/1702">File system access</a></li>
+<li><a href="https://github.com/apache/arrow-datafusion/issues/1704">Cluster state</a></li>
+</ul>
+</li>
+<li>Continued improvements for working with limited resources and large datasets</li>
+<li>Memory limited joins<a href="https://github.com/apache/arrow-datafusion/issues/1599">#1599</a></li>
+<li>Sort-merge join<a href="https://github.com/apache/arrow-datafusion/issues/141">#141</a><a href="https://github.com/apache/arrow-datafusion/pull/1776">#1776</a></li>
+<li>Introduce row based bytes representation <a href="https://github.com/apache/arrow-datafusion/pull/1708">#1708</a></li>
+</ul>
+<h1>How to Get Involved</h1>
+<p>If you are interested in contributing to DataFusion, and learning about state of
+the art query processing, we would love to have you join us on the journey! You
+can help by trying out DataFusion on some of your own data and projects and let us know how it goes or contribute a PR with documentation, tests or code. A list of open issues suitable for beginners is <a href="https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22">here</a></p>
+<p>Check out our new <a href="https://arrow.apache.org/datafusion/community/communication.html">Communication Doc</a> on more
+ways to engage with the community.</p>
+        </div>
+      </div>
+    </div>    
+    <!-- footer -->
+    <div class="row">
+      <div class="large-12 medium-12 columns">
+        <p style="font-style: italic; font-size: 0.8rem; text-align: center;">
+          Copyright 2024, <a href="https://www.apache.org/">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a>.<br/>
+          Apache&reg; and the Apache feather logo are trademarks of The Apache Software Foundation.
+        </p>
+      </div>
+    </div>
+    <script src="/js/bootstrap.bundle.min.js"></script>  </main>
+  </body>
+</html>

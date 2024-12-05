@@ -1,0 +1,734 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - timsaucer</title><link href="https://datafusion.apache.org/blog/" rel="alternate"></link><link href="https://datafusion.apache.org/blog/feeds/timsaucer.atom.xml" rel="self"></link><id>https://datafusion.apache.org/blog/</id><updated>2024-11-19T00:00:00+00:00</updated><subtitle></subtitle><entry><title>Comparing approaches to User Defined Functions in Apache DataFusion using Python</title><link href="https://datafusion.apache.org/blog/blog/2024/11/19/datafusion-python-udf-comparisons" rel="alternate"></link><published>2024-11-19T00:00:00+00:00</published><updated>2024-11-19T00:00:00+00:00</updated><author><name>timsaucer</name></author><id>tag:datafusion.apache.org,2024-11-19:/blog/blog/2024/11/19/datafusion-python-udf-comparisons</id><summary type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+&lt;h2&gt;Personal Context&lt;/h2&gt;
+&lt;p&gt;For a few months now I&amp;rsquo;ve been working with &lt;a href="https://datafusion.apache.org/"&gt;Apache DataFusion&lt;/a&gt;, a
+fast query engine written in Rust. From my experience the language that nearly all data scientists
+are working in is Python. In general, data scientists often use &lt;a href="https://pandas.pydata.org/"&gt;Pandas&lt;/a&gt;
+for in-memory tasks and &lt;a href="https://spark.apache.org/"&gt;PySpark&lt;/a&gt; for larger …&lt;/p&gt;</summary><content type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+&lt;h2&gt;Personal Context&lt;/h2&gt;
+&lt;p&gt;For a few months now I&amp;rsquo;ve been working with &lt;a href="https://datafusion.apache.org/"&gt;Apache DataFusion&lt;/a&gt;, a
+fast query engine written in Rust. From my experience the language that nearly all data scientists
+are working in is Python. In general, data scientists often use &lt;a href="https://pandas.pydata.org/"&gt;Pandas&lt;/a&gt;
+for in-memory tasks and &lt;a href="https://spark.apache.org/"&gt;PySpark&lt;/a&gt; for larger tasks that require
+distributed processing.&lt;/p&gt;
+&lt;p&gt;In addition to DataFusion, there is another Rust based newcomer to the DataFrame world,
+&lt;a href="https://pola.rs/"&gt;Polars&lt;/a&gt;. The latter is growing extremely fast, and it serves many of the same
+use cases as DataFusion. For my use cases, I'm interested in DataFusion because I want to be able
+to build small scale tests rapidly and then scale them up to larger distributed systems with ease.
+I do recommend evaluating Polars for in-memory work.&lt;/p&gt;
+&lt;p&gt;Personally, I would love a single query approach that is fast for both in-memory usage and can
+extend to large batch processing to exploit parallelization. I think DataFusion, coupled with
+&lt;a href="https://datafusion.apache.org/ballista/"&gt;Ballista&lt;/a&gt; or
+&lt;a href="https://github.com/apache/datafusion-ray"&gt;DataFusion-Ray&lt;/a&gt;, may provide this solution.&lt;/p&gt;
+&lt;p&gt;As I&amp;rsquo;m testing, I&amp;rsquo;m primarily limiting my work to the
+&lt;a href="https://datafusion.apache.org/python/"&gt;datafusion-python&lt;/a&gt; project, a wrapper around the Rust
+DataFusion library. This wrapper gives you the speed advantages of keeping all of the data in the
+Rust implementation and the ergonomics of working in Python. Personally, I would prefer to work
+purely in Rust, but I also recognize that since the industry works in Python we should meet the
+people where they are.&lt;/p&gt;
+&lt;h2&gt;User-Defined Functions&lt;/h2&gt;
+&lt;p&gt;The focus of this post is User-Defined Functions (UDFs). The DataFusion library gives a lot of
+useful functions already for doing DataFrame manipulation. These are going to be similar to those
+you find in other DataFrame libraries. You&amp;rsquo;ll be able to do simple arithmetic, create substrings of
+columns, or find the average value across a group of rows. These cover most of the use cases
+you&amp;rsquo;ll need in a DataFrame.&lt;/p&gt;
+&lt;p&gt;However, there will always arise times when you want a custom function. With UDFs you open a
+world of possibilities in your code. Sometimes there simply isn&amp;rsquo;t an easy way to use built-in
+functions to achieve your goals.&lt;/p&gt;
+&lt;p&gt;In the following, I&amp;rsquo;m going to demonstrate two example use cases. These are based on real world
+problems I&amp;rsquo;ve encountered. Also I want to demonstrate the approach of &amp;ldquo;make it work, make it work
+well, make it work fast&amp;rdquo; that is a motto I&amp;rsquo;ve seen thrown around in data science.&lt;/p&gt;
+&lt;p&gt;I will demonstrate three approaches to writing UDFs. In order of increasing performance they are&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Writing a pure Python function to do your computation&lt;/li&gt;
+&lt;li&gt;Using the PyArrow libraries in Python to accelerate your processing&lt;/li&gt;
+&lt;li&gt;Writing a UDF in Rust and exposing it to Python&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Additionally I will demonstrate two variants of this. The first will be nearly identical to the
+PyArrow library approach to simplify understanding how to connect the Rust code to Python. In the
+second version we will do the iteration through the input arrays ourselves to give even greater
+flexibility to the user.&lt;/p&gt;
+&lt;p&gt;Here are the two example use cases, taken from my own work but generalized.&lt;/p&gt;
+&lt;h3&gt;Use Case 1: Scalar Function&lt;/h3&gt;
+&lt;p&gt;I have a DataFrame and a list of tuples that I&amp;rsquo;m interested in. I want to filter out the DataFrame
+to only have values that match those tuples from certain columns in the DataFrame.&lt;/p&gt;
+&lt;p&gt;To give a concrete example, we will use data generated for the &lt;a href="https://www.tpc.org/tpch/"&gt;TPC-H benchmarks&lt;/a&gt;.
+Suppose I have a table of sales line items. There are many columns, but I am interested in three: a
+part key (&lt;code&gt;p_partkey&lt;/code&gt;), supplier key (&lt;code&gt;p_suppkey&lt;/code&gt;), and return status (&lt;code&gt;p_returnflag&lt;/code&gt;). I want
+only to return a DataFrame with a specific combination of these three values. That is, I want
+to know if part number 1530 from supplier 4031 was sold (not returned), so I want a specific
+combination of &lt;code&gt;p_partkey = 1530&lt;/code&gt;, &lt;code&gt;p_suppkey = 4031&lt;/code&gt;, and &lt;code&gt;p_returnflag = 'N'&lt;/code&gt;. I have a small
+handful of these combinations I want to return.&lt;/p&gt;
+&lt;p&gt;Probably the most ergonomic way to do this without UDF is to turn that list of tuples into a
+DataFrame itself, perform a join, and select the columns from the original DataFrame. If we were
+working in PySpark we would probably broadcast join the DataFrame created from the tuple list since
+it is tiny. In practice, I have found that with some DataFrame libraries performing a filter rather
+than a join can be significantly faster. This is worth profiling for your specific use case.&lt;/p&gt;
+&lt;h3&gt;Use Case 2: Aggregate Function&lt;/h3&gt;
+&lt;p&gt;I have a DataFrame with many values that I want to aggregate. I have already analyzed it and
+determined there is a noise level below which I do not want to include in my analysis. I want to
+compute a sum of only values that are above my noise threshold.&lt;/p&gt;
+&lt;p&gt;This can be done fairly easy without leaning on a User Defined Aggegate Function (UDAF). You can
+simply filter the DataFrame and then aggregate using the built-in &lt;code&gt;sum&lt;/code&gt; function. Here, we
+demonstrate doing this as a UDF primarily as an example of how to write UDAFs. We will use the
+PyArrow compute approach.&lt;/p&gt;
+&lt;h2&gt;Pure Python approach&lt;/h2&gt;
+&lt;p&gt;The fastest way (developer time, not code time) for me to implement the scalar problem solution
+was to do something along the lines of &amp;ldquo;for each row, check the values of interest contains that
+tuple&amp;rdquo;. I&amp;rsquo;ve published this as
+&lt;a href="https://github.com/apache/datafusion-python/blob/main/examples/python-udf-comparisons.py"&gt;an example&lt;/a&gt;
+in the &lt;a href="https://github.com/apache/datafusion-python"&gt;datafusion-python repository&lt;/a&gt;. Here is an
+example of how this can be done:&lt;/p&gt;
+&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="n"&gt;values_of_interest&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;[&lt;/span&gt;
+    &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;1530&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="mi"&gt;4031&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="s2"&gt;"N"&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt;
+    &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;6530&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="mi"&gt;1531&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="s2"&gt;"N"&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt;
+    &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;5618&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="mi"&gt;619&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="s2"&gt;"N"&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt;
+    &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;8118&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="mi"&gt;8119&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="s2"&gt;"N"&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt;
+&lt;span class="p"&gt;]&lt;/span&gt;
+
+&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;is_of_interest_impl&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;
+    &lt;span class="n"&gt;partkey_arr&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Array&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+    &lt;span class="n"&gt;suppkey_arr&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Array&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+    &lt;span class="n"&gt;returnflag_arr&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Array&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Array&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+    &lt;span class="n"&gt;result&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;[]&lt;/span&gt;
+    &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="n"&gt;idx&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;partkey&lt;/span&gt; &lt;span class="ow"&gt;in&lt;/span&gt; &lt;span class="nb"&gt;enumerate&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;partkey_arr&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+        &lt;span class="n"&gt;partkey&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;partkey&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;as_py&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+        &lt;span class="n"&gt;suppkey&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;suppkey_arr&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;idx&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;as_py&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+        &lt;span class="n"&gt;returnflag&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;returnflag_arr&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;idx&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;as_py&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+        &lt;span class="n"&gt;value&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;partkey&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;suppkey&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;returnflag&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="n"&gt;result&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;append&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;value&lt;/span&gt; &lt;span class="ow"&gt;in&lt;/span&gt; &lt;span class="n"&gt;values_of_interest&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+    &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;array&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;result&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+&lt;span class="c1"&gt;# Wrap our custom function with `datafusion.udf`, annotating expected &lt;/span&gt;
+&lt;span class="c1"&gt;# parameter and return types&lt;/span&gt;
+&lt;span class="n"&gt;is_of_interest&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;udf&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;
+    &lt;span class="n"&gt;is_of_interest_impl&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+    &lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;int64&lt;/span&gt;&lt;span class="p"&gt;(),&lt;/span&gt; &lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;int64&lt;/span&gt;&lt;span class="p"&gt;(),&lt;/span&gt; &lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;utf8&lt;/span&gt;&lt;span class="p"&gt;()],&lt;/span&gt;
+    &lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;bool_&lt;/span&gt;&lt;span class="p"&gt;(),&lt;/span&gt;
+    &lt;span class="s2"&gt;"stable"&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+&lt;span class="p"&gt;)&lt;/span&gt;
+
+&lt;span class="n"&gt;df_udf_filter&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;df_lineitem&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;filter&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;
+    &lt;span class="n"&gt;is_of_interest&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;col&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;"l_partkey"&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt; &lt;span class="n"&gt;col&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;"l_suppkey"&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt; &lt;span class="n"&gt;col&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;"l_returnflag"&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;When working with a DataFusion UDF in Python, you define your function to take in some number of
+expressions. During the evaluation, these will get computed into their corresponding values and
+passed to your UDF as a PyArrow Array. We must return an Array also with the same number of
+elements (rows). So the UDF example just iterates through all of the arrays and checks to see if
+the tuple created from these columns matches any of those that we&amp;rsquo;re looking for.&lt;/p&gt;
+&lt;p&gt;I&amp;rsquo;ll repeat because this is something that tripped me up the first time I wrote a UDF for
+datafusion: &lt;strong&gt;DataFusion UDFs, even scalar UDFs, process an array of values at a time not a single
+row.&lt;/strong&gt; This is different from some other DataFrame libraries and you may need to recognize a slight
+change in mentality.&lt;/p&gt;
+&lt;p&gt;Some important lines here are the lines like &lt;code&gt;partkey = partkey.as_py()&lt;/code&gt;. When we do this, we pay a
+heavy cost. Now instead of keeping the analysis in the Rust code, we have to take the values in the
+array and convert them over to Python objects. In this case we end up getting two numbers and a
+string as real Python objects, complete with reference counting and all. Also we are iterating
+through the array in Python rather than Rust native. These will &lt;strong&gt;significantly&lt;/strong&gt; slow down your
+code. Any time you have to cross the barrier where you change values inside the Rust arrays into
+Python objects or vice versa you will pay &lt;strong&gt;heavy&lt;/strong&gt; cost in that transformation. You will want to
+design your UDFs to avoid this as much as possible.&lt;/p&gt;
+&lt;h2&gt;Python approach using PyArrow compute&lt;/h2&gt;
+&lt;p&gt;DataFusion uses &lt;a href="https://arrow.apache.org/"&gt;Apache Arrow&lt;/a&gt; as its in-memory data format. This can
+be seen in the way that Arrow Arrays are passed into the UDFs. We can take advantage of the fact
+that &lt;a href="https://arrow.apache.org/docs/python/"&gt;PyArrow&lt;/a&gt;, the canonical Python Arrow implementation,
+provides a variety of
+useful functions. In the example below, we are only using a few of the boolean functions and the
+equality function. Each of these functions takes two arrays and analyzes them row by row. In the
+below example, we shift the logic around a little since we are now operating on an entire array of
+values instead of checking a single row ourselves.&lt;/p&gt;
+&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="nn"&gt;pyarrow.compute&lt;/span&gt; &lt;span class="k"&gt;as&lt;/span&gt; &lt;span class="nn"&gt;pc&lt;/span&gt;
+
+&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;udf_using_pyarrow_compute_impl&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;
+    &lt;span class="n"&gt;partkey_arr&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Array&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+    &lt;span class="n"&gt;suppkey_arr&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Array&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+    &lt;span class="n"&gt;returnflag_arr&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Array&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Array&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+    &lt;span class="n"&gt;results&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="kc"&gt;None&lt;/span&gt;
+    &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="n"&gt;partkey&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;suppkey&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;returnflag&lt;/span&gt; &lt;span class="ow"&gt;in&lt;/span&gt; &lt;span class="n"&gt;values_of_interest&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+        &lt;span class="n"&gt;filtered_partkey_arr&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;pc&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;equal&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;partkey_arr&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;partkey&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="n"&gt;filtered_suppkey_arr&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;pc&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;equal&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;suppkey_arr&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;suppkey&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="n"&gt;filtered_returnflag_arr&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;pc&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;equal&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;returnflag_arr&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;returnflag&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+        &lt;span class="n"&gt;resultant_arr&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;pc&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;and_&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;filtered_partkey_arr&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;filtered_suppkey_arr&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="n"&gt;resultant_arr&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;pc&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;and_&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;resultant_arr&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;filtered_returnflag_arr&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+        &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;results&lt;/span&gt; &lt;span class="ow"&gt;is&lt;/span&gt; &lt;span class="kc"&gt;None&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+            &lt;span class="n"&gt;results&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;resultant_arr&lt;/span&gt;
+        &lt;span class="k"&gt;else&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+            &lt;span class="n"&gt;results&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;pc&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;or_&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;results&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;resultant_arr&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+    &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;results&lt;/span&gt;
+
+
+&lt;span class="n"&gt;udf_using_pyarrow_compute&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;udf&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;
+    &lt;span class="n"&gt;udf_using_pyarrow_compute_impl&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+    &lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;int64&lt;/span&gt;&lt;span class="p"&gt;(),&lt;/span&gt; &lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;int64&lt;/span&gt;&lt;span class="p"&gt;(),&lt;/span&gt; &lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;utf8&lt;/span&gt;&lt;span class="p"&gt;()],&lt;/span&gt;
+    &lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;bool_&lt;/span&gt;&lt;span class="p"&gt;(),&lt;/span&gt;
+    &lt;span class="s2"&gt;"stable"&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+&lt;span class="p"&gt;)&lt;/span&gt;
+
+&lt;span class="n"&gt;df_udf_pyarrow_compute&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;df_lineitem&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;filter&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;
+    &lt;span class="n"&gt;udf_using_pyarrow_compute&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;col&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;"l_partkey"&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt; &lt;span class="n"&gt;col&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;"l_suppkey"&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt; &lt;span class="n"&gt;col&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;"l_returnflag"&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;The idea in the code above is that we will iterate through each of the values of interest, which we
+expect to be small. For each of the columns, we compare the value of interest to it&amp;rsquo;s corresponding
+array using &lt;code&gt;pyarrow.compute.equal&lt;/code&gt;. This will give use three boolean arrays. We have a match to
+the tuple if we have a row in all three arrays that is true, so we use &lt;code&gt;pyarrow.compute.and_&lt;/code&gt;. Now
+our return value from the UDF needs to include arrays for which any of the values of interest list
+of tuples exists, so we take the result from the current loop and perform a &lt;code&gt;pyarrow.compute.or_&lt;/code&gt;
+on it.&lt;/p&gt;
+&lt;p&gt;From my benchmarking, switching from approach of converting values into Python objects to this
+approach of using the PyArrow built-in functions leads to about a 10x speed improvement in this
+simple problem.&lt;/p&gt;
+&lt;p&gt;It&amp;rsquo;s worth noting that almost all of the PyArrow compute functions expect to take one or two arrays
+as their arguments. If you need to write a UDF that is evaluating three or more columns, you&amp;rsquo;ll
+need to do something akin to what we&amp;rsquo;ve shown here.&lt;/p&gt;
+&lt;h2&gt;Rust UDF with Python wrapper&lt;/h2&gt;
+&lt;p&gt;This is the most complicated approach, but has the potential to be the most performant. What we
+will do here is write a Rust function to perform our computation and then expose that function to
+Python. I know of two use cases where I would recommend this approach. The first is the case when
+the PyArrow compute functions are insufficient for your needs. Perhaps your code is too complex or
+could be greatly simplified if you pulled in some outside dependency. The second use case is when
+you have written a UDF that you&amp;rsquo;re sharing across multiple projects and have hardened the approach.
+It is possible that you can implement your function in Rust to give a speed improvement and then
+every project that is using this shared UDF will benefit from those updates.&lt;/p&gt;
+&lt;p&gt;When deciding to use this approach, it&amp;rsquo;s worth considering how much you think you&amp;rsquo;ll actually
+benefit from the Rust implementation to decide if it&amp;rsquo;s worth the additional effort to maintain and
+deploy the Python wheels you generate. It is certainly not necessary for every use case.&lt;/p&gt;
+&lt;p&gt;Due to the excellent work by the Python arrow team, we can simplify our work to needing only two
+dependencies on the Rust side, &lt;a href="https://github.com/apache/arrow-rs"&gt;arrow-rs&lt;/a&gt; and
+&lt;a href="https://pyo3.rs/"&gt;pyo3&lt;/a&gt;. I have posted a &lt;a href="https://github.com/timsaucer/tuple_filter_example"&gt;minimal example&lt;/a&gt;.
+You&amp;rsquo;ll need &lt;a href="https://github.com/PyO3/maturin"&gt;maturin&lt;/a&gt; to build the project, and you must use
+release mode when building to get the expected performance.&lt;/p&gt;
+&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;maturin develop --release
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;When you write your UDF in Rust you generally will need to take these steps&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Write a function description that takes in some number of Python generic objects.&lt;/li&gt;
+&lt;li&gt;Convert these objects to Arrow Arrays of the appropriate type(s).&lt;/li&gt;
+&lt;li&gt;Perform your computation and create a resultant Array.&lt;/li&gt;
+&lt;li&gt;Convert the array into a Python generic object.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;For the conversion to and from Python objects, we can take advantage of the
+&lt;code&gt;ArrayData::from_pyarrow_bound&lt;/code&gt; and &lt;code&gt;ArrayData::to_pyarrow&lt;/code&gt; functions.  All that remains is to
+perform your computation.&lt;/p&gt;
+&lt;p&gt;We are going to demonstrate doing this computation in two ways. The first is to mimic what we&amp;rsquo;ve
+done in the above approach using PyArrow. In the second we demonstrate iterating through the three
+arrays ourselves.&lt;/p&gt;
+&lt;p&gt;In our first approach, we can expect the performance to be nearly identical to when we used the
+PyArrow compute functions. On the Rust side we will have slightly less overhead but the heavy
+lifting portions of the code are essentially the same between this Rust implementation and the
+PyArrow approach above.&lt;/p&gt;
+&lt;p&gt;The reason for demonstrating this, even though it doesn&amp;rsquo;t provide a significant speedup over
+Python, is to primarily demonstrate how to make the Python to Rust with Python wrapper
+transition. In the second implementation you can see how we can iterate through all of the arrays
+ourselves.&lt;/p&gt;
+&lt;p&gt;In this first example, we are hard coding the values of interest, but in the following section
+we demonstrate passing these in during initalization.&lt;/p&gt;
+&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="cp"&gt;#[pyfunction]&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="k"&gt;pub&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="k"&gt;fn&lt;/span&gt; &lt;span class="nf"&gt;tuple_filter_fn&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="n"&gt;py&lt;/span&gt;: &lt;span class="nc"&gt;Python&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="nb"&gt;'_&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="n"&gt;partkey_expr&lt;/span&gt;: &lt;span class="kp"&gt;&amp;amp;&lt;/span&gt;&lt;span class="nc"&gt;Bound&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="nb"&gt;'_&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;PyAny&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="n"&gt;suppkey_expr&lt;/span&gt;: &lt;span class="kp"&gt;&amp;amp;&lt;/span&gt;&lt;span class="nc"&gt;Bound&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="nb"&gt;'_&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;PyAny&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="n"&gt;returnflag_expr&lt;/span&gt;: &lt;span class="kp"&gt;&amp;amp;&lt;/span&gt;&lt;span class="nc"&gt;Bound&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="nb"&gt;'_&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;PyAny&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;-&amp;gt; &lt;span class="nc"&gt;PyResult&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="n"&gt;Py&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="n"&gt;PyAny&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="kd"&gt;let&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;partkey_arr&lt;/span&gt;: &lt;span class="nc"&gt;PrimitiveArray&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="n"&gt;Int64Type&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="n"&gt;ArrayData&lt;/span&gt;::&lt;span class="n"&gt;from_pyarrow_bound&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;partkey_expr&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="o"&gt;?&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;into&lt;/span&gt;&lt;span class="p"&gt;();&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="kd"&gt;let&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;suppkey_arr&lt;/span&gt;: &lt;span class="nc"&gt;PrimitiveArray&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="n"&gt;Int64Type&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="n"&gt;ArrayData&lt;/span&gt;::&lt;span class="n"&gt;from_pyarrow_bound&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;suppkey_expr&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="o"&gt;?&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;into&lt;/span&gt;&lt;span class="p"&gt;();&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="kd"&gt;let&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;returnflag_arr&lt;/span&gt;: &lt;span class="nc"&gt;StringArray&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;ArrayData&lt;/span&gt;::&lt;span class="n"&gt;from_pyarrow_bound&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;returnflag_expr&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="o"&gt;?&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;into&lt;/span&gt;&lt;span class="p"&gt;();&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="kd"&gt;let&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;values_of_interest&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;vec&lt;/span&gt;&lt;span class="o"&gt;!&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;1530&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="mi"&gt;4031&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="s"&gt;"N"&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;to_string&lt;/span&gt;&lt;span class="p"&gt;()),&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;6530&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="mi"&gt;1531&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="s"&gt;"N"&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;to_string&lt;/span&gt;&lt;span class="p"&gt;()),&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;5618&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="mi"&gt;619&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="s"&gt;"N"&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;to_string&lt;/span&gt;&lt;span class="p"&gt;()),&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;8118&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="mi"&gt;8119&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="s"&gt;"N"&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;to_string&lt;/span&gt;&lt;span class="p"&gt;()),&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="p"&gt;];&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="kd"&gt;let&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="k"&gt;mut&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;res&lt;/span&gt;: &lt;span class="nb"&gt;Option&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="n"&gt;BooleanArray&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nb"&gt;None&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="k"&gt;for&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;partkey&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;suppkey&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;returnflag&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="k"&gt;in&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;values_of_interest&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="kd"&gt;let&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;filtered_partkey_arr&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;BooleanArray&lt;/span&gt;::&lt;span class="n"&gt;from_unary&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;partkey_arr&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="n"&gt;p&lt;/span&gt;&lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;p&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;==&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;partkey&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="kd"&gt;let&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;filtered_suppkey_arr&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;BooleanArray&lt;/span&gt;::&lt;span class="n"&gt;from_unary&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;suppkey_arr&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="n"&gt;s&lt;/span&gt;&lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;s&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;==&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;suppkey&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="kd"&gt;let&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;filtered_returnflag_arr&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;            &lt;/span&gt;&lt;span class="n"&gt;BooleanArray&lt;/span&gt;::&lt;span class="n"&gt;from_unary&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;returnflag_arr&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="n"&gt;s&lt;/span&gt;&lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;s&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;==&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;returnflag&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="kd"&gt;let&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;part_and_supp&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;compute&lt;/span&gt;::&lt;span class="n"&gt;and&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;filtered_partkey_arr&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;filtered_suppkey_arr&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;            &lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;map_err&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="n"&gt;e&lt;/span&gt;&lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;PyValueError&lt;/span&gt;::&lt;span class="n"&gt;new_err&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;e&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;to_string&lt;/span&gt;&lt;span class="p"&gt;()))&lt;/span&gt;&lt;span class="o"&gt;?&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="kd"&gt;let&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;resultant_arr&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;compute&lt;/span&gt;::&lt;span class="n"&gt;and&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;part_and_supp&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;filtered_returnflag_arr&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;            &lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;map_err&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="n"&gt;e&lt;/span&gt;&lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;PyValueError&lt;/span&gt;::&lt;span class="n"&gt;new_err&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;e&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;to_string&lt;/span&gt;&lt;span class="p"&gt;()))&lt;/span&gt;&lt;span class="o"&gt;?&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="n"&gt;res&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="k"&gt;match&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;res&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;            &lt;/span&gt;&lt;span class="nb"&gt;Some&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;r&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;compute&lt;/span&gt;::&lt;span class="n"&gt;or&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;r&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;resultant_arr&lt;/span&gt;&lt;span class="p"&gt;).&lt;/span&gt;&lt;span class="n"&gt;ok&lt;/span&gt;&lt;span class="p"&gt;(),&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;            &lt;/span&gt;&lt;span class="nb"&gt;None&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nb"&gt;Some&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;resultant_arr&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="p"&gt;};&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="n"&gt;res&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;unwrap&lt;/span&gt;&lt;span class="p"&gt;().&lt;/span&gt;&lt;span class="n"&gt;into_data&lt;/span&gt;&lt;span class="p"&gt;().&lt;/span&gt;&lt;span class="n"&gt;to_pyarrow&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;py&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+
+
+&lt;span class="cp"&gt;#[pymodule]&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="k"&gt;fn&lt;/span&gt; &lt;span class="nf"&gt;tuple_filter_example&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;module&lt;/span&gt;: &lt;span class="kp"&gt;&amp;amp;&lt;/span&gt;&lt;span class="nc"&gt;Bound&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="nb"&gt;'_&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;PyModule&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;-&amp;gt; &lt;span class="nc"&gt;PyResult&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="n"&gt;module&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;add_function&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;wrap_pyfunction&lt;/span&gt;&lt;span class="o"&gt;!&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;tuple_filter_fn&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;module&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="o"&gt;?&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="o"&gt;?&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="nb"&gt;Ok&lt;/span&gt;&lt;span class="p"&gt;(())&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;To use this we use the &lt;code&gt;udf&lt;/code&gt; function in &lt;code&gt;datafusion-python&lt;/code&gt; just as before.&lt;/p&gt;
+&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="kn"&gt;from&lt;/span&gt; &lt;span class="nn"&gt;datafusion&lt;/span&gt; &lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="n"&gt;udf&lt;/span&gt;
+&lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="nn"&gt;pyarrow&lt;/span&gt; &lt;span class="k"&gt;as&lt;/span&gt; &lt;span class="nn"&gt;pa&lt;/span&gt;
+&lt;span class="kn"&gt;from&lt;/span&gt; &lt;span class="nn"&gt;tuple_filter_example&lt;/span&gt; &lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="n"&gt;tuple_filter_fn&lt;/span&gt;
+
+&lt;span class="n"&gt;udf_using_custom_rust_fn&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;udf&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;
+    &lt;span class="n"&gt;tuple_filter_fn&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+    &lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;int64&lt;/span&gt;&lt;span class="p"&gt;(),&lt;/span&gt; &lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;int64&lt;/span&gt;&lt;span class="p"&gt;(),&lt;/span&gt; &lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;utf8&lt;/span&gt;&lt;span class="p"&gt;()],&lt;/span&gt;
+    &lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;bool_&lt;/span&gt;&lt;span class="p"&gt;(),&lt;/span&gt;
+    &lt;span class="s2"&gt;"stable"&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;That's it! We've now got a third party Rust UDF with Python wrappers working with DataFusion's
+Python bindings!&lt;/p&gt;
+&lt;h3&gt;Rust UDF with initialization&lt;/h3&gt;
+&lt;p&gt;Looking at the code above, you can see that it is hard coding the values we're interested in. There
+are many types of UDFs that don't require any additional data provided to them before they start
+the computation. The code above is sloppy, so let's clean it up.&lt;/p&gt;
+&lt;p&gt;We want to write the function to take some additional data. A limitation of the UDFs we create is
+that they expect to operate on entire arrays of data at a time. We can get around this problem by
+creating an initializer for our UDF. We do this by defining a Rust struct that contains the data we
+need and implement two methods on this struct, &lt;code&gt;new&lt;/code&gt; and &lt;code&gt;__call__&lt;/code&gt;. By doing this we will create a
+Python object that is callable, so it can be the function we provide to &lt;code&gt;udf&lt;/code&gt;.&lt;/p&gt;
+&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="cp"&gt;#[pyclass]&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="k"&gt;pub&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="nc"&gt;TupleFilterClass&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="n"&gt;values_of_interest&lt;/span&gt;: &lt;span class="nb"&gt;Vec&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;i64&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="kt"&gt;i64&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nb"&gt;String&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+
+&lt;span class="cp"&gt;#[pymethods]&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="k"&gt;impl&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;TupleFilterClass&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="cp"&gt;#[new]&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="k"&gt;fn&lt;/span&gt; &lt;span class="nf"&gt;new&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;values_of_interest&lt;/span&gt;: &lt;span class="nb"&gt;Vec&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;i64&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="kt"&gt;i64&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nb"&gt;String&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;-&amp;gt; &lt;span class="nc"&gt;Self&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="bp"&gt;Self&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;            &lt;/span&gt;&lt;span class="n"&gt;values_of_interest&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="k"&gt;fn&lt;/span&gt; &lt;span class="nf"&gt;__call__&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="n"&gt;py&lt;/span&gt;: &lt;span class="nc"&gt;Python&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="nb"&gt;'_&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="n"&gt;partkey_expr&lt;/span&gt;: &lt;span class="kp"&gt;&amp;amp;&lt;/span&gt;&lt;span class="nc"&gt;Bound&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="nb"&gt;'_&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;PyAny&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="n"&gt;suppkey_expr&lt;/span&gt;: &lt;span class="kp"&gt;&amp;amp;&lt;/span&gt;&lt;span class="nc"&gt;Bound&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="nb"&gt;'_&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;PyAny&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="n"&gt;returnflag_expr&lt;/span&gt;: &lt;span class="kp"&gt;&amp;amp;&lt;/span&gt;&lt;span class="nc"&gt;Bound&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="nb"&gt;'_&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;PyAny&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;-&amp;gt; &lt;span class="nc"&gt;PyResult&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="n"&gt;Py&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="n"&gt;PyAny&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="kd"&gt;let&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;partkey_arr&lt;/span&gt;: &lt;span class="nc"&gt;PrimitiveArray&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="n"&gt;Int64Type&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;            &lt;/span&gt;&lt;span class="n"&gt;ArrayData&lt;/span&gt;::&lt;span class="n"&gt;from_pyarrow_bound&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;partkey_expr&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="o"&gt;?&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;into&lt;/span&gt;&lt;span class="p"&gt;();&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="kd"&gt;let&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;suppkey_arr&lt;/span&gt;: &lt;span class="nc"&gt;PrimitiveArray&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="n"&gt;Int64Type&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;            &lt;/span&gt;&lt;span class="n"&gt;ArrayData&lt;/span&gt;::&lt;span class="n"&gt;from_pyarrow_bound&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;suppkey_expr&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="o"&gt;?&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;into&lt;/span&gt;&lt;span class="p"&gt;();&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="kd"&gt;let&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;returnflag_arr&lt;/span&gt;: &lt;span class="nc"&gt;StringArray&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;ArrayData&lt;/span&gt;::&lt;span class="n"&gt;from_pyarrow_bound&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;returnflag_expr&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="o"&gt;?&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;into&lt;/span&gt;&lt;span class="p"&gt;();&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="kd"&gt;let&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="k"&gt;mut&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;res&lt;/span&gt;: &lt;span class="nb"&gt;Option&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="n"&gt;BooleanArray&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nb"&gt;None&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="k"&gt;for&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;partkey&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;suppkey&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;returnflag&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="k"&gt;in&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;values_of_interest&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;            &lt;/span&gt;&lt;span class="kd"&gt;let&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;filtered_partkey_arr&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;BooleanArray&lt;/span&gt;::&lt;span class="n"&gt;from_unary&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;partkey_arr&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="n"&gt;p&lt;/span&gt;&lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;p&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;==&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;partkey&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;            &lt;/span&gt;&lt;span class="kd"&gt;let&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;filtered_suppkey_arr&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;BooleanArray&lt;/span&gt;::&lt;span class="n"&gt;from_unary&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;suppkey_arr&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="n"&gt;s&lt;/span&gt;&lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;s&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;==&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;suppkey&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;            &lt;/span&gt;&lt;span class="kd"&gt;let&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;filtered_returnflag_arr&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;                &lt;/span&gt;&lt;span class="n"&gt;BooleanArray&lt;/span&gt;::&lt;span class="n"&gt;from_unary&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;returnflag_arr&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="n"&gt;s&lt;/span&gt;&lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;s&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;==&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;returnflag&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+
+&lt;span class="w"&gt;            &lt;/span&gt;&lt;span class="kd"&gt;let&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;part_and_supp&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;compute&lt;/span&gt;::&lt;span class="n"&gt;and&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;filtered_partkey_arr&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;filtered_suppkey_arr&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;                &lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;map_err&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="n"&gt;e&lt;/span&gt;&lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;PyValueError&lt;/span&gt;::&lt;span class="n"&gt;new_err&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;e&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;to_string&lt;/span&gt;&lt;span class="p"&gt;()))&lt;/span&gt;&lt;span class="o"&gt;?&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;            &lt;/span&gt;&lt;span class="kd"&gt;let&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;resultant_arr&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;compute&lt;/span&gt;::&lt;span class="n"&gt;and&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;part_and_supp&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;filtered_returnflag_arr&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;                &lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;map_err&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="n"&gt;e&lt;/span&gt;&lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;PyValueError&lt;/span&gt;::&lt;span class="n"&gt;new_err&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;e&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;to_string&lt;/span&gt;&lt;span class="p"&gt;()))&lt;/span&gt;&lt;span class="o"&gt;?&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+
+&lt;span class="w"&gt;            &lt;/span&gt;&lt;span class="n"&gt;res&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="k"&gt;match&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;res&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;                &lt;/span&gt;&lt;span class="nb"&gt;Some&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;r&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;compute&lt;/span&gt;::&lt;span class="n"&gt;or&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;r&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;resultant_arr&lt;/span&gt;&lt;span class="p"&gt;).&lt;/span&gt;&lt;span class="n"&gt;ok&lt;/span&gt;&lt;span class="p"&gt;(),&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;                &lt;/span&gt;&lt;span class="nb"&gt;None&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nb"&gt;Some&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;resultant_arr&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;            &lt;/span&gt;&lt;span class="p"&gt;};&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="n"&gt;res&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;unwrap&lt;/span&gt;&lt;span class="p"&gt;().&lt;/span&gt;&lt;span class="n"&gt;into_data&lt;/span&gt;&lt;span class="p"&gt;().&lt;/span&gt;&lt;span class="n"&gt;to_pyarrow&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;py&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+
+&lt;span class="cp"&gt;#[pymodule]&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="k"&gt;fn&lt;/span&gt; &lt;span class="nf"&gt;tuple_filter_example&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;module&lt;/span&gt;: &lt;span class="kp"&gt;&amp;amp;&lt;/span&gt;&lt;span class="nc"&gt;Bound&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="nb"&gt;'_&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;PyModule&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;-&amp;gt; &lt;span class="nc"&gt;PyResult&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="n"&gt;module&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;add_class&lt;/span&gt;::&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="n"&gt;TupleFilterClass&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;&lt;span class="o"&gt;?&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="nb"&gt;Ok&lt;/span&gt;&lt;span class="p"&gt;(())&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;When you write this, you don't have to call your constructor &lt;code&gt;new&lt;/code&gt;. The more important part is that
+you have &lt;code&gt;#[new]&lt;/code&gt; designated on the function. With this you can provide any kinds of data you need
+during processing. Using this initializer in Python is fairly straightforward.&lt;/p&gt;
+&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="kn"&gt;from&lt;/span&gt; &lt;span class="nn"&gt;datafusion&lt;/span&gt; &lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="n"&gt;udf&lt;/span&gt;
+&lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="nn"&gt;pyarrow&lt;/span&gt; &lt;span class="k"&gt;as&lt;/span&gt; &lt;span class="nn"&gt;pa&lt;/span&gt;
+&lt;span class="kn"&gt;from&lt;/span&gt; &lt;span class="nn"&gt;tuple_filter_example&lt;/span&gt; &lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="n"&gt;TupleFilterClass&lt;/span&gt;
+
+&lt;span class="n"&gt;tuple_filter_class&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;TupleFilterClass&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;values_of_interest&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+&lt;span class="n"&gt;udf_using_custom_rust_fn_with_data&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;udf&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;
+    &lt;span class="n"&gt;tuple_filter_class&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+    &lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;int64&lt;/span&gt;&lt;span class="p"&gt;(),&lt;/span&gt; &lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;int64&lt;/span&gt;&lt;span class="p"&gt;(),&lt;/span&gt; &lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;utf8&lt;/span&gt;&lt;span class="p"&gt;()],&lt;/span&gt;
+    &lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;bool_&lt;/span&gt;&lt;span class="p"&gt;(),&lt;/span&gt;
+    &lt;span class="s2"&gt;"stable"&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+    &lt;span class="n"&gt;name&lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="s2"&gt;"tuple_filter_with_data"&lt;/span&gt;
+&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;When you use this approach you will need to provide a &lt;code&gt;name&lt;/code&gt; argument to &lt;code&gt;udf&lt;/code&gt;. This is because our
+class/struct does not get the &lt;code&gt;__qualname__&lt;/code&gt; attribute that the &lt;code&gt;udf&lt;/code&gt; function is looking for. You
+can give this udf any name you choose.&lt;/p&gt;
+&lt;h3&gt;Rust UDF with direct iteration&lt;/h3&gt;
+&lt;p&gt;The final version of our scalar UDF is one where we implement it in Rust and iterate through all of
+the arrays ourselves. If you are iterating through more than 3 arrays at a time I recommend looking
+at &lt;a href="https://docs.rs/itertools/latest/itertools/macro.izip.html"&gt;izip&lt;/a&gt; in the
+&lt;a href="https://crates.io/crates/itertools"&gt;itertools crate&lt;/a&gt;. For ease of understanding and since we only
+have 3 arrays here I will just explicitly create my own tuple here.&lt;/p&gt;
+&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="cp"&gt;#[pyclass]&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="k"&gt;pub&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="nc"&gt;TupleFilterDirectIterationClass&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="n"&gt;values_of_interest&lt;/span&gt;: &lt;span class="nb"&gt;Vec&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;i64&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="kt"&gt;i64&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nb"&gt;String&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+
+&lt;span class="cp"&gt;#[pymethods]&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="k"&gt;impl&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;TupleFilterDirectIterationClass&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="cp"&gt;#[new]&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="k"&gt;fn&lt;/span&gt; &lt;span class="nf"&gt;new&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;values_of_interest&lt;/span&gt;: &lt;span class="nb"&gt;Vec&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;i64&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="kt"&gt;i64&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nb"&gt;String&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;-&amp;gt; &lt;span class="nc"&gt;Self&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="bp"&gt;Self&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;values_of_interest&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="k"&gt;fn&lt;/span&gt; &lt;span class="nf"&gt;__call__&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="n"&gt;py&lt;/span&gt;: &lt;span class="nc"&gt;Python&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="nb"&gt;'_&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="n"&gt;partkey_expr&lt;/span&gt;: &lt;span class="kp"&gt;&amp;amp;&lt;/span&gt;&lt;span class="nc"&gt;Bound&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="nb"&gt;'_&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;PyAny&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="n"&gt;suppkey_expr&lt;/span&gt;: &lt;span class="kp"&gt;&amp;amp;&lt;/span&gt;&lt;span class="nc"&gt;Bound&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="nb"&gt;'_&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;PyAny&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="n"&gt;returnflag_expr&lt;/span&gt;: &lt;span class="kp"&gt;&amp;amp;&lt;/span&gt;&lt;span class="nc"&gt;Bound&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="nb"&gt;'_&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;PyAny&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;-&amp;gt; &lt;span class="nc"&gt;PyResult&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="n"&gt;Py&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="n"&gt;PyAny&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="kd"&gt;let&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;partkey_arr&lt;/span&gt;: &lt;span class="nc"&gt;PrimitiveArray&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="n"&gt;Int64Type&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;            &lt;/span&gt;&lt;span class="n"&gt;ArrayData&lt;/span&gt;::&lt;span class="n"&gt;from_pyarrow_bound&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;partkey_expr&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="o"&gt;?&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;into&lt;/span&gt;&lt;span class="p"&gt;();&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="kd"&gt;let&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;suppkey_arr&lt;/span&gt;: &lt;span class="nc"&gt;PrimitiveArray&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="n"&gt;Int64Type&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;            &lt;/span&gt;&lt;span class="n"&gt;ArrayData&lt;/span&gt;::&lt;span class="n"&gt;from_pyarrow_bound&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;suppkey_expr&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="o"&gt;?&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;into&lt;/span&gt;&lt;span class="p"&gt;();&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="kd"&gt;let&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;returnflag_arr&lt;/span&gt;: &lt;span class="nc"&gt;StringArray&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;ArrayData&lt;/span&gt;::&lt;span class="n"&gt;from_pyarrow_bound&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;returnflag_expr&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="o"&gt;?&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;into&lt;/span&gt;&lt;span class="p"&gt;();&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="kd"&gt;let&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;values_to_search&lt;/span&gt;: &lt;span class="nb"&gt;Vec&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="kt"&gt;i64&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="kt"&gt;i64&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="kt"&gt;str&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;values_of_interest&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;            &lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;iter&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;            &lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;map&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;b&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;c&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;b&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;c&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;as_str&lt;/span&gt;&lt;span class="p"&gt;()))&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;            &lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;collect&lt;/span&gt;&lt;span class="p"&gt;();&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="kd"&gt;let&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;values&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;partkey_arr&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;            &lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;values&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;            &lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;iter&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;            &lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;zip&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;suppkey_arr&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;values&lt;/span&gt;&lt;span class="p"&gt;().&lt;/span&gt;&lt;span class="n"&gt;iter&lt;/span&gt;&lt;span class="p"&gt;())&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;            &lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;zip&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;returnflag_arr&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;iter&lt;/span&gt;&lt;span class="p"&gt;())&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;            &lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;map&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="p"&gt;((&lt;/span&gt;&lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;b&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;c&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;b&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;c&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;unwrap_or_default&lt;/span&gt;&lt;span class="p"&gt;()))&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;            &lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;map&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="n"&gt;v&lt;/span&gt;&lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;values_to_search&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;contains&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;v&lt;/span&gt;&lt;span class="p"&gt;));&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="kd"&gt;let&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;res&lt;/span&gt;: &lt;span class="nc"&gt;BooleanArray&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;BooleanBuffer&lt;/span&gt;::&lt;span class="n"&gt;from_iter&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;values&lt;/span&gt;&lt;span class="p"&gt;).&lt;/span&gt;&lt;span class="n"&gt;into&lt;/span&gt;&lt;span class="p"&gt;();&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="n"&gt;res&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;into_data&lt;/span&gt;&lt;span class="p"&gt;().&lt;/span&gt;&lt;span class="n"&gt;to_pyarrow&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;py&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;We convert the &lt;code&gt;values_of_interest&lt;/code&gt; into a vector of borrowed types so that we can do a fast search
+without creating additional memory. The other option is to turn the &lt;code&gt;returnflag&lt;/code&gt; into a &lt;code&gt;String&lt;/code&gt;
+but that memory allocation is unnecessary. After that we use two &lt;code&gt;zip&lt;/code&gt; operations so that we can
+iterate over all three columns in a single pass. Since each &lt;code&gt;zip&lt;/code&gt; will return a tuple of two
+elements, a quick &lt;code&gt;map&lt;/code&gt; turns them into the tuple format we need. Also, &lt;code&gt;StringArray&lt;/code&gt; is a little
+different in the buffer it uses, so it is treated slightly differently from the others.&lt;/p&gt;
+&lt;h2&gt;User Defined Aggregate Function&lt;/h2&gt;
+&lt;p&gt;Writing a user defined aggregate function or user defined window function is slightly more complex
+than scalar functions. This is because we must accumulate values and there is no guarantee that one
+batch will contain all the values we are aggregating over. For this we need to define an
+&lt;code&gt;Accumulator&lt;/code&gt; which will do a few things.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Process a batch and compute an internal state&lt;/li&gt;
+&lt;li&gt;Share the state so that we can combine multiple batches&lt;/li&gt;
+&lt;li&gt;Merge the results across multiple batches&lt;/li&gt;
+&lt;li&gt;Return the final result&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;In the example below, we're going to look at customer orders and we want to know per customer ID,
+how much they have ordered total. We want to ignore small orders, which we define as anything under
+5000.&lt;/p&gt;
+&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="kn"&gt;from&lt;/span&gt; &lt;span class="nn"&gt;datafusion&lt;/span&gt; &lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="n"&gt;Accumulator&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;udaf&lt;/span&gt;
+&lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="nn"&gt;pyarrow&lt;/span&gt; &lt;span class="k"&gt;as&lt;/span&gt; &lt;span class="nn"&gt;pa&lt;/span&gt;
+&lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="nn"&gt;pyarrow.compute&lt;/span&gt; &lt;span class="k"&gt;as&lt;/span&gt; &lt;span class="nn"&gt;pc&lt;/span&gt;
+
+&lt;span class="n"&gt;IGNORE_THESHOLD&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="mf"&gt;5000.0&lt;/span&gt;
+&lt;span class="k"&gt;class&lt;/span&gt; &lt;span class="nc"&gt;AboveThresholdAccum&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Accumulator&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+    &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="fm"&gt;__init__&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kc"&gt;None&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+        &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;_sum&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="mf"&gt;0.0&lt;/span&gt;
+
+    &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;update&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;values&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Array&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kc"&gt;None&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+        &lt;span class="n"&gt;over_threshold&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;pc&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;greater&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;values&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;scalar&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;IGNORE_THESHOLD&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+        &lt;span class="n"&gt;sum_above&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;pc&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;sum&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;values&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;filter&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;over_threshold&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;as_py&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+        &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;sum_above&lt;/span&gt; &lt;span class="ow"&gt;is&lt;/span&gt; &lt;span class="kc"&gt;None&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+            &lt;span class="n"&gt;sum_above&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="mf"&gt;0.0&lt;/span&gt;
+        &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;_sum&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;_sum&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;sum_above&lt;/span&gt;
+
+    &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;merge&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;states&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;List&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Array&lt;/span&gt;&lt;span class="p"&gt;])&lt;/span&gt; &lt;span class="o"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kc"&gt;None&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+        &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;_sum&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;_sum&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;pc&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;sum&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;states&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;])&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;as_py&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+
+    &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;state&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="n"&gt;List&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Scalar&lt;/span&gt;&lt;span class="p"&gt;]:&lt;/span&gt;
+        &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;scalar&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;_sum&lt;/span&gt;&lt;span class="p"&gt;)]&lt;/span&gt;
+
+    &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;evaluate&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Scalar&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+        &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;scalar&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;_sum&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+&lt;span class="n"&gt;sum_above_threshold&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;udaf&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;AboveThresholdAccum&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;float64&lt;/span&gt;&lt;span class="p"&gt;()],&lt;/span&gt; &lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;float64&lt;/span&gt;&lt;span class="p"&gt;(),&lt;/span&gt; &lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;float64&lt;/span&gt;&lt;span class="p"&gt;()],&lt;/span&gt; &lt;span class="s1"&gt;'stable'&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+&lt;span class="n"&gt;df_orders&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;aggregate&lt;/span&gt;&lt;span class="p"&gt;([&lt;/span&gt;&lt;span class="n"&gt;col&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;"o_custkey"&lt;/span&gt;&lt;span class="p"&gt;)],[&lt;/span&gt;&lt;span class="n"&gt;sum_above_threshold&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;col&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;"o_totalprice"&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;alias&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;"sales"&lt;/span&gt;&lt;span class="p"&gt;)])&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;show&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;Since we are doing a &lt;code&gt;sum&lt;/code&gt; we can keep a single value as our internal state. When we call &lt;code&gt;update()&lt;/code&gt;
+we will process a single array and update the internal state, which we share with the &lt;code&gt;state()&lt;/code&gt;
+function. For larger batches we may &lt;code&gt;merge()&lt;/code&gt; these states. It is important to note that the
+&lt;code&gt;states&lt;/code&gt; in the &lt;code&gt;merge()&lt;/code&gt; function are an array of the values returned from &lt;code&gt;state()&lt;/code&gt;. It is
+entirely possible that the &lt;code&gt;merge&lt;/code&gt; function is significantly different than the &lt;code&gt;update&lt;/code&gt;, though in
+our example they are very similar.&lt;/p&gt;
+&lt;p&gt;One example of implementing a user defined aggregate function where the &lt;code&gt;update()&lt;/code&gt; and &lt;code&gt;merge()&lt;/code&gt;
+operations are different is computing an average. In &lt;code&gt;update()&lt;/code&gt; we would create a state that is both
+a sum and a count. &lt;code&gt;state()&lt;/code&gt; would return a list of these two values, and &lt;code&gt;merge()&lt;/code&gt; would compute
+the final result.&lt;/p&gt;
+&lt;h2&gt;User Defined Window Functions&lt;/h2&gt;
+&lt;p&gt;Writing a user defined window function is slightly more complex than an aggregate function due
+to the variety of ways that window functions are called. I recommend reviewing the
+&lt;a href="https://datafusion.apache.org/python/user-guide/common-operations/udf-and-udfa.html"&gt;online documentation&lt;/a&gt;
+for a description of which functions need to be implemented. The details of how to implement
+these generally follow the same patterns as described above for aggregate functions.&lt;/p&gt;
+&lt;h2&gt;Performance Comparison&lt;/h2&gt;
+&lt;p&gt;For the scalar functions above, we performed a timing evaluation, repeating the operation 100
+times. For this simple example these are our results.&lt;/p&gt;
+&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="err"&gt;+-----------------------------+--------------+---------+&lt;/span&gt;
+&lt;span class="err"&gt;| approach                    | Average Time | Std Dev |&lt;/span&gt;
+&lt;span class="err"&gt;+-----------------------------+--------------+---------+&lt;/span&gt;
+&lt;span class="err"&gt;| python udf                  | 4.969        | 0.062   |&lt;/span&gt;
+&lt;span class="err"&gt;| simple filter               | 1.075        | 0.022   |&lt;/span&gt;
+&lt;span class="err"&gt;| explicit filter             | 0.685        | 0.063   |&lt;/span&gt;
+&lt;span class="err"&gt;| pyarrow compute             | 0.529        | 0.017   |&lt;/span&gt;
+&lt;span class="err"&gt;| arrow rust compute          | 0.511        | 0.034   |&lt;/span&gt;
+&lt;span class="err"&gt;| arrow rust compute as class | 0.502        | 0.011   |&lt;/span&gt;
+&lt;span class="err"&gt;| rust custom iterator        | 0.478        | 0.009   |&lt;/span&gt;
+&lt;span class="err"&gt;+-----------------------------+--------------+---------+&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;As expected, the conversion to Python objects is by far the worst performance. As soon as we drop
+into using any functions that keep the data entirely on the Native (Rust or C/C++) side we see a
+near 10x speed improvement. Then as we increase our complexity from using PyArrow compute functions
+to implementing the UDF in Rust we see incremental improvements. Our fastest approach - iterating
+through the arrays ourselves does operate nearly 10% faster than the PyArrow compute approach.&lt;/p&gt;
+&lt;h2&gt;Final Thoughts and Recommendations&lt;/h2&gt;
+&lt;p&gt;For anyone who is curious about &lt;a href="https://datafusion.apache.org/"&gt;DataFusion&lt;/a&gt; I highly recommend
+giving it a try. This post was designed to make it easier for new users to the Python implementation
+to work with User Defined Functions by giving a few examples of how one might implement these.&lt;/p&gt;
+&lt;p&gt;When it comes to designing UDFs, I strongly recommend seeing if you can write your UDF using
+&lt;a href="https://arrow.apache.org/docs/python/api/compute.html"&gt;PyArrow functions&lt;/a&gt; rather than pure Python
+objects. As shown in the scalar example above, you can achieve a 10x speedup by using PyArrow
+functions. If you must do something that isn't well represented by the PyArrow compute functions,
+then I would consider using a Rust based UDF in the manner shown above.&lt;/p&gt;
+&lt;p&gt;I would like to thank &lt;a href="https://github.com/alamb"&gt;@alamb&lt;/a&gt;, &lt;a href="https://github.com/andygrove"&gt;@andygrove&lt;/a&gt;, &lt;a href="https://github.com/comphead"&gt;@comphead&lt;/a&gt;, &lt;a href="https://github.com/emgeee"&gt;@emgeee&lt;/a&gt;, &lt;a href="https://github.com/kylebarron"&gt;@kylebarron&lt;/a&gt;, and &lt;a href="https://github.com/Omega359"&gt;@Omega359&lt;/a&gt;
+for their helpful reviews and feedback.&lt;/p&gt;
+&lt;p&gt;Lastly, the Apache Arrow and DataFusion community is an active group of very helpful people working
+to make a great tool. If you want to get involved, please take a look at the
+&lt;a href="https://datafusion.apache.org/python/"&gt;online documentation&lt;/a&gt; and jump in to help with one of the
+&lt;a href="https://github.com/apache/datafusion-python/issues"&gt;open issues&lt;/a&gt;.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Apache DataFusion Python 40.1.0 Released, Significant usability updates</title><link href="https://datafusion.apache.org/blog/blog/2024/08/20/python-datafusion-40.0.0" rel="alternate"></link><published>2024-08-20T00:00:00+00:00</published><updated>2024-08-20T00:00:00+00:00</updated><author><name>timsaucer</name></author><id>tag:datafusion.apache.org,2024-08-20:/blog/blog/2024/08/20/python-datafusion-40.0.0</id><summary type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+&lt;h2&gt;Introduction&lt;/h2&gt;
+&lt;p&gt;We are happy to announce that &lt;a href="https://pypi.org/project/datafusion/40.1.0/"&gt;DataFusion in Python 40.1.0&lt;/a&gt; has been released. In addition to
+bringing in all of the new features of the core &lt;a href="https://datafusion.apache.org/blog/2024/07/24/datafusion-40.0.0/"&gt;DataFusion 40.0.0&lt;/a&gt; package, this release
+contains &lt;em&gt;significant&lt;/em&gt; updates to the user interface and documentation. We listened to the python …&lt;/p&gt;</summary><content type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+&lt;h2&gt;Introduction&lt;/h2&gt;
+&lt;p&gt;We are happy to announce that &lt;a href="https://pypi.org/project/datafusion/40.1.0/"&gt;DataFusion in Python 40.1.0&lt;/a&gt; has been released. In addition to
+bringing in all of the new features of the core &lt;a href="https://datafusion.apache.org/blog/2024/07/24/datafusion-40.0.0/"&gt;DataFusion 40.0.0&lt;/a&gt; package, this release
+contains &lt;em&gt;significant&lt;/em&gt; updates to the user interface and documentation. We listened to the python
+user community to create a more &lt;em&gt;pythonic&lt;/em&gt; experience. If you have not used the python interface to
+DataFusion before, this is an excellent time to give it a try!&lt;/p&gt;
+&lt;h2&gt;Background&lt;/h2&gt;
+&lt;p&gt;Until now, the python bindings for DataFusion have primarily been a thin layer to expose the
+underlying Rust functionality. This has been worked well for early adopters to use DataFusion
+within their Python projects, but some users have found it difficult to work with. As compared to
+other DataFrame libraries, these issues were raised:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Most of the functions had little or no documentation. Users often had to refer to the Rust
+documentation or code to learn how to use DataFusion. This alienated some python users.&lt;/li&gt;
+&lt;li&gt;Users could not take advantage of modern IDE features such as type hinting. These are valuable
+tools for rapid testing and development.&lt;/li&gt;
+&lt;li&gt;Some of the interfaces felt &amp;ldquo;clunky&amp;rdquo; to users since some Python concepts do not always map well
+to their Rust counterparts.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;This release aims to bring a better user experience to the DataFusion Python community.&lt;/p&gt;
+&lt;h2&gt;What's Changed&lt;/h2&gt;
+&lt;p&gt;The most significant difference is that we have added wrapper functions and classes for most of the
+user facing interface. These wrappers, written in Python, contain both documentation and type
+annotations.&lt;/p&gt;
+&lt;p&gt;This documenation is now available on the &lt;a href="https://datafusion.apache.org/python/autoapi/datafusion/index.html"&gt;DataFusion in Python API&lt;/a&gt; website. There you can browse
+the available functions and classes to see the breadth of available functionality.&lt;/p&gt;
+&lt;p&gt;Modern IDEs use language servers such as
+&lt;a href="https://marketplace.visualstudio.com/items?itemName=ms-python.vscode-pylance"&gt;Pylance&lt;/a&gt; or
+&lt;a href="https://jedi.readthedocs.io/en/latest/"&gt;Jedi&lt;/a&gt; to perform analysis of python code, provide useful
+hints, and identify usage errors. These are major tools in the python user community. With this
+release, users can fully use these tools in their workflow.&lt;/p&gt;
+&lt;figure style="text-align: center;"&gt;
+&lt;img alt="Fig 1: Enhanced tooltips in an IDE." class="img-responsive" src="../images/python-datafusion-40.0.0/vscode_hover_tooltip.png" width="100%"/&gt;
+&lt;figcaption&gt;
+&lt;b&gt;Figure 1&lt;/b&gt;: With the enhanced python wrappers, users can see helpful tool tips with
+   type annotations directly in modern IDEs.
+&lt;/figcaption&gt;
+&lt;/figure&gt;
+&lt;p&gt;By having the type annotations, these IDEs can also identify quickly when a user has incorrectly
+used a function's arguments as shown in Figure 2.&lt;/p&gt;
+&lt;figure style="text-align: center;"&gt;
+&lt;img alt="Fig 2: Error checking in static analysis" class="img-responsive" src="../images/python-datafusion-40.0.0/pylance_error_checking.png" width="100%"/&gt;
+&lt;figcaption&gt;
+&lt;b&gt;Figure 2&lt;/b&gt;: Modern Python language servers can perform static analysis and quickly find
+   errors in the arguments to functions.
+&lt;/figcaption&gt;
+&lt;/figure&gt;
+&lt;p&gt;In addition to these wrapper libraries, we have enhancements to some of the functions to feel more
+easy to use.&lt;/p&gt;
+&lt;h3&gt;Improved DataFrame filter arguments&lt;/h3&gt;
+&lt;p&gt;You can now apply multiple &lt;code&gt;filter&lt;/code&gt; statements in a single step. When using &lt;code&gt;DataFrame.filter&lt;/code&gt; you
+can pass in multiple arguments, separated by a comma. These will act as a logical &lt;code&gt;AND&lt;/code&gt; of all of
+the filter arguments. The following two statements are equivalent:&lt;/p&gt;
+&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="n"&gt;df&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;filter&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;col&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;"size"&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;&amp;lt;&lt;/span&gt; &lt;span class="n"&gt;col&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;"max_size"&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;filter&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;col&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;"color"&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="n"&gt;lit&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;"green"&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+&lt;span class="n"&gt;df&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;filter&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;col&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;"size"&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;&amp;lt;&lt;/span&gt; &lt;span class="n"&gt;col&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;"max_size"&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt; &lt;span class="n"&gt;col&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;"color"&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="n"&gt;lit&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;"green"&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;h3&gt;Comparison against literal values&lt;/h3&gt;
+&lt;p&gt;It is very common to write DataFrame operations that compare an expression to some fixed value.
+For example, filtering a DataFrame might have an operation such as &lt;code&gt;df.filter(col("size") &amp;lt; lit(16))&lt;/code&gt;.
+To make these common operations more ergonomic, you can now simply use &lt;code&gt;df.filter(col("size") &amp;lt; 16)&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;For the right hand side of the comparison operator, you can now use any Python value that can be
+coerced into a &lt;code&gt;Literal&lt;/code&gt;. This gives an easy to ready expression. For example, consider these few
+lines from one of the
+&lt;a href="https://github.com/apache/datafusion-python/tree/main/examples/tpch"&gt;TPC-H examples&lt;/a&gt; provided in
+the DataFusion Python repository.&lt;/p&gt;
+&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="n"&gt;df&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;
+    &lt;span class="n"&gt;df_lineitem&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;filter&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;col&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;"l_shipdate"&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;&amp;gt;=&lt;/span&gt; &lt;span class="n"&gt;lit&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;date&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+    &lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;filter&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;col&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;"l_discount"&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;&amp;gt;=&lt;/span&gt; &lt;span class="n"&gt;lit&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;DISCOUNT&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;-&lt;/span&gt; &lt;span class="n"&gt;lit&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;DELTA&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+    &lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;filter&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;col&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;"l_discount"&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;&amp;lt;=&lt;/span&gt; &lt;span class="n"&gt;lit&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;DISCOUNT&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;lit&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;DELTA&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+    &lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;filter&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;col&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;"l_quantity"&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;&amp;lt;&lt;/span&gt; &lt;span class="n"&gt;lit&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;QUANTITY&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;The above code mirrors closely how these filters would need to be applied in rust. With this new
+release, the user can simplify these lines. Also shown in the example below is that &lt;code&gt;filter()&lt;/code&gt;
+now accepts a variable number of arguments and filters on all such arguments (boolean AND).&lt;/p&gt;
+&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="n"&gt;df&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;df_lineitem&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;filter&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;
+    &lt;span class="n"&gt;col&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;"l_shipdate"&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;&amp;gt;=&lt;/span&gt; &lt;span class="n"&gt;date&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+    &lt;span class="n"&gt;col&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;"l_discount"&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;&amp;gt;=&lt;/span&gt; &lt;span class="n"&gt;DISCOUNT&lt;/span&gt; &lt;span class="o"&gt;-&lt;/span&gt; &lt;span class="n"&gt;DELTA&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+    &lt;span class="n"&gt;col&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;"l_discount"&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;&amp;lt;=&lt;/span&gt; &lt;span class="n"&gt;DISCOUNT&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;DELTA&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+    &lt;span class="n"&gt;col&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;"l_quantity"&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;&amp;lt;&lt;/span&gt; &lt;span class="n"&gt;QUANTITY&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;h3&gt;Select columns by name&lt;/h3&gt;
+&lt;p&gt;It is very common for users to perform &lt;code&gt;DataFrame&lt;/code&gt; selection where they simply want a column. For
+this we have had the function &lt;code&gt;select_columns("a", "b")&lt;/code&gt; or the user could perform
+&lt;code&gt;select(col("a"), col("b"))&lt;/code&gt;. In the new release, we accept either full expressions in &lt;code&gt;select()&lt;/code&gt;
+or strings of the column names. You can mix these as well.&lt;/p&gt;
+&lt;p&gt;Where before you may have to do an operation like&lt;/p&gt;
+&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="n"&gt;df_subset&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;df&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;select&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;col&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;"a"&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt; &lt;span class="n"&gt;col&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;"b"&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt; &lt;span class="n"&gt;f&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;abs&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;col&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;"c"&lt;/span&gt;&lt;span class="p"&gt;)))&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;You can now simplify this to&lt;/p&gt;
+&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="n"&gt;df_subset&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;df&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;select&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;"a"&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="s2"&gt;"b"&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;f&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;abs&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;col&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;"c"&lt;/span&gt;&lt;span class="p"&gt;)))&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;h3&gt;Creating named structs&lt;/h3&gt;
+&lt;p&gt;Creating a &lt;code&gt;struct&lt;/code&gt; with named fields was previously difficult to use and allowed for potential
+user errors when specifying the name of each field. Now we have a cleaner interface where the
+user passes a list of tuples containing the name of the field and the expression to create.&lt;/p&gt;
+&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="n"&gt;df&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;select&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;f&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;named_struct&lt;/span&gt;&lt;span class="p"&gt;([&lt;/span&gt;
+  &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;"a"&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;col&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;"a"&lt;/span&gt;&lt;span class="p"&gt;)),&lt;/span&gt;
+  &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;"b"&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;col&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;"b"&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+&lt;span class="p"&gt;]))&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;h2&gt;Next Steps&lt;/h2&gt;
+&lt;p&gt;While most of the user facing classes and functions have been exposed, there are a few that require
+exposure. Namely the classes in &lt;code&gt;datafusion.object_store&lt;/code&gt; and the logical plans used by
+&lt;code&gt;datafusion.substrait&lt;/code&gt;. The team is working on
+&lt;a href="https://github.com/apache/datafusion-python/issues/767"&gt;these issues&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Additionally, in the next release of DataFusion there have been improvements made to the user-defined
+aggregate and window functions to make them easier to use. We plan on
+&lt;a href="https://github.com/apache/datafusion-python/issues/780"&gt;bringing these enhancements&lt;/a&gt; to this project.&lt;/p&gt;
+&lt;h2&gt;Thank You&lt;/h2&gt;
+&lt;p&gt;We would like to thank the following members for their very helpful discussions regarding these
+updates: &lt;a href="https://github.com/andygrove"&gt;@andygrove&lt;/a&gt;, &lt;a href="https://github.com/max-muoto"&gt;@max-muoto&lt;/a&gt;, &lt;a href="https://github.com/slyons"&gt;@slyons&lt;/a&gt;, &lt;a href="https://github.com/Throne3d"&gt;@Throne3d&lt;/a&gt;, &lt;a href="https://github.com/Michael-J-Ward"&gt;@Michael-J-Ward&lt;/a&gt;, &lt;a href="https://github.com/datapythonista"&gt;@datapythonista&lt;/a&gt;,
+&lt;a href="https://github.com/austin362667"&gt;@austin362667&lt;/a&gt;, &lt;a href="https://github.com/kylebarron"&gt;@kylebarron&lt;/a&gt;, &lt;a href="https://github.com/simicd"&gt;@simicd&lt;/a&gt;. The &lt;a href="https://github.com/apache/datafusion-python/pull/750"&gt;primary PR (#750)&lt;/a&gt; that includes these updates
+had an extensive conversation, leading to a significantly improved end product. Again, thank you
+to all who provided input!&lt;/p&gt;
+&lt;p&gt;We would like to give an special thank you to &lt;a href="https://github.com/3ok"&gt;@3ok&lt;/a&gt; who created the initial version of the wrapper
+definitions. The work they did was time consuming and required exceptional attention to detail. It
+provided enormous value to starting this project. Thank you!&lt;/p&gt;
+&lt;h2&gt;Get Involved&lt;/h2&gt;
+&lt;p&gt;The DataFusion Python team is an active and engaging community and we would love
+to have you join us and help the project.&lt;/p&gt;
+&lt;p&gt;Here are some ways to get involved:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Learn more by visiting the &lt;a href="https://datafusion.apache.org/python/index.html"&gt;DataFusion Python project&lt;/a&gt;
+page.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Try out the project and provide feedback, file issues, and contribute code.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;</content><category term="blog"></category></entry></feed>

@@ -1,0 +1,171 @@
+<!doctype html>
+<html class="no-js" lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Using StringView / German Style Strings to Make Queries Faster: Part 1- Reading Parquet - Apache DataFusion Blog</title>
+<link href="/css/bootstrap.min.css" rel="stylesheet">
+<link href="/css/fontawesome.all.min.css" rel="stylesheet">
+<link href="/css/headerlink.css" rel="stylesheet">
+<link href="/highlight/default.min.css" rel="stylesheet">
+<script src="/highlight/highlight.js"></script>
+<script>hljs.highlightAll();</script>  </head>
+  <body class="d-flex flex-column h-100">
+  <main class="flex-shrink-0">
+<!-- nav bar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark" aria-label="Fifth navbar example">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/"><img src="/images/logo_original4x.png" style="height: 32px;"/> Apache DataFusion Blog</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarADP" aria-controls="navbarADP" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarADP">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link" href="/about.html">About</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/feed.xml">RSS</a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>    
+
+
+<!-- page contents -->
+<div id="contents">
+    <div class="bg-white p-5 rounded">
+        <div class="col-sm-8 mx-auto">
+          <h1>
+              Using StringView / German Style Strings to Make Queries Faster: Part 1- Reading Parquet
+          </h1>
+              <p>Posted on: Fri 13 September 2024 by Xiangpeng Hao, Andrew Lamb</p>
+              <!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+-->
+<p><em>Editor's Note: This is the first of a <a href="../2024/09/13/string-view-german-style-strings-part-2/">two part</a> blog series that was first published on the <a href="https://www.influxdata.com/blog/faster-queries-with-stringview-part-one-influxdb/">InfluxData blog</a>. Thanks to InfluxData for sponsoring this work as <a href="https://haoxp.xyz/">Xiangpeng Hao</a>'s summer intern project</em></p>
+<p>This blog describes our experience implementing <a href="https://arrow.apache.org/docs/format/Columnar.html#variable-size-binary-view-layout">StringView</a> in the <a href="https://github.com/apache/arrow-rs">Rust implementation</a> of <a href="https://arrow.apache.org/">Apache Arrow</a>, and integrating it into <a href="https://datafusion.apache.org/">Apache DataFusion</a>, significantly accelerating string-intensive queries in the <a href="https://benchmark.clickhouse.com/">ClickBench</a> benchmark by 20%- 200% (Figure 1[^1]).</p>
+<p>Getting significant end-to-end performance improvements was non-trivial. Implementing StringView itself was only a fraction of the effort required. Among other things, we had to optimize UTF-8 validation, implement unintuitive compiler optimizations, tune block sizes, and time GC to realize the <a href="https://www.influxdata.com/blog/flight-datafusion-arrow-parquet-fdap-architecture-influxdb/">FDAP ecosystem</a>&rsquo;s benefit. With other members of the open source community, we were able to overcome performance bottlenecks that could have killed the project. We would like to contribute by explaining the challenges and solutions in more detail so that more of the community can learn from our experience.</p>
+<p>StringView is based on a simple idea: avoid some string copies and accelerate comparisons with inlined prefixes. Like most great ideas, it is &ldquo;obvious&rdquo; only after <a href="https://db.in.tum.de/~freitag/papers/p29-neumann-cidr20.pdf">someone describes it clearly</a>. Although simple, straightforward implementation actually <em>slows down performance for almost every query</em>. We must, therefore, apply astute observations and diligent engineering to realize the actual benefits from StringView.</p>
+<p>Although this journey was successful, not all research ideas are as lucky. To accelerate the adoption of research into industry, it is valuable to integrate research prototypes with practical systems. Understanding the nuances of real-world systems makes it more likely that research designs[^2] will lead to practical system improvements.</p>
+<p>StringView support was released as part of <a href="https://crates.io/crates/arrow/52.2.0">arrow-rs v52.2.0</a> and <a href="https://crates.io/crates/datafusion/41.0.0">DataFusion v41.0.0</a>. You can try it by setting the <code>schema_force_view_types</code> <a href="https://datafusion.apache.org/user-guide/configs.html">DataFusion configuration option</a>, and we are<a href="https://github.com/apache/datafusion/issues/11682"> hard at work with the community to </a>make it the default. We invite everyone to try it out, take advantage of the effort invested so far, and contribute to making it better.</p>
+<p><img alt="End to end performance improvements for ClickBench queries" class="img-responsive" src="../images/string-view-1/figure1-performance.png" width="100%"/></p>
+<p>Figure 1: StringView improves string-intensive ClickBench query performance by 20% - 200%</p>
+<h2>What is StringView?</h2>
+<p><img alt="Diagram of using StringArray and StringViewArray to represent the same string content" class="img-responsive" src="../images/string-view-1/figure2-string-view.png" width="100%"/></p>
+<p>Figure 2: Use StringArray and StringViewArray to represent the same string content.</p>
+<p>The concept of inlined strings with prefixes (called &ldquo;German Strings&rdquo; <a href="https://x.com/andy_pavlo/status/1813258735965643203">by Andy Pavlo</a>, in homage to <a href="https://www.tum.de/">TUM</a>, where the <a href="https://db.in.tum.de/~freitag/papers/p29-neumann-cidr20.pdf">Umbra paper that describes</a> them originated) 
+has been used in many recent database systems (<a href="https://engineering.fb.com/2024/02/20/developer-tools/velox-apache-arrow-15-composable-data-management/">Velox</a>, <a href="https://pola.rs/posts/polars-string-type/">Polars</a>, <a href="https://duckdb.org/2021/12/03/duck-arrow.html">DuckDB</a>, <a href="https://cedardb.com/blog/german_strings/">CedarDB</a>, etc.) 
+and was introduced to Arrow as a new <a href="https://arrow.apache.org/docs/format/Columnar.html#variable-size-binary-view-layout">StringViewArray</a>[^3] type. Arrow&rsquo;s original <a href="https://arrow.apache.org/docs/format/Columnar.html#variable-size-binary-layout">StringArray</a> is very memory efficient but less effective for certain operations. 
+StringViewArray accelerates string-intensive operations via prefix inlining and a more flexible and compact string representation.</p>
+<p>A StringViewArray consists of three components:</p>
+<ol>
+<li>The <code><em>view</em></code> array</li>
+<li>The buffers</li>
+<li>The buffer pointers (IDs) that map buffer offsets to their physical locations</li>
+</ol>
+<p>Each <code>view</code> is 16 bytes long, and its contents differ based on the string&rsquo;s length:</p>
+<ul>
+<li>string length &lt; 12 bytes: the first four bytes store the string length, and the remaining 12 bytes store the inlined string.</li>
+<li>string length &gt; 12 bytes: the string is stored in a separate buffer. The length is again stored in the first 4 bytes, followed by the buffer id (4 bytes), the buffer offset (4 bytes), and the prefix (first 4 bytes) of the string.</li>
+</ul>
+<p>Figure 2 shows an example of the same logical content (left) using StringArray (middle) and StringViewArray (right):</p>
+<ul>
+<li>The first string &ndash; <code>"Apache DataFusion"</code> &ndash; is 17 bytes long, and both StringArray and StringViewArray store the string&rsquo;s bytes at the beginning of the buffer. The StringViewArray also inlines the first 4 bytes &ndash; <code>"Apac"</code> &ndash; in the view.</li>
+<li>The second string, <code>"InfluxDB"</code> is only 8 bytes long, so StringViewArray completely inlines the string content in the <code>view</code> struct while StringArray stores the string in the buffer as well.</li>
+<li>The third string <code>"Arrow Rust Impl"</code> is 15 bytes long and cannot be fully inlined. StringViewArray stores this in the same form as the first string.</li>
+<li>The last string <code>"Apache DataFusion"</code> has the same content as the first string. It&rsquo;s possible to use StringViewArray to avoid this duplication and reuse the bytes by pointing the view to the previous location.</li>
+</ul>
+<p>StringViewArray provides three opportunities for outperforming StringArray:</p>
+<ol>
+<li>Less copying via the offset + buffer format</li>
+<li>Faster comparisons using the inlined string prefix</li>
+<li>Reusing repeated string values with the flexible <code>view</code> layout</li>
+</ol>
+<p>The rest of this blog post discusses how to apply these opportunities in real query scenarios to improve performance, what challenges we encountered along the way, and how we solved them.</p>
+<h2>Faster Parquet Loading</h2>
+<p><a href="https://parquet.apache.org/">Apache Parquet</a> is the de facto format for storing large-scale analytical data commonly stored LakeHouse-style, such as <a href="https://iceberg.apache.org">Apache Iceberg</a> and <a href="https://delta.io">Delta Lake</a>. Efficiently loading data from Parquet is thus critical to query performance in many important real-world workloads.</p>
+<p>Parquet encodes strings (i.e., <a href="https://docs.rs/parquet/latest/parquet/data_type/struct.ByteArray.html">byte array</a>) in a slightly different format than required for the original Arrow StringArray. The string length is encoded inline with the actual string data (as shown in Figure 4 left). As mentioned previously, StringArray requires the data buffer to be continuous and compact&mdash;the strings have to follow one after another. This requirement means that reading Parquet string data into an Arrow StringArray requires copying and consolidating the string bytes to a new buffer and tracking offsets in a separate array. Copying these strings is often wasteful. Typical queries filter out most data immediately after loading, so most of the copied data is quickly discarded.</p>
+<p>On the other hand, reading Parquet data as a StringViewArray can re-use the same data buffer as storing the Parquet pages because StringViewArray does not require strings to be contiguous. For example, in Figure 4, the StringViewArray directly references the buffer with the decoded Parquet page. The string <code>"Arrow Rust Impl"</code> is represented by a <code>view</code> with offset 37 and length 15 into that buffer.</p>
+<p><img alt="Diagram showing how StringViewArray can avoid copying by reusing decoded Parquet pages." class="img-responsive" src="../images/string-view-1/figure4-copying.png" width="100%"/></p>
+<p>Figure 4: StringViewArray avoids copying by reusing decoded Parquet pages.</p>
+<p><strong>Mini benchmark</strong></p>
+<p>Reusing Parquet buffers is great in theory, but how much does saving a copy actually matter? We can run the following benchmark in arrow-rs to find out:</p>
+<p>Our benchmarking machine shows that loading <em>BinaryViewArray</em> is almost 2x faster than loading BinaryArray (see next section about why this isn&rsquo;t <em>String</em> ViewArray).</p>
+<p>You can read more on this arrow-rs issue: <a href="https://github.com/apache/arrow-rs/issues/5904">https://github.com/apache/arrow-rs/issues/5904</a></p>
+<h1>From Binary to Strings</h1>
+<p>You may wonder why we reported performance for BinaryViewArray when this post is about StringViewArray. Surprisingly, initially, our implementation to read StringViewArray from Parquet was much <em>slower</em> than StringArray. Why? TLDR: Although reading StringViewArray copied less data, the initial implementation also spent much more time validating <a href="https://en.wikipedia.org/wiki/UTF-8#:~:text=UTF%2D8%20is%20a%20variable,Unicode%20Standard">UTF-8</a> (as shown in Figure 5).</p>
+<p>Strings are stored as byte sequences. When reading data from (potentially untrusted) Parquet files, a Parquet decoder must ensure those byte sequences are valid UTF-8 strings, and most programming languages, including Rust, include highly<a href="https://doc.rust-lang.org/std/str/fn.from_utf8.html"> optimized routines</a> for doing so.</p>
+<p><img alt="Figure showing time to load strings from Parquet and the effect of optimized UTF-8 validation." class="img-responsive" src="../images/string-view-1/figure5-loading-strings.png" width="100%"/></p>
+<p>Figure 5: Time to load strings from Parquet. The UTF-8 validation advantage initially eliminates the advantage of reduced copying for StringViewArray.</p>
+<p>A StringArray can be validated in a single call to the UTF-8 validation function as it has a continuous string buffer. As long as the underlying buffer is UTF-8[^4], all strings in the array must be UTF-8. The Rust parquet reader makes a single function call to validate the entire buffer.</p>
+<p>However, validating an arbitrary StringViewArray requires validating each string with a separate call to the validation function, as the underlying buffer may also contain non-string data (for example, the lengths in Parquet pages).</p>
+<p>UTF-8 validation in Rust is highly optimized and favors longer strings (as shown in Figure 6), likely because it leverages SIMD instructions to perform parallel validation. The benefit of a single function call to validate UTF-8 over a function call for each string more than eliminates the advantage of avoiding the copy for StringViewArray.</p>
+<p><img alt="Figure showing UTF-8 validation throughput vs string length." class="img-responsive" src="../images/string-view-1/figure6-utf8-validation.png" width="100%"/></p>
+<p>Figure 6: UTF-8 validation throughput vs string length&mdash;StringArray&rsquo;s contiguous buffer can be validated much faster than StringViewArray&rsquo;s buffer.</p>
+<p>Does this mean we should only use StringArray? No! Thankfully, there&rsquo;s a clever way out. The key observation is that in many real-world datasets,<a href="https://www.vldb.org/pvldb/vol17/p148-zeng.pdf"> 99% of strings are shorter than 128 bytes</a>, meaning the encoded length values are smaller than 128, <strong>in which case the length itself is also valid UTF-8</strong> (in fact, it is <a href="https://en.wikipedia.org/wiki/ASCII">ASCII</a>).</p>
+<p>This observation means we can optimize validating UTF-8 strings in Parquet pages by treating the length bytes as part of a single large string as long as the length <em>value</em> is less than 128. Put another way, prior to this optimization, the length bytes act as string boundaries, which require a UTF-8 validation on each string. After this optimization, only those strings with lengths larger than 128 bytes (less than 1% of the strings in the ClickBench dataset) are string boundaries, significantly increasing the UTF-8 validation chunk size and thus improving performance.</p>
+<p>The <a href="https://github.com/apache/arrow-rs/pull/6009/files">actual implementation</a> is only nine lines of Rust (with 30 lines of comments). You can find more details in the related arrow-rs issue:<a href="https://github.com/apache/arrow-rs/issues/5995"> https://github.com/apache/arrow-rs/issues/5995</a>. As expected, with this optimization, loading StringViewArray is almost 2x faster than loading StringArray.</p>
+<h1>Be Careful About Implicit Copies</h1>
+<p>After all the work to avoid copying strings when loading from Parquet, performance was still not as good as expected. We tracked the problem to a few implicit data copies that we weren't aware of, as described in<a href="https://github.com/apache/arrow-rs/issues/6033"> this issue</a>.</p>
+<p>The copies we eventually identified come from the following innocent-looking line of Rust code, where <code>self.buf</code> is a <a href="https://en.wikipedia.org/wiki/Reference_counting">reference counted</a> pointer that should transform without copying into a buffer for use in StringViewArray.</p>
+<p>However, Rust-type coercion rules favored a blanket implementation that <em>did</em> copy data. This implementation is shown in the following code block where the <code>impl&lt;T: AsRef&lt;[u8]&gt;&gt;</code> will accept any type that implements <code>AsRef&lt;[u8]&gt;</code> and copies the data to create a new buffer. To avoid copying, users need to explicitly call <code>from_vec</code>, which consumes the <code>Vec</code> and transforms it into a buffer.</p>
+<p>Diagnosing this implicit copy was time-consuming as it relied on subtle Rust language semantics. We needed to track every step of the data flow to ensure every copy was necessary. To help other users and prevent future mistakes, we also <a href="https://github.com/apache/arrow-rs/pull/6043">removed</a> the implicit API from arrow-rs in favor of an explicit API. Using this approach, we found and fixed several <a href="https://github.com/apache/arrow-rs/pull/6039">other unintentional copies</a> in the code base&mdash;hopefully, the change will help other <a href="https://github.com/spiraldb/vortex/pull/504">downstream users</a> avoid unnecessary copies.</p>
+<h1>Help the Compiler by Giving it More Information</h1>
+<p>The Rust compiler&rsquo;s automatic optimizations mostly work very well for a wide variety of use cases, but sometimes, it needs additional hints to generate the most efficient code. When profiling the performance of <code>view</code> construction, we found, counterintuitively, that constructing <strong>long</strong> strings was 10x faster than constructing <strong>short</strong> strings, which made short strings slower on StringViewArray than on StringArray!</p>
+<p>As described in the first section, StringViewArray treats long and short strings differently. Short strings (&lt;12 bytes) directly inline to the <code>view</code> struct, while long strings only inline the first 4 bytes. The code to construct a <code>view</code> looks something like this:</p>
+<p>It appears that both branches of the code should be fast: they both involve copying at most 16 bytes of data and some memory shift/store operations. How could the branch for short strings be 10x slower?</p>
+<p>Looking at the assembly code using <a href="https://godbolt.org/">Compiler Explorer</a>, we (with help from <a href="https://github.com/aoli-al">Ao Li</a>) found the compiler used CPU <strong>load instructions</strong> to copy the fixed-sized 4 bytes to the <code>view</code> for long strings, but it calls a function, <a href="https://doc.rust-lang.org/std/ptr/fn.copy_nonoverlapping.html"><code>ptr::copy_non_overlapping</code></a>, to copy the inlined bytes to the <code>view</code> for short strings. The difference is that long strings have a prefix size (4 bytes) known at compile time, so the compiler directly uses efficient CPU instructions. But, since the size of the short string is unknown to the compiler, it has to call the general-purpose function <code>ptr::copy_non_coverlapping</code>. Making a function call is significant unnecessary overhead compared to a CPU copy instruction.</p>
+<p>However, we know something the compiler doesn&rsquo;t know: the short string size is not arbitrary&mdash;it must be between 0 and 12 bytes, and we can leverage this information to avoid the function call. Our solution generates 13 copies of the function using generics, one for each of the possible prefix lengths. The code looks as follows, and <a href="https://godbolt.org/z/685YPsd5G">checking the assembly code</a>, we confirmed there are no calls to <code>ptr::copy_non_overlapping</code>, and only native CPU instructions are used. For more details, see <a href="https://github.com/apache/arrow-rs/issues/6034">the ticket</a>.</p>
+<h1>End-to-End Query Performance</h1>
+<p>In the previous sections, we went out of our way to make sure loading StringViewArray is faster than StringArray. Before going further, we wanted to verify if obsessing about reducing copies and function calls has actually improved end-to-end performance in real-life queries. To do this, we evaluated a ClickBench query (Q20) in DataFusion that counts how many URLs contain the word <code>"google"</code>:</p>
+<p>This is a relatively simple query; most of the time is spent on loading the &ldquo;URL&rdquo; column to find matching rows. The query plan looks like this:</p>
+<p>We ran the benchmark in the DataFusion repo like this:</p>
+<p>With StringViewArray we saw a 24% end-to-end performance improvement, as shown in Figure 7. With the <code>--string-view</code> argument, the end-to-end query time is <code>944.3 ms, 869.6 ms, 861.9 ms</code> (three iterations). Without <code>--string-view</code>, the end-to-end query time is <code>1186.1 ms, 1126.1 ms, 1138.3 ms</code>.</p>
+<p><img alt="Figure showing StringView improves end to end performance by 24 percent." class="img-responsive" src="../images/string-view-1/figure7-end-to-end.png" width="100%"/></p>
+<p>Figure 7: StringView reduces end-to-end query time by 24% on ClickBench Q20.</p>
+<p>We also double-checked with detailed profiling and verified that the time reduction is indeed due to faster Parquet loading.</p>
+<h2>Conclusion</h2>
+<p>In this first blog post, we have described what it took to improve the
+performance of simply reading strings from Parquet files using StringView. While
+this resulted in real end-to-end query performance improvements, in our <a href="https://datafusion.apache.org/blog/2024/09/13/using-stringview-to-make-queries-faster-part-2.html">next
+post</a>, we explore additional optimizations enabled by StringView in DataFusion,
+along with some of the pitfalls we encountered while implementing them.</p>
+<h1>Footnotes</h1>
+<p>[^1]: Benchmarked with AMD Ryzen 7600x (12 core, 24 threads, 32 MiB L3), WD Black SN770 NVMe SSD (5150MB/4950MB seq RW bandwidth)</p>
+<p>[^2]: Xiangpeng is a PhD student at the University of Wisconsin-Madison</p>
+<p>[^3]: There is also a corresponding <em>BinaryViewArray</em> which is similar except that the data is not constrained to be UTF-8 encoded strings.</p>
+<p>[^4]: We also make sure that offsets do not break a UTF-8 code point, which is <a href="https://github.com/apache/arrow-rs/blob/master/parquet/src/arrow/buffer/offset_buffer.rs#L62-L71">cheaply validated</a>.</p>
+        </div>
+      </div>
+    </div>    
+    <!-- footer -->
+    <div class="row">
+      <div class="large-12 medium-12 columns">
+        <p style="font-style: italic; font-size: 0.8rem; text-align: center;">
+          Copyright 2024, <a href="https://www.apache.org/">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a>.<br/>
+          Apache&reg; and the Apache feather logo are trademarks of The Apache Software Foundation.
+        </p>
+      </div>
+    </div>
+    <script src="/js/bootstrap.bundle.min.js"></script>  </main>
+  </body>
+</html>

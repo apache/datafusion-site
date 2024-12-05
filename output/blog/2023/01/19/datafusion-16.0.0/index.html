@@ -1,0 +1,277 @@
+<!doctype html>
+<html class="no-js" lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apache Arrow DataFusion 16.0.0 Project Update - Apache DataFusion Blog</title>
+<link href="/css/bootstrap.min.css" rel="stylesheet">
+<link href="/css/fontawesome.all.min.css" rel="stylesheet">
+<link href="/css/headerlink.css" rel="stylesheet">
+<link href="/highlight/default.min.css" rel="stylesheet">
+<script src="/highlight/highlight.js"></script>
+<script>hljs.highlightAll();</script>  </head>
+  <body class="d-flex flex-column h-100">
+  <main class="flex-shrink-0">
+<!-- nav bar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark" aria-label="Fifth navbar example">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/"><img src="/images/logo_original4x.png" style="height: 32px;"/> Apache DataFusion Blog</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarADP" aria-controls="navbarADP" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarADP">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link" href="/about.html">About</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/feed.xml">RSS</a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>    
+
+
+<!-- page contents -->
+<div id="contents">
+    <div class="bg-white p-5 rounded">
+        <div class="col-sm-8 mx-auto">
+          <h1>
+              Apache Arrow DataFusion 16.0.0 Project Update
+          </h1>
+              <p>Posted on: Thu 19 January 2023 by pmc</p>
+              <!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+-->
+<h1>Introduction</h1>
+<p><a href="https://arrow.apache.org/datafusion/">DataFusion</a> is an extensible
+query execution framework, written in <a href="https://www.rust-lang.org/">Rust</a>,
+that uses <a href="https://arrow.apache.org">Apache Arrow</a> as its
+in-memory format. It is targeted primarily at developers creating data
+intensive analytics, and offers mature
+<a href="https://arrow.apache.org/datafusion/user-guide/sql/index.html">SQL support</a>,
+a DataFrame API, and many extension points.</p>
+<p>Systems based on DataFusion perform very well in benchmarks,
+especially considering they operate directly on parquet files rather
+than first loading into a specialized format.  Some recent highlights
+include <a href="https://benchmark.clickhouse.com/">clickbench</a> and the
+<a href="https://www.cloudfuse.io/dashboards/standalone-engines">Cloudfuse.io standalone query
+engines</a> page.</p>
+<p>DataFusion is also part of a longer term trend, articulated clearly by
+<a href="http://www.cs.cmu.edu/~pavlo/">Andy Pavlo</a> in his <a href="https://ottertune.com/blog/2022-databases-retrospective/">2022 Databases
+Retrospective</a>.
+Database frameworks are proliferating and it is likely that all OLAP
+DBMSs and other data heavy applications, such as machine learning,
+will <strong>require</strong> a vectorized, highly performant query engine in the next
+5 years to remain relevant.  The only practical way to make such
+technology so widely available without many millions of dollars of
+investment is though open source engine such as DataFusion or
+<a href="https://github.com/facebookincubator/velox">Velox</a>.</p>
+<p>The rest of this post describes the improvements made to DataFusion
+over the last three months and some hints of where we are heading.</p>
+<h2>Community Growth</h2>
+<p>We again saw significant growth in the DataFusion community since <a href="https://arrow.apache.org/blog/2022/10/25/datafusion-13.0.0/">our last update</a>. There are some interesting metrics on <a href="https://ossrank.com/p/1573-apache-arrow-datafusion">OSSRank</a>.</p>
+<p>The DataFusion 16.0.0 release consists of 543 PRs from 73 distinct contributors, not including all the work that goes into dependencies such as <a href="https://crates.io/crates/arrow">arrow</a>, <a href="https://crates.io/crates/parquet">parquet</a>, and <a href="https://crates.io/crates/object_store">object_store</a>, that much of the same community helps support. Thank you all for your help</p>
+<!--
+$ git log --pretty=oneline 13.0.0..16.0.0 . | wc -l
+     543
+
+$ git shortlog -sn 13.0.0..16.0.0 . | wc -l
+      73
+-->
+<p>Several <a href="https://github.com/apache/arrow-datafusion#known-uses">new systems based on DataFusion</a> were recently added:</p>
+<ul>
+<li><a href="https://github.com/GreptimeTeam/greptimedb">Greptime DB</a></li>
+<li><a href="https://synnada.ai/">Synnada</a></li>
+<li><a href="https://github.com/PRQL/prql-query">PRQL</a></li>
+<li><a href="https://github.com/parseablehq/parseable">Parseable</a></li>
+<li><a href="https://github.com/splitgraph/seafowl">SeaFowl</a></li>
+</ul>
+<h2>Performance 🚀</h2>
+<p>Performance and efficiency are core values for
+DataFusion. While there is still a gap between DataFusion and the best of
+breed, tightly integrated systems such as <a href="https://duckdb.org">DuckDB</a>
+and <a href="https://www.pola.rs/">Polars</a>, DataFusion is
+closing the gap quickly. Performance highlights from the last three
+months:</p>
+<ul>
+<li>Up to 30% Faster Sorting and Merging using the new <a href="https://arrow.apache.org/blog/2022/11/07/multi-column-sorts-in-arrow-rust-part-1/">Row Format</a></li>
+<li><a href="https://arrow.apache.org/blog/2022/12/26/querying-parquet-with-millisecond-latency/">Advanced predicate pushdown</a>, directly on parquet, directly from object storage, enabling sub millisecond filtering. <!-- Andrew nots: we should really get this turned on by default --></li>
+<li><code>70%</code> faster <code>IN</code> expressions evaluation (<a href="https://github.com/apache/arrow-datafusion/issues/4057">#4057</a>)</li>
+<li>Sort and partition aware optimizations (<a href="https://github.com/apache/arrow-datafusion/issues/3969">#3969</a> and  <a href="https://github.com/apache/arrow-datafusion/issues/4691">#4691</a>)</li>
+<li>Filter selectivity analysis (<a href="https://github.com/apache/arrow-datafusion/issues/3868">#3868</a>)</li>
+</ul>
+<h2>Runtime Resource Limits</h2>
+<p>Previously, DataFusion could potentially use unbounded amounts of memory for certain queries that included Sorts, Grouping or Joins.</p>
+<p>In version 16.0.0, it is possible to limit DataFusion's memory usage for Sorting and Grouping. We are looking for help adding similar limiting for Joins as well as expanding our algorithms to optionally spill to secondary storage. See <a href="https://github.com/apache/arrow-datafusion/issues/3941">#3941</a> for more detail.</p>
+<h2>SQL Window Functions</h2>
+<p><a href="https://en.wikipedia.org/wiki/Window_function_(SQL)">SQL Window Functions</a> are useful for a variety of analysis and DataFusion's implementation support expanded significantly:</p>
+<ul>
+<li>Custom window frames such as <code>... OVER (ORDER BY ... RANGE BETWEEN 0.2 PRECEDING AND 0.2 FOLLOWING)</code></li>
+<li>Unbounded window frames such as <code>... OVER (ORDER BY ... RANGE UNBOUNDED ROWS PRECEDING)</code></li>
+<li>Support for the <code>NTILE</code> window function (<a href="https://github.com/apache/arrow-datafusion/issues/4676">#4676</a>)</li>
+<li>Support for <code>GROUPS</code> mode (<a href="https://github.com/apache/arrow-datafusion/issues/4155">#4155</a>)</li>
+</ul>
+<h1>Improved Joins</h1>
+<p>Joins are often the most complicated operations to handle well in
+analytics systems and DataFusion 16.0.0 offers significant improvements
+such as</p>
+<ul>
+<li>Cost based optimizer (CBO) automatically reorders join evaluations, selects algorithms (Merge / Hash), and pick build side based on available statistics and join type (<code>INNER</code>, <code>LEFT</code>, etc) (<a href="https://github.com/apache/arrow-datafusion/issues/4219">#4219</a>)</li>
+<li>Fast non <code>column=column</code> equijoins such as <code>JOIN ON a.x + 5 = b.y</code></li>
+<li>Better performance on non-equijoins (<a href="https://github.com/apache/arrow-datafusion/issues/4562">#4562</a>) <!-- TODO is this a good thing to mention as any time this is usd the query is going to go slow or the data size is small --></li>
+</ul>
+<h1>Streaming Execution</h1>
+<p>One emerging use case for Datafusion is as a foundation for
+streaming-first data platforms. An important prerequisite
+is support for incremental execution for queries that can be computed
+incrementally.</p>
+<p>With this release, DataFusion now supports the following streaming features:</p>
+<ul>
+<li>Data ingestion from infinite files such as FIFOs (<a href="https://github.com/apache/arrow-datafusion/issues/4694">#4694</a>),</li>
+<li>Detection of pipeline-breaking queries in streaming use cases (<a href="https://github.com/apache/arrow-datafusion/issues/4694">#4694</a>),</li>
+<li>Automatic input swapping for joins so probe side is a data stream (<a href="https://github.com/apache/arrow-datafusion/issues/4694">#4694</a>),</li>
+<li>Intelligent elision of pipeline-breaking sort operations whenever possible (<a href="https://github.com/apache/arrow-datafusion/issues/4691">#4691</a>),</li>
+<li>Incremental execution for more types of queries; e.g. queries involving finite window frames (<a href="https://github.com/apache/arrow-datafusion/issues/4777">#4777</a>).</li>
+</ul>
+<p>These are a major steps forward, and we plan even more improvements over the next few releases.</p>
+<h1>Better Support for Distributed Catalogs</h1>
+<p>16.0.0 has been enhanced support for asynchronous catalogs (<a href="https://github.com/apache/arrow-datafusion/issues/4607">#4607</a>)
+to better support distributed metadata stores such as
+<a href="https://delta.io/">Delta.io</a> and <a href="https://iceberg.apache.org/">Apache
+Iceberg</a> which require asynchronous I/O
+during planning to access remote catalogs. Previously, DataFusion
+required synchronous access to all relevant catalog information.</p>
+<h1>Additional SQL Support</h1>
+<p>SQL support continues to improve, including some of these highlights:</p>
+<ul>
+<li>Add TPC-DS query planning regression tests <a href="https://github.com/apache/arrow-datafusion/issues/4719">#4719</a></li>
+<li>Support for <code>PREPARE</code> statement <a href="https://github.com/apache/arrow-datafusion/issues/4490">#4490</a></li>
+<li>Automatic coercions ast between Date and Timestamp <a href="https://github.com/apache/arrow-datafusion/issues/4726">#4726</a></li>
+<li>Support type coercion for timestamp and utf8 <a href="https://github.com/apache/arrow-datafusion/issues/4312">#4312</a></li>
+<li>Full support for time32 and time64 literal values (<code>ScalarValue</code>) <a href="https://github.com/apache/arrow-datafusion/issues/4156">#4156</a></li>
+<li>New functions, incuding <code>uuid()</code> <a href="https://github.com/apache/arrow-datafusion/issues/4041">#4041</a>, <code>current_time</code> <a href="https://github.com/apache/arrow-datafusion/issues/4054">#4054</a>, <code>current_date</code> <a href="https://github.com/apache/arrow-datafusion/issues/4022">#4022</a></li>
+<li>Compressed CSV/JSON support <a href="https://github.com/apache/arrow-datafusion/issues/3642">#3642</a></li>
+</ul>
+<p>The community has also invested in new <a href="https://github.com/apache/arrow-datafusion/blob/master/datafusion/core/tests/sqllogictests/README.md">sqllogic based</a> tests to keep improving DataFusion's quality with less effort.</p>
+<h1>Plan Serialization and Substrait</h1>
+<p>DataFusion now supports serialization of physical plans, with a custom protocol buffers format. In addition, we are adding initial support for <a href="https://substrait.io/">Substrait</a>, a Cross-Language Serialization for Relational Algebra</p>
+<h1>How to Get Involved</h1>
+<p>Kudos to everyone in the community who contributed ideas, discussions, bug reports, documentation and code. It is exciting to be building something so cool together!</p>
+<p>If you are interested in contributing to DataFusion, we would love to
+have you join us. You can try out DataFusion on some of your own
+data and projects and let us know how it goes or contribute a PR with
+documentation, tests or code. A list of open issues suitable for
+beginners is
+<a href="https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22">here</a>.</p>
+<p>Check out our <a href="https://arrow.apache.org/datafusion/community/communication.html">Communication Doc</a> on more
+ways to engage with the community.</p>
+<h2>Appendix: Contributor Shoutout</h2>
+<p>Here is a list of people who have contributed PRs to this project over the last three releases, derived from <code>git shortlog -sn 13.0.0..16.0.0 .</code> Thank you all!</p>
+<div class="codehilite"><pre><span></span><code><span class="w">   </span><span class="mi">113</span><span class="w">  </span><span class="n">Andrew</span><span class="w"> </span><span class="n">Lamb</span><span class="w"></span>
+<span class="w">    </span><span class="mi">58</span><span class="w">  </span><span class="n">jakevin</span><span class="w"></span>
+<span class="w">    </span><span class="mi">46</span><span class="w">  </span><span class="n">Raphael</span><span class="w"> </span><span class="n">Taylor</span><span class="o">-</span><span class="n">Davies</span><span class="w"></span>
+<span class="w">    </span><span class="mi">30</span><span class="w">  </span><span class="n">Andy</span><span class="w"> </span><span class="n">Grove</span><span class="w"></span>
+<span class="w">    </span><span class="mi">19</span><span class="w">  </span><span class="n">Batuhan</span><span class="w"> </span><span class="n">Taskaya</span><span class="w"></span>
+<span class="w">    </span><span class="mi">19</span><span class="w">  </span><span class="n">Remzi</span><span class="w"> </span><span class="n">Yang</span><span class="w"></span>
+<span class="w">    </span><span class="mi">17</span><span class="w">  </span><span class="n">ygf11</span><span class="w"></span>
+<span class="w">    </span><span class="mi">16</span><span class="w">  </span><span class="n">Burak</span><span class="w"></span>
+<span class="w">    </span><span class="mi">16</span><span class="w">  </span><span class="n">Jeffrey</span><span class="w"></span>
+<span class="w">    </span><span class="mi">16</span><span class="w">  </span><span class="n">Marco</span><span class="w"> </span><span class="n">Neumann</span><span class="w"></span>
+<span class="w">    </span><span class="mi">14</span><span class="w">  </span><span class="n">Kun</span><span class="w"> </span><span class="n">Liu</span><span class="w"></span>
+<span class="w">    </span><span class="mi">12</span><span class="w">  </span><span class="n">Yang</span><span class="w"> </span><span class="n">Jiang</span><span class="w"></span>
+<span class="w">    </span><span class="mi">10</span><span class="w">  </span><span class="n">mingmwang</span><span class="w"></span>
+<span class="w">     </span><span class="mi">9</span><span class="w">  </span><span class="n">Dani&euml;l</span><span class="w"> </span><span class="n">Heres</span><span class="w"></span>
+<span class="w">     </span><span class="mi">9</span><span class="w">  </span><span class="n">Mustafa</span><span class="w"> </span><span class="n">akur</span><span class="w"></span>
+<span class="w">     </span><span class="mi">9</span><span class="w">  </span><span class="n">comphead</span><span class="w"></span>
+<span class="w">     </span><span class="mi">9</span><span class="w">  </span><span class="n">mvanschellebeeck</span><span class="w"></span>
+<span class="w">     </span><span class="mi">9</span><span class="w">  </span><span class="n">xudong</span><span class="p">.</span><span class="n">w</span><span class="w"></span>
+<span class="w">     </span><span class="mi">7</span><span class="w">  </span><span class="n">dependabot</span><span class="o">[</span><span class="n">bot</span><span class="o">]</span><span class="w"></span>
+<span class="w">     </span><span class="mi">7</span><span class="w">  </span><span class="n">yahoNanJing</span><span class="w"></span>
+<span class="w">     </span><span class="mi">6</span><span class="w">  </span><span class="n">Brent</span><span class="w"> </span><span class="n">Gardner</span><span class="w"></span>
+<span class="w">     </span><span class="mi">5</span><span class="w">  </span><span class="n">AssHero</span><span class="w"></span>
+<span class="w">     </span><span class="mi">4</span><span class="w">  </span><span class="n">Jiayu</span><span class="w"> </span><span class="n">Liu</span><span class="w"></span>
+<span class="w">     </span><span class="mi">4</span><span class="w">  </span><span class="n">Wei</span><span class="o">-</span><span class="n">Ting</span><span class="w"> </span><span class="n">Kuo</span><span class="w"></span>
+<span class="w">     </span><span class="mi">4</span><span class="w">  </span><span class="n">askoa</span><span class="w"></span>
+<span class="w">     </span><span class="mi">3</span><span class="w">  </span><span class="n">Andr&eacute;</span><span class="w"> </span><span class="n">Calado</span><span class="w"> </span><span class="n">Coroado</span><span class="w"></span>
+<span class="w">     </span><span class="mi">3</span><span class="w">  </span><span class="n">Jie</span><span class="w"> </span><span class="n">Han</span><span class="w"></span>
+<span class="w">     </span><span class="mi">3</span><span class="w">  </span><span class="n">Jon</span><span class="w"> </span><span class="n">Mease</span><span class="w"></span>
+<span class="w">     </span><span class="mi">3</span><span class="w">  </span><span class="n">Metehan</span><span class="w"> </span><span class="n">Y&inodot;ld&inodot;r&inodot;m</span><span class="w"></span>
+<span class="w">     </span><span class="mi">3</span><span class="w">  </span><span class="n">Nga</span><span class="w"> </span><span class="k">Tran</span><span class="w"></span>
+<span class="w">     </span><span class="mi">3</span><span class="w">  </span><span class="n">Ruihang</span><span class="w"> </span><span class="n">Xia</span><span class="w"></span>
+<span class="w">     </span><span class="mi">3</span><span class="w">  </span><span class="n">baishen</span><span class="w"></span>
+<span class="w">     </span><span class="mi">2</span><span class="w">  </span><span class="n">Berkay</span><span class="w"> </span><span class="n">&Scedil;ahin</span><span class="w"></span>
+<span class="w">     </span><span class="mi">2</span><span class="w">  </span><span class="n">Dan</span><span class="w"> </span><span class="n">Harris</span><span class="w"></span>
+<span class="w">     </span><span class="mi">2</span><span class="w">  </span><span class="n">Dongyan</span><span class="w"> </span><span class="n">Zhou</span><span class="w"></span>
+<span class="w">     </span><span class="mi">2</span><span class="w">  </span><span class="n">Eduard</span><span class="w"> </span><span class="n">Karacharov</span><span class="w"></span>
+<span class="w">     </span><span class="mi">2</span><span class="w">  </span><span class="n">Kikkon</span><span class="w"></span>
+<span class="w">     </span><span class="mi">2</span><span class="w">  </span><span class="n">Liang</span><span class="o">-</span><span class="n">Chi</span><span class="w"> </span><span class="n">Hsieh</span><span class="w"></span>
+<span class="w">     </span><span class="mi">2</span><span class="w">  </span><span class="n">Marko</span><span class="w"> </span><span class="n">Milenkovi&cacute;</span><span class="w"></span>
+<span class="w">     </span><span class="mi">2</span><span class="w">  </span><span class="n">Martin</span><span class="w"> </span><span class="n">Grigorov</span><span class="w"></span>
+<span class="w">     </span><span class="mi">2</span><span class="w">  </span><span class="n">Roman</span><span class="w"> </span><span class="n">Nozdrin</span><span class="w"></span>
+<span class="w">     </span><span class="mi">2</span><span class="w">  </span><span class="n">Tim</span><span class="w"> </span><span class="n">Van</span><span class="w"> </span><span class="n">Wassenhove</span><span class="w"></span>
+<span class="w">     </span><span class="mi">2</span><span class="w">  </span><span class="n">r</span><span class="mf">.4</span><span class="n">ntix</span><span class="w"></span>
+<span class="w">     </span><span class="mi">2</span><span class="w">  </span><span class="n">unconsolable</span><span class="w"></span>
+<span class="w">     </span><span class="mi">2</span><span class="w">  </span><span class="n">unvalley</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">Ajaya</span><span class="w"> </span><span class="n">Agrawal</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">Alexander</span><span class="w"> </span><span class="n">Spies</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">ArkashaJavelin</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">Artjoms</span><span class="w"> </span><span class="n">Iskovs</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">BoredPerson</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">Christian</span><span class="w"> </span><span class="n">Salvati</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">Creampanda</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="k">Data</span><span class="w"> </span><span class="n">Psycho</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">Francis</span><span class="w"> </span><span class="n">Du</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">Francis</span><span class="w"> </span><span class="n">Le</span><span class="w"> </span><span class="n">Roy</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">LFC</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">Marko</span><span class="w"> </span><span class="n">Grujic</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">Matt</span><span class="w"> </span><span class="n">Willian</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">Matthijs</span><span class="w"> </span><span class="n">Brobbel</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="nf">Max</span><span class="w"> </span><span class="n">Burke</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">Mehmet</span><span class="w"> </span><span class="n">Ozan</span><span class="w"> </span><span class="n">Kabak</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">Rito</span><span class="w"> </span><span class="n">Takeuchi</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">Roman</span><span class="w"> </span><span class="n">Zeyde</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">Vrishabh</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">Zhang</span><span class="w"> </span><span class="n">Li</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">ZuoTiJia</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">byteink</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">cfraz89</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">nbr</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">xxchan</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">yujie</span><span class="p">.</span><span class="n">zhang</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">zembunia</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">哇呜哇呜呀咦耶</span><span class="w"></span>
+</code></pre></div>
+        </div>
+      </div>
+    </div>    
+    <!-- footer -->
+    <div class="row">
+      <div class="large-12 medium-12 columns">
+        <p style="font-style: italic; font-size: 0.8rem; text-align: center;">
+          Copyright 2024, <a href="https://www.apache.org/">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a>.<br/>
+          Apache&reg; and the Apache feather logo are trademarks of The Apache Software Foundation.
+        </p>
+      </div>
+    </div>
+    <script src="/js/bootstrap.bundle.min.js"></script>  </main>
+  </body>
+</html>

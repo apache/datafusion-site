@@ -1,0 +1,210 @@
+<!doctype html>
+<html class="no-js" lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apache DataFusion Python 40.1.0 Released, Significant usability updates - Apache DataFusion Blog</title>
+<link href="/css/bootstrap.min.css" rel="stylesheet">
+<link href="/css/fontawesome.all.min.css" rel="stylesheet">
+<link href="/css/headerlink.css" rel="stylesheet">
+<link href="/highlight/default.min.css" rel="stylesheet">
+<script src="/highlight/highlight.js"></script>
+<script>hljs.highlightAll();</script>  </head>
+  <body class="d-flex flex-column h-100">
+  <main class="flex-shrink-0">
+<!-- nav bar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark" aria-label="Fifth navbar example">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/"><img src="/images/logo_original4x.png" style="height: 32px;"/> Apache DataFusion Blog</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarADP" aria-controls="navbarADP" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarADP">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link" href="/about.html">About</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/feed.xml">RSS</a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>    
+
+
+<!-- page contents -->
+<div id="contents">
+    <div class="bg-white p-5 rounded">
+        <div class="col-sm-8 mx-auto">
+          <h1>
+              Apache DataFusion Python 40.1.0 Released, Significant usability updates
+          </h1>
+              <p>Posted on: Tue 20 August 2024 by timsaucer</p>
+              <!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+-->
+<h2>Introduction</h2>
+<p>We are happy to announce that <a href="https://pypi.org/project/datafusion/40.1.0/">DataFusion in Python 40.1.0</a> has been released. In addition to
+bringing in all of the new features of the core <a href="https://datafusion.apache.org/blog/2024/07/24/datafusion-40.0.0/">DataFusion 40.0.0</a> package, this release
+contains <em>significant</em> updates to the user interface and documentation. We listened to the python
+user community to create a more <em>pythonic</em> experience. If you have not used the python interface to
+DataFusion before, this is an excellent time to give it a try!</p>
+<h2>Background</h2>
+<p>Until now, the python bindings for DataFusion have primarily been a thin layer to expose the
+underlying Rust functionality. This has been worked well for early adopters to use DataFusion
+within their Python projects, but some users have found it difficult to work with. As compared to
+other DataFrame libraries, these issues were raised:</p>
+<ol>
+<li>Most of the functions had little or no documentation. Users often had to refer to the Rust
+documentation or code to learn how to use DataFusion. This alienated some python users.</li>
+<li>Users could not take advantage of modern IDE features such as type hinting. These are valuable
+tools for rapid testing and development.</li>
+<li>Some of the interfaces felt &ldquo;clunky&rdquo; to users since some Python concepts do not always map well
+to their Rust counterparts.</li>
+</ol>
+<p>This release aims to bring a better user experience to the DataFusion Python community.</p>
+<h2>What's Changed</h2>
+<p>The most significant difference is that we have added wrapper functions and classes for most of the
+user facing interface. These wrappers, written in Python, contain both documentation and type
+annotations.</p>
+<p>This documenation is now available on the <a href="https://datafusion.apache.org/python/autoapi/datafusion/index.html">DataFusion in Python API</a> website. There you can browse
+the available functions and classes to see the breadth of available functionality.</p>
+<p>Modern IDEs use language servers such as
+<a href="https://marketplace.visualstudio.com/items?itemName=ms-python.vscode-pylance">Pylance</a> or
+<a href="https://jedi.readthedocs.io/en/latest/">Jedi</a> to perform analysis of python code, provide useful
+hints, and identify usage errors. These are major tools in the python user community. With this
+release, users can fully use these tools in their workflow.</p>
+<figure style="text-align: center;">
+<img alt="Fig 1: Enhanced tooltips in an IDE." class="img-responsive" src="../images/python-datafusion-40.0.0/vscode_hover_tooltip.png" width="100%"/>
+<figcaption>
+<b>Figure 1</b>: With the enhanced python wrappers, users can see helpful tool tips with
+   type annotations directly in modern IDEs.
+</figcaption>
+</figure>
+<p>By having the type annotations, these IDEs can also identify quickly when a user has incorrectly
+used a function's arguments as shown in Figure 2.</p>
+<figure style="text-align: center;">
+<img alt="Fig 2: Error checking in static analysis" class="img-responsive" src="../images/python-datafusion-40.0.0/pylance_error_checking.png" width="100%"/>
+<figcaption>
+<b>Figure 2</b>: Modern Python language servers can perform static analysis and quickly find
+   errors in the arguments to functions.
+</figcaption>
+</figure>
+<p>In addition to these wrapper libraries, we have enhancements to some of the functions to feel more
+easy to use.</p>
+<h3>Improved DataFrame filter arguments</h3>
+<p>You can now apply multiple <code>filter</code> statements in a single step. When using <code>DataFrame.filter</code> you
+can pass in multiple arguments, separated by a comma. These will act as a logical <code>AND</code> of all of
+the filter arguments. The following two statements are equivalent:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">df</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">col</span><span class="p">(</span><span class="s2">"size"</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">col</span><span class="p">(</span><span class="s2">"max_size"</span><span class="p">))</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">col</span><span class="p">(</span><span class="s2">"color"</span><span class="p">)</span> <span class="o">==</span> <span class="n">lit</span><span class="p">(</span><span class="s2">"green"</span><span class="p">))</span>
+<span class="n">df</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">col</span><span class="p">(</span><span class="s2">"size"</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">col</span><span class="p">(</span><span class="s2">"max_size"</span><span class="p">),</span> <span class="n">col</span><span class="p">(</span><span class="s2">"color"</span><span class="p">)</span> <span class="o">==</span> <span class="n">lit</span><span class="p">(</span><span class="s2">"green"</span><span class="p">))</span>
+</code></pre></div>
+<h3>Comparison against literal values</h3>
+<p>It is very common to write DataFrame operations that compare an expression to some fixed value.
+For example, filtering a DataFrame might have an operation such as <code>df.filter(col("size") &lt; lit(16))</code>.
+To make these common operations more ergonomic, you can now simply use <code>df.filter(col("size") &lt; 16)</code>.</p>
+<p>For the right hand side of the comparison operator, you can now use any Python value that can be
+coerced into a <code>Literal</code>. This gives an easy to ready expression. For example, consider these few
+lines from one of the
+<a href="https://github.com/apache/datafusion-python/tree/main/examples/tpch">TPC-H examples</a> provided in
+the DataFusion Python repository.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">df</span> <span class="o">=</span> <span class="p">(</span>
+    <span class="n">df_lineitem</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">col</span><span class="p">(</span><span class="s2">"l_shipdate"</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="n">lit</span><span class="p">(</span><span class="n">date</span><span class="p">))</span>
+    <span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">col</span><span class="p">(</span><span class="s2">"l_discount"</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="n">lit</span><span class="p">(</span><span class="n">DISCOUNT</span><span class="p">)</span> <span class="o">-</span> <span class="n">lit</span><span class="p">(</span><span class="n">DELTA</span><span class="p">))</span>
+    <span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">col</span><span class="p">(</span><span class="s2">"l_discount"</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="n">lit</span><span class="p">(</span><span class="n">DISCOUNT</span><span class="p">)</span> <span class="o">+</span> <span class="n">lit</span><span class="p">(</span><span class="n">DELTA</span><span class="p">))</span>
+    <span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">col</span><span class="p">(</span><span class="s2">"l_quantity"</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">lit</span><span class="p">(</span><span class="n">QUANTITY</span><span class="p">))</span>
+<span class="p">)</span>
+</code></pre></div>
+<p>The above code mirrors closely how these filters would need to be applied in rust. With this new
+release, the user can simplify these lines. Also shown in the example below is that <code>filter()</code>
+now accepts a variable number of arguments and filters on all such arguments (boolean AND).</p>
+<div class="codehilite"><pre><span></span><code><span class="n">df</span> <span class="o">=</span> <span class="n">df_lineitem</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span>
+    <span class="n">col</span><span class="p">(</span><span class="s2">"l_shipdate"</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="n">date</span><span class="p">,</span>
+    <span class="n">col</span><span class="p">(</span><span class="s2">"l_discount"</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="n">DISCOUNT</span> <span class="o">-</span> <span class="n">DELTA</span><span class="p">,</span>
+    <span class="n">col</span><span class="p">(</span><span class="s2">"l_discount"</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="n">DISCOUNT</span> <span class="o">+</span> <span class="n">DELTA</span><span class="p">,</span>
+    <span class="n">col</span><span class="p">(</span><span class="s2">"l_quantity"</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">QUANTITY</span><span class="p">,</span>
+<span class="p">)</span>
+</code></pre></div>
+<h3>Select columns by name</h3>
+<p>It is very common for users to perform <code>DataFrame</code> selection where they simply want a column. For
+this we have had the function <code>select_columns("a", "b")</code> or the user could perform
+<code>select(col("a"), col("b"))</code>. In the new release, we accept either full expressions in <code>select()</code>
+or strings of the column names. You can mix these as well.</p>
+<p>Where before you may have to do an operation like</p>
+<div class="codehilite"><pre><span></span><code><span class="n">df_subset</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">col</span><span class="p">(</span><span class="s2">"a"</span><span class="p">),</span> <span class="n">col</span><span class="p">(</span><span class="s2">"b"</span><span class="p">),</span> <span class="n">f</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">col</span><span class="p">(</span><span class="s2">"c"</span><span class="p">)))</span>
+</code></pre></div>
+<p>You can now simplify this to</p>
+<div class="codehilite"><pre><span></span><code><span class="n">df_subset</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="s2">"a"</span><span class="p">,</span> <span class="s2">"b"</span><span class="p">,</span> <span class="n">f</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">col</span><span class="p">(</span><span class="s2">"c"</span><span class="p">)))</span>
+</code></pre></div>
+<h3>Creating named structs</h3>
+<p>Creating a <code>struct</code> with named fields was previously difficult to use and allowed for potential
+user errors when specifying the name of each field. Now we have a cleaner interface where the
+user passes a list of tuples containing the name of the field and the expression to create.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">df</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">named_struct</span><span class="p">([</span>
+  <span class="p">(</span><span class="s2">"a"</span><span class="p">,</span> <span class="n">col</span><span class="p">(</span><span class="s2">"a"</span><span class="p">)),</span>
+  <span class="p">(</span><span class="s2">"b"</span><span class="p">,</span> <span class="n">col</span><span class="p">(</span><span class="s2">"b"</span><span class="p">))</span>
+<span class="p">]))</span>
+</code></pre></div>
+<h2>Next Steps</h2>
+<p>While most of the user facing classes and functions have been exposed, there are a few that require
+exposure. Namely the classes in <code>datafusion.object_store</code> and the logical plans used by
+<code>datafusion.substrait</code>. The team is working on
+<a href="https://github.com/apache/datafusion-python/issues/767">these issues</a>.</p>
+<p>Additionally, in the next release of DataFusion there have been improvements made to the user-defined
+aggregate and window functions to make them easier to use. We plan on
+<a href="https://github.com/apache/datafusion-python/issues/780">bringing these enhancements</a> to this project.</p>
+<h2>Thank You</h2>
+<p>We would like to thank the following members for their very helpful discussions regarding these
+updates: <a href="https://github.com/andygrove">@andygrove</a>, <a href="https://github.com/max-muoto">@max-muoto</a>, <a href="https://github.com/slyons">@slyons</a>, <a href="https://github.com/Throne3d">@Throne3d</a>, <a href="https://github.com/Michael-J-Ward">@Michael-J-Ward</a>, <a href="https://github.com/datapythonista">@datapythonista</a>,
+<a href="https://github.com/austin362667">@austin362667</a>, <a href="https://github.com/kylebarron">@kylebarron</a>, <a href="https://github.com/simicd">@simicd</a>. The <a href="https://github.com/apache/datafusion-python/pull/750">primary PR (#750)</a> that includes these updates
+had an extensive conversation, leading to a significantly improved end product. Again, thank you
+to all who provided input!</p>
+<p>We would like to give an special thank you to <a href="https://github.com/3ok">@3ok</a> who created the initial version of the wrapper
+definitions. The work they did was time consuming and required exceptional attention to detail. It
+provided enormous value to starting this project. Thank you!</p>
+<h2>Get Involved</h2>
+<p>The DataFusion Python team is an active and engaging community and we would love
+to have you join us and help the project.</p>
+<p>Here are some ways to get involved:</p>
+<ul>
+<li>
+<p>Learn more by visiting the <a href="https://datafusion.apache.org/python/index.html">DataFusion Python project</a>
+page.</p>
+</li>
+<li>
+<p>Try out the project and provide feedback, file issues, and contribute code.</p>
+</li>
+</ul>
+        </div>
+      </div>
+    </div>    
+    <!-- footer -->
+    <div class="row">
+      <div class="large-12 medium-12 columns">
+        <p style="font-style: italic; font-size: 0.8rem; text-align: center;">
+          Copyright 2024, <a href="https://www.apache.org/">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a>.<br/>
+          Apache&reg; and the Apache feather logo are trademarks of The Apache Software Foundation.
+        </p>
+      </div>
+    </div>
+    <script src="/js/bootstrap.bundle.min.js"></script>  </main>
+  </body>
+</html>

@@ -1,0 +1,263 @@
+<!doctype html>
+<html class="no-js" lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apache DataFusion is now the fastest single node engine for querying Apache Parquet files - Apache DataFusion Blog</title>
+<link href="/css/bootstrap.min.css" rel="stylesheet">
+<link href="/css/fontawesome.all.min.css" rel="stylesheet">
+<link href="/css/headerlink.css" rel="stylesheet">
+<link href="/highlight/default.min.css" rel="stylesheet">
+<script src="/highlight/highlight.js"></script>
+<script>hljs.highlightAll();</script>  </head>
+  <body class="d-flex flex-column h-100">
+  <main class="flex-shrink-0">
+<!-- nav bar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark" aria-label="Fifth navbar example">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/"><img src="/images/logo_original4x.png" style="height: 32px;"/> Apache DataFusion Blog</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarADP" aria-controls="navbarADP" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarADP">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link" href="/about.html">About</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/feed.xml">RSS</a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>    
+
+
+<!-- page contents -->
+<div id="contents">
+    <div class="bg-white p-5 rounded">
+        <div class="col-sm-8 mx-auto">
+          <h1>
+              Apache DataFusion is now the fastest single node engine for querying Apache Parquet files
+          </h1>
+              <p>Posted on: Mon 18 November 2024 by Andrew Lamb, Staff Engineer at InfluxData</p>
+              <!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+-->
+<p>I am extremely excited to announce that <a href="https://crates.io/crates/datafusion">Apache DataFusion</a>  is the
+fastest engine for querying Apache Parquet files in <a href="https://benchmark.clickhouse.com/">ClickBench</a>. It is faster
+than <a href="https://duckdb.org/">DuckDB</a>, <a href="https://clickhouse.com/chdb">chDB</a> and <a href="https://clickhouse.com/">Clickhouse</a> using the same hardware. It also marks
+the first time a <a href="https://www.rust-lang.org/">Rust</a>-based engine holds the top spot, which has previously
+been held by traditional C/C++-based engines.</p>
+<p><img alt="Apache DataFusion Logo" class="img-responsive" src="../images/2x_bgwhite_original.png" width="80%"/></p>
+<p><img alt="ClickBench performance for DataFusion 43.0.0" class="img-responsive" src="../images/clickbench-datafusion-43/perf.png" width="100%"/></p>
+<p><strong>Figure 1</strong>: 2024-11-16 <a href="https://benchmark.clickhouse.com/#eyJzeXN0ZW0iOnsiQWxsb3lEQiI6ZmFsc2UsIkFsbG95REIgKHR1bmVkKSI6ZmFsc2UsIkF0aGVuYSAocGFydGl0aW9uZWQpIjpmYWxzZSwiQXRoZW5hIChzaW5nbGUpIjpmYWxzZSwiQXVyb3JhIGZvciBNeVNRTCI6ZmFsc2UsIkF1cm9yYSBmb3IgUG9zdGdyZVNRTCI6ZmFsc2UsIkJ5Q29uaXR5IjpmYWxzZSwiQnl0ZUhvdXNlIjpmYWxzZSwiY2hEQiAoRGF0YUZyYW1lKSI6ZmFsc2UsImNoREIgKFBhcnF1ZXQsIHBhcnRpdGlvbmVkKSI6dHJ1ZSwiY2hEQiI6ZmFsc2UsIkNpdHVzIjpmYWxzZSwiQ2xpY2tIb3VzZSBDbG91ZCAoYXdzKSI6ZmFsc2UsIkNsaWNrSG91c2UgQ2xvdWQgKGF6dXJlKSI6ZmFsc2UsIkNsaWNrSG91c2UgQ2xvdWQgKGdjcCkiOmZhbHNlLCJDbGlja0hvdXNlIChkYXRhIGxha2UsIHBhcnRpdGlvbmVkKSI6ZmFsc2UsIkNsaWNrSG91c2UgKGRhdGEgbGFrZSwgc2luZ2xlKSI6ZmFsc2UsIkNsaWNrSG91c2UgKFBhcnF1ZXQsIHBhcnRpdGlvbmVkKSI6dHJ1ZSwiQ2xpY2tIb3VzZSAoUGFycXVldCwgc2luZ2xlKSI6ZmFsc2UsIkNsaWNrSG91c2UgKHdlYikiOmZhbHNlLCJDbGlja0hvdXNlIjpmYWxzZSwiQ2xpY2tIb3VzZSAodHVuZWQpIjpmYWxzZSwiQ2xpY2tIb3VzZSAodHVuZWQsIG1lbW9yeSkiOmZhbHNlLCJDbG91ZGJlcnJ5IjpmYWxzZSwiQ3JhdGVEQiI6ZmFsc2UsIkNydW5jaHkgQnJpZGdlIGZvciBBbmFseXRpY3MgKFBhcnF1ZXQpIjpmYWxzZSwiRGF0YWJlbmQiOmZhbHNlLCJEYXRhRnVzaW9uIChQYXJxdWV0LCBwYXJ0aXRpb25lZCkiOnRydWUsIkRhdGFGdXNpb24gKFBhcnF1ZXQsIHNpbmdsZSkiOmZhbHNlLCJBcGFjaGUgRG9yaXMiOmZhbHNlLCJEcnVpZCI6ZmFsc2UsIkR1Y2tEQiAoRGF0YUZyYW1lKSI6ZmFsc2UsIkR1Y2tEQiAoUGFycXVldCwgcGFydGl0aW9uZWQpIjp0cnVlLCJEdWNrREIiOmZhbHNlLCJFbGFzdGljc2VhcmNoIjpmYWxzZSwiRWxhc3RpY3NlYXJjaCAodHVuZWQpIjpmYWxzZSwiR2xhcmVEQiI6ZmFsc2UsIkdyZWVucGx1bSI6ZmFsc2UsIkhlYXZ5QUkiOmZhbHNlLCJIeWRyYSI6ZmFsc2UsIkluZm9icmlnaHQiOmZhbHNlLCJLaW5ldGljYSI6ZmFsc2UsIk1hcmlhREIgQ29sdW1uU3RvcmUiOmZhbHNlLCJNYXJpYURCIjpmYWxzZSwiTW9uZXREQiI6ZmFsc2UsIk1vbmdvREIiOmZhbHNlLCJNb3RoZXJEdWNrIjpmYWxzZSwiTXlTUUwgKE15SVNBTSkiOmZhbHNlLCJNeVNRTCI6ZmFsc2UsIk94bGEiOmZhbHNlLCJQYW5kYXMgKERhdGFGcmFtZSkiOmZhbHNlLCJQYXJhZGVEQiAoUGFycXVldCwgcGFydGl0aW9uZWQpIjp0cnVlLCJQYXJhZGVEQiAoUGFycXVldCwgc2luZ2xlKSI6ZmFsc2UsIlBpbm90IjpmYWxzZSwiUG9sYXJzIChEYXRhRnJhbWUpIjpmYWxzZSwiUG9zdGdyZVNRTCAodHVuZWQpIjpmYWxzZSwiUG9zdGdyZVNRTCI6ZmFsc2UsIlF1ZXN0REIgKHBhcnRpdGlvbmVkKSI6ZmFsc2UsIlF1ZXN0REIiOmZhbHNlLCJSZWRzaGlmdCI6ZmFsc2UsIlNpbmdsZVN0b3JlIjpmYWxzZSwiU25vd2ZsYWtlIjpmYWxzZSwiU1FMaXRlIjpmYWxzZSwiU3RhclJvY2tzIjpmYWxzZSwiVGFibGVzcGFjZSI6ZmFsc2UsIlRlbWJvIE9MQVAgKGNvbHVtbmFyKSI6ZmFsc2UsIlRpbWVzY2FsZURCIChubyBjb2x1bW5zdG9yZSkiOmZhbHNlLCJUaW1lc2NhbGVEQiI6ZmFsc2UsIlRpbnliaXJkIChGcmVlIFRyaWFsKSI6ZmFsc2UsIlVtYnJhIjpmYWxzZX0sInR5cGUiOnsiQyI6dHJ1ZSwiY29sdW1uLW9yaWVudGVkIjp0cnVlLCJQb3N0Z3JlU1FMIGNvbXBhdGlibGUiOnRydWUsIm1hbmFnZWQiOnRydWUsImdjcCI6dHJ1ZSwic3RhdGVsZXNzIjp0cnVlLCJKYXZhIjp0cnVlLCJDKysiOnRydWUsIk15U1FMIGNvbXBhdGlibGUiOnRydWUsInJvdy1vcmllbnRlZCI6dHJ1ZSwiQ2xpY2tIb3VzZSBkZXJpdmF0aXZlIjp0cnVlLCJlbWJlZGRlZCI6dHJ1ZSwic2VydmVybGVzcyI6dHJ1ZSwiZGF0YWZyYW1lIjp0cnVlLCJhd3MiOnRydWUsImF6dXJlIjp0cnVlLCJhbmFseXRpY2FsIjp0cnVlLCJSdXN0Ijp0cnVlLCJzZWFyY2giOnRydWUsImRvY3VtZW50Ijp0cnVlLCJzb21ld2hhdCBQb3N0Z3JlU1FMIGNvbXBhdGlibGUiOnRydWUsInRpbWUtc2VyaWVzIjp0cnVlfSwibWFjaGluZSI6eyIxNiB2Q1BVIDEyOEdCIjp0cnVlLCI4IHZDUFUgNjRHQiI6dHJ1ZSwic2VydmVybGVzcyI6dHJ1ZSwiMTZhY3UiOnRydWUsImM2YS40eGxhcmdlLCA1MDBnYiBncDIiOnRydWUsIkwiOnRydWUsIk0iOnRydWUsIlMiOnRydWUsIlhTIjp0cnVlLCJjNmEubWV0YWwsIDUwMGdiIGdwMiI6ZmFsc2UsIjE5MkdCIjp0cnVlLCIyNEdCIjp0cnVlLCIzNjBHQiI6dHJ1ZSwiNDhHQiI6dHJ1ZSwiNzIwR0IiOnRydWUsIjk2R0IiOnRydWUsImRldiI6dHJ1ZSwiNzA4R0IiOnRydWUsImM1bi40eGxhcmdlLCA1MDBnYiBncDIiOnRydWUsIkFuYWx5dGljcy0yNTZHQiAoNjQgdkNvcmVzLCAyNTYgR0IpIjp0cnVlLCJjNS40eGxhcmdlLCA1MDBnYiBncDIiOnRydWUsImM2YS40eGxhcmdlLCAxNTAwZ2IgZ3AyIjp0cnVlLCJjbG91ZCI6dHJ1ZSwiZGMyLjh4bGFyZ2UiOnRydWUsInJhMy4xNnhsYXJnZSI6dHJ1ZSwicmEzLjR4bGFyZ2UiOnRydWUsInJhMy54bHBsdXMiOnRydWUsIlMyIjp0cnVlLCJTMjQiOnRydWUsIjJYTCI6dHJ1ZSwiM1hMIjp0cnVlLCI0WEwiOnRydWUsIlhMIjp0cnVlLCJMMSAtIDE2Q1BVIDMyR0IiOnRydWUsImM2YS40eGxhcmdlLCA1MDBnYiBncDMiOnRydWV9LCJjbHVzdGVyX3NpemUiOnsiMSI6dHJ1ZSwiMiI6dHJ1ZSwiNCI6dHJ1ZSwiOCI6dHJ1ZSwiMTYiOnRydWUsIjMyIjp0cnVlLCI2NCI6dHJ1ZSwiMTI4Ijp0cnVlLCJzZXJ2ZXJsZXNzIjp0cnVlfSwibWV0cmljIjoiaG90IiwicXVlcmllcyI6W3RydWUsdHJ1ZSx0cnVlLHRydWUsdHJ1ZSx0cnVlLHRydWUsdHJ1ZSx0cnVlLHRydWUsdHJ1ZSx0cnVlLHRydWUsdHJ1ZSx0cnVlLHRydWUsdHJ1ZSx0cnVlLHRydWUsdHJ1ZSx0cnVlLHRydWUsdHJ1ZSx0cnVlLHRydWUsdHJ1ZSx0cnVlLHRydWUsdHJ1ZSx0cnVlLHRydWUsdHJ1ZSx0cnVlLHRydWUsdHJ1ZSx0cnVlLHRydWUsdHJ1ZSx0cnVlLHRydWUsdHJ1ZSx0cnVlLHRydWVdfQ==">ClickBench Results</a> for the  &lsquo;hot&rsquo;[^1] run against the
+partitioned 14 GB Parquet dataset (100 files, each ~140MB) on a <code>c6a.4xlarge</code> (16
+CPU / 32 GB  RAM) VM. Measurements are relative (<code>1.x</code>) to results using
+different hardware.</p>
+<p>Best in class performance on Parquet is now available to anyone. DataFusion&rsquo;s
+open design lets you start quickly with a full featured Query Engine, including
+SQL, data formats, catalogs, and more, and then customize any behavior you need.
+I predict the continued emergence of new classes of data systems now that
+creators can focus the bulk of their innovation on areas such as query
+languages, system integrations, and data formats rather than trying to play
+catchup with core engine performance.</p>
+<p>ClickBench also includes results for proprietary storage formats, which require
+costly load / export steps, making them useful in fewer use cases and thus much
+less important than open formats (though the idea of use case specific formats
+is interesting[^2]).</p>
+<p>This blog post highlights some of the techniques we used to achieve this
+performance, and celebrates the teamwork involved.</p>
+<h1>A Strong History of Performance Improvements</h1>
+<p>Performance has long been a core focus for DataFusion's community, and 
+speed attracts users and contributors. Recently, we seem to have been
+even more focused on performance, including in July, 2024 when <a href="https://www.linkedin.com/in/mehmet-ozan-kabak/">Mehmet Ozan
+Kabak</a>, CEO of <a href="https://www.synnada.ai/">Synnada</a>, again <a href="https://github.com/apache/datafusion/issues/11442#issuecomment-2226834443">suggested focusing on performance</a>. This
+got many of us excited (who doesn&rsquo;t love a challenge!), and we have subsequently
+rallied to steadily improve the performance release on release as shown in
+Figure 2.</p>
+<p><img alt="ClickBench performance results over time for DataFusion" class="img-responsive" src="../images/clickbench-datafusion-43/perf-over-time.png" width="100%"/></p>
+<p><strong>Figure 2</strong>: ClickBench performance improved over 30% between DataFusion 34
+(released Dec. 2023) and DataFusion 43 (released Nov. 2024).</p>
+<p>Like all good optimization efforts, ours took sustained effort as DataFusion ran
+out of <a href="https://www.influxdata.com/blog/aggregating-millions-groups-fast-apache-arrow-datafusion">single 2x performance improvements</a> several years ago. Working together our
+community of engineers from around the world[^3] and all experience levels[^4]
+pulled it off (check out <a href="https://github.com/apache/datafusion/issues/12821">this discussion</a> to get a sense). It may be a "<a href="https://db.cs.cmu.edu/seminar2024/">hobo
+sandwich</a>" [^5], but it is a tasty one!</p>
+<p>Of course, most of these techniques have been implemented and described before,
+but until now they were only available in proprietary systems such as
+<a href="https://www.vertica.com/">Vertica</a>, <a href="https://www.databricks.com/product/photon">DataBricks
+Photon</a>, or
+<a href="https://www.snowflake.com/en/">Snowflake</a> or in tightly integrated open source
+systems such as <a href="https://duckdb.org/">DuckDB</a> or
+<a href="https://clickhouse.com/">ClickHouse</a> which were not designed to be extended.</p>
+<h2>StringView</h2>
+<p>Performance improved for all queries when DataFusion switched to using Arrow
+<code>StringView</code>. Using <code>StringView</code> &ldquo;just&rdquo; saves some copies and avoids one memory
+access for certain comparisons. However, these copies and comparisons happen to
+occur in many of the hottest loops during query processing, so optimizing them
+resulted in measurable performance improvements.</p>
+<p><img alt="Illustration of how take works with StringView" class="img-responsive" src="../images/clickbench-datafusion-43/string-view-take.png" width="80%"/></p>
+<p><strong>Figure 3:</strong> Figure from <a href="https://www.influxdata.com/blog/faster-queries-with-stringview-part-one-influxdb/">Using StringView / German Style Strings to Make
+Queries Faster: Part 1</a> showing how <code>StringView</code> saves copying data in many cases.</p>
+<p>Using StringView to make DataFusion faster for ClickBench required substantial
+careful, low level optimization work described in <a href="https://www.influxdata.com/blog/faster-queries-with-stringview-part-one-influxdb/">Using StringView / German
+Style Strings to Make Queries Faster: Part 1</a> and <a href="https://www.influxdata.com/blog/faster-queries-with-stringview-part-two-influxdb/">Part 2</a>. However, it <em>also</em>
+required extending the rest of DataFusion&rsquo;s operations to support the new type.
+You can get a sense of the magnitude of the work required by looking at the 100+
+pull requests linked to the epic in arrow-rs
+(<a href="https://github.com/apache/arrow-rs/issues/5374">here</a>) and three major epics
+(<a href="https://github.com/apache/datafusion/issues/10918">here</a>,
+<a href="https://github.com/apache/datafusion/issues/11790">here</a> and
+<a href="https://github.com/apache/datafusion/issues/11752">here</a>) in DataFusion.</p>
+<p>Here is a partial list of people involved in the project (I am sorry to those whom I forgot)</p>
+<ul>
+<li><strong>Arrow</strong>:  <a href="https://github.com/XiangpengHao">Xiangpeng Hao</a> (InfluxData&rsquo;s amazing 2024 summer intern and UW Madison PhD), <a href="https://github.com/ariesdevil">Yijun Zhao</a> from DataBend Labs, and <a href="https://github.com/tustvold">Raphael Taylor-Davies</a> laid the foundation.  <a href="https://github.com/RinChanNOWWW">RinChanNOW</a> from Tencent and <a href="https://github.com/a10y">Andrew Duffy</a> from SpiralDB helped push it along in the early days, and <a href="https://github.com/viirya">Liang-Chi Hsieh</a>, <a href="https://github.com/Dandandan">Dani&euml;l Heres</a> reviewed and provided guidance.</li>
+<li><strong>DataFusion</strong>:  <a href="https://github.com/XiangpengHao">Xiangpeng Hao</a>, again charted the initial path and <a href="https://github.com/Weijun-H">Weijun Huang</a>, <a href="https://github.com/dharanad">Dharan Aditya</a> <a href="https://github.com/Lordworms">Lordworms</a>, <a href="https://github.com/goldmedal">Jax Liu</a>,  <a href="https://github.com/wiedld">wiedld</a>, <a href="https://github.com/tlm365">Tai Le Manh</a>, <a href="https://github.com/my-vegetable-has-exploded">yi wang</a>, <a href="https://github.com/doupache">doupache</a>, <a href="https://github.com/jayzhan211">Jay Zhan</a> , <a href="https://github.com/xinlifoobar">Xin Li</a>  and <a href="https://github.com/Kev1n8">Kaifeng Zheng</a> made it real.</li>
+<li><strong>DataFusion String Function Migration</strong>:  <a href="https://github.com/tshauck">Trent Hauck</a> organized the effort and set the patterns, <a href="https://github.com/goldmedal">Jax Liu</a> made a clever testing framework, and <a href="https://github.com/austin362667">Austin Liu</a>, <a href="https://github.com/demetribu">Dmitrii Bu</a>, <a href="https://github.com/tlm365">Tai Le Manh</a>, <a href="https://github.com/PsiACE">Chojan Shang</a>, <a href="https://github.com/devanbenz">WeblWabl</a>, <a href="https://github.com/Lordworms">Lordworms</a>, <a href="https://github.com/thinh2">iamthinh</a>, <a href="https://github.com/Omega359">Bruce Ritchie</a>, <a href="https://github.com/Kev1n8">Kaifeng Zheng</a>, and <a href="https://github.com/xinlifoobar">Xin Li</a> bashed out the conversions.</li>
+</ul>
+<h2>Parquet</h2>
+<p>Part of the reason for DataFusion's speed in ClickBench is reading Parquet files (really) quickly,
+which reflects invested effort in the Parquet reading system (see <a href="https://www.influxdata.com/blog/querying-parquet-millisecond-latency/">Querying
+Parquet with Millisecond Latency</a> )</p>
+<p>The <a href="https://docs.rs/datafusion/latest/datafusion/datasource/physical_plan/parquet/struct.ParquetExec.html">DataFusion ParquetExec</a> (built on the <a href="https://crates.io/crates/parquet">Rust Parquet Implementation</a>) is now the most
+sophisticated open source Parquet reader I know of. It has every optimization we
+can think of for reading Parquet, including projection pushdown, predicate
+pushdown (row group metadata, page index, and bloom filters), limit pushdown,
+parallel reading, interleaved I/O, and late materialized filtering (coming soon &trade;️
+by default). Some recent work from <a href="https://github.com/itsjunetime">June</a>
+<a href="https://github.com/apache/datafusion/pull/12135">recently unblocked a remaining hurdle</a> for enabling late materialized
+filtering, and conveniently <a href="https://github.com/XiangpengHao">Xiangpeng Hao</a> is
+working on the <a href="https://github.com/apache/arrow-datafusion/issues/3463">final piece</a> (no pressure😅)</p>
+<h2>Skipping Partial Aggregation When It Doesn't Help</h2>
+<p>Many ClickBench queries are aggregations that summarize millions of rows, a
+common task for reporting and dashboarding. DataFusion uses state of the art
+<a href="https://docs.rs/datafusion/latest/datafusion/physical_plan/trait.Accumulator.html#tymethod.state">two phase aggregation</a> plans. Normally, two phase aggregation works well as the
+first phase consolidates many rows immediately after reading, while the data is
+still in cache. However, for certain &ldquo;high cardinality&rdquo; aggregate queries (that
+have large numbers of groups), <a href="https://github.com/apache/datafusion/issues/6937">the two phase aggregation strategy used in
+DataFusion was inefficient</a>,
+manifesting in relatively slower performance compared to other engines for
+ClickBench queries such as</p>
+<div class="codehilite"><pre><span></span><code><span class="k">SELECT</span> <span class="ss">"WatchID"</span><span class="p">,</span> <span class="ss">"ClientIP"</span><span class="p">,</span> <span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span> <span class="k">AS</span> <span class="k">c</span><span class="p">,</span> <span class="p">...</span> 
+<span class="k">FROM</span> <span class="n">hits</span> 
+<span class="k">GROUP</span> <span class="k">BY</span> <span class="ss">"WatchID"</span><span class="p">,</span> <span class="ss">"ClientIP"</span> <span class="cm">/* &lt;----- 13M Distinct Groups!!! */</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="k">c</span> <span class="k">DESC</span> 
+<span class="k">LIMIT</span> <span class="mi">10</span><span class="p">;</span>
+</code></pre></div>
+<p>For such queries, the first aggregation phase does not significantly
+reduce the number of rows, which wastes significant effort. <a href="https://github.com/korowa">Eduard
+Karacharov</a> contributed a <a href="https://github.com/apache/datafusion/pull/11627">dynamic strategy</a> to
+bypass the first phase when it is not working efficiently, shown in Figure 4.</p>
+<p><img alt="Two phase aggregation diagram from DataFusion API docs annotated to show first phase not helping" class="img-responsive" src="../images/clickbench-datafusion-43/skipping-partial-aggregation.png" width="100%"/></p>
+<p><strong>Figure 4</strong>: Diagram from <a href="https://docs.rs/datafusion/latest/datafusion/physical_plan/trait.Accumulator.html#tymethod.state">DataFusion API docs</a> showing when the multi-phase
+grouping is not effective</p>
+<h2>Optimized Multi-Column Grouping</h2>
+<p>Another method for improving analytic database performance is specialized (aka
+highly optimized) versions of operations for different data types, which the
+system picks at runtime based on the query. Like other systems, DataFusion has
+specialized code for handling different types of group columns. For example,
+there is <a href="https://github.com/apache/datafusion/blob/73507c307487708deb321e1ba4e0d302084ca27e/datafusion/physical-plan/src/aggregates/group_values/single_group_by/primitive.rs">special code</a> that handles <code>GROUP BY int_id</code>  and <a href="https://github.com/apache/datafusion/blob/73507c307487708deb321e1ba4e0d302084ca27e/datafusion/physical-plan/src/aggregates/group_values/single_group_by/bytes.rs">different special
+code</a> that handles <code>GROUP BY string_id</code> .</p>
+<p>When a query groups by multiple columns, it is tricker to apply this technique.
+For example <code>GROUP BY string_id, int_id</code> and <code>GROUP BY int_id, string_id</code> have
+different optimal structures, but it is not possible to include specialized
+versions for all possible combinations of group column types.</p>
+<p>DataFusion includes <a href="https://github.com/apache/datafusion/blob/73507c307487708deb321e1ba4e0d302084ca27e/datafusion/physical-plan/src/aggregates/group_values/row.rs#L33-L39">a general Row based mechanism</a> that works for any
+combination of column types, but this general mechanism copies each value twice
+as shown in Figure 5. The cost of this copy <a href="https://github.com/apache/datafusion/issues/9403">is especially high for variable
+length strings and binary data</a>.</p>
+<p><img alt="Row based storage for multiple group columns" class="img-responsive" src="../images/clickbench-datafusion-43/row-based-storage.png" width="100%"/></p>
+<p><strong>Figure 5</strong>: Prior to DataFusion 43.0.0, queries with multiple group columns
+used Row based group storage and copied each group value twice. This copy
+consumes a substantial amount of the query time for queries with many distinct
+groups, such as several of the queries in ClickBench.</p>
+<p>Many optimizations in Databases boil down to simply avoiding copies, and this
+was no exception. The trick was to figure out how to avoid copies without
+causing per-column comparison overhead to dominate or complexity to get out of
+hand. In a great example of diligent and disciplined engineering, <a href="https://github.com/jayzhan211">Jay
+Zhan</a> tried <a href="https://github.com/apache/datafusion/pull/10937">several</a>, <a href="https://github.com/apache/datafusion/pull/10976">different</a> approaches until arriving
+at the [one shipped in DataFusion <code>43.0.0</code>], shown in Figure 6.</p>
+<p><img alt="Column based storage for multiple group columns" class="img-responsive" src="../images/clickbench-datafusion-43/column-based-storage.png" width="100%"/></p>
+<p><strong>Figure 6</strong>: DataFusion 43.0.0&rsquo;s new columnar group storage copies each group
+value exactly once, which is significantly faster when grouping by multiple
+columns.</p>
+<p>Huge thanks as well to <a href="https://github.com/eejbyfeldt">Emil Ejbyfeldt</a> and
+<a href="https://github.com/Dandandan">Dani&euml;l Heres</a> for their help reviewing and to
+<a href="https://github.com/Rachelint">Rachelint (kamille</a>) for reviewing and
+contributing a faster <a href="https://github.com/apache/datafusion/pull/12996">vectorized append and compare for multiple groups</a> which
+will be released in DataFusion 44. The discussion on <a href="https://github.com/apache/datafusion/issues/9403">the ticket</a> is another
+great example of the power of the DataFusion community working together to build
+great software.</p>
+<h1>What&rsquo;s Next 🚀</h1>
+<p>Just as I expect the performance of other engines to improve, DataFusion has
+several more performance improvements lined up itself:</p>
+<ol>
+<li><a href="https://github.com/apache/datafusion/pull/11943#top">Intermediate results blocked management</a> (thanks again <a href="https://github.com/Rachelint">Rachelint (kamille</a>)</li>
+<li><a href="https://github.com/apache/datafusion/issues/3463">Enable parquet filter pushdown by default</a></li>
+</ol>
+<p>We are also talking about what to focus on over the <a href="https://github.com/apache/datafusion/issues/13274">next three
+months</a> and are always
+looking for people to help! If you want to geek out (obsess??) about performance
+and other features with engineers from around the world, <a href="https://datafusion.apache.org/contributor-guide/communication.html">we would love you to
+join us</a>.</p>
+<h1>Additional Thanks</h1>
+<p>In addition to the people called out above, thanks:</p>
+<ol>
+<li><a href="https://github.com/pmcgleenon">Patrick McGleenon</a> for running ClickBench and gathering this data (<a href="https://github.com/apache/datafusion/issues/13099#issuecomment-2478314793">source</a>).</li>
+<li>Everyone I missed in the shoutouts &ndash; there are so many of you. We appreciate everyone.</li>
+</ol>
+<h1>Conclusion</h1>
+<p>I have dreamed about DataFusion being on top of the ClickBench leaderboard for
+several years. I often watched with envy improvements in systems backed by large
+VC investments, internet companies, or world class research institutions, and
+doubted that we could pull off something similar in an open source project with
+always limited time.</p>
+<p>The fact that we have now surpassed those other systems in query performance I
+think speaks to the power and possibility of focusing on community and aligning
+our collective enthusiasm and skills towards a common goal. Of course, being on
+the top in any particular benchmark is likely fleeting as other engines will
+improve, but so will DataFusion!</p>
+<p>I love working on DataFusion &ndash; the people, the quality of the code, my
+interactions and the results we have achieved together far surpass my
+expectations as well as most of my other software development experiences. I
+can&rsquo;t wait to see what people will build next, and hope to <a href="https://github.com/apache/datafusion">see you
+online</a>.</p>
+<h2>Notes</h2>
+<p>[^1]: Note that DuckDB is slightly faster on the &lsquo;cold&rsquo; run.</p>
+<p>[^2]: Want to try your hand at a custom format for ClickBench fame / glory?: <a href="https://github.com/apache/datafusion/issues/13448">Make DataFusion the fastest engine in ClickBench with custom file format</a></p>
+<p>[^3]: We have contributors from North America, South American, Europe, Asia, Africa and Australia</p>
+<p>[^4]: Undergraduates, PhD, Junior engineers, and getting-kind-of-crotchety experienced engineers</p>
+<p>[^5]: Thanks to Andy Pavlo, I love that nomenclature</p>
+        </div>
+      </div>
+    </div>    
+    <!-- footer -->
+    <div class="row">
+      <div class="large-12 medium-12 columns">
+        <p style="font-style: italic; font-size: 0.8rem; text-align: center;">
+          Copyright 2024, <a href="https://www.apache.org/">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a>.<br/>
+          Apache&reg; and the Apache feather logo are trademarks of The Apache Software Foundation.
+        </p>
+      </div>
+    </div>
+    <script src="/js/bootstrap.bundle.min.js"></script>  </main>
+  </body>
+</html>
