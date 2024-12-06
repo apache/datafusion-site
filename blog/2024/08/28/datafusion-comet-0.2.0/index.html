@@ -1,0 +1,127 @@
+<!doctype html>
+<html class="no-js" lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apache DataFusion Comet 0.2.0 Release - Apache DataFusion Blog</title>
+<link href="/css/bootstrap.min.css" rel="stylesheet">
+<link href="/css/fontawesome.all.min.css" rel="stylesheet">
+<link href="/css/headerlink.css" rel="stylesheet">
+<link href="/highlight/default.min.css" rel="stylesheet">
+<script src="/highlight/highlight.js"></script>
+<script>hljs.highlightAll();</script>  </head>
+  <body class="d-flex flex-column h-100">
+  <main class="flex-shrink-0">
+<!-- nav bar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark" aria-label="Fifth navbar example">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/"><img src="/images/logo_original4x.png" style="height: 32px;"/> Apache DataFusion Blog</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarADP" aria-controls="navbarADP" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarADP">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link" href="/about.html">About</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/feed.xml">RSS</a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>    
+
+
+<!-- page contents -->
+<div id="contents">
+    <div class="bg-white p-5 rounded">
+        <div class="col-sm-8 mx-auto">
+          <h1>
+              Apache DataFusion Comet 0.2.0 Release
+          </h1>
+              <p>Posted on: Wed 28 August 2024 by pmc</p>
+              <!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+-->
+<p>The Apache DataFusion PMC is pleased to announce version 0.2.0 of the <a href="https://datafusion.apache.org/comet/">Comet</a> subproject.</p>
+<p>Comet is an accelerator for Apache Spark that translates Spark physical plans to DataFusion physical plans for
+improved performance and efficiency without requiring any code changes.</p>
+<p>Comet runs on commodity hardware and aims to provide 100% compatibility with Apache Spark. Any operators or
+expressions that are not fully compatible will fall back to Spark unless explicitly enabled by the user. Refer
+to the <a href="https://datafusion.apache.org/comet/user-guide/compatibility.html">compatibility guide</a> for more information.</p>
+<p>This release covers approximately four weeks of development work and is the result of merging 87 PRs from 14 
+contributors. See the <a href="https://github.com/apache/datafusion-comet/blob/main/dev/changelog/0.2.0.md">change log</a> for more information.</p>
+<h2>Release Highlights</h2>
+<h3>Docker Images</h3>
+<p>Docker images are now available from the <a href="https://github.com/apache/datafusion-comet/pkgs/container/datafusion-comet/265110454?tag=spark-3.4-scala-2.12-0.2.0">GitHub Container Registry</a>.</p>
+<h3>Performance improvements</h3>
+<ul>
+<li>Native shuffle is now enabled by default</li>
+<li>Improved handling of decimal types</li>
+<li>Reduced some redundant copying of batches in Filter/Scan operations</li>
+<li>Optimized performance of count aggregates</li>
+<li>Optimized performance of  CASE expressions for specific uses:</li>
+<li>CASE WHEN expr THEN column ELSE null END</li>
+<li>CASE WHEN expr THEN literal ELSE literal END</li>
+<li>Optimized performance of IS NOT NULL</li>
+</ul>
+<h3>New Features</h3>
+<ul>
+<li>Window operations now support count and sum aggregates</li>
+<li>CreateArray</li>
+<li>GetStructField</li>
+<li>Support nested types in hash join</li>
+<li>Basic implementation of RLIKE expression</li>
+</ul>
+<h2>Current Performance</h2>
+<p>We use benchmarks derived from the industry standard TPC-H and TPC-DS benchmarks for tracking progress with
+performance. The following charts shows the time it takes to run the queries against 100 GB of data in
+Parquet format using a single executor with eight cores. See the <a href="https://datafusion.apache.org/comet/contributor-guide/benchmarking.html">Comet Benchmarking Guide</a>
+for details of the environment used for these benchmarks.</p>
+<h3>Benchmark derived from TPC-H</h3>
+<p>Comet 0.2.0 provides a 62% speedup compared to Spark. This is slightly better than the Comet 0.1.0 release.</p>
+<p><img alt="Chart showing TPC-H benchmark results for Comet 0.2.0" class="img-responsive" src="../images/comet-0.2.0/tpch_allqueries.png" width="100%"/></p>
+<h3>Benchmark derived from TPC-DS</h3>
+<p>Comet 0.2.0 provides a 21% speedup compared to Spark, which is a significant improvement compared to 
+Comet 0.1.0, which did not provide any speedup for this benchmark.</p>
+<p><img alt="Chart showing TPC-DS benchmark results for Comet 0.2.0" class="img-responsive" src="../images/comet-0.2.0/tpcds_allqueries.png" width="100%"/></p>
+<h2>Getting Involved</h2>
+<p>The Comet project welcomes new contributors. We use the same <a href="https://datafusion.apache.org/contributor-guide/communication.html#slack-and-discord">Slack and Discord</a> channels as the main DataFusion
+project.</p>
+<p>The easiest way to get involved is to test Comet with your current Spark jobs and file issues for any bugs or
+performance regressions that you find. See the <a href="https://datafusion.apache.org/comet/user-guide/installation.html">Getting Started</a> guide for instructions on downloading and installing
+Comet.</p>
+<p>There are also many <a href="https://github.com/apache/datafusion-comet/contribute">good first issues</a> waiting for contributions.</p>
+        </div>
+      </div>
+    </div>    
+    <!-- footer -->
+    <div class="row">
+      <div class="large-12 medium-12 columns">
+        <p style="font-style: italic; font-size: 0.8rem; text-align: center;">
+          Copyright 2024, <a href="https://www.apache.org/">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a>.<br/>
+          Apache&reg; and the Apache feather logo are trademarks of The Apache Software Foundation.
+        </p>
+      </div>
+    </div>
+    <script src="/js/bootstrap.bundle.min.js"></script>  </main>
+  </body>
+</html>
