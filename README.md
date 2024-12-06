@@ -2,7 +2,26 @@
 
 This repository contains the Apache DataFusion blog at https://datafusion.apache.org/blog/
 
+## Testing
+
+There are two ways to preview your blog post before publishing the site. You can
+either locally build and test the site or you can use the auto staging feature
+of the CI system. To locally build the site on your machine, follow the docker
+instructions below.
+
+To use the staging feature of the CI system, push a branch that starts with
+`site/` and create a PR to merge this branch into `main`. When you do so, it
+will trigger a CI process that will build the site and push it to the branch
+`asf-staging`. Once this completes, the ASF infrastructure will auto publish
+this staged branch to https://datafusion.staged.apache.org/
+
+The most recently run staging CI pipeline will be published to this site. If you
+need to republish any branch, simply rerun the `Stage Site` workflow.
+
 ## Setup for Docker
+
+To locally build and preview the site on your computer, you will need to build
+a docker container using these instructions:
 
 ```shell
 git clone https://github.com/apache/infrastructure-actions.git
@@ -28,7 +47,7 @@ See the [ASF-Pelican](https://infra.apache.org/asf-pelican.html) site for most d
 on how this process works.
 
 To preview your site live, create a branch named `site/my-feature-x`. This should
-auto-publish to https://datafusion.staged.apache.org/blog
+auto-publish to https://datafusion.staged.apache.org/
 
 When you are satisfied with the staged branch, merging into `main` should cause
 the site to build via github actions and publish.
