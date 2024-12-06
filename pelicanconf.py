@@ -3,7 +3,7 @@ import datetime
 SITENAME = 'Apache DataFusion Blog'
 SITEDESC = 'The official new and blog for the Apache DataFusion project'
 SITEDOMAIN = 'datafusion.apache.org'
-SITEURL = 'https://datafusion.apache.org'
+SITEURL = 'https://datafusion.apache.org/blog'
 SITELOGO = 'https://datafusion.apache.org/favicon.ico'
 SITEREPOSITORY = 'https://github.com/apache/datafusion-site/blob/main/content/'
 CURRENTYEAR = datetime.date.today().year
@@ -63,7 +63,7 @@ ASF_GENID = {
 # blogs/README.md is not intended for publication
 IGNORE_FILES = [ 'theme', 'README.md' ]
 
-FEED_RSS = "feed.xml"
+FEED_RSS = "blog/feed.xml"
 
 MARKDOWN = {
     'extension_configs': {
