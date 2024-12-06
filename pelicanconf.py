@@ -3,8 +3,8 @@ import datetime
 SITENAME = 'Apache DataFusion Blog'
 SITEDESC = 'The official new and blog for the Apache DataFusion project'
 SITEDOMAIN = 'datafusion.apache.org'
-SITEURL = 'https://datafusion.apache.org/blog'
-SITELOGO = 'https://datafusion.apache.org/favicon.ico'
+SITEURL = 'https://datafusion.staged.apache.org'
+SITELOGO = 'https://datafusion.staged.apache.org/favicon.ico'
 SITEREPOSITORY = 'https://github.com/apache/datafusion-site/blob/main/content/'
 CURRENTYEAR = datetime.date.today().year
 TRADEMARKS = 'Apache HTTP Server, Apache, and the Apache feather logo are trademarks of The Apache Software Foundation.'
@@ -37,9 +37,10 @@ AUTHORS_SAVE_AS = ''
 ARCHIVES_SAVE_AS = ''
 # Disable articles by pointing to a (should-be-absent) subdir
 ARTICLE_PATHS = [ 'blog' ]
-# needed to create blogs page
-ARTICLE_URL = 'blog/{date:%Y}/{date:%m}/{date:%d}/{filename}'
-ARTICLE_SAVE_AS = 'blog/{date:%Y}/{date:%m}/{date:%d}/{filename}/index.html'
+# needed to create blogs page. Do not put the preceeding /blog here because
+# that will be added by asf infra when it posts the site
+ARTICLE_URL = '{date:%Y}/{date:%m}/{date:%d}/{filename}'
+ARTICLE_SAVE_AS = '{date:%Y}/{date:%m}/{date:%d}/{filename}/index.html'
 # Disable all processing of .html files
 READERS = { 'html': None, }
 
@@ -62,7 +63,7 @@ ASF_GENID = {
 # blogs/README.md is not intended for publication
 IGNORE_FILES = [ 'theme', 'README.md' ]
 
-FEED_RSS = "blog/feed.xml"
+FEED_RSS = "feed.xml"
 
 MARKDOWN = {
     'extension_configs': {
