@@ -3,8 +3,8 @@ import datetime
 SITENAME = 'Apache DataFusion Blog'
 SITEDESC = 'The official new and blog for the Apache DataFusion project'
 SITEDOMAIN = 'datafusion.apache.org'
-SITEURL = 'https://datafusion.staged.apache.org'
-SITELOGO = 'https://datafusion.staged.apache.org/favicon.ico'
+SITEURL = 'https://datafusion.apache.org'
+SITELOGO = 'https://datafusion.apache.org/favicon.ico'
 SITEREPOSITORY = 'https://github.com/apache/datafusion-site/blob/main/content/'
 CURRENTYEAR = datetime.date.today().year
 TRADEMARKS = 'Apache HTTP Server, Apache, and the Apache feather logo are trademarks of The Apache Software Foundation.'
