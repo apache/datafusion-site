@@ -13,7 +13,10 @@ To use the staging feature of the CI system, push a branch that starts with
 `site/` and create a PR to merge this branch into `main`. When you do so, it
 will trigger a CI process that will build the site and push it to the branch
 `asf-staging`. Once this completes, the ASF infrastructure will auto publish
-this staged branch to https://datafusion.staged.apache.org/
+this staged branch to https://datafusion.staged.apache.org/ It is important
+to note that this staging feature only works for branches on the main repo.
+If you are working on a forked repo, you will need to use the docker approach
+below.
 
 The most recently run staging CI pipeline will be published to this site. If you
 need to republish any branch, simply rerun the `Stage Site` workflow.
