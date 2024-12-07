@@ -37,9 +37,10 @@ AUTHORS_SAVE_AS = ''
 ARCHIVES_SAVE_AS = ''
 # Disable articles by pointing to a (should-be-absent) subdir
 ARTICLE_PATHS = [ 'blog' ]
-# needed to create blogs page
-ARTICLE_URL = 'blog/{date:%Y}/{date:%m}/{date:%d}/{filename}'
-ARTICLE_SAVE_AS = 'blog/{date:%Y}/{date:%m}/{date:%d}/{filename}/index.html'
+# needed to create blogs page. Do not put the preceeding /blog here because
+# that will be added by asf infra when it posts the site
+ARTICLE_URL = '{date:%Y}/{date:%m}/{date:%d}/{filename}'
+ARTICLE_SAVE_AS = '{date:%Y}/{date:%m}/{date:%d}/{filename}/index.html'
 # Disable all processing of .html files
 READERS = { 'html': None, }
 
