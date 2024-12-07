@@ -1,0 +1,227 @@
+<!doctype html>
+<html class="no-js" lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apache Arrow DataFusion 8.0.0 Release - Apache DataFusion Blog</title>
+<link href="/css/bootstrap.min.css" rel="stylesheet">
+<link href="/css/fontawesome.all.min.css" rel="stylesheet">
+<link href="/css/headerlink.css" rel="stylesheet">
+<link href="/highlight/default.min.css" rel="stylesheet">
+<script src="/highlight/highlight.js"></script>
+<script>hljs.highlightAll();</script>  </head>
+  <body class="d-flex flex-column h-100">
+  <main class="flex-shrink-0">
+<!-- nav bar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark" aria-label="Fifth navbar example">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/"><img src="/images/logo_original4x.png" style="height: 32px;"/> Apache DataFusion Blog</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarADP" aria-controls="navbarADP" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarADP">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link" href="/about.html">About</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/feed.xml">RSS</a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>    
+
+
+<!-- page contents -->
+<div id="contents">
+    <div class="bg-white p-5 rounded">
+        <div class="col-sm-8 mx-auto">
+          <h1>
+              Apache Arrow DataFusion 8.0.0 Release
+          </h1>
+              <p>Posted on: Mon 16 May 2022 by pmc</p>
+              <!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+-->
+<h1>Introduction</h1>
+<p><a href="https://arrow.apache.org/datafusion/">DataFusion</a> is an extensible query execution framework, written in Rust, that
+uses Apache Arrow as its in-memory format.</p>
+<p>When you want to extend your Rust project with <a href="https://arrow.apache.org/datafusion/user-guide/sql/sql_status.html">SQL support</a>,
+a DataFrame API, or the ability to read and process Parquet, JSON, Avro or CSV data, DataFusion is definitely worth
+checking out.</p>
+<p>DataFusion's SQL, <code>DataFrame</code>, and manual <code>PlanBuilder</code> API let users access a sophisticated query optimizer and
+execution engine capable of fast, resource efficient, and parallel execution that takes optimal advantage of
+today's multicore hardware. Being written in Rust means DataFusion can offer <em>both</em> the safety of a dynamic language and
+the resource efficiency of a compiled language.</p>
+<p>The Apache Arrow team is pleased to announce the DataFusion 8.0.0 release (and also the release of version 0.7.0 of
+the Ballista subproject). This covers 3 months of development work and includes 279 commits from the following 49
+distinct contributors.</p>
+<!--
+$ git log --pretty=oneline 7.0.0..8.0.0 datafusion datafusion-cli datafusion-examples ballista ballista-cli ballista-examples | wc -l
+279
+
+$ git shortlog -sn 7.0.0..8.0.0 datafusion datafusion-cli datafusion-examples ballista ballista-cli ballista-examples | wc -l
+49
+
+(feynman han, feynman.h, Feynman Han were assumed to be the same person)
+-->
+<div class="codehilite"><pre><span></span><code><span class="w">    </span><span class="mi">39</span><span class="w">  </span><span class="n">Andy</span><span class="w"> </span><span class="n">Grove</span><span class="w"></span>
+<span class="w">    </span><span class="mi">33</span><span class="w">  </span><span class="n">Andrew</span><span class="w"> </span><span class="n">Lamb</span><span class="w"></span>
+<span class="w">    </span><span class="mi">21</span><span class="w">  </span><span class="n">DuRipeng</span><span class="w"></span>
+<span class="w">    </span><span class="mi">20</span><span class="w">  </span><span class="n">Yijie</span><span class="w"> </span><span class="n">Shen</span><span class="w"></span>
+<span class="w">    </span><span class="mi">19</span><span class="w">  </span><span class="n">Yang</span><span class="w"> </span><span class="n">Jiang</span><span class="w"></span>
+<span class="w">    </span><span class="mi">17</span><span class="w">  </span><span class="n">Raphael</span><span class="w"> </span><span class="n">Taylor</span><span class="o">-</span><span class="n">Davies</span><span class="w"></span>
+<span class="w">    </span><span class="mi">11</span><span class="w">  </span><span class="n">Dan</span><span class="w"> </span><span class="n">Harris</span><span class="w"></span>
+<span class="w">    </span><span class="mi">11</span><span class="w">  </span><span class="n">Matthew</span><span class="w"> </span><span class="n">Turner</span><span class="w"></span>
+<span class="w">    </span><span class="mi">11</span><span class="w">  </span><span class="n">yahoNanJing</span><span class="w"></span>
+<span class="w">     </span><span class="mi">9</span><span class="w">  </span><span class="n">dependabot</span><span class="o">[</span><span class="n">bot</span><span class="o">]</span><span class="w"></span>
+<span class="w">     </span><span class="mi">8</span><span class="w">  </span><span class="n">jakevin</span><span class="w"></span>
+<span class="w">     </span><span class="mi">6</span><span class="w">  </span><span class="n">Kun</span><span class="w"> </span><span class="n">Liu</span><span class="w"></span>
+<span class="w">     </span><span class="mi">5</span><span class="w">  </span><span class="n">Jiayu</span><span class="w"> </span><span class="n">Liu</span><span class="w"></span>
+<span class="w">     </span><span class="mi">4</span><span class="w">  </span><span class="n">Dani&euml;l</span><span class="w"> </span><span class="n">Heres</span><span class="w"></span>
+<span class="w">     </span><span class="mi">4</span><span class="w">  </span><span class="n">mingmwang</span><span class="w"></span>
+<span class="w">     </span><span class="mi">4</span><span class="w">  </span><span class="n">xudong</span><span class="p">.</span><span class="n">w</span><span class="w"></span>
+<span class="w">     </span><span class="mi">3</span><span class="w">  </span><span class="n">Carol</span><span class="w"> </span><span class="p">(</span><span class="n">Nichols</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">Goulding</span><span class="p">)</span><span class="w"></span>
+<span class="w">     </span><span class="mi">3</span><span class="w">  </span><span class="n">Dmitry</span><span class="w"> </span><span class="n">Patsura</span><span class="w"></span>
+<span class="w">     </span><span class="mi">3</span><span class="w">  </span><span class="n">Eduard</span><span class="w"> </span><span class="n">Karacharov</span><span class="w"></span>
+<span class="w">     </span><span class="mi">3</span><span class="w">  </span><span class="n">Jeremy</span><span class="w"> </span><span class="n">Dyer</span><span class="w"></span>
+<span class="w">     </span><span class="mi">3</span><span class="w">  </span><span class="n">Kaushik</span><span class="w"></span>
+<span class="w">     </span><span class="mi">3</span><span class="w">  </span><span class="n">Rich</span><span class="w"></span>
+<span class="w">     </span><span class="mi">3</span><span class="w">  </span><span class="n">comphead</span><span class="w"></span>
+<span class="w">     </span><span class="mi">3</span><span class="w">  </span><span class="n">gaojun2048</span><span class="w"></span>
+<span class="w">     </span><span class="mi">3</span><span class="w">  </span><span class="n">Feynman</span><span class="w"> </span><span class="n">Han</span><span class="w"></span>
+<span class="w">     </span><span class="mi">2</span><span class="w">  </span><span class="n">Jie</span><span class="w"> </span><span class="n">Han</span><span class="w"></span>
+<span class="w">     </span><span class="mi">2</span><span class="w">  </span><span class="n">Jon</span><span class="w"> </span><span class="n">Mease</span><span class="w"></span>
+<span class="w">     </span><span class="mi">2</span><span class="w">  </span><span class="n">Tim</span><span class="w"> </span><span class="n">Van</span><span class="w"> </span><span class="n">Wassenhove</span><span class="w"></span>
+<span class="w">     </span><span class="mi">2</span><span class="w">  </span><span class="n">Yt</span><span class="w"></span>
+<span class="w">     </span><span class="mi">2</span><span class="w">  </span><span class="n">Zhang</span><span class="w"> </span><span class="n">Li</span><span class="w"></span>
+<span class="w">     </span><span class="mi">2</span><span class="w">  </span><span class="n">silence</span><span class="o">-</span><span class="n">coding</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">Alexander</span><span class="w"> </span><span class="n">Spies</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">George</span><span class="w"> </span><span class="n">Andronchik</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">Guillaume</span><span class="w"> </span><span class="n">Balaine</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">Hao</span><span class="w"> </span><span class="n">Xin</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">Jiacai</span><span class="w"> </span><span class="n">Liu</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">J&ouml;rn</span><span class="w"> </span><span class="n">Horstmann</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">Liang</span><span class="o">-</span><span class="n">Chi</span><span class="w"> </span><span class="n">Hsieh</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="nf">Max</span><span class="w"> </span><span class="n">Burke</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">NaincyKumariKnoldus</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">Nga</span><span class="w"> </span><span class="k">Tran</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">Patrick</span><span class="w"> </span><span class="n">More</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">Pierre</span><span class="w"> </span><span class="n">Zemb</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">Remzi</span><span class="w"> </span><span class="n">Yang</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">Sergey</span><span class="w"> </span><span class="n">Melnychuk</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">Stephen</span><span class="w"> </span><span class="n">Carman</span><span class="w"></span>
+<span class="w">     </span><span class="mi">1</span><span class="w">  </span><span class="n">doki</span><span class="w"></span>
+</code></pre></div>
+<p>The following sections highlight some of the changes in this release. Of course, many other bug fixes and
+improvements have been made and we encourage you to check out the
+<a href="https://github.com/apache/arrow-datafusion/blob/8.0.0/datafusion/CHANGELOG.md">changelog</a> for full details.</p>
+<h1>Summary</h1>
+<h2>DDL Support</h2>
+<p>DDL support has been expanded to include the following commands for creating databases, schemas, and views. This
+allows DataFusion to be used more effectively from the CLI.</p>
+<ul>
+<li><code>CREATE DATABASE</code></li>
+<li><code>CREATE VIEW</code></li>
+<li><code>CREATE SCHEMA</code></li>
+<li><code>CREATE EXTERNAL TABLE</code> now supports JSON files, <code>IF NOT EXISTS</code>, and partition columns</li>
+</ul>
+<h2>SQL Support</h2>
+<p>The SQL query planner now supports a number of new SQL features, including:</p>
+<ul>
+<li><em>Subqueries</em>: when used via <code>IN</code>, <code>EXISTS</code>, and as scalars</li>
+<li><em>Grouping Sets</em>: <code>CUBE</code> and <code>ROLLUP</code> grouping sets.</li>
+<li><em>Aggregate functions</em>: <code>approx_percentile</code>, <code>approx_percentile_cont</code>, <code>approx_percentile_cont_with_weight</code>, <code>approx_distinct</code>, <code>approx_median</code> and <code>array</code></li>
+<li><em><code>null</code> literals</em></li>
+<li><em>bitwise operations</em>: for example '<code>|</code>'</li>
+</ul>
+<p>There are also many bug fixes and improvements around normalizing identifiers consistently.</p>
+<p>We continue our tradition of incrementally releasing support for new
+features as they are developed. Thus, while the physical plan may not yet
+support all new features, it gets more complete each release. These
+changes also make DataFusion an increasingly compelling choice for
+projects looking for a SQL parser and query planner that can produce
+optimized logical plans that can be translated to
+their own execution engine.</p>
+<h2>Query Execution &amp; Internals</h2>
+<p>There are several notable improvements and new features in the query execution engine:</p>
+<ul>
+<li>The <code>ExecutionContext</code> has been renamed to <code>SessionContext</code> and now supports multi-tenancy</li>
+<li>The <code>ExecutionPlan</code> trait is no longer <code>async</code></li>
+<li>A new serialization API for serializing plans to bytes (based on protobuf)</li>
+</ul>
+<p>In addition, we have added several foundational features to drive even
+more advanced query processing into DataFusion, focusing on running
+arbitrary queries larger than available memory, and pushing the
+envelope for performance of sorting, grouping, and joining even
+further:</p>
+<ul>
+<li>Morsel-Driven Scheduler based on <a href="https://15721.courses.cs.cmu.edu/spring2016/papers/p743-leis.pdf">"Morsel-Driven Parallelism: A NUMA-Aware Query
+  Evaluation Framework for the Many-Core Age"</a></li>
+<li>Consolidated object store implementation and integration with parquet decoding</li>
+<li>Memory Limited Spilling sort operator</li>
+<li>Memory Limited Sort-Merge join operator</li>
+<li>High performance JIT code generation for tuple comparisons</li>
+<li>Memory efficient Row Format</li>
+</ul>
+<h2>Improved file support</h2>
+<p>DataFusion now supports JSON, both for reading and writing. There are also new DataFrame methods for writing query
+results to files in CSV, Parquet, and JSON format.</p>
+<h2>Ballista</h2>
+<p>Ballista continues to mature and now supports a wider range of operators and expressions. There are also improvements
+to the scheduler to support UDFs, and there are some robustness improvements, such as cleaning up work directories
+and persisting session configs to allow schedulers to restart and continue processing in-flight jobs.</p>
+<h2>Upcoming Work</h2>
+<p>Here are some of the initiatives that the community plans on working on prior to the next release.</p>
+<ul>
+<li>There is a <a href="https://docs.google.com/document/d/1jNRbadyStSrV5kifwn0khufAwq6OnzGczG4z8oTQJP4/edit?usp=sharing">proposal to move Ballista to its own top-level arrow-ballista repository</a>
+ to decouple DataFusion and Ballista releases and to allow each project to have documentation better targeted at
+  its particular audience.</li>
+<li>We plan on increasing the frequency of DataFusion releases, with monthly releases now instead of quarterly. This
+  is driven by requests from the increasing number of projects that now depend on DataFusion.</li>
+<li>There is ongoing work to implement new optimizer rules to rewrite queries containing subquery expressions as
+  joins, to support a wider range of queries.</li>
+<li>The new scheduler based on morsel-driven execution will continue to evolve in this next release, with work to
+  refine IO abstractions to improve performance and integration with the new scheduler.</li>
+<li>Improved performance for Sort, Grouping and Joins</li>
+</ul>
+<h1>How to Get Involved</h1>
+<p>If you are interested in contributing to DataFusion, and learning about state-of-the-art query processing, we would
+love to have you join us on the journey! You can help by trying out DataFusion on some of your own data and projects
+and let us know how it goes or contribute a PR with documentation, tests or code. A list of open issues suitable
+for beginners is <a href="https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22">here</a></p>
+<p>Check out our new <a href="https://arrow.apache.org/datafusion/community/communication.html">Communication Doc</a> on more
+ways to engage with the community.</p>
+        </div>
+      </div>
+    </div>    
+    <!-- footer -->
+    <div class="row">
+      <div class="large-12 medium-12 columns">
+        <p style="font-style: italic; font-size: 0.8rem; text-align: center;">
+          Copyright 2024, <a href="https://www.apache.org/">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a>.<br/>
+          Apache&reg; and the Apache feather logo are trademarks of The Apache Software Foundation.
+        </p>
+      </div>
+    </div>
+    <script src="/js/bootstrap.bundle.min.js"></script>  </main>
+  </body>
+</html>
