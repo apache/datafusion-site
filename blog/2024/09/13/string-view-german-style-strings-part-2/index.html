@@ -79,7 +79,7 @@ This coalescing ensures the batches are sufficiently sized to benefit from <a hr
 <p>The coalescing operation is implemented using the <a href="https://docs.rs/arrow/latest/arrow/compute/fn.take.html">take</a> and <a href="https://arrow.apache.org/rust/arrow/compute/kernels/filter/fn.filter.html">filter</a> kernels in arrow-rs. For StringArray, these kernels require copying the string contents to a new buffer without &ldquo;holes&rdquo; in between. This copy can be expensive especially when the new array is large.</p>
 <p>However, <code>take</code> and <code>filter</code> for StringViewArray can avoid the copy by reusing buffers from the old array. The kernels only need to create a new list of  <code>view</code>s that point at the same strings within the old buffers. 
 Figure 1 illustrates the difference between the output of both string representations. StringArray creates two new strings at offsets 0-17 and 17-32, while StringViewArray simply points to the original buffer at offsets 0 and 25.</p>
-<p><img alt="Diagram showing Zero-copy &lt;code&gt;take&lt;/code&gt;/&lt;code&gt;filter&lt;/code&gt; for StringViewArray" class="img-responsive" src="../images/string-view-2/figure1-zero-copy-take.png" width="100%"/></p>
+<p><img alt="Diagram showing Zero-copy &lt;code&gt;take&lt;/code&gt;/&lt;code&gt;filter&lt;/code&gt; for StringViewArray" class="img-responsive" src="/blog/images/string-view-2/figure1-zero-copy-take.png" width="100%"/></p>
 <p>Figure 1: Zero-copy <code>take</code>/<code>filter</code> for StringViewArray</p>
 <h1>When to GC?</h1>
 <p>Zero-copy <code>take/filter</code> is great for generating large arrays quickly, but it is suboptimal for highly selective filters, where most of the strings are filtered out. When the cardinality drops, StringViewArray buffers become sparse&mdash;only a small subset of the bytes in the buffer&rsquo;s memory are referred to by any <code>view</code>. This leads to excessive memory usage, especially in a <a href="https://github.com/apache/datafusion/issues/11628">filter-then-coalesce scenario</a>. For example, a StringViewArray with 10M strings may only refer to 1M strings after some filter operations; however, due to zero-copy take/filter, the (reused) 10M buffers can not be released/reused.</p>
@@ -103,7 +103,7 @@ In certain cases, we found that multiple calls to <a href="https://docs.rs/arrow
 <p>Let&rsquo;s consider ClickBench query 22, which selects multiple string fields (<code>URL</code>, <code>Title</code>, and <code>SearchPhase</code>) and applies several filters.</p>
 <p>We ran the benchmark using the following command in the DataFusion repo. Again, the <code>--string-view</code> option means we use StringViewArray instead of StringArray.</p>
 <p>To eliminate the impact of the faster Parquet reading using StringViewArray (see the first part of this blog), Figure 2 plots only the time spent in <code>FilterExec</code>. Without StringViewArray, the filter takes 7.17s; with StringViewArray, the filter only takes 4.86s, a 32% reduction in time. Moreover, we see a 17% improvement in end-to-end query performance.</p>
-<p><img alt="Figure showing StringViewArray reduces the filter time by 32% on ClickBench query 22." class="img-responsive" src="../images/string-view-2/figure2-filter-time.png" width="100%"/></p>
+<p><img alt="Figure showing StringViewArray reduces the filter time by 32% on ClickBench query 22." class="img-responsive" src="/blog/images/string-view-2/figure2-filter-time.png" width="100%"/></p>
 <p>Figure 2: StringViewArray reduces the filter time by 32% on ClickBench query 22.</p>
 <h1>Faster String Aggregation</h1>
 <p>So far, we have discussed how to exploit two StringViewArray features: reduced copy and faster filtering. This section focuses on reusing string bytes to repeat string values.</p>
@@ -143,6 +143,6 @@ In certain cases, we found that multiple calls to <a href="https://docs.rs/arrow
         </p>
       </div>
     </div>
-    <script src="/js/bootstrap.bundle.min.js"></script>  </main>
+    <script src="/blog/js/bootstrap.bundle.min.js"></script>  </main>
   </body>
 </html>

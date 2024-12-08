@@ -69,7 +69,7 @@ limitations under the License.
 <p>Grouped aggregations are a core part of any analytic tool, creating understandable summaries of huge data volumes. <a href="https://arrow.apache.org/datafusion/">Apache Arrow DataFusion</a>&rsquo;s parallel aggregation capability is 2-3x faster in the <a href="https://crates.io/crates/datafusion/28.0.0">newly released version <code>28.0.0</code></a> for queries with a large number (10,000 or more) of groups.</p>
 <p>Improving aggregation performance matters to all users of DataFusion. For example, both InfluxDB, a <a href="https://github.com/influxdata/influxdb">time series data platform</a> and Coralogix, a <a href="https://coralogix.com/?utm_source=InfluxDB&amp;utm_medium=Blog&amp;utm_campaign=organic">full-stack observability</a> platform, aggregate vast amounts of raw data to monitor and create insights for our customers. Improving DataFusion&rsquo;s performance lets us provide better user experiences by generating insights faster with fewer resources. Because DataFusion is open source and released under the permissive <a href="https://github.com/apache/arrow-datafusion/blob/main/LICENSE.txt">Apache 2.0</a> license, the whole DataFusion community benefits as well.</p>
 <p>With the new optimizations, DataFusion&rsquo;s grouping speed is now close to DuckDB, a system that regularly reports <a href="https://duckdblabs.github.io/db-benchmark/">great</a> <a href="https://duckdb.org/2022/03/07/aggregate-hashtable.html#experiments">grouping</a> benchmark performance numbers. Figure 1 contains a representative sample of <a href="https://github.com/ClickHouse/ClickBench/tree/main">ClickBench</a> on a single Parquet file, and the full results are at the end of this article.</p>
-<p><img src="../images/datafusion_fast_grouping/summary.png" width="700"/></p>
+<p><img src="/blog/images/datafusion_fast_grouping/summary.png" width="700"/></p>
 <p><strong>Figure 1</strong>: Query performance for ClickBench queries on queries 16, 17, 18 and 19 on a single Parquet file for DataFusion <code>27.0.0</code>, DataFusion <code>28.0.0</code> and DuckDB <code>0.8.1</code>.</p>
 <h2>Introduction to high cardinality grouping</h2>
 <p>Aggregation is a fancy word for computing summary statistics across many rows that have the same value in one or more columns. We call the rows with the same values <em>groups</em> and &ldquo;high cardinality&rdquo; means there are a large number of distinct groups in the dataset. At the time of writing, a &ldquo;large&rdquo; number of groups in analytic engines is around 10,000.</p>
@@ -321,7 +321,7 @@ Thus, to answer the query, DataFusion must map each of the 100M different input 
 <p>The full results of running the <a href="https://github.com/ClickHouse/ClickBench/tree/main">ClickBench</a> queries against the single Parquet file with DataFusion <code>27.0.0</code>, DataFusion <code>28.0.0</code>, and DuckDB <code>0.8.1</code> are below. These numbers were run on a GCP <code>e2-standard-8 machine</code> with 8 cores and 32 GB of RAM, using the scripts <a href="https://github.com/alamb/datafusion-duckdb-benchmark">here</a>.</p>
 <p>As the industry moves towards data systems assembled from components, it is increasingly important that they exchange data using open standards such as <a href="https://arrow.apache.org/">Apache Arrow</a> and <a href="https://parquet.apache.org/">Parquet</a> rather than custom storage and in-memory formats. Thus, this benchmark uses a single input Parquet file representative of many DataFusion users and aligned with the current trend in analytics of avoiding a costly load/transformation into a custom storage format prior to query.</p>
 <p>DataFusion now reaches near-DuckDB-speeds querying Parquet data. While we don&rsquo;t plan to engage in a benchmarking shootout with a team that literally wrote <a href="https://dl.acm.org/doi/abs/10.1145/3209950.3209955">Fair Benchmarking Considered Difficult</a>, hopefully everyone can agree that DataFusion <code>28.0.0</code> is a significant improvement.</p>
-<p><img src="../images/datafusion_fast_grouping/full.png" width="700"/></p>
+<p><img src="/blog/images/datafusion_fast_grouping/full.png" width="700"/></p>
 <p><strong>Figure 6</strong>: Performance of DataFusion <code>27.0.0</code>, DataFusion <code>28.0.0</code>, and DuckDB <code>0.8.1</code> on all 43 ClickBench queries against a single <code>hits.parquet</code> file. Lower is better.</p>
 <h3>Notes</h3>
 <p>DataFusion <code>27.0.0</code> was not able to run several queries due to either planner bugs (Q9, Q11, Q12, 14) or running out of memory (Q33). DataFusion <code>28.0.0</code> solves those issues.</p>
@@ -352,6 +352,6 @@ Thus, to answer the query, DataFusion must map each of the 100M different input 
         </p>
       </div>
     </div>
-    <script src="/js/bootstrap.bundle.min.js"></script>  </main>
+    <script src="/blog/js/bootstrap.bundle.min.js"></script>  </main>
   </body>
 </html>
