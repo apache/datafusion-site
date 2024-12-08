@@ -4,7 +4,7 @@ SITENAME = 'Apache DataFusion Blog'
 SITEDESC = 'The official new and blog for the Apache DataFusion project'
 SITEDOMAIN = 'datafusion.apache.org'
 SITEURL = 'https://datafusion.apache.org/blog'
-SITELOGO = 'https://datafusion.apache.org/favicon.ico'
+SITELOGO = 'https://datafusion.apache.org/blog/favicon.ico'
 SITEREPOSITORY = 'https://github.com/apache/datafusion-site/blob/main/content/'
 CURRENTYEAR = datetime.date.today().year
 TRADEMARKS = 'Apache HTTP Server, Apache, and the Apache feather logo are trademarks of The Apache Software Foundation.'
@@ -63,7 +63,7 @@ ASF_GENID = {
 # blogs/README.md is not intended for publication
 IGNORE_FILES = [ 'theme', 'README.md' ]
 
-FEED_RSS = "blog/feed.xml"
+FEED_RSS = "feed.xml"
 
 MARKDOWN = {
     'extension_configs': {

@@ -78,7 +78,7 @@ performance of individual TPC-H queries compared to the previous release.
 
 <i>TPC-H @ scale factor 100, in parquet format. Concurrency 24.</i>
 
-<img src="../images/2021-08-18-datafusion500perf.png" />
+<img src="/blog/images/2021-08-18-datafusion500perf.png" />
 
 We also extended support for more TPC-H queries: q7, q8, q9 and q13 are running successfully in DataFusion 5.0.
 

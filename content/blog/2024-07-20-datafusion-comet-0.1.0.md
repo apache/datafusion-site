@@ -84,7 +84,7 @@ Parquet format using a single executor with eight cores. See the [Comet Benchmar
 for details of the environment used for these benchmarks.
 
 <img
-src="../images/comet-0.1.0/tpch_allqueries.png"
+src="/blog/images/comet-0.1.0/tpch_allqueries.png"
 width="100%"
 class="img-responsive"
 alt="Chart showing TPC-H benchmark results for Comet 0.1.0"
@@ -101,7 +101,7 @@ can run natively.
 The following chart shows how much Comet currently accelerates each query from the benchmark.
 
 <img 
-  src="../images/comet-0.1.0/tpch_queries_speedup.png" 
+  src="/blog/images/comet-0.1.0/tpch_queries_speedup.png" 
   width="100%" 
   class="img-responsive" 
   alt="Chart showing TPC-H benchmark results for Comet 0.1.0"

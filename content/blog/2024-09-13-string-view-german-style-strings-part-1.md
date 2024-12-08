@@ -45,7 +45,7 @@ StringView support was released as part of [arrow-rs v52.2.0](https://crates.io/
 
 
 <img
-src="../images/string-view-1/figure1-performance.png"
+src="/blog/images/string-view-1/figure1-performance.png"
 width="100%"
 class="img-responsive"
 alt="End to end performance improvements for ClickBench queries"
@@ -59,7 +59,7 @@ Figure 1: StringView improves string-intensive ClickBench query performance by 2
 
 
 <img
-src="../images/string-view-1/figure2-string-view.png"
+src="/blog/images/string-view-1/figure2-string-view.png"
 width="100%"
 class="img-responsive"
 alt="Diagram of using StringArray and StringViewArray to represent the same string content"
@@ -119,7 +119,7 @@ On the other hand, reading Parquet data as a StringViewArray can re-use the same
 
 
 <img
-src="../images/string-view-1/figure4-copying.png"
+src="/blog/images/string-view-1/figure4-copying.png"
 width="100%"
 class="img-responsive"
 alt="Diagram showing how StringViewArray can avoid copying by reusing decoded Parquet pages."
@@ -145,7 +145,7 @@ You may wonder why we reported performance for BinaryViewArray when this post is
 Strings are stored as byte sequences. When reading data from (potentially untrusted) Parquet files, a Parquet decoder must ensure those byte sequences are valid UTF-8 strings, and most programming languages, including Rust, include highly[ optimized routines](https://doc.rust-lang.org/std/str/fn.from_utf8.html) for doing so.
 
 <img
-src="../images/string-view-1/figure5-loading-strings.png"
+src="/blog/images/string-view-1/figure5-loading-strings.png"
 width="100%"
 class="img-responsive"
 alt="Figure showing time to load strings from Parquet and the effect of optimized UTF-8 validation."
@@ -160,7 +160,7 @@ However, validating an arbitrary StringViewArray requires validating each string
 UTF-8 validation in Rust is highly optimized and favors longer strings (as shown in Figure 6), likely because it leverages SIMD instructions to perform parallel validation. The benefit of a single function call to validate UTF-8 over a function call for each string more than eliminates the advantage of avoiding the copy for StringViewArray.
 
 <img
-src="../images/string-view-1/figure6-utf8-validation.png"
+src="/blog/images/string-view-1/figure6-utf8-validation.png"
 width="100%"
 class="img-responsive"
 alt="Figure showing UTF-8 validation throughput vs string length."
@@ -210,7 +210,7 @@ We ran the benchmark in the DataFusion repo like this:
 With StringViewArray we saw a 24% end-to-end performance improvement, as shown in Figure 7. With the `--string-view` argument, the end-to-end query time is `944.3 ms, 869.6 ms, 861.9 ms` (three iterations). Without `--string-view`, the end-to-end query time is `1186.1 ms, 1126.1 ms, 1138.3 ms`.
 
 <img
-src="../images/string-view-1/figure7-end-to-end.png"
+src="/blog/images/string-view-1/figure7-end-to-end.png"
 width="100%"
 class="img-responsive"
 alt="Figure showing StringView improves end to end performance by 24 percent."
