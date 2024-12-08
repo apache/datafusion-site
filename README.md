@@ -2,6 +2,16 @@
 
 This repository contains the Apache DataFusion blog at https://datafusion.apache.org/blog/
 
+## Authoring blog posts
+
+It is recommended to use one of the existing posts and follow the same format.
+There are a couple of important impacts on the publishing:
+
+- The filename should match the YYYY-MM-DD-brief-title.md format. During
+    processing we parse these filenames to extract the date.
+- Images should link to "/blog/images/image-path.png" and not to a relative
+    path.
+
 ## Testing
 
 There are two ways to preview your blog post before publishing the site. You can
@@ -36,12 +46,14 @@ Then within the directory that contains `datafusion-site` you can build and test
 the site using:
 
 ```shell
-docker run --rm -it -p8000:8000 -v $PWD:/site df-site-build:latest
+docker run -it --rm -p8000:8000 -v $PWD:/site --entrypoint /bin/bash df-site-build:latest
+pelicanasf content -o blog
+python3 -m http.server 8000
 ```
 
-Navigate in your web browser to [http://localhost:8000] to view the live website.
-This page will monitor and rebuild the site when you make any changes to the file
-structure, so you can edit and see the results by just refreshing your browser.
+Navigate in your web browser to [http://localhost:8000/blog] to view the live
+website. In your terminal you can press Ctrl+C and rerun the last two commands
+to rebuild and publish the site.
 
 ## Publish site
 
