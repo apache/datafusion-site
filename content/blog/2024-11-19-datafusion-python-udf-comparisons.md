@@ -25,7 +25,7 @@ limitations under the License.
 {% endcomment %}
 -->
 
-## Personal Context
+### Personal Context
 
 For a few months now I’ve been working with [Apache DataFusion](https://datafusion.apache.org/), a
 fast query engine written in Rust. From my experience the language that nearly all data scientists
@@ -51,7 +51,7 @@ Rust implementation and the ergonomics of working in Python. Personally, I would
 purely in Rust, but I also recognize that since the industry works in Python we should meet the
 people where they are.
 
-## User-Defined Functions
+### User-Defined Functions
 
 The focus of this post is User-Defined Functions (UDFs). The DataFusion library gives a lot of
 useful functions already for doing DataFrame manipulation. These are going to be similar to those
@@ -80,7 +80,7 @@ flexibility to the user.
 
 Here are the two example use cases, taken from my own work but generalized.
 
-### Use Case 1: Scalar Function
+#### Use Case 1: Scalar Function
 
 I have a DataFrame and a list of tuples that I’m interested in. I want to filter out the DataFrame
 to only have values that match those tuples from certain columns in the DataFrame.
@@ -99,7 +99,7 @@ working in PySpark we would probably broadcast join the DataFrame created from t
 it is tiny. In practice, I have found that with some DataFrame libraries performing a filter rather
 than a join can be significantly faster. This is worth profiling for your specific use case.
 
-### Use Case 2: Aggregate Function
+#### Use Case 2: Aggregate Function
 
 I have a DataFrame with many values that I want to aggregate. I have already analyzed it and
 determined there is a noise level below which I do not want to include in my analysis. I want to
@@ -110,7 +110,7 @@ simply filter the DataFrame and then aggregate using the built-in `sum` function
 demonstrate doing this as a UDF primarily as an example of how to write UDAFs. We will use the
 PyArrow compute approach.
 
-## Pure Python approach
+### Pure Python approach
 
 The fastest way (developer time, not code time) for me to implement the scalar problem solution
 was to do something along the lines of “for each row, check the values of interest contains that
@@ -176,7 +176,7 @@ code. Any time you have to cross the barrier where you change values inside the 
 Python objects or vice versa you will pay **heavy** cost in that transformation. You will want to
 design your UDFs to avoid this as much as possible.
 
-## Python approach using PyArrow compute
+### Python approach using PyArrow compute
 
 DataFusion uses [Apache Arrow](https://arrow.apache.org/) as its in-memory data format. This can
 be seen in the way that Arrow Arrays are passed into the UDFs. We can take advantage of the fact
@@ -240,7 +240,7 @@ It’s worth noting that almost all of the PyArrow compute functions expect to t
 as their arguments. If you need to write a UDF that is evaluating three or more columns, you’ll
 need to do something akin to what we’ve shown here.
 
-## Rust UDF with Python wrapper
+### Rust UDF with Python wrapper
 
 This is the most complicated approach, but has the potential to be the most performant. What we
 will do here is write a Rust function to perform our computation and then expose that function to
@@ -362,7 +362,7 @@ udf_using_custom_rust_fn = udf(
 That's it! We've now got a third party Rust UDF with Python wrappers working with DataFusion's
 Python bindings!
 
-### Rust UDF with initialization
+#### Rust UDF with initialization
 
 Looking at the code above, you can see that it is hard coding the values we're interested in. There
 are many types of UDFs that don't require any additional data provided to them before they start
@@ -456,7 +456,7 @@ When you use this approach you will need to provide a `name` argument to `udf`. 
 class/struct does not get the `__qualname__` attribute that the `udf` function is looking for. You
 can give this udf any name you choose.
 
-### Rust UDF with direct iteration
+#### Rust UDF with direct iteration
 
 The final version of our scalar UDF is one where we implement it in Rust and iterate through all of
 the arrays ourselves. If you are iterating through more than 3 arrays at a time I recommend looking
@@ -517,7 +517,7 @@ iterate over all three columns in a single pass. Since each `zip` will return a 
 elements, a quick `map` turns them into the tuple format we need. Also, `StringArray` is a little
 different in the buffer it uses, so it is treated slightly differently from the others.
 
-## User Defined Aggregate Function
+### User Defined Aggregate Function
 
 Writing a user defined aggregate function or user defined window function is slightly more complex
 than scalar functions. This is because we must accumulate values and there is no guarantee that one
@@ -576,7 +576,7 @@ operations are different is computing an average. In `update()` we would create 
 a sum and a count. `state()` would return a list of these two values, and `merge()` would compute
 the final result.
 
-## User Defined Window Functions
+### User Defined Window Functions
 
 Writing a user defined window function is slightly more complex than an aggregate function due
 to the variety of ways that window functions are called. I recommend reviewing the
@@ -609,7 +609,7 @@ near 10x speed improvement. Then as we increase our complexity from using PyArro
 to implementing the UDF in Rust we see incremental improvements. Our fastest approach - iterating
 through the arrays ourselves does operate nearly 10% faster than the PyArrow compute approach.
 
-## Final Thoughts and Recommendations
+### Final Thoughts and Recommendations
 
 For anyone who is curious about [DataFusion](https://datafusion.apache.org/) I highly recommend
 giving it a try. This post was designed to make it easier for new users to the Python implementation
