@@ -51,7 +51,7 @@ pelicanasf content -o blog
 python3 -m http.server 8000
 ```
 
-Navigate in your web browser to [http://localhost:8000/blog] to view the live
+Navigate in your web browser to http://localhost:8000/blog view the live
 website. In your terminal you can press Ctrl+C and rerun the last two commands
 to rebuild and publish the site.
 
