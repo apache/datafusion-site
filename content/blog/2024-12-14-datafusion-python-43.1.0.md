@@ -43,7 +43,7 @@ We would like to point out four features that are particularly noteworthy.
 
 ## Arrow PyCapsule import and export
 
-Apache has stable C interface for moving data between different libraries, but difficulties
+Arrow has stable C interface for moving data between different libraries, but difficulties
 sometimes arise when different Python libraries expose this interface through different
 methods, requiring developers to write function calls for each library they are attempting
 to work with. A better approach is to use the [Arrow PyCapsule Interface] which gives a
