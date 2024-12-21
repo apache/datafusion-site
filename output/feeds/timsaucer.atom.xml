@@ -1,5 +1,156 @@
 <?xml version="1.0" encoding="utf-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - timsaucer</title><link href="https://datafusion.apache.org/blog/" rel="alternate"></link><link href="https://datafusion.apache.org/blog/feeds/timsaucer.atom.xml" rel="self"></link><id>https://datafusion.apache.org/blog/</id><updated>2024-11-19T00:00:00+00:00</updated><subtitle></subtitle><entry><title>Comparing approaches to User Defined Functions in Apache DataFusion using Python</title><link href="https://datafusion.apache.org/blog/2024/11/19/datafusion-python-udf-comparisons" rel="alternate"></link><published>2024-11-19T00:00:00+00:00</published><updated>2024-11-19T00:00:00+00:00</updated><author><name>timsaucer</name></author><id>tag:datafusion.apache.org,2024-11-19:/blog/2024/11/19/datafusion-python-udf-comparisons</id><summary type="html">&lt;!--
+<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - timsaucer</title><link href="https://datafusion.apache.org/blog/" rel="alternate"></link><link href="https://datafusion.apache.org/blog/feeds/timsaucer.atom.xml" rel="self"></link><id>https://datafusion.apache.org/blog/</id><updated>2024-12-14T00:00:00+00:00</updated><subtitle></subtitle><entry><title>Apache DataFusion Python 43.1.0 Released</title><link href="https://datafusion.apache.org/blog/2024/12/14/datafusion-python-43.1.0" rel="alternate"></link><published>2024-12-14T00:00:00+00:00</published><updated>2024-12-14T00:00:00+00:00</updated><author><name>timsaucer</name></author><id>tag:datafusion.apache.org,2024-12-14:/blog/2024/12/14/datafusion-python-43.1.0</id><summary type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+&lt;p&gt;We are happy to announce that &lt;a href="https://pypi.org/project/datafusion/43.1.0/"&gt;datafusion-python 43.1.0&lt;/a&gt; has been released. This release
+brings in all of the new features of the core &lt;a href="https://github.com/apache/datafusion/blob/main/dev/changelog/43.0.0.md"&gt;DataFusion 43.0.0&lt;/a&gt; library. Since the last
+blog post for &lt;a href="https://datafusion.apache.org/blog/2024/08/20/python-datafusion-40.0.0/"&gt;datafusion-python 40.1.0&lt;/a&gt;, a large number of improvements have been made
+that can …&lt;/p&gt;</summary><content type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+&lt;p&gt;We are happy to announce that &lt;a href="https://pypi.org/project/datafusion/43.1.0/"&gt;datafusion-python 43.1.0&lt;/a&gt; has been released. This release
+brings in all of the new features of the core &lt;a href="https://github.com/apache/datafusion/blob/main/dev/changelog/43.0.0.md"&gt;DataFusion 43.0.0&lt;/a&gt; library. Since the last
+blog post for &lt;a href="https://datafusion.apache.org/blog/2024/08/20/python-datafusion-40.0.0/"&gt;datafusion-python 40.1.0&lt;/a&gt;, a large number of improvements have been made
+that can be found in the &lt;a href="https://github.com/apache/datafusion-python/tree/main/dev/changelog"&gt;changelogs&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;We would like to point out four features that are particularly noteworthy.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Arrow PyCapsule import and export&lt;/li&gt;
+&lt;li&gt;User-Defined Window Functions&lt;/li&gt;
+&lt;li&gt;Foreign Table Providers&lt;/li&gt;
+&lt;li&gt;String View performance enhancements&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;Arrow PyCapsule import and export&lt;/h2&gt;
+&lt;p&gt;Arrow has stable C interface for moving data between different libraries, but difficulties
+sometimes arise when different Python libraries expose this interface through different
+methods, requiring developers to write function calls for each library they are attempting
+to work with. A better approach is to use the &lt;a href="https://arrow.apache.org/docs/format/CDataInterface/PyCapsuleInterface.html"&gt;Arrow PyCapsule Interface&lt;/a&gt; which gives a
+consistent method for exposing these data structures across libraries.&lt;/p&gt;
+&lt;p&gt;In &lt;a href="https://github.com/apache/datafusion-python/pull/825"&gt;PR #825&lt;/a&gt;, we introduced support for both importing and exporting Arrow data in
+&lt;code&gt;datafusion-python&lt;/code&gt;. With this improvement, you can now use a single function call to import
+a table from &lt;strong&gt;any&lt;/strong&gt; Python library that implements the &lt;a href="https://arrow.apache.org/docs/format/CDataInterface/PyCapsuleInterface.html"&gt;Arrow PyCapsule Interface&lt;/a&gt;.
+Many popular libaries, such as &lt;a href="https://pandas.pydata.org/"&gt;Pandas&lt;/a&gt; and &lt;a href="https://pola.rs/"&gt;Polars&lt;/a&gt;
+already support these interfaces.&lt;/p&gt;
+&lt;p&gt;Suppose you have a Pandas and Polars DataFrames named &lt;code&gt;df_pandas&lt;/code&gt; or &lt;code&gt;df_polars&lt;/code&gt;, respectively:&lt;/p&gt;
+&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="n"&gt;ctx&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;SessionContext&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+&lt;span class="n"&gt;df_dfn1&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;ctx&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;from_arrow&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;df_pandas&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;span class="n"&gt;df_dfn1&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;show&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+
+&lt;span class="n"&gt;df_dfn2&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;ctx&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;from_arrow&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;df_polars&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;span class="n"&gt;df_dfn2&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;show&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;One great thing about using this interface is that as any new library is developed and
+uses these stable interfaces, they will work out of the box with DataFusion!&lt;/p&gt;
+&lt;p&gt;Additionally, DataFusion DataFrames allow for exporting via the PyCapsule interface. For example,
+to convert a DataFrame to a PyArrow table, it is simply&lt;/p&gt;
+&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="nn"&gt;pyarrow&lt;/span&gt; &lt;span class="k"&gt;as&lt;/span&gt; &lt;span class="nn"&gt;pa&lt;/span&gt;
+&lt;span class="n"&gt;table&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;table&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;df&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;h2&gt;User-Defined Window Functions&lt;/h2&gt;
+&lt;p&gt;In &lt;code&gt;datafusion-python 42.0.0&lt;/code&gt; we released User-Defined Window Support in &lt;a href="https://github.com/apache/datafusion-python/pull/880"&gt;PR #880&lt;/a&gt;.
+For a detailed description of how these work please see the online documentation for
+all &lt;a href="https://datafusion.apache.org/python/user-guide/common-operations/udf-and-udfa.html"&gt;user-defined functions&lt;/a&gt;. Additionally the &lt;a href="https://github.com/apache/datafusion-python/tree/main/examples"&gt;examples folder&lt;/a&gt; contains a complete
+example demonstrating the four different modes of operation of window functions
+within DataFusion.&lt;/p&gt;
+&lt;h2&gt;Foreign Table Providers&lt;/h2&gt;
+&lt;p&gt;In the core &lt;a href="https://github.com/apache/datafusion/blob/main/dev/changelog/43.0.0.md"&gt;DataFusion 43.0.0&lt;/a&gt; release, support was added for a Foreign Function
+Interface to table providers. This creates a stable way for sharing functionality
+across different libraries, similar to the &lt;a href="https://arrow.apache.org/docs/format/CDataInterface.html"&gt;Arrow C data interface&lt;/a&gt; operates. This
+enables libraries, such as &lt;a href="https://delta.io/docs/"&gt;delta lake&lt;/a&gt; and &lt;a href="https://github.com/datafusion-contrib/datafusion-table-providers"&gt;datafusion-contrib&lt;/a&gt; to write their own
+table providers in Rust and expose them in Python without requiring a Rust dependency
+on &lt;code&gt;datafusion-python&lt;/code&gt;. This is important because it allows these libraries to
+operate with &lt;code&gt;datafusion-python&lt;/code&gt; regardless of which version of &lt;code&gt;datafusion&lt;/code&gt; they
+were built against.&lt;/p&gt;
+&lt;p&gt;To implement this feature in a table provider is quite simple. There is a complete
+example in the &lt;a href="https://github.com/apache/datafusion-python/tree/main/examples"&gt;examples folder&lt;/a&gt;, but the relevant code is here, exposed as a
+Python function via &lt;a href="https://pyo3.rs/"&gt;pyo3&lt;/a&gt;:&lt;/p&gt;
+&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="k"&gt;fn&lt;/span&gt; &lt;span class="nf"&gt;__datafusion_table_provider__&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="na"&gt;'py&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="n"&gt;py&lt;/span&gt;: &lt;span class="nc"&gt;Python&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="na"&gt;'py&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;-&amp;gt; &lt;span class="nc"&gt;PyResult&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="n"&gt;Bound&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="na"&gt;'py&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;PyCapsule&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="kd"&gt;let&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;name&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;CString&lt;/span&gt;::&lt;span class="n"&gt;new&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s"&gt;"datafusion_table_provider"&lt;/span&gt;&lt;span class="p"&gt;).&lt;/span&gt;&lt;span class="n"&gt;unwrap&lt;/span&gt;&lt;span class="p"&gt;();&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="kd"&gt;let&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;provider&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;            &lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;create_table&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;            &lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;map_err&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="n"&gt;e&lt;/span&gt;&lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;PyRuntimeError&lt;/span&gt;::&lt;span class="n"&gt;new_err&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;e&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;to_string&lt;/span&gt;&lt;span class="p"&gt;()))&lt;/span&gt;&lt;span class="o"&gt;?&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="kd"&gt;let&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;provider&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;FFI_TableProvider&lt;/span&gt;::&lt;span class="n"&gt;new&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Arc&lt;/span&gt;::&lt;span class="n"&gt;new&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;provider&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="kc"&gt;false&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="n"&gt;PyCapsule&lt;/span&gt;::&lt;span class="n"&gt;new_bound&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;py&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;provider&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nb"&gt;Some&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;name&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;clone&lt;/span&gt;&lt;span class="p"&gt;()))&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;That's it! All of the work of converting the table provider to use the FFI interface
+is performed by the core library.&lt;/p&gt;
+&lt;h2&gt;String View performance enhancements&lt;/h2&gt;
+&lt;p&gt;In the core &lt;a href="https://github.com/apache/datafusion/blob/main/dev/changelog/43.0.0.md"&gt;DataFusion 43.0.0&lt;/a&gt; release, the option to enable StringView by default
+was turned on. This leads to some significant performance enhancements, but it &lt;em&gt;may&lt;/em&gt;
+require some changes to users of &lt;code&gt;datafusion-python&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;To learn more about the excellent work on this feature please read &lt;a href="https://datafusion.apache.org/blog/2024/09/13/string-view-german-style-strings-part-1/"&gt;part 1&lt;/a&gt; and &lt;a href="https://datafusion.apache.org/blog/2024/09/13/string-view-german-style-strings-part-2/"&gt;part 2&lt;/a&gt;
+of the blog post describing how these enhancements can lead to 20-200% performance
+gains in some tests.&lt;/p&gt;
+&lt;p&gt;During our testing we identified some cases where we needed to adjust workflows to
+account for the fact that StringView is now the default type for string based operations.
+First, when performing manipulations on string objects there is a perfomance loss when
+needing to cast from string to string view or vice versa. To reap the best performance,
+ideally all of your string type data will use StringView. For most users this should be
+transparent. However if you specify a schema for reading or creating data, then you
+likely need to change from &lt;code&gt;pa.string()&lt;/code&gt; to &lt;code&gt;pa.string_view()&lt;/code&gt;. For our testing, this
+primarily happens during data loading operations and in unit tests.&lt;/p&gt;
+&lt;p&gt;If you wish to disable StringView as the default type to retain the old approach,
+you can do so following this example:&lt;/p&gt;
+&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="kn"&gt;from&lt;/span&gt; &lt;span class="nn"&gt;datafusion&lt;/span&gt; &lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="n"&gt;SessionContext&lt;/span&gt;
+&lt;span class="kn"&gt;from&lt;/span&gt; &lt;span class="nn"&gt;datafusion&lt;/span&gt; &lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="n"&gt;SessionConfig&lt;/span&gt;
+&lt;span class="n"&gt;config&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;SessionConfig&lt;/span&gt;&lt;span class="p"&gt;({&lt;/span&gt;&lt;span class="s2"&gt;"datafusion.execution.parquet.schema_force_view_types"&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="s2"&gt;"false"&lt;/span&gt;&lt;span class="p"&gt;})&lt;/span&gt;
+&lt;span class="n"&gt;ctx&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;SessionContext&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;config&lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="n"&gt;config&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;h2&gt;Appreciation&lt;/h2&gt;
+&lt;p&gt;We would like to thank everyone who has helped with these releases through their helpful
+conversations, code review, issue descriptions, and code authoring. We would especially
+like to thank the following authors of PRs who made these releases possible, listed in
+alphabetical order by username: &lt;a href="https://github.com/andygrove"&gt;@andygrove&lt;/a&gt;, &lt;a href="https://github.com/drauschenbach"&gt;@drauschenbach&lt;/a&gt;, &lt;a href="https://github.com/emgeee"&gt;@emgeee&lt;/a&gt;, &lt;a href="https://github.com/ion-elgreco"&gt;@ion-elgreco&lt;/a&gt;,
+&lt;a href="https://github.com/jcrist"&gt;@jcrist&lt;/a&gt;, &lt;a href="https://github.com/kosiew"&gt;@kosiew&lt;/a&gt;, &lt;a href="https://github.com/mesejo"&gt;@mesejo&lt;/a&gt;, &lt;a href="https://github.com/Michael-J-Ward"&gt;@Michael-J-Ward&lt;/a&gt;, and &lt;a href="https://github.com/sir-sigurd"&gt;@sir-sigurd&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Thank you!&lt;/p&gt;
+&lt;h2&gt;Get Involved&lt;/h2&gt;
+&lt;p&gt;The DataFusion Python team is an active and engaging community and we would love
+to have you join us and help the project.&lt;/p&gt;
+&lt;p&gt;Here are some ways to get involved:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Learn more by visiting the &lt;a href="https://datafusion.apache.org/python/index.html"&gt;DataFusion Python project&lt;/a&gt;
+page.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Try out the project and provide feedback, file issues, and contribute code.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;</content><category term="blog"></category></entry><entry><title>Comparing approaches to User Defined Functions in Apache DataFusion using Python</title><link href="https://datafusion.apache.org/blog/2024/11/19/datafusion-python-udf-comparisons" rel="alternate"></link><published>2024-11-19T00:00:00+00:00</published><updated>2024-11-19T00:00:00+00:00</updated><author><name>timsaucer</name></author><id>tag:datafusion.apache.org,2024-11-19:/blog/2024/11/19/datafusion-python-udf-comparisons</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with

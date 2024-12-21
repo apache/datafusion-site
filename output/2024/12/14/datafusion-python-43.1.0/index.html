@@ -1,0 +1,191 @@
+<!doctype html>
+<html class="no-js" lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apache DataFusion Python 43.1.0 Released - Apache DataFusion Blog</title>
+<link href="/blog/css/bootstrap.min.css" rel="stylesheet">
+<link href="/blog/css/fontawesome.all.min.css" rel="stylesheet">
+<link href="/blog/css/headerlink.css" rel="stylesheet">
+<link href="/blog/highlight/default.min.css" rel="stylesheet">
+<script src="/blog/highlight/highlight.js"></script>
+<script>hljs.highlightAll();</script>  </head>
+  <body class="d-flex flex-column h-100">
+  <main class="flex-shrink-0">
+<!-- nav bar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark" aria-label="Fifth navbar example">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/blog"><img src="/blog/images/logo_original4x.png" style="height: 32px;"/> Apache DataFusion Blog</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarADP" aria-controls="navbarADP" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarADP">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/about.html">About</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/feed.xml">RSS</a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>    
+
+
+<!-- page contents -->
+<div id="contents">
+    <div class="bg-white p-5 rounded">
+        <div class="col-sm-8 mx-auto">
+          <h1>
+              Apache DataFusion Python 43.1.0 Released
+          </h1>
+              <p>Posted on: Sat 14 December 2024 by timsaucer</p>
+              <!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+-->
+<p>We are happy to announce that <a href="https://pypi.org/project/datafusion/43.1.0/">datafusion-python 43.1.0</a> has been released. This release
+brings in all of the new features of the core <a href="https://github.com/apache/datafusion/blob/main/dev/changelog/43.0.0.md">DataFusion 43.0.0</a> library. Since the last
+blog post for <a href="https://datafusion.apache.org/blog/2024/08/20/python-datafusion-40.0.0/">datafusion-python 40.1.0</a>, a large number of improvements have been made
+that can be found in the <a href="https://github.com/apache/datafusion-python/tree/main/dev/changelog">changelogs</a>.</p>
+<p>We would like to point out four features that are particularly noteworthy.</p>
+<ul>
+<li>Arrow PyCapsule import and export</li>
+<li>User-Defined Window Functions</li>
+<li>Foreign Table Providers</li>
+<li>String View performance enhancements</li>
+</ul>
+<h2>Arrow PyCapsule import and export</h2>
+<p>Arrow has stable C interface for moving data between different libraries, but difficulties
+sometimes arise when different Python libraries expose this interface through different
+methods, requiring developers to write function calls for each library they are attempting
+to work with. A better approach is to use the <a href="https://arrow.apache.org/docs/format/CDataInterface/PyCapsuleInterface.html">Arrow PyCapsule Interface</a> which gives a
+consistent method for exposing these data structures across libraries.</p>
+<p>In <a href="https://github.com/apache/datafusion-python/pull/825">PR #825</a>, we introduced support for both importing and exporting Arrow data in
+<code>datafusion-python</code>. With this improvement, you can now use a single function call to import
+a table from <strong>any</strong> Python library that implements the <a href="https://arrow.apache.org/docs/format/CDataInterface/PyCapsuleInterface.html">Arrow PyCapsule Interface</a>.
+Many popular libaries, such as <a href="https://pandas.pydata.org/">Pandas</a> and <a href="https://pola.rs/">Polars</a>
+already support these interfaces.</p>
+<p>Suppose you have a Pandas and Polars DataFrames named <code>df_pandas</code> or <code>df_polars</code>, respectively:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">ctx</span> <span class="o">=</span> <span class="n">SessionContext</span><span class="p">()</span>
+<span class="n">df_dfn1</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">from_arrow</span><span class="p">(</span><span class="n">df_pandas</span><span class="p">)</span>
+<span class="n">df_dfn1</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+
+<span class="n">df_dfn2</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">from_arrow</span><span class="p">(</span><span class="n">df_polars</span><span class="p">)</span>
+<span class="n">df_dfn2</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</code></pre></div>
+<p>One great thing about using this interface is that as any new library is developed and
+uses these stable interfaces, they will work out of the box with DataFusion!</p>
+<p>Additionally, DataFusion DataFrames allow for exporting via the PyCapsule interface. For example,
+to convert a DataFrame to a PyArrow table, it is simply</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">import</span> <span class="nn">pyarrow</span> <span class="k">as</span> <span class="nn">pa</span>
+<span class="n">table</span> <span class="o">=</span> <span class="n">pa</span><span class="o">.</span><span class="n">table</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
+</code></pre></div>
+<h2>User-Defined Window Functions</h2>
+<p>In <code>datafusion-python 42.0.0</code> we released User-Defined Window Support in <a href="https://github.com/apache/datafusion-python/pull/880">PR #880</a>.
+For a detailed description of how these work please see the online documentation for
+all <a href="https://datafusion.apache.org/python/user-guide/common-operations/udf-and-udfa.html">user-defined functions</a>. Additionally the <a href="https://github.com/apache/datafusion-python/tree/main/examples">examples folder</a> contains a complete
+example demonstrating the four different modes of operation of window functions
+within DataFusion.</p>
+<h2>Foreign Table Providers</h2>
+<p>In the core <a href="https://github.com/apache/datafusion/blob/main/dev/changelog/43.0.0.md">DataFusion 43.0.0</a> release, support was added for a Foreign Function
+Interface to table providers. This creates a stable way for sharing functionality
+across different libraries, similar to the <a href="https://arrow.apache.org/docs/format/CDataInterface.html">Arrow C data interface</a> operates. This
+enables libraries, such as <a href="https://delta.io/docs/">delta lake</a> and <a href="https://github.com/datafusion-contrib/datafusion-table-providers">datafusion-contrib</a> to write their own
+table providers in Rust and expose them in Python without requiring a Rust dependency
+on <code>datafusion-python</code>. This is important because it allows these libraries to
+operate with <code>datafusion-python</code> regardless of which version of <code>datafusion</code> they
+were built against.</p>
+<p>To implement this feature in a table provider is quite simple. There is a complete
+example in the <a href="https://github.com/apache/datafusion-python/tree/main/examples">examples folder</a>, but the relevant code is here, exposed as a
+Python function via <a href="https://pyo3.rs/">pyo3</a>:</p>
+<div class="codehilite"><pre><span></span><code><span class="w">    </span><span class="k">fn</span> <span class="nf">__datafusion_table_provider__</span><span class="o">&lt;</span><span class="na">'py</span><span class="o">&gt;</span><span class="p">(</span><span class="w"></span>
+<span class="w">        </span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"></span>
+<span class="w">        </span><span class="n">py</span>: <span class="nc">Python</span><span class="o">&lt;</span><span class="na">'py</span><span class="o">&gt;</span><span class="p">,</span><span class="w"></span>
+<span class="w">    </span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">PyResult</span><span class="o">&lt;</span><span class="n">Bound</span><span class="o">&lt;</span><span class="na">'py</span><span class="p">,</span><span class="w"> </span><span class="n">PyCapsule</span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">CString</span>::<span class="n">new</span><span class="p">(</span><span class="s">"datafusion_table_provider"</span><span class="p">).</span><span class="n">unwrap</span><span class="p">();</span><span class="w"></span>
+
+<span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">provider</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="bp">self</span><span class="w"></span>
+<span class="w">            </span><span class="p">.</span><span class="n">create_table</span><span class="p">()</span><span class="w"></span>
+<span class="w">            </span><span class="p">.</span><span class="n">map_err</span><span class="p">(</span><span class="o">|</span><span class="n">e</span><span class="o">|</span><span class="w"> </span><span class="n">PyRuntimeError</span>::<span class="n">new_err</span><span class="p">(</span><span class="n">e</span><span class="p">.</span><span class="n">to_string</span><span class="p">()))</span><span class="o">?</span><span class="p">;</span><span class="w"></span>
+<span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">provider</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">FFI_TableProvider</span>::<span class="n">new</span><span class="p">(</span><span class="n">Arc</span>::<span class="n">new</span><span class="p">(</span><span class="n">provider</span><span class="p">),</span><span class="w"> </span><span class="kc">false</span><span class="p">);</span><span class="w"></span>
+
+<span class="w">        </span><span class="n">PyCapsule</span>::<span class="n">new_bound</span><span class="p">(</span><span class="n">py</span><span class="p">,</span><span class="w"> </span><span class="n">provider</span><span class="p">,</span><span class="w"> </span><span class="nb">Some</span><span class="p">(</span><span class="n">name</span><span class="p">.</span><span class="n">clone</span><span class="p">()))</span><span class="w"></span>
+<span class="w">    </span><span class="p">}</span><span class="w"></span>
+</code></pre></div>
+<p>That's it! All of the work of converting the table provider to use the FFI interface
+is performed by the core library.</p>
+<h2>String View performance enhancements</h2>
+<p>In the core <a href="https://github.com/apache/datafusion/blob/main/dev/changelog/43.0.0.md">DataFusion 43.0.0</a> release, the option to enable StringView by default
+was turned on. This leads to some significant performance enhancements, but it <em>may</em>
+require some changes to users of <code>datafusion-python</code>.</p>
+<p>To learn more about the excellent work on this feature please read <a href="https://datafusion.apache.org/blog/2024/09/13/string-view-german-style-strings-part-1/">part 1</a> and <a href="https://datafusion.apache.org/blog/2024/09/13/string-view-german-style-strings-part-2/">part 2</a>
+of the blog post describing how these enhancements can lead to 20-200% performance
+gains in some tests.</p>
+<p>During our testing we identified some cases where we needed to adjust workflows to
+account for the fact that StringView is now the default type for string based operations.
+First, when performing manipulations on string objects there is a perfomance loss when
+needing to cast from string to string view or vice versa. To reap the best performance,
+ideally all of your string type data will use StringView. For most users this should be
+transparent. However if you specify a schema for reading or creating data, then you
+likely need to change from <code>pa.string()</code> to <code>pa.string_view()</code>. For our testing, this
+primarily happens during data loading operations and in unit tests.</p>
+<p>If you wish to disable StringView as the default type to retain the old approach,
+you can do so following this example:</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span> <span class="nn">datafusion</span> <span class="kn">import</span> <span class="n">SessionContext</span>
+<span class="kn">from</span> <span class="nn">datafusion</span> <span class="kn">import</span> <span class="n">SessionConfig</span>
+<span class="n">config</span> <span class="o">=</span> <span class="n">SessionConfig</span><span class="p">({</span><span class="s2">"datafusion.execution.parquet.schema_force_view_types"</span><span class="p">:</span> <span class="s2">"false"</span><span class="p">})</span>
+<span class="n">ctx</span> <span class="o">=</span> <span class="n">SessionContext</span><span class="p">(</span><span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">)</span>
+</code></pre></div>
+<h2>Appreciation</h2>
+<p>We would like to thank everyone who has helped with these releases through their helpful
+conversations, code review, issue descriptions, and code authoring. We would especially
+like to thank the following authors of PRs who made these releases possible, listed in
+alphabetical order by username: <a href="https://github.com/andygrove">@andygrove</a>, <a href="https://github.com/drauschenbach">@drauschenbach</a>, <a href="https://github.com/emgeee">@emgeee</a>, <a href="https://github.com/ion-elgreco">@ion-elgreco</a>,
+<a href="https://github.com/jcrist">@jcrist</a>, <a href="https://github.com/kosiew">@kosiew</a>, <a href="https://github.com/mesejo">@mesejo</a>, <a href="https://github.com/Michael-J-Ward">@Michael-J-Ward</a>, and <a href="https://github.com/sir-sigurd">@sir-sigurd</a>.</p>
+<p>Thank you!</p>
+<h2>Get Involved</h2>
+<p>The DataFusion Python team is an active and engaging community and we would love
+to have you join us and help the project.</p>
+<p>Here are some ways to get involved:</p>
+<ul>
+<li>
+<p>Learn more by visiting the <a href="https://datafusion.apache.org/python/index.html">DataFusion Python project</a>
+page.</p>
+</li>
+<li>
+<p>Try out the project and provide feedback, file issues, and contribute code.</p>
+</li>
+</ul>
+        </div>
+      </div>
+    </div>    
+    <!-- footer -->
+    <div class="row">
+      <div class="large-12 medium-12 columns">
+        <p style="font-style: italic; font-size: 0.8rem; text-align: center;">
+          Copyright 2024, <a href="https://www.apache.org/">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a>.<br/>
+          Apache&reg; and the Apache feather logo are trademarks of The Apache Software Foundation.
+        </p>
+      </div>
+    </div>
+    <script src="/blog/js/bootstrap.bundle.min.js"></script>  </main>
+  </body>
+</html>
