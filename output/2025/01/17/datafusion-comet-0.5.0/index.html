@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta http-equiv="x-ua-compatible" content="ie=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Apache DataFusion Comet 0.4.0 Release - Apache DataFusion Blog</title>
+    <title>Apache DataFusion Comet 0.5.0 Release - Apache DataFusion Blog</title>
 <link href="/blog/css/bootstrap.min.css" rel="stylesheet">
 <link href="/blog/css/fontawesome.all.min.css" rel="stylesheet">
 <link href="/blog/css/headerlink.css" rel="stylesheet">
@@ -40,9 +40,9 @@
     <div class="bg-white p-5 rounded">
         <div class="col-sm-8 mx-auto">
           <h1>
-              Apache DataFusion Comet 0.4.0 Release
+              Apache DataFusion Comet 0.5.0 Release
           </h1>
-              <p>Posted on: Wed 20 November 2024 by pmc</p>
+              <p>Posted on: Fri 17 January 2025 by pmc</p>
               <!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
@@ -61,59 +61,54 @@ See the License for the specific language governing permissions and
 limitations under the License.
 {% endcomment %}
 -->
-<p>The Apache DataFusion PMC is pleased to announce version 0.4.0 of the <a href="https://datafusion.apache.org/comet/">Comet</a> subproject.</p>
+<p>The Apache DataFusion PMC is pleased to announce version 0.5.0 of the <a href="https://datafusion.apache.org/comet/">Comet</a> subproject.</p>
 <p>Comet is an accelerator for Apache Spark that translates Spark physical plans to DataFusion physical plans for
 improved performance and efficiency without requiring any code changes.</p>
 <p>Comet runs on commodity hardware and aims to provide 100% compatibility with Apache Spark. Any operators or
 expressions that are not fully compatible will fall back to Spark unless explicitly enabled by the user. Refer
 to the <a href="https://datafusion.apache.org/comet/user-guide/compatibility.html">compatibility guide</a> for more information.</p>
-<p>This release covers approximately six weeks of development work and is the result of merging 51 PRs from 10
-contributors. See the <a href="https://github.com/apache/datafusion-comet/blob/main/dev/changelog/0.4.0.md">change log</a> for more information.</p>
+<p>This release covers approximately 8 weeks of development work and is the result of merging 69 PRs from 15
+contributors. See the <a href="https://github.com/apache/datafusion-comet/blob/main/dev/changelog/0.5.0.md">change log</a> for more information.</p>
 <h2>Release Highlights</h2>
-<h3>Performance &amp; Stability</h3>
-<p>There are a number of performance and stability improvements in this release. Here is a summary of some of the
-larger changes. Current benchmarking results can be found in the <a href="https://datafusion.apache.org/comet/contributor-guide/benchmarking.html">Comet Benchmarking Guide</a>.</p>
-<h4>Unified Memory Management</h4>
-<p>Comet now uses a unified memory management approach that shares an off-heap memory pool with Apache Spark, resulting
-in a much simpler configuration. Comet now requires <code>spark.memory.offHeap.enabled=true</code>. This approach provides a
-holistic view of memory usage in Spark and Comet and makes it easier to optimize system performance.</p>
-<h4>Faster Joins</h4>
-<p>Apache Spark supports sort-merge and hash joins, which have similar performance characteristics. Spark defaults to
-using sort-merge joins because they are less likely to result in OutOfMemory exceptions. In vectorized query
-engines such as DataFusion, hash joins outperform sort-merge joins. Comet now has an experimental feature to
-replace Spark sort-merge joins with hash joins for improved performance. This feature is experimental because
-there is currently no spill-to-disk support in the hash join implementation. This feature can be enabled by
-setting <code>spark.comet.exec.replaceSortMergeJoin=true</code>.</p>
-<h4>Bloom Filter Aggregates</h4>
-<p>Spark&rsquo;s optimizer can insert Bloom filter aggregations and filters to prune large result sets before a shuffle. However,
-Comet would fall back to Spark for the aggregation. Comet now has native support for Bloom filter aggregations
-after previously supporting Bloom filter testing. Users no longer need to set
-<code>spark.sql.optimizer.runtime.bloomFilter.enabled=false</code> when using Comet.</p>
-<h4>Complex Type support</h4>
-<p>This release has the following improvements to complex type support:</p>
-<ul>
-<li>Implemented <code>ArrayAppend</code> and <code>GetArrayStructFields</code>.</li>
-<li>Implemented native cast between structs</li>
-<li>Implemented native cast from structs to string</li>
-</ul>
-<h2>Roadmap</h2>
-<p>One of the highest priority items on the roadmap is to add support for reading complex types (maps, structs, and arrays)
-from Parquet sources, both when reading Parquet directly and from Iceberg.</p>
-<p>Comet currently has proprietary native code for decoding Parquet pages, native column readers for all of Spark&rsquo;s
-primitive types, and special handling for Spark-specific use cases such as timestamp rebasing and decimal type
-promotion. This implementation does not yet support complex types. File IO, decryption, and decompression are handled
-in JVM code, and Parquet pages are passed on to native code for decoding.</p>
-<p>Rather than add complex type support to this existing code, we are exploring two main options to allow us to
-leverage more of the upstream Arrow and DataFusion code.</p>
-<h3>Use DataFusion&rsquo;s ParquetExec</h3>
-<p>For use cases where DataFusion can support reading a Parquet source, Comet could create a native plan that uses
-DataFusion&rsquo;s ParquetExec. We are investigating using DataFusion&rsquo;s SchemaAdapter to handle some Spark-specific
-handling of timestamps and decimals.</p>
-<h3>Use Arrow&rsquo;s Parquet Batch Reader</h3>
-<p>For use cases not supported by DataFusion&rsquo;s ParquetExec, such as integrating with Iceberg, we are exploring
-replacing our current native Parquet decoding logic with the Arrow readers provided by the Parquet crate.</p>
-<p>Iceberg already provides a vectorized Spark reader for Parquet. A <a href="https://github.com/apache/iceberg/pull/9841">PR</a> is open against Iceberg for adding a native
-version based on Comet, and we hope to update this to leverage the improvements outlined above.</p>
+<h3>Performance</h3>
+<p>Comet 0.5.0 achieves a 1.9x speedup for single-node TPC-H @ 100 GB, an improvement from 1.7x in the previous release.</p>
+<p><img alt="Chart showing TPC-H benchmark results for Comet 0.5.0" class="img-responsive" src="/blog/images/comet-0.5.0/tpch_allqueries.png" width="100%"/></p>
+<p><img alt="Chart showing TPC-H benchmark results for Comet 0.5.0" class="img-responsive" src="/blog/images/comet-0.5.0/tpch_queries_compare.png" width="100%"/></p>
+<p>More benchmarking results can be found in the <a href="https://datafusion.apache.org/comet/contributor-guide/benchmarking.html">Comet Benchmarking Guide</a>.</p>
+<h3>Shuffle Improvements</h3>
+<p>Comet now supports multiple compression algorithms for compressing shuffle files. Previously, only ZSTD was supported
+but Comet now also supports LZ4 and Snappy. The default is now LZ4, which matches the default in Spark. ZSTD may be
+a better choice when the compression ratio is more important than CPU overhead.</p>
+<p>Previously, Comet used Arrow IPC to encode record batches into shuffle files. Although Arrow IPC is a good
+general-purpose framework for serializing Arrow record batches, we found that we could get better performance using
+a custom serialization approach optimized for Comet. One optimization is that the schema is encoded once per shuffle
+operation rather than once per batch. There are some planned performance improvements in the Rust implementation of
+Arrow IPC and Comet may switch back to Arrow IPC in the future.</p>
+<p>Comet provides two shuffle implementations. Comet native shuffle is the fastest and performs repartitioning in
+native code. Comet columnar shuffle delegates to Spark to perform repartitioning and is used in cases where native
+shuffle is not supported, such as with <code>RangePartitioning</code>. Comet generally tries to use native shuffle first, then
+columnar shuffle, and finally falls back to Spark if neither is supported. There was a bug in previous releases
+where Comet would sometimes fall back to Spark shuffle if native shuffle was not supported and missed opportunities
+to use columnar shuffle. This bug was fixed in this release but currently requires the configuration setting
+<code>spark.comet.exec.shuffle.fallbackToColumnar=true</code>. This will be enabled by default in the next release.</p>
+<h3>Memory Management</h3>
+<p>Comet 0.4.0 required Spark to be configured to use off-heap memory. In this release it is no longer required and
+there are multiple options for configuring Comet to use on-heap memory instead. More details are available in the
+<a href="https://datafusion.apache.org/comet/user-guide/tuning.html">Comet Tuning Guide</a>.</p>
+<h3>Spark SQL Metrics</h3>
+<p>Comet now provides detailed metrics for native shuffle, showing time for repartitioning, encoding and compressing,
+and writing to disk.</p>
+<h3>Crate Reorganization</h3>
+<p>One of the goals of the Comet project is to make Spark-compatible functionality available to other projects that
+are based on DataFusion. In this release, many implementations of Spark-compatible expressions were moved from the
+unpublished <code>datafusion-comet</code> crate, which provides the native part of the Spark plugin, into the
+<code>datafusion-comet-spark-expr</code> crate. There is also ongoing work to reorganize this crate to move expressions into
+subfolders named after the group name that Spark uses to organize expressions. For example, there are now subfolders
+named <code>agg_funcs</code>, <code>datetime_funcs</code>, <code>hash_funcs</code>, and so on.</p>
+<h2>Update on Complex Type Support</h2>
+<p>Good progress has been made with proof-of-concept work using DataFusion&rsquo;s <code>ParquetExec</code>, which has the advantage of
+supporting complex types. This work is available on the <code>comet-parquet-exec</code> branch, and the current focus is on
+fixing test regressions, particularly regarding timestamp conversion issues.</p>
 <h2>Getting Involved</h2>
 <p>The Comet project welcomes new contributors. We use the same <a href="https://datafusion.apache.org/contributor-guide/communication.html#slack-and-discord">Slack and Discord</a> channels as the main DataFusion
 project and have a weekly <a href="https://docs.google.com/document/d/1NBpkIAuU7O9h8Br5CbFksDhX-L9TyO9wmGLPMe0Plc8/edit?usp=sharing">DataFusion video call</a>.</p>
