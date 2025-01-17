@@ -47,9 +47,19 @@ contributors. See the [change log] for more information.
 
 Comet 0.5.0 achieves a 1.9x speedup for single-node TPC-H @ 100 GB, an improvement from 1.7x in the previous release.
 
-![tpch-summary](https://datafusion.apache.org/comet/_images/tpch_allqueries.png)
+<img
+src="/blog/images/comet-0.5.0/tpch_allqueries.png"
+width="100%"
+class="img-responsive"
+alt="Chart showing TPC-H benchmark results for Comet 0.5.0"
+/>
 
-![tpch-queries](https://datafusion.apache.org/comet/_images/tpch_queries_compare.png)
+<img
+src="/blog/images/comet-0.5.0/tpch_queries_compare.png"
+width="100%"
+class="img-responsive"
+alt="Chart showing TPC-H benchmark results for Comet 0.5.0"
+/>
 
 More benchmarking results can be found in the [Comet Benchmarking Guide].
 
