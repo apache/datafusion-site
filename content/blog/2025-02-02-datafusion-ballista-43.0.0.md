@@ -40,7 +40,7 @@ In recent months, our development efforts have been directed toward providing a 
 
 [delta-rs]: https://github.com/delta-io/delta-rs
 
-The most significant enhancement in this release is the deprecation of `BallistaContext`, which has been superseded by the DataFusion `SessionContext`. This change enables DataFusion applications written in Rust to execute on a Ballista cluster with minimal modifications. Beyond simplifying migration and reducing maintenance overhead, this update introduces distributed write functionality to Ballista for the first time, significantly enhancing its capabilities. At the moment there is a gap between DataFusion and Ballista, which we will try to bridge in the future.
+The most significant enhancement in this release is the deprecation of `BallistaContext`, which has been superseded by the DataFusion `SessionContext`. This change enables DataFusion applications written in Rust to execute on a Ballista cluster with minimal modifications. Beyond simplifying migration and reducing maintenance overhead, this update introduces distributed write functionality to Ballista for the first time, significantly enhancing its capabilities.
 
 ```rust
 use ballista::prelude::*;
@@ -70,13 +70,15 @@ async fn main() -> datafusion::error::Result<()> {
 }
 ```
 
-Additionally, Ballista’s versioning scheme has been aligned with that of DataFusion, ensuring that Ballista's version number reflects the compatible DataFusion version..
+Additionally, Ballista’s versioning scheme has been aligned with that of DataFusion, ensuring that Ballista's version number reflects the compatible DataFusion version.
+
+At the moment there is a gap between DataFusion and Ballista, which we will try to bridge in the future.
 
 ### Removal of Experimental Features
 
 Ballista had grown in scope to include several experimental features in various states of completeness. Some features have been removed from this release in an effort to strip Ballista back to its core and make it easier to maintain and extend.
 
-Specifically, the caching subsystem, object store registry, plugin subsystem, key-value stores for persistent scheduler state, and the UI have been removed.
+Specifically, the caching subsystem, predefined object store registry, plugin subsystem, key-value stores for persistent scheduler state, and the UI have been removed.
 
 ### Performance & Scalability
 
@@ -85,7 +87,7 @@ Ballista has significantly leveraged the advancements made in the DataFusion pro
 Per query comparison:
 
 <img
-src="https://github.com/apache/datafusion-ballista/raw/e9e8f9a783d9dbc8b40f3e57e2a7294788df6b93/docs/source/_static/images/tpch_queries_compare.png"
+src="/blog/images/datafusion-ballista-43.0.0/tpch_queries_compare.png"
 width="100%"
 class="img-responsive"
 alt="Per query comparison"
@@ -94,7 +96,7 @@ alt="Per query comparison"
 Relative speedup:
 
 <img
-src="https://github.com/apache/datafusion-ballista/raw/e9e8f9a783d9dbc8b40f3e57e2a7294788df6b93/docs/source/_static/images/tpch_queries_speedup_rel.png"
+src="/blog/images/datafusion-ballista-43.0.0/tpch_queries_speedup_rel.png"
 width="100%"
 class="img-responsive"
 alt="Relative speedup graph"
@@ -103,7 +105,7 @@ alt="Relative speedup graph"
 The overall speedup is 2.9x
 
 <img
-src="https://github.com/apache/datafusion-ballista/raw/e9e8f9a783d9dbc8b40f3e57e2a7294788df6b93/docs/source/_static/images/tpch_allqueries.png"
+src="/blog/images/datafusion-ballista-43.0.0/tpch_allqueries.png"
 width="50%"
 class="img-responsive"
 alt="Overall speedup"
@@ -111,10 +113,10 @@ alt="Overall speedup"
 
 ### New Logo
 
-We got logo updated as well, visually similar to other DataFusion projects.
+Ballista now has a new logo, which is visually similar to other DataFusion projects.  
 
 <img
-src="https://github.com/apache/datafusion-ballista/raw/main/docs/source/_static/images/ballista-logo.png"
+src="/blog/images/datafusion-ballista-43.0.0/ballista-logo.png"
 width="50%"
 class="img-responsive"
 alt="New logo"
