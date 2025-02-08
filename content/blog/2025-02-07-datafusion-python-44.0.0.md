@@ -1,6 +1,6 @@
 ---
 layout: post
-title: Apache DataFusion Python 43.1.0 Released
+title: Apache DataFusion Python 44.0.0 Released
 date: 2025-02-07
 author: timsaucer
 categories: [release]
