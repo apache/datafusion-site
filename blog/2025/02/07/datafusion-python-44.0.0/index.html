@@ -1,0 +1,138 @@
+<!doctype html>
+<html class="no-js" lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apache DataFusion Python 43.1.0 Released - Apache DataFusion Blog</title>
+<link href="/blog/css/bootstrap.min.css" rel="stylesheet">
+<link href="/blog/css/fontawesome.all.min.css" rel="stylesheet">
+<link href="/blog/css/headerlink.css" rel="stylesheet">
+<link href="/blog/highlight/default.min.css" rel="stylesheet">
+<script src="/blog/highlight/highlight.js"></script>
+<script>hljs.highlightAll();</script>  </head>
+  <body class="d-flex flex-column h-100">
+  <main class="flex-shrink-0">
+<!-- nav bar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark" aria-label="Fifth navbar example">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/blog"><img src="/blog/images/logo_original4x.png" style="height: 32px;"/> Apache DataFusion Blog</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarADP" aria-controls="navbarADP" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarADP">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/about.html">About</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/feed.xml">RSS</a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>    
+
+
+<!-- page contents -->
+<div id="contents">
+    <div class="bg-white p-5 rounded">
+        <div class="col-sm-8 mx-auto">
+          <h1>
+              Apache DataFusion Python 43.1.0 Released
+          </h1>
+              <p>Posted on: Fri 07 February 2025 by timsaucer</p>
+              <!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+-->
+<p>We are happy to announce that <a href="https://pypi.org/project/datafusion/44.0.0/">datafusion-python 44.0.0</a> has been released. This release
+brings in all of the new features of the core <a href="https://github.com/apache/datafusion/blob/main/dev/changelog/44.0.0.md">DataFusion 44.0.0</a> library. You can see the
+full details of the improvements in the <a href="https://github.com/apache/datafusion-python/tree/main/dev/changelog">changelogs</a>.</p>
+<h2>Asynchronous Iteration of Record Batches</h2>
+<p>Retrieving a <code>RecordBatch</code> from a <code>RecordBatchStream</code> was a synchronous call, which would
+require the end user's code to wait for the data retrieval. This is described in
+<a href="https://github.com/apache/datafusion-python/issues/974">Issue 974</a>. We continue to support this as a synchronous iterator, but we have also added
+in the ability to retrieve the <code>RecordBatch</code> using the Python asynchronous <code>anext</code>
+function.</p>
+<h1>Default Compression for Parquet files</h1>
+<p>With <a href="https://github.com/apache/datafusion-python/pull/981">PR 981</a>, we change the saving of Parquet files to use zstd compression by default.
+Previously the default was uncompressed, causing excessive disk storage. Zstd is an
+excellent compression scheme that balances speed and compression ratio. Users can still
+save their Parquet files uncompressed by passing in the appropriate value to the
+<code>compression</code> argument when calling <code>DataFrame.write_parquet</code>.</p>
+<h2><code>uv</code> package management</h2>
+<p><a href="https://github.com/astral-sh/uv">uv</a> is an extremely fast Python package manager, written in Rust. In the previous version
+of <code>datafusion-python</code> we had a combination of settings of PyPi and Conda. Instead, we
+switch to using <a href="https://github.com/astral-sh/uv">uv</a> is our primary method for dependency management.</p>
+<p>For most users of DataFusion, this change will be transparent. You can still install
+via <code>pip</code> or <code>conda</code>. For developers, the instructions in the repository have been updated.</p>
+<h2>Migration Guide</h2>
+<p>During the upgrade from <a href="https://github.com/apache/datafusion/blob/main/dev/changelog/43.0.0.md">DataFusion 43.0.0</a> to <a href="https://github.com/apache/datafusion/blob/main/dev/changelog/44.0.0.md">DataFusion 44.0.0</a> as our upstream core
+dependency, we discovered a few changes were necessary within our repository and our
+unit tests. These notes serve to help guide users who may encounter similar issues when
+upgrading.</p>
+<ul>
+<li><code>RuntimeConfig</code> is now deprecated in favor of <code>RuntimeEnvBuilder</code>. The migration is
+fairly straightforward, and the corresponding classes have been marked as deprecated. For
+end users it should be simply a matter of changing the class name.</li>
+<li>If you perform a <code>concat</code> of a <code>string_view</code> and <code>string</code>, it will now return a
+<code>string_view</code> instead of a <code>string</code>. This likely only impacts unit tests that are validating
+return types. In general, it is recommended to switch to using <code>string_view</code> whenever 
+possible. You can see the blog articles <a href="https://datafusion.apache.org/blog/2024/09/13/string-view-german-style-strings-part-1/">String View Pt 1</a> and <a href="https://datafusion.apache.org/blog/2024/09/13/string-view-german-style-strings-part-2/">Pt 2</a> for more information
+on these performance improvements.</li>
+<li>The function <code>date_part</code> now returns an <code>int32</code> instead of a <code>float64</code>. This is likely
+only impactful to unit tests.</li>
+</ul>
+<h2>Appreciation</h2>
+<p>We would like to thank everyone who has helped with these releases through their helpful
+conversations, code review, issue descriptions, and code authoring. We would especially
+like to thank the following authors of PRs who made these releases possible, listed in
+alphabetical order by username: <a href="https://github.com/chenkovsky">@chenkovsky</a>, <a href="https://github.com/ion-elgreco">@ion-elgreco</a>, <a href="https://github.com/kylebarron">@kylebarron</a>, and
+<a href="https://github.com/kosiew">@kosiew</a>.</p>
+<p>Thank you!</p>
+<h2>Get Involved</h2>
+<p>The DataFusion Python team is an active and engaging community and we would love
+to have you join us and help the project.</p>
+<p>Here are some ways to get involved:</p>
+<ul>
+<li>
+<p>Learn more by visiting the <a href="https://datafusion.apache.org/python/index.html">DataFusion Python project</a> page.</p>
+</li>
+<li>
+<p>Try out the project and provide feedback, file issues, and contribute code.</p>
+</li>
+<li>
+<p>Join us on <a href="https://s.apache.org/slack-invite">ASF Slack</a> or the <a href="https://discord.gg/Qw5gKqHxUM">Arrow Rust Discord Server</a>.</p>
+</li>
+</ul>
+        </div>
+      </div>
+    </div>    
+    <!-- footer -->
+    <div class="row">
+      <div class="large-12 medium-12 columns">
+        <p style="font-style: italic; font-size: 0.8rem; text-align: center;">
+          Copyright 2025, <a href="https://www.apache.org/">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a>.<br/>
+          Apache&reg; and the Apache feather logo are trademarks of The Apache Software Foundation.
+        </p>
+      </div>
+    </div>
+    <script src="/blog/js/bootstrap.bundle.min.js"></script>  </main>
+  </body>
+</html>
