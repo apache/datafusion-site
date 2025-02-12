@@ -1,0 +1,130 @@
+<!doctype html>
+<html class="no-js" lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apache DataFusion Ballista 43.0.0 Released - Apache DataFusion Blog</title>
+<link href="/blog/css/bootstrap.min.css" rel="stylesheet">
+<link href="/blog/css/fontawesome.all.min.css" rel="stylesheet">
+<link href="/blog/css/headerlink.css" rel="stylesheet">
+<link href="/blog/highlight/default.min.css" rel="stylesheet">
+<script src="/blog/highlight/highlight.js"></script>
+<script>hljs.highlightAll();</script>  </head>
+  <body class="d-flex flex-column h-100">
+  <main class="flex-shrink-0">
+<!-- nav bar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark" aria-label="Fifth navbar example">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/blog"><img src="/blog/images/logo_original4x.png" style="height: 32px;"/> Apache DataFusion Blog</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarADP" aria-controls="navbarADP" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarADP">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/about.html">About</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/feed.xml">RSS</a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>    
+
+
+<!-- page contents -->
+<div id="contents">
+    <div class="bg-white p-5 rounded">
+        <div class="col-sm-8 mx-auto">
+          <h1>
+              Apache DataFusion Ballista 43.0.0 Released
+          </h1>
+              <p>Posted on: Sun 02 February 2025 by milenkovicm</p>
+              <!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+-->
+<p>We are  pleased to announce version <a href="https://github.com/apache/datafusion-ballista/blob/main/CHANGELOG.md#4300-2025-01-07">43.0.0</a> of the <a href="https://datafusion.apache.org/ballista/">DataFusion Ballista</a>. Ballista allows existing <a href="https://datafusion.apache.org">DataFusion</a> applications to be scaled out on a cluster for use cases that are not practical to run on a single node.</p>
+<h2>Highlights of this release</h2>
+<h3>Seamless Integration with DataFusion</h3>
+<p>The primary objective of this release has been to achieve a more seamless integration with the DataFusion ecosystem and try to achieve the same level of flexibility as DataFusion.</p>
+<p>In recent months, our development efforts have been directed toward providing a robust and extensible Ballista API. This new API empowers end-users to tailor Ballista's core functionality to their specific use cases. As a result, we have deprecated several experimental features from the Ballista core, allowing users to reintroduce them as custom extensions outside the core framework. This shift reduces the maintenance burden on Ballista's core maintainers and paves the way for optional features, such as <a href="https://github.com/delta-io/delta-rs">delta-rs</a> support, to be added externally when needed.</p>
+<p>The most significant enhancement in this release is the deprecation of <code>BallistaContext</code>, which has been superseded by the DataFusion <code>SessionContext</code>. This change enables DataFusion applications written in Rust to execute on a Ballista cluster with minimal modifications. Beyond simplifying migration and reducing maintenance overhead, this update introduces distributed write functionality to Ballista for the first time, significantly enhancing its capabilities.</p>
+<div class="codehilite"><pre><span></span><code><span class="k">use</span><span class="w"> </span><span class="n">ballista</span>::<span class="n">prelude</span>::<span class="o">*</span><span class="p">;</span><span class="w"></span>
+<span class="k">use</span><span class="w"> </span><span class="n">datafusion</span>::<span class="n">prelude</span>::<span class="o">*</span><span class="p">;</span><span class="w"></span>
+
+<span class="cp">#[tokio::main]</span><span class="w"></span>
+<span class="k">async</span><span class="w"> </span><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span>-&gt; <span class="nc">datafusion</span>::<span class="n">error</span>::<span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+
+<span class="w">  </span><span class="c1">// Instead of creating classic SessionContext</span>
+<span class="w">  </span><span class="c1">// let ctx = SessionContext::new();</span>
+
+<span class="w">  </span><span class="c1">// create DataFusion SessionContext with ballista standalone cluster started</span>
+<span class="w">  </span><span class="c1">// let ctx = SessionContext::standalone().await;</span>
+
+<span class="w">  </span><span class="c1">// create DataFusion SessionContext with ballista remote cluster started</span>
+<span class="w">  </span><span class="kd">let</span><span class="w"> </span><span class="n">ctx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">SessionContext</span>::<span class="n">remote</span><span class="p">(</span><span class="s">"df://localhost:50050"</span><span class="p">).</span><span class="k">await</span><span class="p">;</span><span class="w"></span>
+
+<span class="w">  </span><span class="c1">// register the table</span>
+<span class="w">  </span><span class="n">ctx</span><span class="p">.</span><span class="n">register_csv</span><span class="p">(</span><span class="s">"example"</span><span class="p">,</span><span class="w"> </span><span class="s">"tests/data/example.csv"</span><span class="p">,</span><span class="w"> </span><span class="n">CsvReadOptions</span>::<span class="n">new</span><span class="p">()).</span><span class="k">await</span><span class="o">?</span><span class="p">;</span><span class="w"></span>
+
+<span class="w">  </span><span class="c1">// create a plan to run a SQL query</span>
+<span class="w">  </span><span class="kd">let</span><span class="w"> </span><span class="n">df</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ctx</span><span class="p">.</span><span class="n">sql</span><span class="p">(</span><span class="s">"SELECT a, MIN(b) FROM example WHERE a &lt;= b GROUP BY a LIMIT 100"</span><span class="p">).</span><span class="k">await</span><span class="o">?</span><span class="p">;</span><span class="w"></span>
+
+<span class="w">  </span><span class="c1">// execute and print results</span>
+<span class="w">  </span><span class="n">df</span><span class="p">.</span><span class="n">show</span><span class="p">().</span><span class="k">await</span><span class="o">?</span><span class="p">;</span><span class="w"></span>
+<span class="w">  </span><span class="nb">Ok</span><span class="p">(())</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
+</code></pre></div>
+<p>Additionally, Ballista&rsquo;s versioning scheme has been aligned with that of DataFusion, ensuring that Ballista's version number reflects the compatible DataFusion version.</p>
+<p>At the moment there is a gap between DataFusion and Ballista, which we will try to bridge in the future.</p>
+<h3>Removal of Experimental Features</h3>
+<p>Ballista had grown in scope to include several experimental features in various states of completeness. Some features have been removed from this release in an effort to strip Ballista back to its core and make it easier to maintain and extend.</p>
+<p>Specifically, the caching subsystem, predefined object store registry, plugin subsystem, key-value stores for persistent scheduler state, and the UI have been removed.</p>
+<h3>Performance &amp; Scalability</h3>
+<p>Ballista has significantly leveraged the advancements made in the DataFusion project over the past year. Benchmark results demonstrate notable improvements in performance, highlighting the impact of these enhancements:</p>
+<p>Per query comparison:</p>
+<p><img alt="Per query comparison" class="img-responsive" src="/blog/images/datafusion-ballista-43.0.0/tpch_queries_compare.png" width="100%"/></p>
+<p>Relative speedup:</p>
+<p><img alt="Relative speedup graph" class="img-responsive" src="/blog/images/datafusion-ballista-43.0.0/tpch_queries_speedup_rel.png" width="100%"/></p>
+<p>The overall speedup is 2.9x</p>
+<p><img alt="Overall speedup" class="img-responsive" src="/blog/images/datafusion-ballista-43.0.0/tpch_allqueries.png" width="50%"/></p>
+<h3>New Logo</h3>
+<p>Ballista now has a new logo, which is visually similar to other DataFusion projects.  </p>
+<p><img alt="New logo" class="img-responsive" src="/blog/images/datafusion-ballista-43.0.0/ballista-logo.png" width="50%"/></p>
+<h2>Roadmap</h2>
+<p>Moving forward, Ballista will adopt the same release cadence as DataFusion, providing synchronized updates across the ecosystem.
+Currently, there is no established long-term roadmap for Ballista. A plan will be formulated in the coming months based on community feedback and the availability of additional maintainers.</p>
+<p>In the short term, development efforts will concentrate on closing the feature gap between DataFusion and Ballista. Key priorities include implementing support for <code>INSERT INTO</code>, enabling table <code>URL</code> functionality, and achieving deeper integration with the Python ecosystem.</p>
+        </div>
+      </div>
+    </div>    
+    <!-- footer -->
+    <div class="row">
+      <div class="large-12 medium-12 columns">
+        <p style="font-style: italic; font-size: 0.8rem; text-align: center;">
+          Copyright 2025, <a href="https://www.apache.org/">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a>.<br/>
+          Apache&reg; and the Apache feather logo are trademarks of The Apache Software Foundation.
+        </p>
+      </div>
+    </div>
+    <script src="/blog/js/bootstrap.bundle.min.js"></script>  </main>
+  </body>
+</html>
