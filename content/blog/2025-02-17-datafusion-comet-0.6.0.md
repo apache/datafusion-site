@@ -55,7 +55,9 @@ that depend on the [datafusion_comet_spark_expr] crate.
 
 ### New Features
 
-- Comet now supports `array_join`, `array_intersect`, and `arrays_overlap`.
+- Comet now supports `array_join`, `array_intersect`, and `arrays_overlap`. Note that these expressions are not 
+  yet guaranteed to be 100% compatible with Spark for all input data types, so these expressions are only enabled 
+  with the configuration setting `spark.comet.expression.allowIncompatible=true`. 
 
 ### Performance & Stability
 
