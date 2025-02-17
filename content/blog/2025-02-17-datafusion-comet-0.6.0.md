@@ -40,7 +40,10 @@ This release covers approximately four weeks of development work and is the resu
 contributors. See the [change log] for more information.
 
 Starting with this release, we now plan on releasing new versions of Comet more frequently, typically within 1-2 weeks
-of each major DataFusion release.
+of each major DataFusion release. The main motivation for this change is to better support downstream Rust projects 
+that depend on the [datafusion_comet_spark_expr] crate.
+
+[datafusion_comet_spark_expr]: https://docs.rs/datafusion-comet-spark-expr/latest/datafusion_comet_spark_expr/
 
 [change log]: https://github.com/apache/datafusion-comet/blob/main/dev/changelog/0.6.0.md
 
