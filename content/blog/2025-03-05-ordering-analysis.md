@@ -29,53 +29,25 @@ limitations under the License.
 
 ## Introduction
 
-In this blog post, we will analyze how to determine whether an ordering requirement of an operator is satisfied by the existing ordering at its input. This analysis is pre-condition for order based optimizations and also much more complex than one thinks initially.
+In this blog post, we will explore how to determine whether an ordering requirement[^1] of an operator is satisfied by its input data. This analysis is essential for order-based optimizations and is often more complex than one might initially think.
 
-Some of the operators in the physical plan require its input data to be ordered. The reasons for these requirements might be:
-- More efficient Implementation (`SortMergeJoin`)
-- Implementation with low memory footprint (`SortMergeJoin`, `Aggregation`, `Windowing`)
-- Hard Requirement coming from the query itself (`Window` operator with `ORDER BY` clause)
-- ...
+Some operators in the physical query plan require their input data to be ordered. The reasons for these requirements include:
+- **More efficient implementation** (e.g., `SortMergeJoin`)
+- **Low memory footprint** (e.g., `SortMergeJoin`, `Aggregation`, `Windowing`)
+- **Hard requirements from the query itself** (e.g., `Window` operator with `ORDER BY` clause)
 
-If the requirements for the operator is not satisfied we may insert a `Sort` operator (`SortExec` in `DataFusion` world) to satisfy the requirement. If the requirement is already satisfied, we can continue with the existing plan without any `Sort` operator.
+If an operator's ordering requirement is not satisfied by the input, a `Sort` operator (e.g., `SortExec` in the `DataFusion` framework) may be inserted to fulfill the requirement. If the requirement is already met, the plan can proceed without an additional `Sort` operator.
 
-If we don't insert a `Sort` operator to the plan where we should (because of incorrect analysis), the result produced by the query will be wrong. Alternatively, if we insert a `Sort` operator where we don't need to, the result generated will be correct but inefficient. Hence, it is critical to determine whether an ordering requirement by an operator is satisfied at its input. Doing this analysis wrongly or ineffectively might cause planner to generate invalid or sub-optimal plans.
+Correctly analyzing whether the ordering requirement is satisfied is critical. Failure to do so can lead to:
+- **Incorrect query results** if a `Sort` operator is omitted.
+- **Inefficient execution plans** if a `Sort` operator is unnecessarily added.
 
-As an example, consider `SortPreservingMerge: required_ordering: [<expr> <DIRECTION>, ..]` operator. This operator takes data from multiple input partitions, then merges these data into single partition according to specied ordering. For this operator to work as desired each of its input should satisfy the required ordering by the operator. Otherwise, resulting data will not have correct ordering.
-
-If the `SortPreservingMerge: [a ASC]` operator merges 2 partitions. Each of its input should satisfy the ordering `[a ASC]`. If the data from first partition is as follows:
-
-| a |
-|---|
-| 1 |
-| 3 |
-| 5 |
+This post outlines the necessary properties of the table we must monitor for this analysis and illustrates the analysis process.
 
 
-and data from second partition is as follows:
+### Example Virtual Table
 
-| a |
-|---|
-| 2 |
-| 4 |
-| 6 |
-
-`SortPreservingMerge` operator will produce following data
-
-| a |
-|---|
-| 1 |
-| 2 |
-| 3 |
-| 4 |
-| 5 |
-| 6 |
-
-by merging partitions at its input.
-
-## Setting the Stage
-
-Let's start by generating a virtual table to model the data at the input of an operator. We will use this table to analyze whether an ordering requirement is satisfied by it or not.
+Let's define a virtual table to model the input data of an operator for analysis:
 
 | a1 | a2 | c1 | c2 | b1 | b2 | a2_clone | b2_clone |
 |----|----|----|----|----|----|----------|----------|
@@ -87,21 +59,22 @@ Let's start by generating a virtual table to model the data at the input of an o
 | 2  | 0  | 0  | 1  | 1  | 1  | 0        | 1        |
 | 2  | 1  | 0  | 1  | 1  | 2  | 1        | 2        |
 
-To be able to analyze whether an ordering is satisfied by a table or not we need to keep track of following properties for the table:
-- Constant Expression
-- Equivalent Expression Groups
-- Existing orderings of the table
+## Key Concepts for Analyzing Orderings
+Before analyzing whether an ordering requirement is satisfied, we first need to define a few properties of the input data. These properties help guide the analysis process:
 
-Let us continue with what each property means and what they keep track of in the table
+### 1. Constant Expressions
+Constant expressions are those where each row in the expression has the same value across all rows. Although constant expressions may seem odd in a table, they can arise after operations like `Filter` or `Join`. In our example table, expressions `c1` and `c2` are constant.
 
-### Constant Expressions
-Constant expressions are the expressions where each row in the expression is same with another. (Although, constant expressions might seem weird for a table to have. These expressions can arise after `Filter`, `Join` operations). In our example table Expression: `c1` and Expression: `c2` have this property. We can store constants as following vector `[c1, c2]` for this table. 
+For instance:
+- Expression `c1` and `c2` are constant because every row in the table has the same value for these columns.
 
-### Equivalent Expression Groups
-Equivalent Expression Groups are expressions that have same value with each other. These expressions can be thought as cloned version of one another. Similar to constant expressions, these expressions may arise after `Filter`, `Join`, `Projection` operations. In our example table, Expressions: `a2`, `a2_clone` and `b2`, `b2_clone` constructs 2 equivalance groups, where each group contains 2 expressions. (A group may contain more than 2 entry also). For our table, we can store equivalent expressions groups as nested vector: `[[a2, a2_clone], [b2, b2_clone]]` where inner vector consists of the expressions inside the equivalent group.
+### 2. Equivalent Expression Groups
+Equivalent expression groups are expressions that always hold the same value across rows. These expressions can be thought of as clones of each other and may arise from operations like `Filter`, `Join`, or `Projection`.
 
-### Existing orderings of the table
-Existing Orderings are the valid orderings that table satisfies. However, there are many possible options for valid ordering. Let's enlist some of them
+For example, in our table, the expressions `a2` and `a2_clone` form one equivalence group, and `b2` and `b2_clone` form another equivalence group.
+
+### 3. Valid Orderings
+Valid orderings are the orderings that the table already satisfies. However, there are many possible options for valid ordering. Some of the valid orderings for the table is as follows:
 `[a1 ASC, a2 ASC]`,
 `[a1 ASC]`,
 `[a1 ASC, a2_clone ASC]`,
@@ -114,73 +87,90 @@ Existing Orderings are the valid orderings that table satisfies. However, there 
 .
 As can be seen from the above valid orderings. Storing all of the valid orderings is wasteful, and contains lots of redundancy. Some of the problems are:
 
-- Storing prefix of another valid ordering is redundant. If the table satisfies lexicographical ordering `[a1 ASC, a2 ASC]`, it already satisfies ordering `[a1 ASC]` trivially. Hence, once we store `[a1 ASC, a2 ASC]` we do not need to store `[a1 ASC]` seperately.
+- Storing prefix of another valid ordering is redundant. If the table satisfies lexicographical ordering[^2]: `[a1 ASC, a2 ASC]`, it already satisfies ordering `[a1 ASC]` trivially. Hence, once we store `[a1 ASC, a2 ASC]` we do not need to store `[a1 ASC]` seperately.
 
-- Using all entries in an EquivalenceGroup is redundant. If we know that ordering `[a1 ASC, a2 ASC]` is satisfied by the table, table also satisfies `[a1 ASC, a2_clone ASC]` since `a2` and `a2_clone` are copy of each other. Hence, it is enough to use just one expresssion (let's say first expression) in an equivalence group during the construction of the the valid orderings.
+- Using all entries in an Equivalent Expression Group is redundant. If we know that ordering `[a1 ASC, a2 ASC]` is satisfied by the table, table also satisfies `[a1 ASC, a2_clone ASC]` since `a2` and `a2_clone` are copy of each other. Hence, it is enough to use just one expresssion (let's say first expression) in an Equivalent Expression Group during the construction of the the valid orderings.
 
-- Constant expressions can be inserted into any place inside valid ordering with arbitrary direction (`ASC`, `DESC`). Hence, If ordering `[a1 ASC, a2 ASC]` is valid, orderings: `[c1 ASC, a1 ASC, a2 ASC]`, `[c1 DESC, a1 ASC, a2 ASC]`, `[a1 ASC, c1 ASC, a2 ASC]`, .. are all also valid. This is clearly redundant. For this reason, it is better to not use any constant expression during existing ordering construction.
+- Constant expressions can be inserted into any place inside valid ordering with an arbitrary direction (`ASC`, `DESC`). Hence, If ordering `[a1 ASC, a2 ASC]` is valid, orderings: `[c1 ASC, a1 ASC, a2 ASC]`, `[c1 DESC, a1 ASC, a2 ASC]`, `[a1 ASC, c1 ASC, a2 ASC]`, .. are all also valid. This is clearly redundant. For this reason, it is better to not use any constant expression during existing ordering construction.
 
 In summary,
 
 - We should only use the longest lexicographical ordering as a valid ordering (shouldn't use any prefix of it)
-- Ordering should contain only one expression from an equivalence group.
+- Ordering should contain only one expression from an equivalence group (a representative of the group).
 - Existing ordering expressions shouldn't contain any constant expression.
 
-Adhering to these principles, valid orderings are `[a1 ASC, a2 ASC]`, `[b1 ASC, b2 ASC]` for the virtual table above.
+Adhering to these principles, valid orderings are `[a1 ASC, a2 ASC]`, `[b1 ASC, b2 ASC]` in our table.
 
-Following above procedure, table has following properties:
+### Table Properties
 
-- Constant Expressions = `[c1, c2]`
-- Equivalent Expression Groups = `[[a2, a2_clone], [b2, b2_clone]]`
-- Valid Orderings = `[[a1 ASC, a2 ASC], [b1 ASC, b2 ASC]]` (where `a2` is used from the Equivalence Group = `[a2, a2_clone]` and `b2` is used from the Equivalence Group = `[b2, b2_clone]`).
+| a1 | a2 | c1 | c2 | b1 | b2 | a2_clone | b2_clone |
+|----|----|----|----|----|----|----------|----------|
+| 0  | 0  | 0  | 1  | 0  | 0  | 0        | 0        |
+| 0  | 1  | 0  | 1  | 0  | 0  | 1        | 0        |
+| 1  | 0  | 0  | 1  | 0  | 1  | 0        | 1        |
+| 1  | 1  | 0  | 1  | 0  | 2  | 1        | 2        |
+| 1  | 2  | 0  | 1  | 1  | 0  | 2        | 0        |
+| 2  | 0  | 0  | 1  | 1  | 1  | 0        | 1        |
+| 2  | 1  | 0  | 1  | 1  | 2  | 1        | 2        |
 
-## Analysis
+For the table above, the following properties can be derived:
+- **Constant Expressions** = `[c1, c2]`
+- **Equivalent Expression Groups** = `[[a2, a2_clone], [b2, b2_clone]]`
+- **Valid Orderings** = `[[a1 ASC, a2 ASC], [b1 ASC, b2 ASC]]`
 
-Once we contruct `Constant Expressions`, `Equivalent Expressions Groups` and `Valid Orderings` for the table we can analyze whether an ordering requirement is satisfied by the table or not using these properties.
+### Algorithm for Analyzing Ordering Requirements
 
-Algorithm for doing so is as follows
+We can use following algorithm to check whether an ordering requirement is satisfied by a table:
 
-1. Prune out constant expressions from the ordering requirement.
+1. **Prune constant expressions**: Remove any constant expressions from the ordering requirement.
+2. **Normalize the requirement**: Replace each expression in the ordering requirement with the first entry from its equivalence group.
+3. **De-duplicate expressions**: If an expression appears more than once, remove duplicates, keeping only the first occurrence.
+4. **Match leading orderings**: Check whether the leading ordering requirement[^3] matches the leading valid orderings[^4]. If so:
+    - Remove the leading ordering from the ordering requirement 
+    - Remove the matching leading expression from the valid orderings. 
+5. **Iterate through the remaining expressions**: Go back to step 4 until ordering requirement is empty or leading ordering requirement is not found among the leading valid orderings.
 
-2. Normalize ordering requirement using `Equivalent Expression Groups` (e.g. replace expressions in the `Equivalent Expression Group` with the first entry in the corresponding `Equivalent Expression Group`). By this way we guarantee that expressions match with representation inside the `Valid Orderings`.
+If at the end of the procedure above, ordering requirement is an empty list. We can conclude that the requirement is satisfied by the table.
 
-3. De-duplicate expressions in the ordering requirement where first entry is used among duplicated entries.
+Let’s see this algorithm in action with an example.
 
-4. Iterate over the resulting expression to check whether current expression matches with any of the leading orderings (e.g. first ordering in a lexicographical ordering) among the existing orderings. If so, remove the leading ordering from corresponding Valid Ordering and continue iteration. If not, stop iteration.
+### Example Walkthrough
 
-5. If iteration completes without early exit, ordering is satisfied by existing properties. Otherwise it is not.
+Let's check if the ordering requirement `[c1 DESC, a1 ASC, b1 ASC, a2_clone ASC, b2 ASC, c2 ASC, a2 DESC]` is satisfied by the table with properties:
+- **Constant Expressions** = `[c1, c2]`
+- **Equivalent Expressions Groups** = `[[a2, a2_clone], [b2, b2_clone]]`
+- **Valid Orderings** = `[[a1 ASC, a2 ASC], [b1 ASC, b2 ASC]]`
 
-To see algorithm in place, let's look at a concrete example:
+1. **Prune constant expressions**:  
+   Remove `c1` and `c2`. The requirement becomes:  
+   `[a1 ASC, b1 ASC, a2_clone ASC, b2 ASC, a2 DESC]`.
 
-Let's check whether the ordering requirement `[c1 DESC, a1 ASC, b1 ASC, a2_clone ASC, b2 ASC, c2 ASC, a2 DESC]` is satisfied by the example table above where 
-- `Constant Expression`s are `[c1, c2]`, 
-- `Equivalent Expressions Group`s are `[[a2, a2_clone], [b2, b2_clone]]`
-- `Valid Orderings` are `[[a1 ASC, a2 ASC], [b1 ASC, b2 ASC]]`.
+2. **Normalize using equivalent groups**:  
+   Replace `a2_clone` with `a2` and `b2_clone` with `b2`. The requirement becomes:  
+   `[a1 ASC, b1 ASC, a2 ASC, b2 ASC, a2 DESC]`.
 
-After pruning out constant expressions ordering requirement `[c1 DESC, a1 ASC, b1 ASC, a2_clone ASC, b2 ASC, c2 ASC, a2 ASC]` reduces into `[a1 ASC, b1 ASC, a2_clone ASC, b2 ASC, a2 DESC]` (e.g. expressions `c1` and 'c2' are removed).
+3. **De-duplicate expressions**:  
+   Since `a2` appears twice, we simplify the requirement to:  
+   `[a1 ASC, b1 ASC, a2 ASC, b2 ASC]` (We keep the first expression from the left side).
 
-After normalization, where we replace expression: `a2_clone` with the expression: `a2` and expression: `b2_clone` with the expression: `b2`. Ordering requirement turns into `[a1 ASC, b1 ASC, a2 ASC, b2 ASC, a2 DESC]`.
+4. **Match leading orderings**:  
+   - Check if leading ordering requirement `a1 ASC` can be found among the leading valid orderings: `a1 ASC, b1 ASC`. It can, so we remove `a1 ASC` from the ordering requirement and valid orderings.
+5. **Iterate through the remaining expressions**:
+Now, the problem is converted from 
+*"whether the requirement: `[a1 ASC, b1 ASC, a2 ASC, b2 ASC]` is satisfied by valid orderings:  `[[a1 ASC, a2 ASC], [b1 ASC, b2 ASC]]`"*
+into
+*"whether the requirement: `[b1 ASC, a2 ASC, b2 ASC]` is satisfied by valid orderings:  `[[a2 ASC], [b1 ASC, b2 ASC]]`"*
+We go back to step 4 until the ordering requirement list exhausted or until its length no longer decreases.
 
-After de-duplicating expressions where first encountered entry is kept, requirement turns into `[a1 ASC, b1 ASC, a2 ASC, b2 ASC]`. Please note that during de-duplication as long as expression match we remove the matching expressions except the first one independent of the direction of the requirement. As an example, requirement `[a1 ASC, b1 ASC, a1 DESC]` and `[a1 ASC, b1 ASC, a1 ASC]` both simplifies to `[a1 ASC, b1 ASC]`. 
+At the end of stages above, we end up with an empty ordering requirement list. Given this, we can conclude that the table satisfies the ordering requirement.
 
-After above stages, problem is reduced to whether `Valid Orderings`:  `[[a1 ASC, a2 ASC], [b1 ASC, b2 ASC]]` satisfies the ordering requirement `[a1 ASC, b1 ASC, a2 ASC, b2 ASC]`.
+## Conclusion
 
-To determine if this is the case, first check whether `a1 ASC` (e.g. first entry in the ordering requirement: `[a1 ASC, b1 ASC, a2 ASC, b2 ASC]`) is among the leading orderings of the `Valid Ordering`s available. 
-In our case, leading orderings are `a1 ASC` and `b1 ASC`. Hence `a1 ASC` is among valid orderings, we can remove `a1 ASC` from the `Valid Ordering`: `[a1 ASC, a2 ASC]` and also the ordering requirement `[a1 ASC, b1 ASC, a2 ASC, b2 ASC]`.
+In this post, we analyzed the conditions under which an ordering requirement is satisfied given the properties of a table. We introduced necessary concepts like constant expressions, equivalence groups, and valid orderings, and used these to check whether an ordering requirement could be met. This analysis plays a crucial role in generating efficient query plans and avoiding unnecessary or incorrect operations.
 
-After the stage above, problem is reduced to whether `Valid Ordering`s `[[a2 ASC], [b1 ASC, b2 ASC]]` satisfies the ordering requirement `[b1 ASC, a2 ASC, b2 ASC]`.
+The `DataFusion` query engine uses this kind of analysis during its planning stage to ensure correct and efficient query execution. You can find the implementation of this analysis in the [DataFusion repository](https://github.com/apache/datafusion/tree/main/datafusion/physical-expr/src/equivalence).
 
-We repeat the step 4 again until either 
-- exhausing the ordering requirement list
-- or cannot find the first ordering requirement expression among the leading expressions.
-
-At the end of this procedure, we will end up with the ordering requirement: `[]`.
-Since we end up with an empty requirement, we conclude that indeed ordering requirement `[c1 DESC, a1 ASC, b1 ASC, a2_clone ASC, b2 ASC, c2 ASC, a2 DESC]` is satisfied by the table with the properties:
-`Constant Expression`s: `[c1, c2]`,
-`Equivalent Expression Group`s: `[[a2, a2_clone], [b2, b2_clone]]`
-`Valid Ordering`s: `[[a1 ASC, a2 ASC], [b1 ASC, b2 ASC]]`
-
-
-## Concluding
-
-In this blog post, we analyzed the conditions when an ordering requirement is satisfied given the properties of a table. First, we introduced necessary and handy properties to be able to solve this problem. This analysis is an important pre-condition for the sort based optimizations. With this analysis, we can generate efficient, memory and streaming friendly plans. Doing this analysis prematurely can cause planner to generate wrong or sub-optimal plans. `Datafusion` uses this analysis during planning stage to generate correct, and more performant plans. Implementation of this analysis in `Datafusion` can be found under following [module](https://github.com/apache/datafusion/tree/main/datafusion/physical-expr/src/equivalence)
+[^1]: The ordering requirement refers to the condition that input data must be sorted in a certain way for a specific operator to function as intended.
+[^2]: Lexicographic order is a way of ordering sequences (like strings, list of expressions) based on the order of their components, similar to how words are ordered in a dictionary. It compares each element of the sequences one by one, from left to right.
+[^3]: Leading ordering requirement is the first ordering requiremnt in the list of lexicographical ordering requirement expression. As an example for the requirement: `[a1 ASC, b1 ASC, a2 ASC, b2 ASC]`, leading ordering requirement is: `a1 ASC`.
+[^4]: Leading valid orderings are the first ordering for each valid ordering list in the table. As an example, for the valid orderings: `[[a1 ASC, a2 ASC], [b1 ASC, b2 ASC]]`, leading valid orderings will be: `a1 ASC, b1 ASC`. 
