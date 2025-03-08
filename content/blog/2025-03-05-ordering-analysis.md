@@ -47,7 +47,7 @@ FROM telemetry WHERE hostname = 'app.example.com' ORDER BY time ASC;
 In this case, the system still doesn't have to do any sorting -- but only if it has enough analysis to be able to reason about the sortedness of the stream when we know `hostname` has a single value.
 
 ### Changing the Execution Mode for an Operator
-As another use case, some operators in `Datafusion` utilize the ordering information to execute more efficiently. Consider the following query:
+As another use case, some operators can utilize the ordering information to change its underlying algorithm to execute more efficiently. Consider the following query:
 ```SQL
 SELECT COUNT(log_line) 
 FROM telemetry GROUP BY hostname;
@@ -56,23 +56,27 @@ when `telemetry` is sorted by `hostname`, aggregation doesn't need to hash the e
 
 ### Streaming Friendly Execution
 
-Some operators in the physical query plan require their input data to be ordered. The reasons for these requirements include:
-- **More efficient implementation** (e.g., `SortMergeJoin`)
-- **Low memory footprint** (e.g., `SortMergeJoin`, `Aggregation`, `Windowing`)
-- **Hard requirements from the query itself** (e.g., `Window` operator with `ORDER BY` clause)
+In stream processing, the goal is to produce results immediately as they become available, ensuring minimal latency for real-time workloads. However, some operators need to consume all input data before producing any output. Consider the `Sort` operation: before it can start generating output, the algorithm must first process all input data. As a result, data flow halts whenever such an operator is encountered until all input is consumed. When a physical query plan contains one of these operators (such as `Sort` or `CrossJoin`), we refer to this as query pipeline breaking, meaning the query cannot be executed in a streaming fashion.
 
-If an operator's ordering requirement is not satisfied by the input, a `Sort` operator (e.g., `SortExec` in the `DataFusion` framework) may be inserted to fulfill the requirement. If the requirement is already met, the plan can proceed without an additional `Sort` operator.
+For a query to be executed in a streaming fashion, we need to satisfy 2 conditions:
 
-Correctly analyzing whether the ordering requirement is satisfied is critical. Failure to do so can lead to:
-- **Incorrect query results** if a `Sort` operator is omitted.
-- **Inefficient execution plans** if a `Sort` operator is unnecessarily added.
+**Logically Streamable**  
+It should be possible to generate what user wants in streaming fashion. Consider following query:
 
-This post outlines the necessary properties of the table we must monitor for this analysis and illustrates the analysis process.
+```SQL
+SELECT SUM(amount)  
+FROM orders  
+```
+Here, the user wants to compute the sum of all amounts in the orders table. By nature, this query requires scanning the entire table to generate a result, making it impossible to execute in a streaming fashion.
 
+**Planner should be smart**  
+Being logically streamable does not guarantee that a query will execute in a streaming fashion. SQL is a declarative language, meaning it species 'WHAT' user wants. It is up to the planner, 'HOW' to generate the result. In most cases, there are many ways to compute the correct result for a given query. The query planner is responsible for constructing a sequence of operations that not only produce the correct result but also is the most optimal<sup id="optimal1">[*](#optimal)</sup> execution plan among all other possibilities. If a plan contains a pipeline-breaking operator, the execution will not be streaming—even if the query is logically streamable. To generate truly streaming plans from logically streamable queries, the planner must carefully analyze the existing orderings in the source tables to ensure that the final plan does not contain any pipeline-breaking operators.
+
+
+## Analysis
+Let's start by creating an example table that we will refer throughout the post. This table models the input data of an operator for the analysis:
 
 ### Example Virtual Table
-
-Let's define a virtual table to model the input data of an operator for analysis:
 
 <style>
   table {
@@ -282,3 +286,4 @@ The `DataFusion` query engine uses this kind of analysis during its planning sta
 <p id="footnote2"><sup>[2]</sup>Lexicographic order is a way of ordering sequences (like strings, list of expressions) based on the order of their components, similar to how words are ordered in a dictionary. It compares each element of the sequences one by one, from left to right.</p>
 <p id="footnote3"><sup>[3]</sup>Leading ordering requirement is the first ordering requiremnt in the list of lexicographical ordering requirement expression. As an example for the requirement: <code>[a1 ASC, b1 ASC, a2 ASC, b2 ASC]</code>, leading ordering requirement is: <code>a1 ASC</code>.</p>
 <p id="footnote4"><sup>[4]</sup>Leading valid orderings are the first ordering for each valid ordering list in the table. As an example, for the valid orderings: <code>[[a1 ASC, a2 ASC], [b1 ASC, b2 ASC]]</code>, leading valid orderings will be: <code>a1 ASC, b1 ASC</code>. </p>
+<p id="optimal"><sup>*</sup>Optimal depends on the use case, <code>Datafusion</code> has many various flags to communicate what user thinks the optimum plan is (e.g. streamable, fastest, lowest memory, etc.)</p>
