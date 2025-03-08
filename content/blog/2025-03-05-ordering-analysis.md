@@ -39,7 +39,7 @@ FROM telemetry ORDER BY time ASC limit 10
 ```
 If we don't know anything about the `telemetry` table, we need to sort it by `time ASC` and then retrieve the first 10 rows to get the correct result. However, if the table is already ordered by `time ASC`, simply retrieving the first 10 rows is sufficient. This approach executes much faster and uses less memory compared to the first version.
 
-The key is that the query optimizer needs to know the data is already sorted. For simple queries that is likely simple, but it gets complicated fast, like for example, what if your data is sorted by `hostname`, `time ASC` and your query is
+The key is that the query optimizer needs to know the data is already sorted. For simple queries that is likely simple, but it gets complicated fast, like for example, what if your data is sorted by `[hostname, time ASC]` and your query is
 ```sql
 SELECT hostname, log_line 
 FROM telemetry WHERE hostname = 'app.example.com' ORDER BY time ASC;
@@ -56,7 +56,7 @@ when `telemetry` is sorted by `hostname`, aggregation doesn't need to hash the e
 
 ### Streaming Friendly Execution
 
-In stream processing, the goal is to produce results immediately as they become available, ensuring minimal latency for real-time workloads. However, some operators need to consume all input data before producing any output. Consider the `Sort` operation: before it can start generating output, the algorithm must first process all input data. As a result, data flow halts whenever such an operator is encountered until all input is consumed. When a physical query plan contains one of these operators (such as `Sort` or `CrossJoin`), we refer to this as query pipeline breaking, meaning the query cannot be executed in a streaming fashion.
+In stream processing, the goal is to produce results immediately as they become available, ensuring minimal latency for real-time workloads. However, some operators need to consume all input data before producing any output. Consider the `Sort` operation: before it can start generating output, the algorithm must first process all input data. As a result, data flow halts whenever such an operator is encountered until all input is consumed. When a physical query plan contains such an operator (`Sort`, `CrossJoin`, ..), we refer to this as query pipeline breaking, meaning the query cannot be executed in a streaming fashion.
 
 For a query to be executed in a streaming fashion, we need to satisfy 2 conditions:
 
@@ -70,7 +70,7 @@ FROM orders
 Here, the user wants to compute the sum of all amounts in the orders table. By nature, this query requires scanning the entire table to generate a result, making it impossible to execute in a streaming fashion.
 
 **Planner should be smart**  
-Being logically streamable does not guarantee that a query will execute in a streaming fashion. SQL is a declarative language, meaning it species 'WHAT' user wants. It is up to the planner, 'HOW' to generate the result. In most cases, there are many ways to compute the correct result for a given query. The query planner is responsible for constructing a sequence of operations that not only produce the correct result but also is the most optimal<sup id="optimal1">[*](#optimal)</sup> execution plan among all other possibilities. If a plan contains a pipeline-breaking operator, the execution will not be streaming—even if the query is logically streamable. To generate truly streaming plans from logically streamable queries, the planner must carefully analyze the existing orderings in the source tables to ensure that the final plan does not contain any pipeline-breaking operators.
+Being logically streamable does not guarantee that a query will execute in a streaming fashion. SQL is a declarative language, meaning it species 'WHAT' user wants. It is up to the planner, 'HOW' to generate the result. In most cases, there are many ways to compute the correct result for a given query. The query planner is responsible for choosing a way (ideally the best<sup id="optimal1">[*](#optimal)</sup> one) among the all alternatives to generate the correct result user wants. If a plan contains a pipeline-breaking operator, the execution will not be streaming—even if the query is logically streamable. To generate truly streaming plans from logically streamable queries, the planner must carefully analyze the existing orderings in the source tables to ensure that the final plan does not contain any pipeline-breaking operators.
 
 
 ## Analysis
@@ -81,7 +81,7 @@ Let's start by creating an example table that we will refer throughout the post.
 <style>
   table {
     border-collapse: collapse;
-    width: 100%;
+    width: 80%;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   }
   th, td {
@@ -100,87 +100,124 @@ Let's start by creating an example table that we will refer throughout the post.
 
 <table>
   <tr>
-    <th>a1</th> <th>a2</th> <th>c1</th> <th>c2</th> <th>b1</th> <th>b2</th> <th>a2_clone</th> <th>b2_clone</th>
+    <th>amount</th> <th>price</th> <th>hostname</th><th>currency</th><th>time_bin</th> <th>time</th> <th>price_cloned</th> <th>time_cloned</th>
   </tr>
   <tr>
-    <td>0</td> <td>0</td> <td>0</td> <td>1</td> <td>0</td> <td>0</td> <td>0</td> <td>0</td>
+    <td>12</td> <td>25</td> <td>app.example.com</td> <td>USD</td> <td>08:00:00</td> <td>08:01:30</td> <td>25</td> <td>08:01:30</td>
   </tr>
   <tr>
-    <td>0</td> <td>1</td> <td>0</td> <td>1</td> <td>0</td> <td>0</td> <td>1</td> <td>0</td>
+    <td>12</td> <td>26</td> <td>app.example.com</td> <td>USD</td> <td>08:00:00</td> <td>08:11:30</td> <td>26</td> <td>08:11:30</td>
   </tr>
   <tr>
-    <td>1</td> <td>0</td> <td>0</td> <td>1</td> <td>0</td> <td>1</td> <td>0</td> <td>1</td>
+    <td>15</td> <td>30</td> <td>app.example.com</td> <td>USD</td> <td>08:00:00</td> <td>08:41:30</td> <td>30</td> <td>08:41:30</td>
   </tr>
   <tr>
-    <td>1</td> <td>1</td> <td>0</td> <td>1</td> <td>0</td> <td>2</td> <td>1</td> <td>2</td>
+    <td>15</td> <td>32</td> <td>app.example.com</td> <td>USD</td> <td>08:00:00</td> <td>08:55:15</td> <td>32</td> <td>08:55:15</td>
   </tr>
   <tr>
-    <td>1</td> <td>2</td> <td>0</td> <td>1</td> <td>1</td> <td>0</td> <td>2</td> <td>0</td>
+    <td>15</td> <td>35</td> <td>app.example.com</td> <td>USD</td> <td>09:00:00</td> <td>09:10:23</td> <td>35</td> <td>09:10:23</td>
   </tr>
   <tr>
-    <td>2</td> <td>0</td> <td>0</td> <td>1</td> <td>1</td> <td>1</td> <td>0</td> <td>1</td>
+    <td>20</td> <td>18</td> <td>app.example.com</td> <td>USD</td> <td>09:00:00</td> <td>09:20:33</td> <td>18</td> <td>09:20:33</td>
   </tr>
   <tr>
-    <td>2</td> <td>1</td> <td>0</td> <td>1</td> <td>1</td> <td>2</td> <td>1</td> <td>2</td>
+    <td>20</td> <td>22</td> <td>app.example.com</td> <td>USD</td> <td>09:00:00</td> <td>09:40:15</td> <td>22</td> <td>09:40:15</td>
   </tr>
 </table>
 
+<br>
 
+A naive approach for analysing whether the ordering requirement of an operator is satisfied by its input would be:  
 
-## Key Concepts for Analyzing Orderings
-Before analyzing whether an ordering requirement is satisfied, we first need to define a few properties of the input data. These properties help guide the analysis process:
+  - Store all the valid ordering expressions that the tables satisfies  
+  - Check whether the ordering requirement by the operator is among valid orderings.  
 
-### 1. Constant Expressions
-Constant expressions are those where each row in the expression has the same value across all rows. Although constant expressions may seem odd in a table, they can arise after operations like `Filter` or `Join`. In our example table, expressions `c1` and `c2` are constant.
+This naive algorithm works and correct. However, listing all valid orderings can be quite lenghy and not scalable. As an example, for the example table following orderings are all valid (This is only a small subset of all valid orderings).
 
-For instance:
-- Expression `c1` and `c2` are constant because every row in the table has the same value for these columns.
-
-### 2. Equivalent Expression Groups
-Equivalent expression groups are expressions that always hold the same value across rows. These expressions can be thought of as clones of each other and may arise from operations like `Filter`, `Join`, or `Projection`.
-
-For example, in our table, the expressions `a2` and `a2_clone` form one equivalence group, and `b2` and `b2_clone` form another equivalence group.
-
-### 3. Valid Orderings
-Valid orderings are the orderings that the table already satisfies. However, there are many possible options for valid ordering. Some of the valid orderings for the table is as follows:
-`[a1 ASC, a2 ASC]`,  
-`[a1 ASC]`,  
-`[a1 ASC, a2_clone ASC]`,  
-`[a1 ASC, a2 ASC, c1 ASC]`,  
-`[a1 ASC, a2 ASC, c1 DESC]`,  
-`[a1 ASC, c1 ASC, a2 ASC]`,  
-`[a1 ASC, c1 DESC, a2 ASC]`,  
+`[amount ASC]`  
+`[amount ASC, price ASC]`  
+`[amount ASC, price_cloned ASC]`  
+`[hostname ASC, amount ASC, price_cloned ASC]`  
+`[amount ASC, hostname ASC,  price_cloned ASC]`  
+`[amount ASC, price_cloned ASC, hostname ASC]`  
 .  
 .  
 .  
-As can be seen from the above valid orderings. Storing all of the valid orderings is wasteful, and contains lots of redundancy. Some of the problems are:
 
-- Storing prefix of another valid ordering is redundant. If the table satisfies lexicographical ordering<sup id="fn2">[2](#footnote2)</sup>: `[a1 ASC, a2 ASC]`, it already satisfies ordering `[a1 ASC]` trivially. Hence, once we store `[a1 ASC, a2 ASC]` we do not need to store `[a1 ASC]` seperately.
+As can be seen from the listing above. Storing all of the valid orderings is wasteful, and contains lots of redundancy. Some of the problems in this approach are:
 
-- Using all entries in an Equivalent Expression Group is redundant. If we know that ordering `[a1 ASC, a2 ASC]` is satisfied by the table, table also satisfies `[a1 ASC, a2_clone ASC]` since `a2` and `a2_clone` are copy of each other. Hence, it is enough to use just one expresssion (let's say first expression) in an Equivalent Expression Group during the construction of the the valid orderings.
 
-- Constant expressions can be inserted into any place inside valid ordering with an arbitrary direction (`ASC`, `DESC`). Hence, If ordering `[a1 ASC, a2 ASC]` is valid, orderings: 
-   - `[c1 ASC, a1 ASC, a2 ASC]`, 
-   - `[c1 DESC, a1 ASC, a2 ASC]`, 
-   - `[a1 ASC, c1 ASC, a2 ASC]`, 
-   - .
-   - .
+- Storing prefix of another valid ordering is redundant. If the table satisfies lexicographical ordering<sup id="fn2">[2](#footnote2)</sup>: `[amount ASC, price ASC]`, it already satisfies ordering `[amount ASC]` trivially. Hence, once we store `[amount ASC, price ASC]` we do not need to store `[amount ASC]` separately.
+
+- Using all columns that are equal to each other in the listings is redundant. If we know that ordering `[amount ASC, price ASC]` is satisfied by the table, table also satisfies `[amount ASC, price_clone ASC]` since `price` and `price_cloned` are copy of each other. It is enough to use just one expression among the expressions that exact copy of each other.
+
+- Constant expressions can be inserted into any place inside valid ordering with an arbitrary direction (`ASC`, `DESC`). Hence, If ordering `[amount ASC, price ASC]` is valid, orderings: <br>
+   `[hostname ASC, amount ASC, price ASC]`,  
+   `[hostname DESC, amount ASC, price ASC]`,  
+   `[amount ASC, hostname ASC, price ASC]`,  
+   .  
+   .    
+
 are all also valid. This is clearly redundant. For this reason, it is better to not use any constant expression during existing ordering construction.
 
 In summary,
 
 - We should only use the longest lexicographical ordering as a valid ordering (shouldn't use any prefix of it)
-- Ordering should contain only one expression from an equivalence group (a representative of the group).
-- Existing ordering expressions shouldn't contain any constant expression.
+- Using all of the expressions that are exact copy of each other is redundant.
+- Ordering expressions shouldn't contain any constant expression.
 
-Adhering to these principles, valid orderings are `[a1 ASC, a2 ASC]`, `[b1 ASC, b2 ASC]` in our table.
 
-### Table Properties
+## Key Concepts for Analyzing Orderings
+To solve the shortcomings above, we need to keep track of following properties for the table:
+
+- Constant Expresssions  
+- Equivalent Expression Groups (will be explained shortly)
+- Succint Valid Orderings (will be explained shortly)
+
+These properties allow us to analyze whether the ordering requirement is satisfied by the data already.
+
+### 1. Constant Expressions
+Constant expressions are those where each row in the expression has the same value across all rows. Although constant expressions may seem odd in a table, they can arise after operations like `Filter` or `Join`. 
+
+For instance in the example table:
+
+- Columns `hostname` and `currency` are constant because every row in the table has the same value ('app.example.com' for 'hostname', and 'USD' for 'currency') for these columns.
+
+<blockquote style="border-left: 4px solid #007bff; padding: 10px; background-color: #f8f9fa;">
+    <strong>Note:</strong> Constant expressions can arise during the query execution, in following query:<br>
+    <code>SELECT hostname FROM logs</code><br><code>WHERE hostname='app.example.com'</code> <br>
+    after filtering is done, for subsequent operators 'hostname' column will be constant.
+</blockquote>
+
+### 2. Equivalent Expression Groups
+Equivalent expression groups are expressions that always hold the same value across rows. These expressions can be thought of as clones of each other and may arise from operations like `Filter`, `Join`, or `Projection`.
+
+In the example table, the expressions `price` and `price_clone` form one equivalence group, and `time` and `time_clone` form another equivalence group.
+
+<blockquote style="border-left: 4px solid #007bff; padding: 10px; background-color: #f8f9fa;">
+    <strong>Note:</strong>Equivalent expression groups can arise during the query execution, in the following query:<br>
+    <code>SELECT time, time as time_clone FROM logs</code> <br>
+    after the projection is done, for subsequent operators 'time' and 'time_clone' will form an equivalence group. As another example, in the following query
+    <code>SELECT employees.id, employees.name, departments.department_name</code>
+<code>FROM employees</code>
+<code>JOIN departments ON employees.department_id = departments.id;</code> <br>
+after joining, 'employees.department_id' and 'departments.id' will form an equivalence group.
+</blockquote>
+
+### 3. Succint Valid Orderings
+Valid orderings are the orderings that the table already satisfies. However, naively enlisting them is not scalable as discussed before. We enlist all of the valid orderings after following constraints are applied:
+
+-  Do not use any constant expressions in the valid ordering construction
+-  Only use one of the entries (by convention first entry) in the equivalent expression group.
+-  Lexicographical ordering shouldn't contain any leading ordering<sup id="fn7">[7](#footnote7)</sup>except the first position <sup id="fn5">[5](#footnote5)</sup>.
+-  Do not use any prefix of a valid lexicographical ordering<sup id="fn6">[6](#footnote6)</sup>.
+
+After applying the first and second constraint example table simplifies to 
 
 <style>
   table {
     border-collapse: collapse;
-    width: 100%;
+    width: 80%;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   }
   th, td {
@@ -199,40 +236,47 @@ Adhering to these principles, valid orderings are `[a1 ASC, a2 ASC]`, `[b1 ASC, 
 
 <table>
   <tr>
-    <th>a1</th> <th>a2</th> <th>c1</th> <th>c2</th> <th>b1</th> <th>b2</th> <th>a2_clone</th> <th>b2_clone</th>
+    <th>amount</th> <th>price</th><th>time_bin</th> <th>time</th>
   </tr>
   <tr>
-    <td>0</td> <td>0</td> <td>0</td> <td>1</td> <td>0</td> <td>0</td> <td>0</td> <td>0</td>
+    <td>12</td> <td>25</td><td>08:00:00</td> <td>08:01:30</td>
   </tr>
   <tr>
-    <td>0</td> <td>1</td> <td>0</td> <td>1</td> <td>0</td> <td>0</td> <td>1</td> <td>0</td>
+    <td>12</td> <td>26</td><td>08:00:00</td> <td>08:11:30</td> 
   </tr>
   <tr>
-    <td>1</td> <td>0</td> <td>0</td> <td>1</td> <td>0</td> <td>1</td> <td>0</td> <td>1</td>
+    <td>15</td> <td>30</td><td>08:00:00</td> <td>08:41:30</td>
   </tr>
   <tr>
-    <td>1</td> <td>1</td> <td>0</td> <td>1</td> <td>0</td> <td>2</td> <td>1</td> <td>2</td>
+    <td>15</td> <td>32</td><td>08:00:00</td> <td>08:55:15</td>
   </tr>
   <tr>
-    <td>1</td> <td>2</td> <td>0</td> <td>1</td> <td>1</td> <td>0</td> <td>2</td> <td>0</td>
+    <td>15</td> <td>35</td><td>09:00:00</td> <td>09:10:23</td> 
   </tr>
   <tr>
-    <td>2</td> <td>0</td> <td>0</td> <td>1</td> <td>1</td> <td>1</td> <td>0</td> <td>1</td>
+    <td>20</td> <td>18</td><td>09:00:00</td> <td>09:20:33</td>
   </tr>
   <tr>
-    <td>2</td> <td>1</td> <td>0</td> <td>1</td> <td>1</td> <td>2</td> <td>1</td> <td>2</td>
+    <td>20</td> <td>22</td><td>09:00:00</td> <td>09:40:15</td>
   </tr>
 </table>
+<br>
+Following third and fourth constraints for the simplified table, succint valid orderings are:<br>
+`[amount ASC, price ASC]`,   
+`[time_bin ASC]`,  
+`[time ASC]`  
 
+### Table Properties  
 
-For the table above, the following properties can be derived:
-- **Constant Expressions** = `[c1, c2]`
-- **Equivalent Expression Groups** = `[[a2, a2_clone], [b2, b2_clone]]`
-- **Valid Orderings** = `[[a1 ASC, a2 ASC], [b1 ASC, b2 ASC]]`
+In summary, for the example table, the following properties can be derived:
+
+- **Constant Expressions** = `hostname, current`  
+- **Equivalent Expression Groups** = `[price, price_clone], [time, time_clone]`  
+- **Valid Orderings** = `[amount ASC, price ASC], [time_bin ASC], [time ASC]`  
 
 ### Algorithm for Analyzing Ordering Requirements
 
-We can use following algorithm to check whether an ordering requirement is satisfied by a table:
+After deriving these properties for the data, following algorithm can be used to check whether an ordering requirement is satisfied by the table:
 
 1. **Prune constant expressions**: Remove any constant expressions from the ordering requirement.
 2. **Normalize the requirement**: Replace each expression in the ordering requirement with the first entry from its equivalence group.
@@ -244,46 +288,54 @@ We can use following algorithm to check whether an ordering requirement is satis
 
 If at the end of the procedure above, ordering requirement is an empty list. We can conclude that the requirement is satisfied by the table.
 
-Let’s see this algorithm in action with an example.
-
 ### Example Walkthrough
 
-Let's check if the ordering requirement `[c1 DESC, a1 ASC, b1 ASC, a2_clone ASC, b2 ASC, c2 ASC, a2 DESC]` is satisfied by the table with properties:
-- **Constant Expressions** = `[c1, c2]`
-- **Equivalent Expressions Groups** = `[[a2, a2_clone], [b2, b2_clone]]`
-- **Valid Orderings** = `[[a1 ASC, a2 ASC], [b1 ASC, b2 ASC]]`
+Let's check if the ordering requirement `[hostname DESC, amount ASC, time_bin ASC, price_clone ASC, time ASC, currency ASC, price DESC]` is satisfied by the table with properties:
+
+- **Constant Expressions** = `[hostname, currency]`
+- **Equivalent Expressions Groups** = `[[price, price_clone], [time, time_clone]]`
+- **Succint Valid Orderings** = `[[amount ASC, price ASC], [time_bin ASC], [time ASC]`
+
+### Algorithm Steps
 
 1. **Prune constant expressions**:  
-   Remove `c1` and `c2`. The requirement becomes:  
-   `[a1 ASC, b1 ASC, a2_clone ASC, b2 ASC, a2 DESC]`.
+   Remove `hostname` and `curreny` from the requirement. The requirement becomes:  
+   `[amount ASC, time_bin ASC, price_clone ASC, time ASC, price DESC]`.
 
 2. **Normalize using equivalent groups**:  
-   Replace `a2_clone` with `a2` and `b2_clone` with `b2`. The requirement becomes:  
-   `[a1 ASC, b1 ASC, a2 ASC, b2 ASC, a2 DESC]`.
+   Replace `price_clone` with `price` and `time_clone` with `time`. The requirement becomes:  
+   `[amount ASC, time_bin ASC, price ASC, time ASC, price DESC]`.
 
 3. **De-duplicate expressions**:  
-   Since `a2` appears twice, we simplify the requirement to:  
-   `[a1 ASC, b1 ASC, a2 ASC, b2 ASC]` (We keep the first expression from the left side).
+   Since `price` appears twice, we simplify the requirement to:  
+   `[amount ASC, time_bin ASC, price ASC, time ASC]` (We keep the first expression from the left side).
 
 4. **Match leading orderings**:  
-   - Check if leading ordering requirement `a1 ASC` can be found among the leading valid orderings: `a1 ASC, b1 ASC`. It can, so we remove `a1 ASC` from the ordering requirement and valid orderings.
+  Check if leading ordering requirement `amount ASC` is among the leading valid orderings: `amount ASC, time_bin ASC, time ASC`. This is the case, so we remove `amount ASC` from the ordering requirement and valid orderings.
 5. **Iterate through the remaining expressions**:
-Now, the problem is converted from 
-*"whether the requirement: `[a1 ASC, b1 ASC, a2 ASC, b2 ASC]` is satisfied by valid orderings:  `[[a1 ASC, a2 ASC], [b1 ASC, b2 ASC]]`"*
-into
-*"whether the requirement: `[b1 ASC, a2 ASC, b2 ASC]` is satisfied by valid orderings:  `[[a2 ASC], [b1 ASC, b2 ASC]]`"*
+Now, the problem is converted from<br>
+*"whether the requirement: `[amount ASC, time_bin ASC, price ASC, time ASC]` is satisfied by valid orderings:  `[amount ASC, price ASC], [time_bin ASC], [time ASC]`"*<br>
+into<br>
+*"whether the requirement: `[time_bin ASC, price ASC, time ASC]` is satisfied by valid orderings:  `[price ASC], [time_bin ASC], [time ASC]`"*<br>
 We go back to step 4 until the ordering requirement list exhausted or until its length no longer decreases.
 
 At the end of stages above, we end up with an empty ordering requirement list. Given this, we can conclude that the table satisfies the ordering requirement.
 
 ## Conclusion
 
-In this post, we analyzed the conditions under which an ordering requirement is satisfied given the properties of a table. We introduced necessary concepts like constant expressions, equivalence groups, and valid orderings, and used these to check whether an ordering requirement could be met. This analysis plays a crucial role in generating efficient query plans and avoiding unnecessary or incorrect operations.
+In this post, we analyzed the conditions under which an ordering requirement is satisfied given the properties of a table. We introduced necessary concepts like constant expressions, equivalence groups, and valid orderings, and used these to check whether an ordering requirement could be met by the table. This analysis plays a crucial role in<br>
+- Chosing algorithm variants that are more efficient
+- Generating streaming friendly plans
 
 The `DataFusion` query engine uses this kind of analysis during its planning stage to ensure correct and efficient query execution. You can find the implementation of this analysis in the [DataFusion repository](https://github.com/apache/datafusion/tree/main/datafusion/physical-expr/src/equivalence).
 
+## Appendix
+
 <p id="footnote1"><sup>[1]</sup>The ordering requirement refers to the condition that input data must be sorted in a certain way for a specific operator to function as intended.</p>
 <p id="footnote2"><sup>[2]</sup>Lexicographic order is a way of ordering sequences (like strings, list of expressions) based on the order of their components, similar to how words are ordered in a dictionary. It compares each element of the sequences one by one, from left to right.</p>
-<p id="footnote3"><sup>[3]</sup>Leading ordering requirement is the first ordering requiremnt in the list of lexicographical ordering requirement expression. As an example for the requirement: <code>[a1 ASC, b1 ASC, a2 ASC, b2 ASC]</code>, leading ordering requirement is: <code>a1 ASC</code>.</p>
-<p id="footnote4"><sup>[4]</sup>Leading valid orderings are the first ordering for each valid ordering list in the table. As an example, for the valid orderings: <code>[[a1 ASC, a2 ASC], [b1 ASC, b2 ASC]]</code>, leading valid orderings will be: <code>a1 ASC, b1 ASC</code>. </p>
+<p id="footnote3"><sup>[3]</sup>Leading ordering requirement is the first ordering requirement in the list of lexicographical ordering requirement expression. As an example for the requirement: <code>[amount ASC, time_bin ASC, prices ASC, time ASC]</code>, leading ordering requirement is: <code>amount ASC</code>.</p>
+<p id="footnote4"><sup>[4]</sup>Leading valid orderings are the first ordering for each valid ordering list in the table. As an example, for the valid orderings: <code>[amount ASC, prices ASC], [time_bin ASC, [time ASC]</code>, leading valid orderings will be: <code>amount ASC, time_bin ASC, time ASC</code>. </p>
+<p id="footnote5"><sup>[5]</sup>This means that, if we know that <code>[amount ASC]</code> and <code>[time ASC]</code> are both valid orderings for the table. We shouldn't enlist <code>[amount ASC, time ASC]</code> or <code>[time ASC, amount ASC]</code></p> as valid orderings. These orderings can be deduced if we know that table satisfies the ordering <code>[amount ASC]</code> and <code>[time ASC]</code>.
+<p id="footnote6"><sup>[6]</sup>This means that, if ordering <code>[amount ASC, price ASC]</code> is a valid ordering for the table. We shouldn't enlist <code>[amount ASC]</code> as valid ordering. Valdiity of it can be deduced from the ordering: <code>[amount ASC, price ASC]</code>
+<p id="footnote7"><sup>[7]</sup>Leading ordering is the first ordering in a lexicographical ordering list. As an example, for the ordering: <code>[amount ASC, price ASC]</code>, leading ordering will be: <code>amount ASC</code>. </p>
 <p id="optimal"><sup>*</sup>Optimal depends on the use case, <code>Datafusion</code> has many various flags to communicate what user thinks the optimum plan is (e.g. streamable, fastest, lowest memory, etc.)</p>
