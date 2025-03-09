@@ -147,7 +147,7 @@ This naive algorithm works and correct. However, listing all valid orderings can
 As can be seen from the listing above. Storing all of the valid orderings is wasteful, and contains lots of redundancy. Some of the problems in this approach are:
 
 
-- Storing prefix of another valid ordering is redundant. If the table satisfies lexicographical ordering<sup id="fn2">[2](#footnote2)</sup>: `[amount ASC, price ASC]`, it already satisfies ordering `[amount ASC]` trivially. Hence, once we store `[amount ASC, price ASC]` we do not need to store `[amount ASC]` separately.
+- Storing prefix of another valid ordering is redundant. If the table satisfies lexicographic ordering<sup id="fn2">[2](#footnote2)</sup>: `[amount ASC, price ASC]`, it already satisfies ordering `[amount ASC]` trivially. Hence, once we store `[amount ASC, price ASC]` we do not need to store `[amount ASC]` separately.
 
 - Using all columns that are equal to each other in the listings is redundant. If we know that ordering `[amount ASC, price ASC]` is satisfied by the table, table also satisfies `[amount ASC, price_cloned ASC]` since `price` and `price_cloned` are copy of each other. It is enough to use just one expression among the expressions that exact copy of each other.
 
@@ -162,7 +162,7 @@ are all also valid. This is clearly redundant. For this reason, it is better to 
 
 In summary,
 
-- We should only use the longest lexicographical ordering as a valid ordering (shouldn't use any prefix of it)
+- We should only use the longest lexicographic ordering as a valid ordering (shouldn't use any prefix of it)
 - Using all of the expressions that are exact copy of each other is redundant.
 - Ordering expressions shouldn't contain any constant expression.
 
@@ -213,8 +213,8 @@ Valid orderings are the orderings that the table already satisfies. However, nai
 
 -  Do not use any constant expressions in the valid ordering construction
 -  Only use one of the entries (by convention first entry) in the equivalent expression group.
--  Lexicographical ordering shouldn't contain any leading ordering<sup id="fn5">[5](#footnote5)</sup>except the first position <sup id="fn6">[6](#footnote6)</sup>.
--  Do not use any prefix of a valid lexicographical ordering<sup id="fn7">[7](#footnote7)</sup>.
+-  Lexicographic ordering shouldn't contain any leading ordering<sup id="fn5">[5](#footnote5)</sup>except the first position <sup id="fn6">[6](#footnote6)</sup>.
+-  Do not use any prefix of a valid lexicographic ordering<sup id="fn7">[7](#footnote7)</sup>.
 
 After applying the first and second constraint, example table simplifies to 
 
@@ -340,9 +340,9 @@ The `DataFusion` query engine employs this analysis (and many more) during its p
 
 <p id="footnote1"><sup>[1]</sup>The ordering requirement refers to the condition that input data must be sorted in a certain way for a specific operator to function as intended.</p>
 <p id="footnote2"><sup>[2]</sup>Lexicographic order is a way of ordering sequences (like strings, list of expressions) based on the order of their components, similar to how words are ordered in a dictionary. It compares each element of the sequences one by one, from left to right.</p>
-<p id="footnote3"><sup>[3]</sup>Leading ordering requirement is the first ordering requirement in the list of lexicographical ordering requirement expression. As an example for the requirement: <code>[amount ASC, time_bin ASC, prices ASC, time ASC]</code>, leading ordering requirement is: <code>amount ASC</code>.</p>
+<p id="footnote3"><sup>[3]</sup>Leading ordering requirement is the first ordering requirement in the list of lexicographic ordering requirement expression. As an example for the requirement: <code>[amount ASC, time_bin ASC, prices ASC, time ASC]</code>, leading ordering requirement is: <code>amount ASC</code>.</p>
 <p id="footnote4"><sup>[4]</sup>Leading valid orderings are the first ordering for each valid ordering list in the table. As an example, for the valid orderings: <code>[amount ASC, prices ASC], [time_bin ASC], [time ASC]</code>, leading valid orderings will be: <code>amount ASC, time_bin ASC, time ASC</code>. </p>
-<p id="footnote5"><sup>[5]</sup>Leading ordering is the first ordering in a lexicographical ordering list. As an example, for the ordering: <code>[amount ASC, price ASC]</code>, leading ordering will be: <code>amount ASC</code>. </p>
+<p id="footnote5"><sup>[5]</sup>Leading ordering is the first ordering in a lexicographic ordering list. As an example, for the ordering: <code>[amount ASC, price ASC]</code>, leading ordering will be: <code>amount ASC</code>. </p>
 <p id="footnote6"><sup>[6]</sup>This means that, if we know that <code>[amount ASC]</code> and <code>[time ASC]</code> are both valid orderings for the table. We shouldn't enlist <code>[amount ASC, time ASC]</code> or <code>[time ASC, amount ASC]</code></p> as valid orderings. These orderings can be deduced if we know that table satisfies the ordering <code>[amount ASC]</code> and <code>[time ASC]</code>.
 <p id="footnote7"><sup>[7]</sup>This means that, if ordering <code>[amount ASC, price ASC]</code> is a valid ordering for the table. We shouldn't enlist <code>[amount ASC]</code> as valid ordering. Validity of it can be deduced from the ordering: <code>[amount ASC, price ASC]</code>
 <p id="optimal"><sup>*</sup>Optimal depends on the use case, <code>Datafusion</code> has many various flags to communicate what user thinks the optimum plan is (e.g. streamable, fastest, lowest memory, etc.). See <a href="https://datafusion.apache.org/user-guide/configs.html" target="_blank">configurations</a> for detail.</p>
