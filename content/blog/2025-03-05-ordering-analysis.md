@@ -30,7 +30,7 @@ limitations under the License.
 ## Introduction
 In this blog post, we explain when an ordering requirement of an operator is satisfied by its input data. This analysis is essential for order-based optimizations and is often more complex than one might initially think.
 <blockquote style="border-left: 4px solid #007bff; padding: 10px; background-color: #f8f9fa;">
-    <strong>Ordering Requirement</strong> for an operator describes how the input data to that operator must be sorted for the operator to compute the correct result. It is the job of the DataFusion <a href="https://docs.rs/datafusion/latest/datafusion/physical_optimizer/enforce_sorting/struct.EnforceSorting.html" target="_blank">EnforceSorting</a> planner to make sure that these requirements are satisfied during execution.
+    <strong>Ordering Requirement</strong> for an operator describes how the input data to that operator must be sorted for the operator to compute the correct result. It is the job of the planner to make sure that these requirements are satisfied during execution (See DataFusion <a href="https://docs.rs/datafusion/latest/datafusion/physical_optimizer/enforce_sorting/struct.EnforceSorting.html" target="_blank">EnforceSorting</a> for an implementation of such rule).
 </blockquote>
 
 There are various use cases, where this type of analysis can be useful such as the following examples.
@@ -41,6 +41,8 @@ SELECT hostname, log_line
 FROM telemetry ORDER BY time ASC limit 10
 ```
 If we don't know anything about the `telemetry` table, we need to sort it by `time ASC` and then retrieve the first 10 rows to get the correct result. However, if the table is already ordered by `time ASC`, we can simply retrieve the first 10 rows. This approach executes much faster and uses less memory compared to resorting the entire table, even when the [TopK] operator is used. 
+
+[TopK]: https://docs.rs/datafusion/latest/datafusion/physical_plan/struct.TopK.html
 
 In order to avoid the sort, the query optimizer must determine the data is already sorted. For simple queries the analysis is straightforward, but it gets complicated fast. For example, what if your data is sorted by `[hostname, time ASC]` and your query is
 ```sql
@@ -59,7 +61,7 @@ Most analytic systems, including DataFusion, by default implement such a query u
 
 ### Streaming-Friendly Execution
 
-Stream processing aims to produce results immediately as they become available, ensuring minimal latency for real-time workloads. However, some operators need to consume all input data before producing any output. Consider the `Sort` operation: before it can start generating output, the algorithm must first process all input data. As a result, data flow halts whenever such an operator is encountered until all input is consumed. When a physical query plan contains such an operator (`Sort`, `CrossJoin`, ..), we refer to this as query pipeline breaking, meaning the query cannot be executed in a streaming fashion.
+Stream processing aims to produce results immediately as they become available, ensuring minimal latency for real-time workloads. However, some operators need to consume all input data before producing any output. Consider the `Sort` operation: before it can start generating output, the algorithm must first process all input data. As a result, data flow halts whenever such an operator is encountered until all input is consumed. When a physical query plan contains such an operator (`Sort`, `CrossJoin`, ..), we refer to this as pipeline breaking, meaning the query cannot be executed in a streaming fashion.
 
 For a query to be executed in a streaming fashion, we need to satisfy 2 conditions:
 
@@ -129,6 +131,19 @@ Let's start by creating an example table that we will refer throughout the post.
 </table>
 
 <br>
+
+<blockquote style="border-left: 4px solid #007bff; padding: 10px; background-color: #f8f9fa;">
+<strong>How can a table have multiple orderings?:</strong> At first glance, it may seem counterintuitive for a table to have more than one valid ordering. However, during query execution, such scenarios can arise.
+
+For example, consider the following query:
+```sql
+SELECT time, date_bin('1 hour', time, '1970-01-01') as time_bin  
+FROM table;
+```
+If we know that the table is ordered by <code>time ASC</code>, we can infer that <code>time_bin ASC</code> is also a valid ordering. This is because the <code>date_bin</code> function is monotonic, meaning it preserves the order of its input.
+
+DataFusion leverages these functional dependencies to infer new orderings as data flows through different query operators. For details on the implementation, see the <a href="https://github.com/apache/datafusion/blob/main/datafusion/common/src/functional_dependencies.rs", target="_blank">source</a> code.
+</blockquote>
 
 By inspection, you can see this table is sorted by the `amount` column, but It is also sorted by `time` and `time_bin` as well as the compound `(time_bin, amount)` and many other variations. While this example is an extreme case, many real world data have multiple sort orders. 
 
@@ -204,7 +219,7 @@ Equivalent expression groups are expressions that always hold the same value acr
 In the example table, the expressions `price` and `price_cloned` form one equivalence group, and `time` and `time_cloned` form another equivalence group.
 
 <blockquote style="border-left: 4px solid #007bff; padding: 10px; background-color: #f8f9fa;">
-    <strong>Note:</strong>Equivalent expression groups can arise during the query execution. For example, in the following query:<br>
+    <strong>Note:</strong> Equivalent expression groups can arise during the query execution. For example, in the following query:<br>
     <code>SELECT time, time as time_cloned FROM logs</code> <br>
     after the projection is done, for subsequent operators 'time' and 'time_cloned' will form an equivalence group. As another example, in the following query:<br>
     <code>SELECT employees.id, employees.name, departments.department_name</code>
