@@ -30,10 +30,8 @@ limitations under the License.
 ## Introduction
 In this blog post, we explain when an ordering requirement of an operator is satisfied by its input data. This analysis is essential for order-based optimizations and is often more complex than one might initially think.
 <blockquote style="border-left: 4px solid #007bff; padding: 10px; background-color: #f8f9fa;">
-    <strong>Ordering Requirement</strong> for an operator describes how the input data to that operator must be sorted for the operator to compute the correct result. It is the job of the DataFusion [`EnforceSorting`] planner to make sure that these requirements are satisfied during execution.
+    <strong>Ordering Requirement</strong> for an operator describes how the input data to that operator must be sorted for the operator to compute the correct result. It is the job of the DataFusion <a href="https://docs.rs/datafusion/latest/datafusion/physical_optimizer/enforce_sorting/struct.EnforceSorting.html" target="_blank">EnforceSorting</a> planner to make sure that these requirements are satisfied during execution.
 </blockquote>
-
-[`EnforceSorting`]: https://docs.rs/datafusion/latest/datafusion/physical_optimizer/enforce_sorting/struct.EnforceSorting.html
 
 There are various use cases, where this type of analysis can be useful such as the following examples.
 ### Removing Unnecessary Sorts
@@ -57,7 +55,7 @@ As another use case, some operators can utilize the ordering information to chan
 SELECT COUNT(log_line) 
 FROM telemetry GROUP BY hostname;
 ```
-Most analytic systems, including DataFusion, by default implement such a query using a hash table keyed on values of `hostname` to store the counts. However, if the `telemetry` table is sorted by `hostname`,  there are much more efficient algorithms for grouping on `hostname` values than hashing every value and storing it in memory. However, the more efficient algorithm can only be used when the input is sorted corectly. To see this in practice, check out the [source](https://github.com/apache/datafusion/tree/main/datafusion/physical-plan/src/aggregates/order) for ordered variant of the `Aggregation` in `Datafusion`.
+Most analytic systems, including DataFusion, by default implement such a query using a hash table keyed on values of `hostname` to store the counts. However, if the `telemetry` table is sorted by `hostname`,  there are much more efficient algorithms for grouping on `hostname` values than hashing every value and storing it in memory. However, the more efficient algorithm can only be used when the input is sorted correctly. To see this in practice, check out the [source](https://github.com/apache/datafusion/tree/main/datafusion/physical-plan/src/aggregates/order) for ordered variant of the `Aggregation` in `DataFusion`.
 
 ### Streaming-Friendly Execution
 
@@ -156,16 +154,16 @@ As can be seen from the listing above. Storing all of the valid orderings is was
 
 - Storing a prefix of another valid ordering is redundant. If the table satisfies the lexicographic ordering<sup id="fn1">[1](#footnote1)</sup>: `[amount ASC, price ASC]`, it already satisfies ordering `[amount ASC]` trivially. Hence, once we store `[amount ASC, price ASC]` storing `[amount ASC]` is rdundant.
 
-- Using all columns that are equal to each other in the listings is redundant. If we know the table is orderd by `[amount ASC, price ASC]` , it is also ordered by `[amount ASC, price_cloned ASC]` since `price` and `price_cloned` are copy of each other. It is enough to use just one expression among the expressions that exact copy of each other.
+- Using all columns that are equal to each other in the listings is redundant. If we know the table is ordered by `[amount ASC, price ASC]` , it is also ordered by `[amount ASC, price_cloned ASC]` since `price` and `price_cloned` are copy of each other. It is enough to use just one expression among the expressions that exact copy of each other.
 
-- Constant expressions can be inserted anywhere in a valid ordering with an arbitrary direction (e.g. `ASC`, `DESC`). Hence, if the table is ordered by `[amount ASC, price ASC]`, it is also orderd by: <br>
+- Constant expressions can be inserted anywhere in a valid ordering with an arbitrary direction (e.g. `ASC`, `DESC`). Hence, if the table is ordered by `[amount ASC, price ASC]`, it is also ordered by: <br>
    `[hostname ASC, amount ASC, price ASC]`,  
    `[hostname DESC, amount ASC, price ASC]`,  
    `[amount ASC, hostname ASC, price ASC]`,  
    .  
    .    
 
- This is clearly redundant. For this reason, it is better to avoid explicitly encoding constant expressions in valid sort orders.
+This is clearly redundant. For this reason, it is better to avoid explicitly encoding constant expressions in valid sort orders.
 
 In summary,
 
@@ -301,11 +299,18 @@ If, at the end of the procedure above, the ordering requirement is an empty list
 
 ### Example Walkthrough
 
-Let's check if the ordering requirement `[hostname DESC, amount ASC, time_bin ASC, price_cloned ASC, time ASC, currency ASC, price DESC]` is satisfied by the table with properties:
+Let's say the user provided a query such as the following
+```sql
+SELECT * FROM table
+ORDER BY hostname DESC, amount ASC, time_bin ASC, price_cloned ASC, time ASC, currency ASC, price DESC;
+```
+And the input has the same properties explained above
 
 - **Constant Expressions** = `hostname, currency`
 - **Equivalent Expressions Groups** = `[price, price_cloned], [time, time_cloned]`
 - **Succinct Valid Orderings** = `[amount ASC, price ASC], [time_bin ASC], [time ASC]`
+
+In order to remove a sort, the optimizer must check if the ordering requirement `[hostname DESC, amount ASC, time_bin ASC, price_cloned ASC, time ASC, currency ASC, price DESC]` is satisfied by the properties.
 
 ### Algorithm Steps
 
@@ -356,4 +361,4 @@ The `DataFusion` query engine employs this analysis (and many more) during its p
 <p id="footnote4"><sup>[4]</sup>This means that, if ordering <code>[amount ASC, price ASC]</code> is a valid ordering for the table. We shouldn't enlist <code>[amount ASC]</code> as valid ordering. Validity of it can be deduced from the ordering: <code>[amount ASC, price ASC]</code>
 <p id="footnote5"><sup>[5]</sup>Leading ordering requirement is the first ordering requirement in the list of lexicographic ordering requirement expression. As an example for the requirement: <code>[amount ASC, time_bin ASC, prices ASC, time ASC]</code>, leading ordering requirement is: <code>amount ASC</code>.</p>
 <p id="footnote6"><sup>[6]</sup>Leading valid orderings are the first ordering for each valid ordering list in the table. As an example, for the valid orderings: <code>[amount ASC, prices ASC], [time_bin ASC], [time ASC]</code>, leading valid orderings will be: <code>amount ASC, time_bin ASC, time ASC</code>. </p>
-<p id="optimal"><sup>*</sup>Optimal depends on the use case, <code>Datafusion</code> has many various flags to communicate what user thinks the optimum plan is (e.g. streamable, fastest, lowest memory, etc.). See <a href="https://datafusion.apache.org/user-guide/configs.html" target="_blank">configurations</a> for detail.</p>
+<p id="optimal"><sup>*</sup>Optimal depends on the use case, <code>DataFusion</code> has many various flags to communicate what user thinks the optimum plan is (e.g. streamable, fastest, lowest memory, etc.). See <a href="https://datafusion.apache.org/user-guide/configs.html" target="_blank">configurations</a> for detail.</p>
