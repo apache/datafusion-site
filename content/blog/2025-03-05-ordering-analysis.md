@@ -1,6 +1,6 @@
 ---
 layout: post
-title: Analysis of Ordering for Better Plans
+title: Using Ordering for Better Plans in Apache DataFusion
 date: 2025-03-05
 author: Mustafa Akur, Andrew Lamb
 categories: [tutorial]
@@ -28,34 +28,36 @@ limitations under the License.
 <!-- see https://github.com/apache/datafusion/issues/11631 for details -->
 
 ## Introduction
-In this blog post, we will explore how to determine whether an ordering requirement of an operator is satisfied by its input data. This analysis is essential for order-based optimizations and is often more complex than one might initially think.
+In this blog post, we explain when an ordering requirement of an operator is satisfied by its input data. This analysis is essential for order-based optimizations and is often more complex than one might initially think.
 <blockquote style="border-left: 4px solid #007bff; padding: 10px; background-color: #f8f9fa;">
-    <strong>Ordering Requirement</strong> for an operator refers to the condition that input data must be sorted in a certain way for the operator to function as intended. If this condition is not met, the operator may not perform as expected. It is the job of the planner to make sure that the requirements - such as specific ordering, specific distribution, etc. - of all operators are satisfied during execution.
+    <strong>Ordering Requirement</strong> for an operator describes how the input data to that operator must be sorted for the operator to compute the correct result. It is the job of the DataFusion [`EnforceSorting`] planner to make sure that these requirements are satisfied during execution.
 </blockquote>
 
-There are various use cases, where this type of analysis can be useful. 
+[`EnforceSorting`]: https://docs.rs/datafusion/latest/datafusion/physical_optimizer/enforce_sorting/struct.EnforceSorting.html
+
+There are various use cases, where this type of analysis can be useful such as the following examples.
 ### Removing Unnecessary Sorts
 Imagine a user wants to execute the following query:
 ```SQL
 SELECT hostname, log_line 
 FROM telemetry ORDER BY time ASC limit 10
 ```
-If we don't know anything about the `telemetry` table, we need to sort it by `time ASC` and then retrieve the first 10 rows to get the correct result. However, if the table is already ordered by `time ASC`, simply retrieving the first 10 rows is sufficient. This approach executes much faster and uses less memory compared to the first version.
+If we don't know anything about the `telemetry` table, we need to sort it by `time ASC` and then retrieve the first 10 rows to get the correct result. However, if the table is already ordered by `time ASC`, we can simply retrieve the first 10 rows. This approach executes much faster and uses less memory compared to resorting the entire table, even when the [TopK] operator is used. 
 
-The key is that the query optimizer needs to know the data is already sorted. For simple queries that is likely simple, but it gets complicated fast, like for example, what if your data is sorted by `[hostname, time ASC]` and your query is
+In order to avoid the sort, the query optimizer must determine the data is already sorted. For simple queries the analysis is straightforward, but it gets complicated fast. For example, what if your data is sorted by `[hostname, time ASC]` and your query is
 ```sql
 SELECT hostname, log_line 
 FROM telemetry WHERE hostname = 'app.example.com' ORDER BY time ASC;
 ```
-In this case, the system still doesn't have to do any sorting -- but only if it has enough analysis to be able to reason about the sortedness of the stream when we know `hostname` has a single value.
+In this case, a sort still isn't needed,  but the analysis must  reason about the sortedness of the stream when it knows `hostname` has a single value.
 
-### Optimizing Execution Modes Using Ordering Information
+### Optimized Operator Implementations
 As another use case, some operators can utilize the ordering information to change its underlying algorithm to execute more efficiently. Consider the following query:
 ```SQL
 SELECT COUNT(log_line) 
 FROM telemetry GROUP BY hostname;
 ```
-when `telemetry` is sorted by `hostname`, aggregation doesn't need to hash the entire data at its input. It can use a much more efficient algorithm for grouping the data according to the `hostname` values. Failure to detect the ordering can result in choosing the sub-optimal algorithm variant for the operator. To see this in practice, check out the [source](https://github.com/apache/datafusion/tree/main/datafusion/physical-plan/src/aggregates/order) for ordered variant of the `Aggregation` in `Datafusion`.
+Most analytic systems, including DataFusion, by default implement such a query using a hash table keyed on values of `hostname` to store the counts. However, if the `telemetry` table is sorted by `hostname`,  there are much more efficient algorithms for grouping on `hostname` values than hashing every value and storing it in memory. However, the more efficient algorithm can only be used when the input is sorted corectly. To see this in practice, check out the [source](https://github.com/apache/datafusion/tree/main/datafusion/physical-plan/src/aggregates/order) for ordered variant of the `Aggregation` in `Datafusion`.
 
 ### Streaming-Friendly Execution
 
@@ -72,7 +74,7 @@ FROM orders
 ```
 Here, the user wants to compute the sum of all amounts in the orders table. By nature, this query requires scanning the entire table to generate a result, making it impossible to execute in a streaming fashion.
 
-**Planner should be smart**  
+**Streaming Aware Planner**  
 Being logically streamable does not guarantee that a query will execute in a streaming fashion. SQL is a declarative language, meaning it specifies 'WHAT' user wants. It is up to the planner, 'HOW' to generate the result. In most cases, there are many ways to compute the correct result for a given query. The query planner is responsible for choosing "a way" (ideally the best<sup id="optimal1">[*](#optimal)</sup> one) among the all alternatives to generate what user asks for. If a plan contains a pipeline-breaking operator, the execution will not be streaming—even if the query is logically streamable. To generate truly streaming plans from logically streamable queries, the planner must carefully analyze the existing orderings in the source tables to ensure that the final plan does not contain any pipeline-breaking operators.
 
 
@@ -130,12 +132,14 @@ Let's start by creating an example table that we will refer throughout the post.
 
 <br>
 
-A naive approach for analysing whether the ordering requirement of an operator is satisfied by its input would be:  
+By inspection, you can see this table is sorted by the `amount` column, but It is also sorted by `time` and `time_bin` as well as the compound `(time_bin, amount)` and many other variations. While this example is an extreme case, many real world data have multiple sort orders. 
+
+A naive approach for analyzing whether the ordering requirement of an operator is satisfied by its input would be:  
 
   - Store all the valid ordering expressions that the tables satisfies  
   - Check whether the ordering requirement by the operator is among valid orderings.  
 
-This naive algorithm works and correct. However, listing all valid orderings can be quite lenghy and not scalable. As an example, for the example table following orderings are all valid (This is only a small subset of all valid orderings).
+This naive algorithm works and correct. However, listing all valid orderings can be quite lengthy and is of exponential complexity as the number of orderings grows. For the example table, here is a (small) subset of the valid orderings:
 
 `[amount ASC]`  
 `[amount ASC, price ASC]`  
@@ -147,31 +151,31 @@ This naive algorithm works and correct. However, listing all valid orderings can
 .  
 .  
 
-As can be seen from the listing above. Storing all of the valid orderings is wasteful, and contains lots of redundancy. Some of the problems in this approach are:
+As can be seen from the listing above. Storing all of the valid orderings is wasteful, and contains significant redundancy. Here are some observations, suggesting we can do much better:
 
 
-- Storing prefix of another valid ordering is redundant. If the table satisfies lexicographic ordering<sup id="fn1">[1](#footnote1)</sup>: `[amount ASC, price ASC]`, it already satisfies ordering `[amount ASC]` trivially. Hence, once we store `[amount ASC, price ASC]` we do not need to store `[amount ASC]` separately.
+- Storing a prefix of another valid ordering is redundant. If the table satisfies the lexicographic ordering<sup id="fn1">[1](#footnote1)</sup>: `[amount ASC, price ASC]`, it already satisfies ordering `[amount ASC]` trivially. Hence, once we store `[amount ASC, price ASC]` storing `[amount ASC]` is rdundant.
 
-- Using all columns that are equal to each other in the listings is redundant. If we know that ordering `[amount ASC, price ASC]` is satisfied by the table, table also satisfies `[amount ASC, price_cloned ASC]` since `price` and `price_cloned` are copy of each other. It is enough to use just one expression among the expressions that exact copy of each other.
+- Using all columns that are equal to each other in the listings is redundant. If we know the table is orderd by `[amount ASC, price ASC]` , it is also ordered by `[amount ASC, price_cloned ASC]` since `price` and `price_cloned` are copy of each other. It is enough to use just one expression among the expressions that exact copy of each other.
 
-- Constant expressions can be inserted into any place inside valid ordering with an arbitrary direction (e.g. `ASC`, `DESC`). Hence, If ordering `[amount ASC, price ASC]` is valid, orderings: <br>
+- Constant expressions can be inserted anywhere in a valid ordering with an arbitrary direction (e.g. `ASC`, `DESC`). Hence, if the table is ordered by `[amount ASC, price ASC]`, it is also orderd by: <br>
    `[hostname ASC, amount ASC, price ASC]`,  
    `[hostname DESC, amount ASC, price ASC]`,  
    `[amount ASC, hostname ASC, price ASC]`,  
    .  
    .    
 
-are all also valid. This is clearly redundant. For this reason, it is better to not use any constant expression during existing ordering construction.
+ This is clearly redundant. For this reason, it is better to avoid explicitly encoding constant expressions in valid sort orders.
 
 In summary,
 
-- We should only use the longest lexicographic ordering as a valid ordering (shouldn't use any prefix of it)
-- Using all of the expressions that are exact copy of each other is redundant.
+- We should store only the longest lexicographic ordering (shouldn't use any prefix of it)
+- Using expressions that are exact copies of each other is redundant.
 - Ordering expressions shouldn't contain any constant expression.
 
 
 ## Key Concepts for Analyzing Orderings
-To solve the shortcomings above, we need to keep track of following properties for the table:
+To solve the shortcomings above, DataFusion needs to track of following properties for the table:
 
 - Constant Expresssions  
 - Equivalent Expression Groups (will be explained shortly)
@@ -184,14 +188,14 @@ To solve the shortcomings above, we need to keep track of following properties f
 These properties allow us to analyze whether the ordering requirement is satisfied by the data already.
 
 ### 1. Constant Expressions
-Constant expressions are those where each row in the expression has the same value across all rows. Although constant expressions may seem odd in a table, they can arise after operations like `Filter` or `Join`. 
+Constant expressions are those where each row in the expression has the same value across all rows. Although constant expressions may seem odd in a table, they arise after operations like `Filter` or `Join`. 
 
 For instance in the example table:
 
 - Columns `hostname` and `currency` are constant because every row in the table has the same value ('app.example.com' for 'hostname', and 'USD' for 'currency') for these columns.
 
 <blockquote style="border-left: 4px solid #007bff; padding: 10px; background-color: #f8f9fa;">
-    <strong>Note:</strong> Constant expressions can arise during the query execution, in following query:<br>
+    <strong>Note:</strong> Constant expressions can arise during query execution. For example, in following query:<br>
     <code>SELECT hostname FROM logs</code><br><code>WHERE hostname='app.example.com'</code> <br>
     after filtering is done, for subsequent operators 'hostname' column will be constant.
 </blockquote>
@@ -202,7 +206,7 @@ Equivalent expression groups are expressions that always hold the same value acr
 In the example table, the expressions `price` and `price_cloned` form one equivalence group, and `time` and `time_cloned` form another equivalence group.
 
 <blockquote style="border-left: 4px solid #007bff; padding: 10px; background-color: #f8f9fa;">
-    <strong>Note:</strong>Equivalent expression groups can arise during the query execution, in the following query:<br>
+    <strong>Note:</strong>Equivalent expression groups can arise during the query execution. For example, in the following query:<br>
     <code>SELECT time, time as time_cloned FROM logs</code> <br>
     after the projection is done, for subsequent operators 'time' and 'time_cloned' will form an equivalence group. As another example, in the following query:<br>
     <code>SELECT employees.id, employees.name, departments.department_name</code>
@@ -211,11 +215,11 @@ In the example table, the expressions `price` and `price_cloned` form one equiva
 after joining, 'employees.department_id' and 'departments.id' will form an equivalence group.
 </blockquote>
 
-### 3. Succint Valid Orderings
+### 3. Succint Encoding of Valid Orderings
 Valid orderings are the orderings that the table already satisfies. However, naively listing them requires exponential space as the number of columns grows as discussed before. Instead, we list all valid orderings after following constraints are applied:
 
 -  Do not use any constant expressions in the valid ordering construction
--  Only use one of the entries (by convention first entry) in the equivalent expression group.
+-  Use only one entry (by convention the first entry) in the equivalent expression group.
 -  Lexicographic ordering shouldn't contain any leading ordering<sup id="fn2">[2](#footnote2)</sup>except the first position <sup id="fn3">[3](#footnote3)</sup>.
 -  Do not use any prefix of a valid lexicographic ordering<sup id="fn4">[4](#footnote4)</sup>.
 
@@ -268,14 +272,14 @@ After applying the first and second constraint, example table simplifies to
   </tr>
 </table>
 <br>
-Following third and fourth constraints for the simplified table, succinct valid orderings are:<br>
+Following third and fourth constraints for the simplified table, the succinct valid orderings are:<br>
 `[amount ASC, price ASC]`,   
 `[time_bin ASC]`,  
 `[time ASC]`  
 
 ### Table Properties  
 
-In summary, for the example table, the following properties can be derived:
+In summary, for the example table, the following properties correctly describe the sort properties:
 
 - **Constant Expressions** = `hostname, currency`  
 - **Equivalent Expression Groups** = `[price, price_cloned], [time, time_cloned]`  
@@ -306,7 +310,7 @@ Let's check if the ordering requirement `[hostname DESC, amount ASC, time_bin AS
 ### Algorithm Steps
 
 1. **Prune constant expressions**:  
-   Remove `hostname` and `curreny` from the requirement. The requirement becomes:  
+   Remove `hostname` and `currency` from the requirement. The requirement becomes:  
    `[amount ASC, time_bin ASC, price_cloned ASC, time ASC, price DESC]`.
 
 2. **Normalize using equivalent groups**:  
@@ -326,18 +330,20 @@ into<br>
 *"whether the requirement: `[time_bin ASC, price ASC, time ASC]` is satisfied by valid orderings:  `[price ASC], [time_bin ASC], [time ASC]`"*<br>
 We go back to step 4 until the ordering requirement list is exhausted or its length no longer decreases.
 
-At the end of stages above, we end up with an empty ordering requirement list. Given this, we can conclude that the table satisfies the ordering requirement.
+At the end of stages above, we end up with an empty ordering requirement list. Given this, we can conclude that the table satisfies the ordering requirement and thus no sort is required. 
 
 ## Conclusion
 
-In this post, we analyzed the conditions under which an ordering requirement is satisfied based on the properties of a table. We introduced key concepts such as constant expressions, equivalence groups, and valid orderings, using them to determine whether a given ordering requirement can be met by the table.
+In this post, we described the conditions under which an ordering requirement is satisfied based on the properties of a table. We introduced key concepts such as constant expressions, equivalence groups, and valid orderings, and used them to determine whether a given ordering requirement are satisfied by an input table.
 
 This analysis plays a crucial role in:
 
 - Choosing more efficient algorithm variants
 - Generating streaming-friendly plans
 
-The `DataFusion` query engine employs this analysis (and many more) during its planning stage to ensure correct and efficient query execution.
+The `DataFusion` query engine employs this analysis (and many more) during its planning stage to ensure correct and efficient query execution. We [welcome you] to come and join the project.
+
+[welcome you]: https://datafusion.apache.org/contributor-guide/index.html
 
 ## Appendix
 
