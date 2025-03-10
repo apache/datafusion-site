@@ -212,7 +212,7 @@ after joining, 'employees.department_id' and 'departments.id' will form an equiv
 </blockquote>
 
 ### 3. Succint Valid Orderings
-Valid orderings are the orderings that the table already satisfies. However, naively enlisting them is not scalable as discussed before. We enlist all of the valid orderings after following constraints are applied:
+Valid orderings are the orderings that the table already satisfies. However, naively listing them requires exponential space as the number of columns grows as discussed before. Instead, we list all valid orderings after following constraints are applied:
 
 -  Do not use any constant expressions in the valid ordering construction
 -  Only use one of the entries (by convention first entry) in the equivalent expression group.
