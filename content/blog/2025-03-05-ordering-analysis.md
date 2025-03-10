@@ -136,6 +136,7 @@ Let's start by creating an example table that we will refer throughout the post.
 <strong>How can a table have multiple orderings?:</strong> At first glance, it may seem counterintuitive for a table to have more than one valid ordering. However, during query execution, such scenarios can arise.
 
 For example, consider the following query:
+
 ```sql
 SELECT time, date_bin('1 hour', time, '1970-01-01') as time_bin  
 FROM table;
@@ -372,8 +373,8 @@ The `DataFusion` query engine employs this analysis (and many more) during its p
 -->
 <p id="footnote1"><sup>[1]</sup>Lexicographic order is a way of ordering sequences (like strings, list of expressions) based on the order of their components, similar to how words are ordered in a dictionary. It compares each element of the sequences one by one, from left to right.</p>
 <p id="footnote2"><sup>[2]</sup>Leading ordering is the first ordering in a lexicographic ordering list. As an example, for the ordering: <code>[amount ASC, price ASC]</code>, leading ordering will be: <code>amount ASC</code>. </p>
-<p id="footnote3"><sup>[3]</sup>This means that, if we know that <code>[amount ASC]</code> and <code>[time ASC]</code> are both valid orderings for the table. We shouldn't enlist <code>[amount ASC, time ASC]</code> or <code>[time ASC, amount ASC]</code></p> as valid orderings. These orderings can be deduced if we know that table satisfies the ordering <code>[amount ASC]</code> and <code>[time ASC]</code>.
+<p id="footnote3"><sup>[3]</sup>This means that, if we know that <code>[amount ASC]</code> and <code>[time ASC]</code> are both valid orderings for the table. We shouldn't enlist <code>[amount ASC, time ASC]</code> or <code>[time ASC, amount ASC]</code> as valid orderings. These orderings can be deduced if we know that table satisfies the ordering <code>[amount ASC]</code> and <code>[time ASC]</code>.</p>
 <p id="footnote4"><sup>[4]</sup>This means that, if ordering <code>[amount ASC, price ASC]</code> is a valid ordering for the table. We shouldn't enlist <code>[amount ASC]</code> as valid ordering. Validity of it can be deduced from the ordering: <code>[amount ASC, price ASC]</code>
 <p id="footnote5"><sup>[5]</sup>Leading ordering requirement is the first ordering requirement in the list of lexicographic ordering requirement expression. As an example for the requirement: <code>[amount ASC, time_bin ASC, prices ASC, time ASC]</code>, leading ordering requirement is: <code>amount ASC</code>.</p>
 <p id="footnote6"><sup>[6]</sup>Leading valid orderings are the first ordering for each valid ordering list in the table. As an example, for the valid orderings: <code>[amount ASC, prices ASC], [time_bin ASC], [time ASC]</code>, leading valid orderings will be: <code>amount ASC, time_bin ASC, time ASC</code>. </p>
-<p id="optimal"><sup>*</sup>Optimal depends on the use case, <code>DataFusion</code> has many various flags to communicate what user thinks the optimum plan is (e.g. streamable, fastest, lowest memory, etc.). See <a href="https://datafusion.apache.org/user-guide/configs.html" target="_blank">configurations</a> for detail.</p>
+<p id="optimal"><sup>*</sup>Best depends on the use case, <code>DataFusion</code> has many various flags to communicate what user thinks the best plan is (e.g. streamable, fastest, lowest memory, etc.). See <a href="https://datafusion.apache.org/user-guide/configs.html" target="_blank">configurations</a> for detail.</p>
