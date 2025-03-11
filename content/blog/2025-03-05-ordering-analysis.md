@@ -165,7 +165,7 @@ This naive algorithm works and correct. However, listing all valid orderings can
 .  
 .  
 
-As can be seen from the listing above. Storing all of the valid orderings is wasteful, and contains significant redundancy. Here are some observations, suggesting we can do much better:
+As can be seen from the listing above. Storing all valid orderings is wasteful, and contains significant redundancy. Here are some observations, suggesting we can do much better:
 
 
 - Storing a prefix of another valid ordering is redundant. If the table satisfies the lexicographic ordering<sup id="fn1">[1](#footnote1)</sup>: `[amount ASC, price ASC]`, it already satisfies ordering `[amount ASC]` trivially. Hence, once we store `[amount ASC, price ASC]` storing `[amount ASC]` is rdundant.
@@ -191,12 +191,12 @@ In summary,
 ## Key Concepts for Analyzing Orderings
 To solve the shortcomings above, DataFusion needs to track of following properties for the table:
 
-- Constant Expresssions  
+- Constant Expressions  
 - Equivalent Expression Groups (will be explained shortly)
 - Succinct Valid Orderings (will be explained shortly)
 
 <blockquote style="border-left: 4px solid #007bff; padding: 10px; background-color: #f8f9fa;">
-    <strong>Note:</strong> These propeties are implemented in the <code>EquivalenceProperties</code> structure in <code>DataFusion</code>, please see the <a href="https://github.com/apache/datafusion/blob/f47ea73b87eec4af044f9b9923baf042682615b2/datafusion/physical-expr/src/equivalence/properties/mod.rs#L134" target="_blank">source</a> for more details<br>
+    <strong>Note:</strong> These properties are implemented in the <code>EquivalenceProperties</code> structure in <code>DataFusion</code>, please see the <a href="https://github.com/apache/datafusion/blob/f47ea73b87eec4af044f9b9923baf042682615b2/datafusion/physical-expr/src/equivalence/properties/mod.rs#L134" target="_blank">source</a> for more details<br>
 </blockquote>
 
 These properties allow us to analyze whether the ordering requirement is satisfied by the data already.
@@ -206,12 +206,12 @@ Constant expressions are those where each row in the expression has the same val
 
 For instance in the example table:
 
-- Columns `hostname` and `currency` are constant because every row in the table has the same value ('app.example.com' for 'hostname', and 'USD' for 'currency') for these columns.
+- Columns `hostname` and `currency` are constant because every row in the table has the same value (`'app.example.com'` for `hostname`, and `'USD'` for `currency`) for these columns.
 
 <blockquote style="border-left: 4px solid #007bff; padding: 10px; background-color: #f8f9fa;">
     <strong>Note:</strong> Constant expressions can arise during query execution. For example, in following query:<br>
     <code>SELECT hostname FROM logs</code><br><code>WHERE hostname='app.example.com'</code> <br>
-    after filtering is done, for subsequent operators 'hostname' column will be constant.
+    after filtering is done, for subsequent operators the <code>hostname</code> column will be constant.
 </blockquote>
 
 ### 2. Equivalent Expression Groups
@@ -222,14 +222,14 @@ In the example table, the expressions `price` and `price_cloned` form one equiva
 <blockquote style="border-left: 4px solid #007bff; padding: 10px; background-color: #f8f9fa;">
     <strong>Note:</strong> Equivalent expression groups can arise during the query execution. For example, in the following query:<br>
     <code>SELECT time, time as time_cloned FROM logs</code> <br>
-    after the projection is done, for subsequent operators 'time' and 'time_cloned' will form an equivalence group. As another example, in the following query:<br>
+    after the projection is done, for subsequent operators <code>time</code> and <code>time_cloned</code> will form an equivalence group. As another example, in the following query:<br>
     <code>SELECT employees.id, employees.name, departments.department_name</code>
 <code>FROM employees</code>
 <code>JOIN departments ON employees.department_id = departments.id;</code> <br>
-after joining, 'employees.department_id' and 'departments.id' will form an equivalence group.
+after joining, <code>employees.department_id</code> and <code>departments.id</code> will form an equivalence group.
 </blockquote>
 
-### 3. Succint Encoding of Valid Orderings
+### 3. Succinct Encoding of Valid Orderings
 Valid orderings are the orderings that the table already satisfies. However, naively listing them requires exponential space as the number of columns grows as discussed before. Instead, we list all valid orderings after following constraints are applied:
 
 -  Do not use any constant expressions in the valid ordering construction
@@ -316,6 +316,7 @@ If, at the end of the procedure above, the ordering requirement is an empty list
 ### Example Walkthrough
 
 Let's say the user provided a query such as the following
+
 ```sql
 SELECT * FROM table
 ORDER BY hostname DESC, amount ASC, time_bin ASC, price_cloned ASC, time ASC, currency ASC, price DESC;
