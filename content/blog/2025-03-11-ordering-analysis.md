@@ -30,26 +30,26 @@ limitations under the License.
 ## Introduction
 In this blog post, we explain when an ordering requirement of an operator is satisfied by its input data. This analysis is essential for order-based optimizations and is often more complex than one might initially think.
 <blockquote style="border-left: 4px solid #007bff; padding: 10px; background-color: #f8f9fa;">
-    <strong>Ordering Requirement</strong> for an operator describes how the input data to that operator must be sorted for the operator to compute the correct result. It is the job of the planner to make sure that these requirements are satisfied during execution (See DataFusion <a href="https://docs.rs/datafusion/latest/datafusion/physical_optimizer/enforce_sorting/struct.EnforceSorting.html" target="_blank">EnforceSorting</a> for an implementation of such rule).
+    <strong>Ordering Requirement</strong> for an operator describes how the input data to that operator must be sorted for the operator to compute the correct result. It is the job of the planner to make sure that these requirements are satisfied during execution (See DataFusion <a href="https://docs.rs/datafusion/latest/datafusion/physical_optimizer/enforce_sorting/struct.EnforceSorting.html" target="_blank">EnforceSorting</a> for an implementation of such a rule).
 </blockquote>
 
-There are various use cases, where this type of analysis can be useful such as the following examples.
+There are various use cases where this type of analysis can be useful such as the following examples.
 ### Removing Unnecessary Sorts
 Imagine a user wants to execute the following query:
 ```SQL
 SELECT hostname, log_line 
 FROM telemetry ORDER BY time ASC limit 10
 ```
-If we don't know anything about the `telemetry` table, we need to sort it by `time ASC` and then retrieve the first 10 rows to get the correct result. However, if the table is already ordered by `time ASC`, we can simply retrieve the first 10 rows. This approach executes much faster and uses less memory compared to resorting the entire table, even when the [TopK] operator is used. 
+If we don't know anything about the `telemetry` table we need to sort it by `time ASC` and then retrieve the first 10 rows to get the correct result. However, if the table is already ordered by `time ASC`, we can simply retrieve the first 10 rows. This approach executes much faster and uses less memory compared to resorting the entire table, even when the [TopK] operator is used. 
 
 [TopK]: https://docs.rs/datafusion/latest/datafusion/physical_plan/struct.TopK.html
 
-In order to avoid the sort, the query optimizer must determine the data is already sorted. For simple queries the analysis is straightforward, but it gets complicated fast. For example, what if your data is sorted by `[hostname, time ASC]` and your query is
+In order to avoid the sort the query optimizer must determine the data is already sorted. For simple queries the analysis is straightforward however it gets complicated fast. For example, what if your data is sorted by `[hostname, time ASC]` and your query is
 ```sql
 SELECT hostname, log_line 
 FROM telemetry WHERE hostname = 'app.example.com' ORDER BY time ASC;
 ```
-In this case, a sort still isn't needed,  but the analysis must  reason about the sortedness of the stream when it knows `hostname` has a single value.
+In this case a sort still isn't needed, but the analysis must reason about the sortedness of the stream when it knows `hostname` has a single value.
 
 ### Optimized Operator Implementations
 As another use case, some operators can utilize the ordering information to change its underlying algorithm to execute more efficiently. Consider the following query:
@@ -61,9 +61,9 @@ Most analytic systems, including DataFusion, by default implement such a query u
 
 ### Streaming-Friendly Execution
 
-Stream processing aims to produce results immediately as they become available, ensuring minimal latency for real-time workloads. However, some operators need to consume all input data before producing any output. Consider the `Sort` operation: before it can start generating output, the algorithm must first process all input data. As a result, data flow halts whenever such an operator is encountered until all input is consumed. When a physical query plan contains such an operator (`Sort`, `CrossJoin`, ..), we refer to this as pipeline breaking, meaning the query cannot be executed in a streaming fashion.
+Stream processing aims to produce results immediately as they become available ensuring minimal latency for real-time workloads. However, some operators need to consume all input data before producing any output. Consider the `Sort` operation: before it can start generating output, the algorithm must first process all input data. As a result, data flow halts whenever such an operator is encountered until all input is consumed. When a physical query plan contains such an operator (`Sort`, `CrossJoin`, ..) we refer to this as pipeline breaking, meaning the query cannot be executed in a streaming fashion.
 
-For a query to be executed in a streaming fashion, we need to satisfy 2 conditions:
+For a query to be executed in a streaming fashion we need to satisfy 2 conditions:
 
 **Logically Streamable**  
 It should be possible to generate what user wants in streaming fashion. Consider following query:
@@ -72,10 +72,10 @@ It should be possible to generate what user wants in streaming fashion. Consider
 SELECT SUM(amount)  
 FROM orders  
 ```
-Here, the user wants to compute the sum of all amounts in the orders table. By nature, this query requires scanning the entire table to generate a result, making it impossible to execute in a streaming fashion.
+Here, the user wants to compute the sum of all amounts in the orders table. By the nature of the query this requires scanning the entire table to generate a result making it impossible to execute in a streaming fashion.
 
 **Streaming Aware Planner**  
-Being logically streamable does not guarantee that a query will execute in a streaming fashion. SQL is a declarative language, meaning it specifies 'WHAT' user wants. It is up to the planner, 'HOW' to generate the result. In most cases, there are many ways to compute the correct result for a given query. The query planner is responsible for choosing "a way" (ideally the best<sup id="optimal1">[*](#optimal)</sup> one) among the all alternatives to generate what user asks for. If a plan contains a pipeline-breaking operator, the execution will not be streaming—even if the query is logically streamable. To generate truly streaming plans from logically streamable queries, the planner must carefully analyze the existing orderings in the source tables to ensure that the final plan does not contain any pipeline-breaking operators.
+Being logically streamable does not guarantee that a query will execute in a streaming fashion. SQL is a declarative language, meaning it specifies 'WHAT' user wants. It is up to the planner 'HOW' to generate the result. In most cases there are many ways to compute the correct result for a given query. The query planner is responsible for choosing "a way" (ideally the best<sup id="optimal1">[*](#optimal)</sup> one) among the all alternatives to generate what user asks for. If a plan contains a pipeline-breaking operator the execution will not be streaming—even if the query is logically streamable. To generate truly streaming plans from logically streamable queries the planner must carefully analyze the existing orderings in the source tables to ensure that the final plan does not contain any pipeline-breaking operators.
 
 
 ## Analysis
@@ -133,27 +133,27 @@ Let's start by creating an example table that we will refer throughout the post.
 <br>
 
 <blockquote style="border-left: 4px solid #007bff; padding: 10px; background-color: #f8f9fa;">
-<strong>How can a table have multiple orderings?:</strong> At first glance, it may seem counterintuitive for a table to have more than one valid ordering. However, during query execution, such scenarios can arise.
+<strong>How can a table have multiple orderings?:</strong> At first glance it may seem counterintuitive for a table to have more than one valid ordering. However, during query execution such scenarios can arise.
 
-For example, consider the following query:
+For example consider the following query:
 
 ```sql
 SELECT time, date_bin('1 hour', time, '1970-01-01') as time_bin  
 FROM table;
 ```
-If we know that the table is ordered by <code>time ASC</code>, we can infer that <code>time_bin ASC</code> is also a valid ordering. This is because the <code>date_bin</code> function is monotonic, meaning it preserves the order of its input.
+If we know that the table is ordered by <code>time ASC</code> we can infer that <code>time_bin ASC</code> is also a valid ordering. This is because the <code>date_bin</code> function is monotonic, meaning it preserves the order of its input.
 
-DataFusion leverages these functional dependencies to infer new orderings as data flows through different query operators. For details on the implementation, see the <a href="https://github.com/apache/datafusion/blob/main/datafusion/common/src/functional_dependencies.rs", target="_blank">source</a> code.
+DataFusion leverages these functional dependencies to infer new orderings as data flows through different query operators. For details on the implementation see the <a href="https://github.com/apache/datafusion/blob/main/datafusion/common/src/functional_dependencies.rs", target="_blank">source</a> code.
 </blockquote>
 
-By inspection, you can see this table is sorted by the `amount` column, but It is also sorted by `time` and `time_bin` as well as the compound `(time_bin, amount)` and many other variations. While this example is an extreme case, many real world data have multiple sort orders. 
+By inspection, you can see this table is sorted by the `amount` column, but It is also sorted by `time` and `time_bin` as well as the compound `(time_bin, amount)` and many other variations. While this example is an extreme case, real-world data often has multiple sort orders. 
 
 A naive approach for analyzing whether the ordering requirement of an operator is satisfied by its input would be:  
 
   - Store all the valid ordering expressions that the tables satisfies  
   - Check whether the ordering requirement by the operator is among valid orderings.  
 
-This naive algorithm works and correct. However, listing all valid orderings can be quite lengthy and is of exponential complexity as the number of orderings grows. For the example table, here is a (small) subset of the valid orderings:
+This naive algorithm works and correct. However, listing all valid orderings can be quite lengthy and is of exponential complexity as the number of orderings grows. For the example table here is a (small) subset of the valid orderings:
 
 `[amount ASC]`  
 `[amount ASC, price ASC]`  
@@ -165,12 +165,12 @@ This naive algorithm works and correct. However, listing all valid orderings can
 .  
 .  
 
-As can be seen from the listing above. Storing all valid orderings is wasteful, and contains significant redundancy. Here are some observations, suggesting we can do much better:
+As can be seen from the listing above storing all valid orderings is wasteful and contains significant redundancy. Here are some observations which suggest that we can do much better:
 
 
-- Storing a prefix of another valid ordering is redundant. If the table satisfies the lexicographic ordering<sup id="fn1">[1](#footnote1)</sup>: `[amount ASC, price ASC]`, it already satisfies ordering `[amount ASC]` trivially. Hence, once we store `[amount ASC, price ASC]` storing `[amount ASC]` is rdundant.
+- Storing a prefix of another valid ordering is redundant. If the table satisfies the lexicographic ordering<sup id="fn1">[1](#footnote1)</sup>: `[amount ASC, price ASC]`, it already satisfies ordering `[amount ASC]` trivially. Hence, once we store `[amount ASC, price ASC]` storing `[amount ASC]` is redundant.
 
-- Using all columns that are equal to each other in the listings is redundant. If we know the table is ordered by `[amount ASC, price ASC]` , it is also ordered by `[amount ASC, price_cloned ASC]` since `price` and `price_cloned` are copy of each other. It is enough to use just one expression among the expressions that exact copy of each other.
+- Using all columns that are equal to each other in the listings is redundant. If we know the table is ordered by `[amount ASC, price ASC]`, it is also ordered by `[amount ASC, price_cloned ASC]` since `price` and `price_cloned` are copy of each other. It is enough to use just one expression among the expressions that exact copy of each other.
 
 - Constant expressions can be inserted anywhere in a valid ordering with an arbitrary direction (e.g. `ASC`, `DESC`). Hence, if the table is ordered by `[amount ASC, price ASC]`, it is also ordered by: <br>
    `[hostname ASC, amount ASC, price ASC]`,  
@@ -189,7 +189,7 @@ In summary,
 
 
 ## Key Concepts for Analyzing Orderings
-To solve the shortcomings above, DataFusion needs to track of following properties for the table:
+To solve the shortcomings above DataFusion needs to track of following properties for the table:
 
 - Constant Expressions  
 - Equivalent Expression Groups (will be explained shortly)
@@ -202,7 +202,7 @@ To solve the shortcomings above, DataFusion needs to track of following properti
 These properties allow us to analyze whether the ordering requirement is satisfied by the data already.
 
 ### 1. Constant Expressions
-Constant expressions are those where each row in the expression has the same value across all rows. Although constant expressions may seem odd in a table, they arise after operations like `Filter` or `Join`. 
+Constant expressions are those where each row in the expression has the same value across all rows. Although constant expressions may seem odd in a table they can arise after operations like `Filter` or `Join` occur. 
 
 For instance in the example table:
 
@@ -237,7 +237,7 @@ Valid orderings are the orderings that the table already satisfies. However, nai
 -  Lexicographic ordering shouldn't contain any leading ordering<sup id="fn2">[2](#footnote2)</sup>except the first position <sup id="fn3">[3](#footnote3)</sup>.
 -  Do not use any prefix of a valid lexicographic ordering<sup id="fn4">[4](#footnote4)</sup>.
 
-After applying the first and second constraint, example table simplifies to 
+After applying the first and second constraint, the example table simplifies to 
 
 <style>
   table {
@@ -315,7 +315,7 @@ If, at the end of the procedure above, the ordering requirement is an empty list
 
 ### Example Walkthrough
 
-Let's say the user provided a query such as the following
+Let's say the user provided a query such as the following:
 
 ```sql
 SELECT * FROM table
@@ -327,7 +327,7 @@ And the input has the same properties explained above
 - **Equivalent Expressions Groups** = `[price, price_cloned], [time, time_cloned]`
 - **Succinct Valid Orderings** = `[amount ASC, price ASC], [time_bin ASC], [time ASC]`
 
-In order to remove a sort, the optimizer must check if the ordering requirement `[hostname DESC, amount ASC, time_bin ASC, price_cloned ASC, time ASC, currency ASC, price DESC]` is satisfied by the properties.
+In order to remove a sort the optimizer must check if the ordering requirement `[hostname DESC, amount ASC, time_bin ASC, price_cloned ASC, time ASC, currency ASC, price DESC]` is satisfied by the properties.
 
 ### Algorithm Steps
 
@@ -352,7 +352,7 @@ into<br>
 *"whether the requirement: `[time_bin ASC, price ASC, time ASC]` is satisfied by valid orderings:  `[price ASC], [time_bin ASC], [time ASC]`"*<br>
 We go back to step 4 until the ordering requirement list is exhausted or its length no longer decreases.
 
-At the end of stages above, we end up with an empty ordering requirement list. Given this, we can conclude that the table satisfies the ordering requirement and thus no sort is required. 
+At the end of stages above we end up with an empty ordering requirement list. Given this, we can conclude that the table satisfies the ordering requirement and thus no sort is required. 
 
 ## Conclusion
 
