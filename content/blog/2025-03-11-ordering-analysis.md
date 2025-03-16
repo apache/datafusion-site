@@ -133,7 +133,7 @@ Let's start by creating an example table that we will refer throughout the post.
 <br>
 
 <blockquote style="border-left: 4px solid #007bff; padding: 10px; background-color: #f8f9fa;">
-<strong>How can a table have multiple orderings?:</strong> At first glance it may seem counterintuitive for a table to have more than one valid ordering. However, during query execution such scenarios can arise.
+<strong>How can a table have multiple orderings?</strong> At first glance it may seem counterintuitive for a table to have more than one valid ordering. However, during query execution such scenarios can arise.
 
 For example consider the following query:
 
@@ -290,6 +290,31 @@ Following third and fourth constraints for the simplified table, the succinct va
 `[amount ASC, price ASC]`,   
 `[time_bin ASC]`,  
 `[time ASC]`  
+
+<blockquote style="border-left: 4px solid #007bff; padding: 10px; background-color: #f8f9fa;">
+<strong>How DataFusion discovers orderings?</strong> Datafusion has <code>WITH ORDER</code> clause (see <a href="https://datafusion.apache.org/user-guide/sql/ddl.html#create-external-table">docs</a>) to specify the known orderings of the table during table creation. For example, following query:<br>
+<pre><code>
+CREATE EXTERNAL TABLE source (
+    amount INT NOT NULL,
+    price DOUBLE NOT NULL,
+    time TIMESTAMP NOT NULL,
+    ...
+)
+STORED AS CSV
+WITH ORDER (time ASC)
+WITH ORDER (amount ASC, price ASC)
+LOCATION '/path/to/FILE_NAME.csv'
+OPTIONS ('has_header' 'true');
+</code></pre>
+communicates that "source" table has the orderings: <code>[time ASC]</code> and <code>[amount ASC, price ASC]</code>.<br>
+When orderings are properly communicated from the source, DataFusion can track the transformations at each operator. According to transformations happening in each operator DataFusion can<br>
+<ul>
+<li>add new orderings (such as when "date_bin" function is applied to the "time" column)</li>
+<li>Remove orderings, if operation doesn't preserve the ordering of the data at its input</li>
+<li>Update equivalent groups</li>
+<li>Update constant expressions</li>
+</ul>
+</blockquote>
 
 ### Table Properties  
 
