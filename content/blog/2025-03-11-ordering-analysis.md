@@ -315,6 +315,27 @@ When orderings are communicated from the source, DataFusion tracks the orderings
 <li>Update equivalent groups</li>
 <li>Update constant expressions</li>
 </ul>
+
+Figure 1, shows an example how DataFusion generates an efficient plan for the query:
+<pre><code>
+SELECT 
+  row_number() OVER (ORDER BY time) as rn,
+  time
+FROM events
+ORDER BY rn, time
+</code></pre>
+using the orderings of the query intermediates.<br>
+<br>
+<figure>
+<img
+src="/blog/images/ordering_analysis/query_window_plan.png"
+width="80%"
+class="img-responsive"
+alt="Window Query Datafusion Optimization"
+/>
+<figcaption><strong>Figure 1:</strong> DataFusion analyzes orderings of the sources and query intermediates to generate efficient plans</figcaption>
+</figure>
+
 </blockquote>
 
 ### Table Properties  
