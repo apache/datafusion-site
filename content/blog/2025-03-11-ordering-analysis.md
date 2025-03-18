@@ -292,7 +292,7 @@ Following third and fourth constraints for the simplified table, the succinct va
 `[time ASC]`  
 
 <blockquote style="border-left: 4px solid #007bff; padding: 10px; background-color: #f8f9fa;">
-<strong>How DataFusion discovers orderings?</strong> Datafusion has <code>WITH ORDER</code> clause (see <a href="https://datafusion.apache.org/user-guide/sql/ddl.html#create-external-table">docs</a>) to specify the known orderings of the table during table creation. For example, following query:<br>
+<strong>How can DataFusion find orderings?</strong> DataFusion's `CREATE EXTERNAL TABLE` has a <code>WITH ORDER</code> clause (see <a href="https://datafusion.apache.org/user-guide/sql/ddl.html#create-external-table">docs</a>) to specify the known orderings of the table during table creation. For example, following query:<br>
 <pre><code>
 CREATE EXTERNAL TABLE source (
     amount INT NOT NULL,
