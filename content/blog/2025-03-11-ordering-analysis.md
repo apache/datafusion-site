@@ -293,7 +293,7 @@ Following third and fourth constraints for the simplified table, the succinct va
 
 <blockquote style="border-left: 4px solid #007bff; padding: 10px; background-color: #f8f9fa;">
 <p><strong>How can DataFusion find orderings?</strong></p> 
-DataFusion's <code>CREATE EXTERNAL TABLE</code> has a <code>WITH ORDER</code> clause (see <a href="https://datafusion.apache.org/user-guide/sql/ddl.html#create-external-table">docs</a>) to specify the known orderings of the table during table creation. For example, following query:<br>
+DataFusion's <code>CREATE EXTERNAL TABLE</code> has a <code>WITH ORDER</code> clause (see <a href="https://datafusion.apache.org/user-guide/sql/ddl.html#create-external-table">docs</a>) to specify the known orderings of the table during table creation. For example the following query:<br>
 <pre><code>
 CREATE EXTERNAL TABLE source (
     amount INT NOT NULL,
@@ -316,7 +316,7 @@ When orderings are communicated from the source, DataFusion tracks the orderings
 <li>Update constant expressions</li>
 </ul>
 
-Figure 1, shows an example how DataFusion generates an efficient plan for the query:
+Figure 1 shows an example how DataFusion generates an efficient plan for the query:
 <pre><code>
 SELECT 
   row_number() OVER (ORDER BY time) as rn,
