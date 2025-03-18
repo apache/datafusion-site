@@ -292,7 +292,8 @@ Following third and fourth constraints for the simplified table, the succinct va
 `[time ASC]`  
 
 <blockquote style="border-left: 4px solid #007bff; padding: 10px; background-color: #f8f9fa;">
-<strong>How can DataFusion find orderings?</strong> DataFusion's `CREATE EXTERNAL TABLE` has a <code>WITH ORDER</code> clause (see <a href="https://datafusion.apache.org/user-guide/sql/ddl.html#create-external-table">docs</a>) to specify the known orderings of the table during table creation. For example, following query:<br>
+<p><strong>How can DataFusion find orderings?</strong></p> 
+DataFusion's <code>CREATE EXTERNAL TABLE</code> has a <code>WITH ORDER</code> clause (see <a href="https://datafusion.apache.org/user-guide/sql/ddl.html#create-external-table">docs</a>) to specify the known orderings of the table during table creation. For example, following query:<br>
 <pre><code>
 CREATE EXTERNAL TABLE source (
     amount INT NOT NULL,
@@ -306,8 +307,8 @@ WITH ORDER (amount ASC, price ASC)
 LOCATION '/path/to/FILE_NAME.csv'
 OPTIONS ('has_header' 'true');
 </code></pre>
-communicates that "source" table has the orderings: <code>[time ASC]</code> and <code>[amount ASC, price ASC]</code>.<br>
-When orderings are properly communicated from the source, DataFusion can track the transformations at each operator. According to transformations happening in each operator DataFusion can<br>
+communicates that <code>source</code> table has the orderings: <code>[time ASC]</code> and <code>[amount ASC, price ASC]</code>.<br>
+When orderings are communicated from the source, DataFusion tracks the orderings through each operator while optimizing the plan.<br>
 <ul>
 <li>add new orderings (such as when "date_bin" function is applied to the "time" column)</li>
 <li>Remove orderings, if operation doesn't preserve the ordering of the data at its input</li>
