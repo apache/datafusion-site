@@ -1,7 +1,7 @@
 ---
 layout: post
 title: Efficient Filter Pushdown in Parquet
-date: 2025-03-18
+date: 2025-03-19
 author: Xiangpeng Hao
 categories: [performance]
 ---
