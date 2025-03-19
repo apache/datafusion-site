@@ -59,7 +59,7 @@ Pages are the smallest units of data in Parquet files and typically contain comp
 Check out [Querying Parquet with Millisecond Latency](https://www.influxdata.com/blog/querying-parquet-millisecond-latency/) for more details on the Parquet file structure.
 
 #### 1. Read metadata
-DataFusion first reads the Parquet metadata to understand the data in the file. 
+DataFusion first reads the [Parquet metadata](https://parquet.apache.org/docs/file-format/metadata/) to understand the data in the file. 
 Metadata often includes data schema, the exact location of each row group and column chunk, and their corresponding statistics (e.g., min/max values).
 It also optionally includes [page-level stats](https://parquet.apache.org/docs/file-format/pageindex/) and [Bloom filters](https://www.influxdata.com/blog/using-parquets-bloom-filters/).
 This information is used to prune the file before reading the actual data.
