@@ -32,14 +32,20 @@ _Editor's Note: This blog was first published on [Xiangpeng Hao's blog]. Thanks 
 [InfluxData]: https://www.influxdata.com/
 <hr/>
 
-Parquet has become the industry standard for storing columnar data, and reading Parquet efficiently is crucial for query performance.
+[Apache Parquet] has become the industry standard for storing columnar data, and reading Parquet efficiently is crucial for query performance.
 
-To optimize this, DataFusion implements advanced Parquet support for effective data pruning and decoding.
+[Apache Parquet]: https://parquet.apache.org/
+
+To optimize this, [Apache DataFusion] implements advanced Parquet support for effective data pruning and decoding.
+
+[Apache DataFusion]: https://datafusion.apache.org/
 
 However, achieving high performance adds complexity, and this is no exception. This post provides an overview of the techniques used in DataFusion to selectively read Parquet files.
 
 ### The pipeline
-The diagram below illustrates the Parquet reading pipeline in DataFusion, highlighting how data flows through various pruning stages before being converted to Arrow format:
+The diagram below illustrates the [Parquet reading pipeline] in DataFusion, highlighting how data flows through various pruning stages before being converted to Arrow format:
+
+[Parquet reading pipeline]: https://docs.rs/datafusion/46.0.0/datafusion/datasource/physical_plan/parquet/source/struct.ParquetSource.html```
 
 <img src="/blog/images/parquet-pruning/read-parquet.jpg" alt="Parquet pruning pipeline in DataFusion" width="100%" class="img-responsive">
 
@@ -93,10 +99,10 @@ Now we (hopefully) have pruned the Parquet file into small ranges of bytes, i.e.
 The last step is to [make requests](https://github.com/apache/datafusion/blob/31701b8dc9c6486856c06a29a32107d9f4549cec/datafusion/core/src/datasource/physical_plan/parquet/reader.rs#L103) to fetch those bytes and decode them into Arrow RecordBatch. 
 
 
-### Bonus: filter pushdown
+### Preview of Coming Attractions: filter pushdown
 So far we have discussed techniques that prune the Parquet file using only the metadata, i.e., before reading the actual data.
 
-Filter pushdown, also known as predicate pushdown, is a technique that prunes data during scanning, with filters being generated and applied in the Parquet reader.
+Filter pushdown, also known as predicate pushdown or late materialization, is a technique that prunes data during scanning, with filters being generated and applied in the Parquet reader.
 
 <img src="/blog/images/parquet-pruning/filter-pushdown.jpg" alt="Filter pushdown in DataFusion" width="100%" class="img-responsive">
 
