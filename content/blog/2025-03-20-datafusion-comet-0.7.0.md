@@ -84,20 +84,23 @@ will now do a better job of picking the optimal build side. Thanks to [@hayman42
 [@hayman42]: https://github.com/hayman42
 [Apache Gluten(incubating)]: https://github.com/apache/incubator-gluten/
 
-## Experimental Support for DataFusion’s DataSourceExec
+## Experimental Support for DataFusion’s Parquet Scan
 
-It is now possible to configure Comet to use DataFusion’s `DataSourceExec` instead of Comet’s current Parquet reader. 
+It is now possible to configure Comet to use DataFusion’s Parquet reader instead of Comet’s current Parquet reader. This 
+has the advantage of supporting complex types, and also has performance optimizations that are not present in Comet's 
+existing reader.
+
 Support should still be considered experimental, but most of Comet’s unit tests are now passing with the new reader. 
 Known issues include handling of `INT96` timestamps and unsigned bytes and shorts.
 
-To enable DataFusion’s `DataSourceExec`, either set `spark.comet.scan.impl=native_datafusion` or set the environment 
+To enable DataFusion’s Parquet reader, either set `spark.comet.scan.impl=native_datafusion` or set the environment 
 variable `COMET_PARQUET_SCAN_IMPL=native_datafusion`.
 
 ## Complex Type Support
 
-With DataFusion’s `DataSourceExec` enabled, there is now some early support for reading structs from Parquet. This is 
-largely untested and we would welcome additional testing from the community to help determine what is and isn’t working, 
-as well as contributions to improve support for structs and other complex types. The tracking issue is 
+With DataFusion’s Parquet reader enabled, there is now some early support for reading structs from Parquet. This is 
+not thoroughly tested yet. We would welcome additional testing from the community to help determine what is and isn’t 
+working, as well as contributions to improve support for structs and other complex types. The tracking issue is 
 [https://github.com/apache/datafusion-comet/issues/1043](https://github.com/apache/datafusion-comet/issues/1043).
 
 ## Updates to supported Spark versions
