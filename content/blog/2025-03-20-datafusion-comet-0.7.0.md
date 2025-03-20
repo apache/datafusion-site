@@ -81,7 +81,8 @@ When using the `spark.comet.exec.replaceSortMergeJoin` setting to replace sort-m
 will now do a better job of picking the optimal build side (thanks to [@hayman42] for suggesting this, and thanks to the 
 [Apache Gluten(incubating)] project for the inspiration in implementing this feature).
 
-[@hayman42](https://github.com/hayman42)
+[@hayman42]: https://github.com/hayman42
+[Apache Gluten(incubating)]: https://github.com/apache/incubator-gluten/
 
 ## Experimental Support for DataFusion’s DataSourceExec
 
