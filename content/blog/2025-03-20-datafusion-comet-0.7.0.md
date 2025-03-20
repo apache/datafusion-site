@@ -48,8 +48,8 @@ contributors. See the [change log] for more information.
 Comet 0.7.0 has improved performance compared to the previous release due to improvements in the native shuffle 
 implementation and performance improvements in DataFusion 46.
 
-For single-node TPC-H at 100 GB, Comet now delivers a **2.2x speedup** compared to Spark using the same CPU and RAM. Even 
-with **half the resources**, Comet still provides a measurable performance improvement.
+For single-node TPC-H at 100 GB, Comet now delivers a **greater than 2x speedup** compared to Spark using the same 
+CPU and RAM. Even with **half the resources**, Comet still provides a measurable performance improvement.
 
 <img
 src="/blog/images/comet-0.7.0/performance.png"
