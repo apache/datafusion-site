@@ -78,8 +78,8 @@ There are several improvements to shuffle in this release:
 ## Improved Hash Join Performance
 
 When using the `spark.comet.exec.replaceSortMergeJoin` setting to replace sort-merge joins with hash joins, Comet 
-will now do a better job of picking the optimal build side (thanks to [@hayman42] for suggesting this, and thanks to the 
-[Apache Gluten(incubating)] project for the inspiration in implementing this feature).
+will now do a better job of picking the optimal build side. Thanks to [@hayman42] for suggesting this, and thanks to the 
+[Apache Gluten(incubating)] project for the inspiration in implementing this feature.
 
 [@hayman42]: https://github.com/hayman42
 [Apache Gluten(incubating)]: https://github.com/apache/incubator-gluten/
@@ -98,7 +98,7 @@ variable `COMET_PARQUET_SCAN_IMPL=native_datafusion`.
 With DataFusion’s `DataSourceExec` enabled, there is now some early support for reading structs from Parquet. This is 
 largely untested and we would welcome additional testing from the community to help determine what is and isn’t working, 
 as well as contributions to improve support for structs and other complex types. The tracking issue is 
-https://github.com/apache/datafusion-comet/issues/1043.
+[https://github.com/apache/datafusion-comet/issues/1043](https://github.com/apache/datafusion-comet/issues/1043).
 
 ## Updates to supported Spark versions
 
