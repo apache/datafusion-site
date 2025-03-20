@@ -1,7 +1,7 @@
 ---
 layout: post
 title: Parquet pruning in DataFusion: Read Only What Matters
-date: 2025-03-18
+date: 2025-03-20
 author: Xiangpeng Hao
 categories: [performance]
 ---
