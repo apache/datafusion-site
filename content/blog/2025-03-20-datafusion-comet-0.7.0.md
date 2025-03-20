@@ -88,7 +88,7 @@ will now do a better job of picking the optimal build side. Thanks to [@hayman42
 
 It is now possible to configure Comet to use DataFusion’s `DataSourceExec` instead of Comet’s current Parquet reader. 
 Support should still be considered experimental, but most of Comet’s unit tests are now passing with the new reader. 
-Known issues include handling of `INT96` timestamps and negative bytes and shorts.
+Known issues include handling of `INT96` timestamps and unsigned bytes and shorts.
 
 To enable DataFusion’s `DataSourceExec`, either set `spark.comet.scan.impl=native_datafusion` or set the environment 
 variable `COMET_PARQUET_SCAN_IMPL=native_datafusion`.
