@@ -1,5 +1,91 @@
 <?xml version="1.0" encoding="utf-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - blog</title><link href="https://datafusion.apache.org/blog/" rel="alternate"></link><link href="https://datafusion.apache.org/blog/feeds/blog.atom.xml" rel="self"></link><id>https://datafusion.apache.org/blog/</id><updated>2025-03-11T00:00:00+00:00</updated><subtitle></subtitle><entry><title>Using Ordering for Better Plans in Apache DataFusion</title><link href="https://datafusion.apache.org/blog/2025/03/11/ordering-analysis" rel="alternate"></link><published>2025-03-11T00:00:00+00:00</published><updated>2025-03-11T00:00:00+00:00</updated><author><name>Mustafa Akur, Andrew Lamb</name></author><id>tag:datafusion.apache.org,2025-03-11:/blog/2025/03/11/ordering-analysis</id><summary type="html">&lt;!--
+<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - blog</title><link href="https://datafusion.apache.org/blog/" rel="alternate"></link><link href="https://datafusion.apache.org/blog/feeds/blog.atom.xml" rel="self"></link><id>https://datafusion.apache.org/blog/</id><updated>2025-03-20T00:00:00+00:00</updated><subtitle></subtitle><entry><title>Parquet Pruning in DataFusion: Read Only What Matters</title><link href="https://datafusion.apache.org/blog/2025/03/20/parquet-pruning" rel="alternate"></link><published>2025-03-20T00:00:00+00:00</published><updated>2025-03-20T00:00:00+00:00</updated><author><name>Xiangpeng Hao</name></author><id>tag:datafusion.apache.org,2025-03-20:/blog/2025/03/20/parquet-pruning</id><summary type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+&lt;p&gt;&lt;em&gt;Editor's Note: This blog was first published on &lt;a href="https://blog.xiangpeng.systems/posts/parquet-to-arrow/"&gt;Xiangpeng Hao's blog&lt;/a&gt;. Thanks to &lt;a href="https://www.influxdata.com/"&gt;InfluxData&lt;/a&gt; for sponsoring this work as part of his PhD funding.&lt;/em&gt;&lt;/p&gt;
+&lt;hr/&gt;
+&lt;p&gt;&lt;a href="https://parquet.apache.org/"&gt;Apache Parquet&lt;/a&gt; has become the industry standard for storing columnar data, and reading Parquet efficiently -- especially from remote storage -- is crucial for query performance.&lt;/p&gt;
+&lt;p&gt;&lt;a href="https://datafusion.apache.org/"&gt;Apache DataFusion …&lt;/a&gt;&lt;/p&gt;</summary><content type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+&lt;p&gt;&lt;em&gt;Editor's Note: This blog was first published on &lt;a href="https://blog.xiangpeng.systems/posts/parquet-to-arrow/"&gt;Xiangpeng Hao's blog&lt;/a&gt;. Thanks to &lt;a href="https://www.influxdata.com/"&gt;InfluxData&lt;/a&gt; for sponsoring this work as part of his PhD funding.&lt;/em&gt;&lt;/p&gt;
+&lt;hr/&gt;
+&lt;p&gt;&lt;a href="https://parquet.apache.org/"&gt;Apache Parquet&lt;/a&gt; has become the industry standard for storing columnar data, and reading Parquet efficiently -- especially from remote storage -- is crucial for query performance.&lt;/p&gt;
+&lt;p&gt;&lt;a href="https://datafusion.apache.org/"&gt;Apache DataFusion&lt;/a&gt; implements advanced Parquet pruning techniques to effectively read only the data that matters for a given query.&lt;/p&gt;
+&lt;p&gt;Achieving high performance adds complexity.
+This post provides an overview of the techniques used in DataFusion to selectively read Parquet files.&lt;/p&gt;
+&lt;h3&gt;The pipeline&lt;/h3&gt;
+&lt;p&gt;The diagram below illustrates the &lt;a href="https://docs.rs/datafusion/46.0.0/datafusion/datasource/physical_plan/parquet/source/struct.ParquetSource.html```"&gt;Parquet reading pipeline&lt;/a&gt; in DataFusion, highlighting how data flows through various pruning stages before being converted to Arrow format:&lt;/p&gt;
+&lt;p&gt;&lt;img alt="Parquet pruning pipeline in DataFusion" class="img-responsive" src="/blog/images/parquet-pruning/read-parquet.jpg" width="100%"/&gt;&lt;/p&gt;
+&lt;h4&gt;Background: Parquet file structure&lt;/h4&gt;
+&lt;p&gt;As shown in the figure above, each Parquet file has multiple row groups. Each row group contains a set of columns, and each column contains a set of pages.&lt;/p&gt;
+&lt;p&gt;Pages are the smallest units of data in Parquet files and typically contain compressed and encoded values for a specific column. This hierarchical structure enables efficient columnar access and forms the foundation for the pruning techniques we'll discuss.&lt;/p&gt;
+&lt;p&gt;Check out &lt;a href="https://www.influxdata.com/blog/querying-parquet-millisecond-latency/"&gt;Querying Parquet with Millisecond Latency&lt;/a&gt; for more details on the Parquet file structure.&lt;/p&gt;
+&lt;h4&gt;1. Read metadata&lt;/h4&gt;
+&lt;p&gt;DataFusion first reads the &lt;a href="https://parquet.apache.org/docs/file-format/metadata/"&gt;Parquet metadata&lt;/a&gt; to understand the data in the file. 
+Metadata often includes data schema, the exact location of each row group and column chunk, and their corresponding statistics (e.g., min/max values).
+It also optionally includes &lt;a href="https://parquet.apache.org/docs/file-format/pageindex/"&gt;page-level stats&lt;/a&gt; and &lt;a href="https://www.influxdata.com/blog/using-parquets-bloom-filters/"&gt;Bloom filters&lt;/a&gt;.
+This information is used to prune the file before reading the actual data.&lt;/p&gt;
+&lt;p&gt;&lt;a href="https://github.com/apache/datafusion/blob/31701b8dc9c6486856c06a29a32107d9f4549cec/datafusion/core/src/datasource/physical_plan/parquet/reader.rs#L118"&gt;Fetching metadata&lt;/a&gt; requires up to two network requests: one to read the footer size from the end of the file, and another to read the footer itself. &lt;/p&gt;
+&lt;p&gt;&lt;a href="https://www.influxdata.com/blog/how-good-parquet-wide-tables/"&gt;Decoding metadata&lt;/a&gt; is generally fast since it only requires parsing a small amount of data. However, for tables with hundreds or thousands of columns, the metadata can become quite large and decoding it can become a bottleneck. This is particularly noticeable when scanning many small files.&lt;/p&gt;
+&lt;p&gt;Reading metadata is latency-critical, so DataFusion allows users to cache metadata through the &lt;a href="https://github.com/apache/datafusion/blob/31701b8dc9c6486856c06a29a32107d9f4549cec/datafusion/core/src/datasource/physical_plan/parquet/reader.rs#L39"&gt;ParquetFileReaderFactory&lt;/a&gt; trait.&lt;/p&gt;
+&lt;h4&gt;2. Prune by projection&lt;/h4&gt;
+&lt;p&gt;The simplest yet perhaps most effective pruning is to read only the columns that are needed.
+This is because queries usually don't select all columns, e.g., &lt;code&gt;SELECT a FROM table&lt;/code&gt; only reads column &lt;code&gt;a&lt;/code&gt;.
+As a &lt;strong&gt;columnar&lt;/strong&gt; format, Parquet allows DataFusion to &lt;a href="https://github.com/apache/datafusion/blob/31701b8dc9c6486856c06a29a32107d9f4549cec/datafusion/core/src/datasource/physical_plan/parquet/mod.rs#L778"&gt;only read&lt;/a&gt; the &lt;strong&gt;columns&lt;/strong&gt; that are needed.&lt;/p&gt;
+&lt;p&gt;This projection pruning happens at the column level and can dramatically reduce I/O when working with wide tables where queries typically access only a small subset of columns.&lt;/p&gt;
+&lt;h4&gt;3. Prune by row group stats and Bloom filters&lt;/h4&gt;
+&lt;p&gt;Each row group has &lt;a href="https://github.com/apache/datafusion/blob/31701b8dc9c6486856c06a29a32107d9f4549cec/datafusion/core/src/physical_optimizer/pruning.rs#L81"&gt;basic stats&lt;/a&gt; like min/max values for each column.
+DataFusion applies the query predicates to these stats to prune row groups, e.g., &lt;code&gt;SELECT * FROM table WHERE a &amp;gt; 10&lt;/code&gt; will only read row groups where &lt;code&gt;a&lt;/code&gt; has a max value greater than 10.&lt;/p&gt;
+&lt;p&gt;Sometimes min/max stats are too simple to prune effectively, so Parquet also supports &lt;a href="https://www.influxdata.com/blog/using-parquets-bloom-filters/"&gt;Bloom filters&lt;/a&gt;. DataFusion &lt;a href="https://github.com/apache/datafusion/blob/31701b8dc9c6486856c06a29a32107d9f4549cec/datafusion/core/src/datasource/physical_plan/parquet/opener.rs#L202"&gt;uses Bloom filters when available&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Bloom filters are particularly effective for equality predicates (&lt;code&gt;WHERE a = 10&lt;/code&gt;) and can significantly reduce the number of row groups that need to be read for point queries or queries with highly selective predicates.&lt;/p&gt;
+&lt;h4&gt;4. Prune by page stats&lt;/h4&gt;
+&lt;p&gt;Parquet optionally supports &lt;a href="https://github.com/apache/parquet-format/blob/master/PageIndex.md"&gt;page-level stats&lt;/a&gt; -- similar to row group stats but more fine-grained.
+DataFusion implements &lt;a href="https://github.com/apache/datafusion/blob/31701b8dc9c6486856c06a29a32107d9f4549cec/datafusion/core/src/datasource/physical_plan/parquet/opener.rs#L219"&gt;page pruning&lt;/a&gt; when the stats are present.&lt;/p&gt;
+&lt;p&gt;Page-level pruning provides an additional layer of filtering after row group pruning. It allows DataFusion to skip individual pages within a row group, further reducing the amount of data that needs to be read and decoded.&lt;/p&gt;
+&lt;h4&gt;5. Read from storage&lt;/h4&gt;
+&lt;p&gt;Now we (hopefully) have pruned the Parquet file into small ranges of bytes, i.e., the &lt;a href="https://github.com/apache/datafusion/blob/76a7789ace33ced54c973fa0d5fc9d1866e1bf19/datafusion/datasource-parquet/src/access_plan.rs#L86"&gt;Access Plan&lt;/a&gt;.
+The last step is to &lt;a href="https://github.com/apache/datafusion/blob/31701b8dc9c6486856c06a29a32107d9f4549cec/datafusion/core/src/datasource/physical_plan/parquet/reader.rs#L103"&gt;make requests&lt;/a&gt; to fetch those bytes and decode them into Arrow RecordBatch. &lt;/p&gt;
+&lt;h3&gt;Preview of coming attractions: filter pushdown&lt;/h3&gt;
+&lt;p&gt;So far we have discussed techniques that prune the Parquet file using only the metadata, i.e., before reading the actual data.&lt;/p&gt;
+&lt;p&gt;Filter pushdown, also known as predicate pushdown or late materialization, is a technique that prunes data during scanning, with filters being generated and applied in the Parquet reader.&lt;/p&gt;
+&lt;p&gt;&lt;img alt="Filter pushdown in DataFusion" class="img-responsive" src="/blog/images/parquet-pruning/filter-pushdown.jpg" width="100%"/&gt;&lt;/p&gt;
+&lt;p&gt;Unlike metadata-based pruning which works at the row group or page level, filter pushdown operates at the row level, allowing DataFusion to filter out individual rows that don't match the query predicates during the decoding process.&lt;/p&gt;
+&lt;p&gt;DataFusion &lt;a href="https://github.com/apache/datafusion/blob/31701b8dc9c6486856c06a29a32107d9f4549cec/datafusion/core/src/datasource/physical_plan/parquet/row_filter.rs#L154"&gt;implements filter pushdown&lt;/a&gt; but has &lt;a href="https://github.com/apache/datafusion/blob/31701b8dc9c6486856c06a29a32107d9f4549cec/datafusion/common/src/config.rs#L382"&gt;not enabled it by default&lt;/a&gt; due to &lt;a href="https://github.com/apache/datafusion/issues/3463"&gt;some performance regressions&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;We are working to remove the &lt;a href="https://github.com/apache/arrow-rs/issues/5523#issuecomment-2429470872"&gt;remaining performance issues&lt;/a&gt; and enable it by default, which we will discuss in the next blog post.&lt;/p&gt;
+&lt;h3&gt;Conclusion&lt;/h3&gt;
+&lt;p&gt;DataFusion employs a multi-step approach to Parquet pruning, from column projection to row group stats, page stats, and potentially row-level filtering. 
+Each step may reduce the amount of data to be read and processed, significantly improving query performance.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Using Ordering for Better Plans in Apache DataFusion</title><link href="https://datafusion.apache.org/blog/2025/03/11/ordering-analysis" rel="alternate"></link><published>2025-03-11T00:00:00+00:00</published><updated>2025-03-11T00:00:00+00:00</updated><author><name>Mustafa Akur, Andrew Lamb</name></author><id>tag:datafusion.apache.org,2025-03-11:/blog/2025/03/11/ordering-analysis</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
