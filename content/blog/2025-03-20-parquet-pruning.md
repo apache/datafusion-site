@@ -46,7 +46,7 @@ This post provides an overview of the techniques used in DataFusion to selective
 ### The pipeline
 The diagram below illustrates the [Parquet reading pipeline] in DataFusion, highlighting how data flows through various pruning stages before being converted to Arrow format:
 
-[Parquet reading pipeline]: https://docs.rs/datafusion/46.0.0/datafusion/datasource/physical_plan/parquet/source/struct.ParquetSource.html```
+[Parquet reading pipeline]: https://docs.rs/datafusion/46.0.0/datafusion/datasource/physical_plan/parquet/source/struct.ParquetSource.html
 
 <img src="/blog/images/parquet-pruning/read-parquet.jpg" alt="Parquet pruning pipeline in DataFusion" width="100%" class="img-responsive">
 
