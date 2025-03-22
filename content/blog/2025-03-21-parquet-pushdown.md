@@ -198,7 +198,7 @@ In this case, no columns are cached, because `val` is not used for filtering.
 ```sql
 SELECT COUNT(*) 
 FROM sensor_data 
-WHERE date_time > '2025-03-12' AND location = 'office';
+WHERE date_time > '2025-03-11' AND location = 'office';
 ```
 
 In this case, again, no columns are cached, because the output projection is empty after query plan optimization.
