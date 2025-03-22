@@ -190,7 +190,7 @@ More examples:
 ```sql
 SELECT val 
 FROM sensor_data 
-WHERE date_time > '2025-03-12' AND location = 'office';
+WHERE date_time > '2025-03-11' AND location = 'office';
 ```
 
 In this case, no columns are cached, because `val` is not used for filtering.
