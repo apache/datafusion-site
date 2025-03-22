@@ -53,7 +53,10 @@ _Editor's Note: This blog was first published on [Xiangpeng Hao's blog]. Thanks 
 
 In the [previous post], we discussed how [Apache DataFusion] prunes [Apache Parquet] files to skip irrelevant **files/row_groups** (sometimes also [pages](https://parquet.apache.org/docs/file-format/pageindex/)).
 
-This post discusses how Parquet readers skip irrelevant **rows** while scanning data.
+This post discusses how Parquet readers skip irrelevant **rows** while scanning data,
+leveraging Parquet's columnar layout by first reading only filter columns,
+and then selectively reading other columns only for matching rows.
+
 
 [previous post]: https://datafusion.apache.org/blog/2025/03/20/parquet-pruning
 [Apache DataFusion]: https://datafusion.apache.org/
@@ -61,7 +64,9 @@ This post discusses how Parquet readers skip irrelevant **rows** while scanning 
 
 ## Why filter pushdown in Parquet? 
 
-Below is a query that reads sensor data with filters on `date_time` and `location`:
+Below is an example query that reads sensor data with filters on `date_time` and `location`.
+Without filter pushdown, all rows from location, val, and date_time columns are decoded before `location='office'` is evaluated. Filter pushdown is especially useful when the filter is selective, i.e., removes many rows.
+
 
 ```sql
 SELECT val, location 
@@ -128,11 +133,11 @@ The table below shows the corresponding CPU time on the [ClickBench query 22](ht
 +------------+--------+-------------+--------+
 ```
 
-Clearly, decompress/decode operations dominate the time spent. With filter pushdown, we need to decompress/decode twice; but without filter pushdown, we only need to do this once.
+Clearly, decompress/decode operations dominate the time spent. With filter pushdown, it needs to decompress/decode twice; but without filter pushdown, it only needs to do this once.
 This explains why filter pushdown is slower in some cases.
 
 
-> **Note:** Highly selective filters may skip the entire page; but as long as we read one row from the page, we need to decompress and often decode the entire page.
+> **Note:** Highly selective filters may skip the entire page; but as long as it reads one row from the page, it needs to decompress and often decode the entire page.
 
 
 ## Attempt: cache filter columns
@@ -141,13 +146,13 @@ Intuitively, caching the filter columns and reusing them later could help.
 
 But naively caching decoded pages consumes prohibitively high memory:
 
-1. We need to cache Arrow arrays, which are on average [4x larger than Parquet data](https://github.com/XiangpengHao/liquid-cache/blob/main/dev/doc/liquid-cache-vldb.pdf).
+1. It needs to cache Arrow arrays, which are on average [4x larger than Parquet data](https://github.com/XiangpengHao/liquid-cache/blob/main/dev/doc/liquid-cache-vldb.pdf).
 
-2. We need to cache the **entire column chunk in memory**, because in Phase 1 we build filters over the column chunk, and only use it in Phase 2.  
+2. It needs to cache the **entire column chunk in memory**, because in Phase 1 it builds filters over the column chunk, and only use it in Phase 2.  
 
 3. The memory usage is proportional to the number of filter columns, which can be unboundedly high. 
 
-Worse, caching filter columns means we need to read partially from Parquet and partially from cache, which is complex to implement, likely requiring a substantial change to the current implementation. 
+Worse, caching filter columns means it needs to read partially from Parquet and partially from cache, which is complex to implement, likely requiring a substantial change to the current implementation. 
 
 > **Feel the complexity:** consider building a cache that properly handles nested columns, multiple filters, and filters with multiple columns.
 
@@ -173,7 +178,7 @@ The new pipeline interleaves the previous two phases into a single pass, so that
 
 1. The page being decompressed is immediately used to build filter masks and output columns.
 
-2. We cache the decompressed page for minimal time; after one pass (steps 1-6), the cache memory is released for the next pass. 
+2. Decompressed pages are cached for minimal time; after one pass (steps 1-6), the cache memory is released for the next pass. 
 
 This allows the cache to only hold 1 page at a time, and to immediately discard the previous page after it's used, significantly reducing the memory requirement for caching.
 
@@ -188,7 +193,7 @@ FROM sensor_data
 WHERE date_time > '2025-03-12' AND location = 'office';
 ```
 
-In this case, we don't cache any columns, because `val` is not used for filtering.
+In this case, no columns are cached, because `val` is not used for filtering.
 
 ```sql
 SELECT COUNT(*) 
@@ -196,7 +201,7 @@ FROM sensor_data
 WHERE date_time > '2025-03-12' AND location = 'office';
 ```
 
-In this case, we also don't cache any columns, because the output projection is empty after query plan optimization.
+In this case, again, no columns are cached, because the output projection is empty after query plan optimization.
 
 ### Then why cache 2 pages per column instead of 1? 
 This is another real-world nuance regarding how Parquet layouts the pages.
@@ -212,15 +217,15 @@ You can see this in action using [parquet-viewer](https://parquet-viewer.xiangpe
   </figcaption>
 </figure>
 
-This means that to decode a page of data, we actually need to reference two pages: the dictionary page and the data page.
+This means that to decode a page of data, it actually references two pages: the dictionary page and the data page.
 
-This is why we cache 2 pages per column: one dictionary page and one data page.
-The data page slot will move forward as we read the data; but the dictionary page slot always references the first page.
+This is why it caches 2 pages per column: one dictionary page and one data page.
+The data page slot will move forward as it reads the data; but the dictionary page slot always references the first page.
 
 <figure>
-  <img src="/blog/images/parquet-pushdown/cached-pages.jpg" alt="Cached two pages, one for dictionary (pinned), one for data (moves as we read the data)" width="80%" class="img-responsive">
+  <img src="/blog/images/parquet-pushdown/cached-pages.jpg" alt="Cached two pages, one for dictionary (pinned), one for data (moves as it reads the data)" width="80%" class="img-responsive">
   <figcaption>
-    Cached two pages, one for dictionary (pinned), one for data (moves as we read the data)
+    Cached two pages, one for dictionary (pinned), one for data (moves as it reads the data)
   </figcaption>
 </figure>
 
