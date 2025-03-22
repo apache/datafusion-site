@@ -54,7 +54,7 @@ WHERE date_time > '2025-03-12' AND location = 'office';
 
 
 In our setup, sensor data is aggregated by date — each day has its own Parquet file.
-DataFusion prunes the unneeded Parquet files, i.e., `2025-03-10/11.parquet`.
+At planning time, DataFusion prunes the unneeded Parquet files, i.e., `2025-03-10.parquet` and `2025-03-11.parquet`.
 
 Once the files to read are located, the [*DataFusion's current default implementation*](https://github.com/apache/datafusion/issues/3463) reads all the projected columns (`sensor_id`, `val`, and `location`) into Arrow RecordBatches, then applies the filters over `location` to get the final set of rows.
 
