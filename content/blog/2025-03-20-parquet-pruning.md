@@ -1,7 +1,7 @@
 ---
 layout: post
-title: Parquet pruning in DataFusion: Read Only What Matters
-date: 2025-03-18
+title: Parquet Pruning in DataFusion: Read Only What Matters
+date: 2025-03-20
 author: Xiangpeng Hao
 categories: [performance]
 ---
@@ -100,7 +100,7 @@ Now we (hopefully) have pruned the Parquet file into small ranges of bytes, i.e.
 The last step is to [make requests](https://github.com/apache/datafusion/blob/31701b8dc9c6486856c06a29a32107d9f4549cec/datafusion/core/src/datasource/physical_plan/parquet/reader.rs#L103) to fetch those bytes and decode them into Arrow RecordBatch. 
 
 
-### Preview of Coming Attractions: filter pushdown
+### Preview of coming attractions: filter pushdown
 So far we have discussed techniques that prune the Parquet file using only the metadata, i.e., before reading the actual data.
 
 Filter pushdown, also known as predicate pushdown or late materialization, is a technique that prunes data during scanning, with filters being generated and applied in the Parquet reader.
