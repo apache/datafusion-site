@@ -6,6 +6,25 @@ author: Xiangpeng Hao
 categories: [performance]
 ---
 
+<style>
+figure {
+  margin: 20px 0;
+}
+
+figure img {
+  display: block;
+  max-width: 80%;
+}
+
+figcaption {
+  font-style: italic;
+  margin-top: 10px;
+  color: #555;
+  font-size: 0.9em;
+  max-width: 80%;
+}
+</style>
+
 <!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
@@ -47,10 +66,15 @@ Below is a query that reads sensor data with filters on `date_time` and `locatio
 ```sql
 SELECT val, location 
 FROM sensor_data 
-WHERE date_time > '2025-03-12' AND location = 'office';
+WHERE date_time > '2025-03-11' AND location = 'office';
 ```
 
-<img src="/blog/images/parquet-pushdown/pushdown-vs-no-pushdown.jpg" alt="Parquet pruning skips irrelevant files/row_groups, while filter pushdown skips irrelevant rows. Without filter pushdown, all rows from location, val, and date_time columns are decoded before `location='office'` is evaluated. Filter pushdown is especially useful when the filter is selective, i.e., removes many rows." width="80%" class="img-responsive">
+<figure>
+  <img src="/blog/images/parquet-pushdown/pushdown-vs-no-pushdown.jpg" alt="Parquet pruning skips irrelevant files/row_groups, while filter pushdown skips irrelevant rows. Without filter pushdown, all rows from location, val, and date_time columns are decoded before `location='office'` is evaluated. Filter pushdown is especially useful when the filter is selective, i.e., removes many rows." width="80%" class="img-responsive">
+  <figcaption>
+    Parquet pruning skips irrelevant files/row_groups, while filter pushdown skips irrelevant rows. Without filter pushdown, all rows from location, val, and date_time columns are decoded before `location='office'` is evaluated. Filter pushdown is especially useful when the filter is selective, i.e., removes many rows.
+  </figcaption>
+</figure>
 
 
 In our setup, sensor data is aggregated by date — each day has its own Parquet file.
@@ -70,13 +94,18 @@ At a high level, the Parquet reader first builds a filter mask -- essentially a 
 
 Let's dig into details of [how filter pushdown is implemented](https://github.com/apache/arrow-rs/blob/d5339f31a60a4bd8a4256e7120fe32603249d88e/parquet/src/arrow/async_reader/mod.rs#L618-L712) in the current Rust Parquet reader implementation, illustrated in the following figure.
 
-<img src="/blog/images/parquet-pushdown/baseline-impl.jpg" alt="Implementation of filter pushdown in Rust Parquet readers -- the first phase builds the filter mask, the second phase applies the filter mask to the other columns" width="80%" class="img-responsive">
+<figure>
+  <img src="/blog/images/parquet-pushdown/baseline-impl.jpg" alt="Implementation of filter pushdown in Rust Parquet readers" class="img-responsive" with="70%">
+  <figcaption>
+    Implementation of filter pushdown in Rust Parquet readers -- the first phase builds the filter mask, the second phase applies the filter mask to the other columns
+  </figcaption>
+</figure>
 
 The filter pushdown has two phases:
 
 1. Build the filter mask (steps 1-3)
 
-2. Apply the filter mask to the other columns (steps 4-7)
+2. Use the filter mask to selectively decode other columns (steps 4-7), e.g., output step 3 is used as input for step 5 and 7.
 
 Within each phase, it takes three steps from Parquet to Arrow:
 
@@ -103,7 +132,7 @@ Clearly, decompress/decode operations dominate the time spent. With filter pushd
 This explains why filter pushdown is slower in some cases.
 
 
-> **Note:** Highly selective filters may skip the entire page; but as long as we read one row from the page, we need to decompress/decode the entire page.
+> **Note:** Highly selective filters may skip the entire page; but as long as we read one row from the page, we need to decompress and often decode the entire page.
 
 
 ## Attempt: cache filter columns
@@ -114,7 +143,7 @@ But naively caching decoded pages consumes prohibitively high memory:
 
 1. We need to cache Arrow arrays, which are on average [4x larger than Parquet data](https://github.com/XiangpengHao/liquid-cache/blob/main/dev/doc/liquid-cache-vldb.pdf).
 
-2. We need to cache the **entire column in memory**, because in Phase 1 we build filters over the entire column, and only use it in Phase 2.  
+2. We need to cache the **entire column chunk in memory**, because in Phase 1 we build filters over the column chunk, and only use it in Phase 2.  
 
 3. The memory usage is proportional to the number of filter columns, which can be unboundedly high. 
 
@@ -133,7 +162,12 @@ We need a solution that:
 This section describes my [<700 LOC PR (with lots of comments and tests)](https://github.com/apache/arrow-rs/pull/6921#issuecomment-2718792433) that **reduces total ClickBench time by 15%, with up to 2x lower latency for some queries, no obvious regression on other queries, and caches at most 2 pages (~2MB) per column in memory**.
 
 
-<img src="/blog/images/parquet-pushdown/new-pipeline.jpg" alt="New decoding pipeline, building filter mask and output columns are interleaved in a single pass, allowing us to cache minimal pages for minimal amount of time" width="80%" class="img-responsive">
+<figure>
+  <img src="/blog/images/parquet-pushdown/new-pipeline.jpg" alt="New decoding pipeline, building filter mask and output columns are interleaved in a single pass, allowing us to cache minimal pages for minimal amount of time" width="80%" class="img-responsive">
+  <figcaption>
+    New decoding pipeline, building filter mask and output columns are interleaved in a single pass, allowing us to cache minimal pages for minimal amount of time
+  </figcaption>
+</figure>
 
 The new pipeline interleaves the previous two phases into a single pass, so that:
 
@@ -171,14 +205,24 @@ Parquet by default encodes data using [dictionary encoding](https://parquet.apac
 
 You can see this in action using [parquet-viewer](https://parquet-viewer.xiangpeng.systems):
 
-<img src="/blog/images/parquet-pushdown/parquet-viewer.jpg" alt="Parquet viewer shows the page layout of a column chunk" width="80%" class="img-responsive">
+<figure>
+  <img src="/blog/images/parquet-pushdown/parquet-viewer.jpg" alt="Parquet viewer shows the page layout of a column chunk" width="80%" class="img-responsive">
+  <figcaption>
+    Parquet viewer shows the page layout of a column chunk
+  </figcaption>
+</figure>
 
 This means that to decode a page of data, we actually need to reference two pages: the dictionary page and the data page.
 
 This is why we cache 2 pages per column: one dictionary page and one data page.
 The data page slot will move forward as we read the data; but the dictionary page slot always references the first page.
 
-<img src="/blog/images/parquet-pushdown/cached-pages.jpg" alt="Cached two pages, one for dictionary (pinned), one for data (moves as we read the data)" width="80%" class="img-responsive">
+<figure>
+  <img src="/blog/images/parquet-pushdown/cached-pages.jpg" alt="Cached two pages, one for dictionary (pinned), one for data (moves as we read the data)" width="80%" class="img-responsive">
+  <figcaption>
+    Cached two pages, one for dictionary (pinned), one for data (moves as we read the data)
+  </figcaption>
+</figure>
 
 
 ## How does it perform?
