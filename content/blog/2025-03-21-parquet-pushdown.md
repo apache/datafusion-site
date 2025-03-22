@@ -1,7 +1,7 @@
 ---
 layout: post
 title: Efficient Filter Pushdown in Parquet
-date: 2025-03-19
+date: 2025-03-21
 author: Xiangpeng Hao
 categories: [performance]
 ---
@@ -32,10 +32,13 @@ _Editor's Note: This blog was first published on [Xiangpeng Hao's blog]. Thanks 
 <hr/>
 
 
-In the [previous post](../parquet-pruning/), we discussed how DataFusion prunes Parquet files to skip irrelevant **files/row_groups** (sometimes also [pages](https://parquet.apache.org/docs/file-format/pageindex/)).
+In the [previous post], we discussed how [Apache DataFusion] prunes [Apache Parquet] files to skip irrelevant **files/row_groups** (sometimes also [pages](https://parquet.apache.org/docs/file-format/pageindex/)).
 
 This post discusses how Parquet readers skip irrelevant **rows** while scanning data.
 
+[previous post]: https://datafusion.apache.org/blog/2025/03/20/parquet-pruning
+[Apache DataFusion]: https://datafusion.apache.org/
+[Apache Parquet]: https://parquet.apache.org/
 
 ## Why filter pushdown in Parquet? 
 
@@ -51,21 +54,21 @@ WHERE date_time > '2025-03-12' AND location = 'office';
 
 
 In our setup, sensor data is aggregated by date — each day has its own Parquet file.
-DataFusion prunes the unneeded Parquet files, i.e., 2025-03-10/11.parquet.
+DataFusion prunes the unneeded Parquet files, i.e., `2025-03-10/11.parquet`.
 
-Once the files to read are located, the [*current default implementation*](https://github.com/apache/datafusion/issues/3463) reads all the projected columns (`sensor_id`, `val`, and `location`) into Arrow RecordBatches, then applies the filters over `location` to get the final set of rows.
+Once the files to read are located, the [*DataFusion's current default implementation*](https://github.com/apache/datafusion/issues/3463) reads all the projected columns (`sensor_id`, `val`, and `location`) into Arrow RecordBatches, then applies the filters over `location` to get the final set of rows.
 
-A better approach is **filter pushdown**, which evaluates filter conditions first and only decodes data that passes these conditions.
-In practice, this works by first processing only the filter columns (like `location`), building a boolean mask of rows that satisfy our conditions, then using this mask to selectively decode only the relevant rows from other columns (`sensor_id`, `val`). 
-This eliminates the waste of decoding rows that will be filtered out.
+A better approach is called **filter pushdown**, which evaluates filter conditions first and only decodes data that passes these conditions.
+In practice, this works by first processing only the filter columns (`date_time` and `location`), building a boolean mask of rows that satisfy our conditions, then using this mask to selectively decode only the relevant rows from other columns (`sensor_id`, `val`). 
+This eliminates the waste of decoding rows that will be immediately filtered out.
 
 While simple in theory, practical implementations often make performance worse.
 
-## Why slower?
+## How can filter pushdown be slower?
 
 At a high level, the Parquet reader first builds a filter mask -- essentially a boolean array indicating which rows meet the filter criteria -- and then uses this mask to selectively decode only the needed rows from the remaining columns in the projection.
 
-Let's dig into details of [how filter pushdown is implemented](https://github.com/apache/arrow-rs/blob/d5339f31a60a4bd8a4256e7120fe32603249d88e/parquet/src/arrow/async_reader/mod.rs#L618-L712) in the current Rust implementation of Parquet readers.
+Let's dig into details of [how filter pushdown is implemented](https://github.com/apache/arrow-rs/blob/d5339f31a60a4bd8a4256e7120fe32603249d88e/parquet/src/arrow/async_reader/mod.rs#L618-L712) in the current Rust Parquet reader implementation, illustrated in the following figure.
 
 <img src="/blog/images/parquet-pushdown/baseline-impl.jpg" alt="Implementation of filter pushdown in Rust Parquet readers -- the first phase builds the filter mask, the second phase applies the filter mask to the other columns" width="80%" class="img-responsive">
 
@@ -96,8 +99,8 @@ The table below shows the corresponding CPU time on the [ClickBench query 22](ht
 +------------+--------+-------------+--------+
 ```
 
-Clearly, decompress/decode operations dominate the time spent. With filter pushdown, we need to decompress/decode three times; but without filter pushdown, we only need to do this twice.
-This explains why filter pushdown is slower.
+Clearly, decompress/decode operations dominate the time spent. With filter pushdown, we need to decompress/decode twice; but without filter pushdown, we only need to do this once.
+This explains why filter pushdown is slower in some cases.
 
 
 > **Note:** Highly selective filters may skip the entire page; but as long as we read one row from the page, we need to decompress/decode the entire page.
@@ -107,7 +110,7 @@ This explains why filter pushdown is slower.
 
 Intuitively, caching the filter columns and reusing them later could help.
 
-But caching consumes prohibitively high memory:
+But naively caching decoded pages consumes prohibitively high memory:
 
 1. We need to cache Arrow arrays, which are on average [4x larger than Parquet data](https://github.com/XiangpengHao/liquid-cache/blob/main/dev/doc/liquid-cache-vldb.pdf).
 
@@ -115,7 +118,7 @@ But caching consumes prohibitively high memory:
 
 3. The memory usage is proportional to the number of filter columns, which can be unboundedly high. 
 
-Worse, caching filter columns means we need to read partially from Parquet and partially from cache, which is complex to implement and requires a radical change to the current implementation. 
+Worse, caching filter columns means we need to read partially from Parquet and partially from cache, which is complex to implement, likely requiring a substantial change to the current implementation. 
 
 > **Feel the complexity:** consider building a cache that properly handles nested columns, multiple filters, and filters with multiple columns.
 
@@ -161,7 +164,7 @@ WHERE date_time > '2025-03-12' AND location = 'office';
 
 In this case, we also don't cache any columns, because the output projection is empty after query plan optimization.
 
-### Then why cache 2 pages/column instead of 1? 
+### Then why cache 2 pages per column instead of 1? 
 This is another real-world nuance regarding how Parquet layouts the pages.
 
 Parquet by default encodes data using [dictionary encoding](https://parquet.apache.org/docs/file-format/data-pages/encodings/), which writes a dictionary page as the first page of a column chunk, followed by the keys referencing the dictionary.
@@ -249,6 +252,10 @@ and queries that get slower are likely due to noise.
 Despite being simple in theory, filter pushdown in Parquet is non-trivial to implement.
 It requires understanding both the Parquet format and reader implementation details. 
 The challenge lies in efficiently navigating through the dynamics of decoding, filter evaluation, and memory management.
+
+If you are interested in this level of optimization and want to help test, document and implement this type of optimization, come find us in the [DataFusion Community]. We would love to have you. 
+
+[DataFusion Community]: https://datafusion.apache.org/contributor-guide/communication.html
 
 
 
