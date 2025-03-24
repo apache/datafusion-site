@@ -65,7 +65,7 @@ and then selectively reading other columns only for matching rows.
 ## Why filter pushdown in Parquet? 
 
 Below is an example query that reads sensor data with filters on `date_time` and `location`.
-Without filter pushdown, all rows from location, val, and date_time columns are decoded before `location='office'` is evaluated. Filter pushdown is especially useful when the filter is selective, i.e., removes many rows.
+Without filter pushdown, all rows from `location`, `val`, and `date_time` columns are decoded before `location='office'` is evaluated. Filter pushdown is especially useful when the filter is selective, i.e., removes many rows.
 
 
 ```sql
@@ -87,7 +87,7 @@ At planning time, DataFusion prunes the unneeded Parquet files, i.e., `2025-03-1
 
 Once the files to read are located, the [*DataFusion's current default implementation*](https://github.com/apache/datafusion/issues/3463) reads all the projected columns (`sensor_id`, `val`, and `location`) into Arrow RecordBatches, then applies the filters over `location` to get the final set of rows.
 
-A better approach is called **filter pushdown**, which evaluates filter conditions first and only decodes data that passes these conditions.
+A better approach is called **filter pushdown** with **late materialization**, which evaluates filter conditions first and only decodes data that passes these conditions.
 In practice, this works by first processing only the filter columns (`date_time` and `location`), building a boolean mask of rows that satisfy our conditions, then using this mask to selectively decode only the relevant rows from other columns (`sensor_id`, `val`). 
 This eliminates the waste of decoding rows that will be immediately filtered out.
 
