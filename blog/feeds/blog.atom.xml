@@ -1,5 +1,395 @@
 <?xml version="1.0" encoding="utf-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - blog</title><link href="https://datafusion.apache.org/blog/" rel="alternate"></link><link href="https://datafusion.apache.org/blog/feeds/blog.atom.xml" rel="self"></link><id>https://datafusion.apache.org/blog/</id><updated>2025-03-20T00:00:00+00:00</updated><subtitle></subtitle><entry><title>Apache DataFusion Comet 0.7.0 Release</title><link href="https://datafusion.apache.org/blog/2025/03/20/datafusion-comet-0.7.0" rel="alternate"></link><published>2025-03-20T00:00:00+00:00</published><updated>2025-03-20T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2025-03-20:/blog/2025/03/20/datafusion-comet-0.7.0</id><summary type="html">&lt;!--
+<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - blog</title><link href="https://datafusion.apache.org/blog/" rel="alternate"></link><link href="https://datafusion.apache.org/blog/feeds/blog.atom.xml" rel="self"></link><id>https://datafusion.apache.org/blog/</id><updated>2025-03-24T00:00:00+00:00</updated><subtitle></subtitle><entry><title>Apache DataFusion 46.0.0 Released</title><link href="https://datafusion.apache.org/blog/2025/03/24/datafusion-46.0.0" rel="alternate"></link><published>2025-03-24T00:00:00+00:00</published><updated>2025-03-24T00:00:00+00:00</updated><author><name>Oznur Hanci and Berkay Sahin on behalf of the PMC</name></author><id>tag:datafusion.apache.org,2025-03-24:/blog/2025/03/24/datafusion-46.0.0</id><summary type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+&lt;p&gt;We&amp;rsquo;re excited to announce the release of&amp;nbsp;&lt;strong&gt;Apache DataFusion 46.0.0&lt;/strong&gt;! This new version represents a significant milestone for the project, packing in a wide range of improvements and fixes. You can find the complete details in the&amp;nbsp;full &lt;a href="https://github.com/apache/datafusion/blob/branch-46/dev/changelog/46.0.0.md"&gt;changelog&lt;/a&gt;. We&amp;rsquo;ll highlight the most important changes below …&lt;/p&gt;</summary><content type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+&lt;p&gt;We&amp;rsquo;re excited to announce the release of&amp;nbsp;&lt;strong&gt;Apache DataFusion 46.0.0&lt;/strong&gt;! This new version represents a significant milestone for the project, packing in a wide range of improvements and fixes. You can find the complete details in the&amp;nbsp;full &lt;a href="https://github.com/apache/datafusion/blob/branch-46/dev/changelog/46.0.0.md"&gt;changelog&lt;/a&gt;. We&amp;rsquo;ll highlight the most important changes below and guide you through upgrading.&lt;/p&gt;
+&lt;h2&gt;Breaking Changes&lt;/h2&gt;
+&lt;p&gt;DataFusion 46.0.0 brings a few&amp;nbsp;&lt;strong&gt;breaking changes&lt;/strong&gt;&amp;nbsp;that may require adjustments to your code as described in the &lt;a href="https://datafusion.apache.org/library-user-guide/upgrading.html"&gt;Upgrade Guide&lt;/a&gt;. Here are the most notable ones:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href="https://github.com/apache/datafusion/pull/14224#"&gt;Unified &lt;code&gt;DataSourceExec&lt;/code&gt; Execution Plan&lt;/a&gt;&lt;strong&gt;:&lt;/strong&gt;&amp;nbsp;DataFusion 46.0.0 introduces a major refactor of scan operators. The separate file-format-specific execution plan nodes (&lt;code&gt;ParquetExec&lt;/code&gt;,&amp;nbsp;&lt;code&gt;CsvExec&lt;/code&gt;,&amp;nbsp;&lt;code&gt;JsonExec&lt;/code&gt;,&amp;nbsp;&lt;code&gt;AvroExec&lt;/code&gt;, etc.) have been&amp;nbsp;&lt;strong&gt;deprecated and merged into a single &lt;code&gt;DataSourceExec&lt;/code&gt;&amp;nbsp;plan&lt;/strong&gt;. Format-specific logic is now encapsulated in new&amp;nbsp;&lt;code&gt;DataSource&lt;/code&gt;&amp;nbsp;and&amp;nbsp;&lt;code&gt;FileSource&lt;/code&gt;&amp;nbsp;traits. This change simplifies the execution model, but if you have code that directly references the old plan nodes, you&amp;rsquo;ll need to update it to use&amp;nbsp;&lt;code&gt;DataSourceExec&lt;/code&gt;&amp;nbsp;(see the&amp;nbsp;&lt;a href="https://datafusion.apache.org/library-user-guide/upgrading.html"&gt;Upgrade Guide&lt;/a&gt;&amp;nbsp;for examples of the new API).&lt;/li&gt;
+&lt;li&gt;&lt;a href="https://github.com/apache/arrow-datafusion/issues/7360#:~:text=2"&gt;**Error Handling Improvements&lt;/a&gt; (&lt;code&gt;DataFusionError::Collection&lt;/code&gt;):**&amp;nbsp;We began overhauling DataFusion&amp;rsquo;s approach to error handling. In this release, a new error variant&amp;nbsp;&lt;code&gt;DataFusionError::Collection&lt;/code&gt;&amp;nbsp;(and related mechanisms) has been introduced to aggregate multiple errors into one. This is part of a broader effort to provide richer error context and reduce internal panics. As a result, some error types or messages have changed. Downstream code that matches on specific&amp;nbsp;&lt;code&gt;DataFusionError&lt;/code&gt;&amp;nbsp;variants might need adjustment.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;Performance Improvements&lt;/h2&gt;
+&lt;p&gt;DataFusion 46.0.0 comes with a slew of performance enhancements across the board. Here are some of the noteworthy optimizations in this release:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Faster&amp;nbsp;&lt;code&gt;median()&lt;/code&gt;&amp;nbsp;(no grouping):&lt;/strong&gt;&amp;nbsp;The&amp;nbsp;&lt;code&gt;median()&lt;/code&gt;&amp;nbsp;aggregate function got a special fast path when used without a&amp;nbsp;&lt;code&gt;GROUP BY&lt;/code&gt;. By optimizing its accumulator, median calculation is about&amp;nbsp;&lt;strong&gt;2&amp;times; faster&lt;/strong&gt;&amp;nbsp;in the single-group case. If you use&amp;nbsp;&lt;code&gt;MEDIAN()&lt;/code&gt;&amp;nbsp;on large datasets (especially as a single value), you should notice reduced query times (PR &lt;a href="https://github.com/apache/datafusion/pull/14399"&gt;#14399&lt;/a&gt; by &lt;a href="https://github.com/2010YOUY01"&gt;@2010YOUY01&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Optimized&amp;nbsp;&lt;code&gt;FIRST_VALUE&lt;/code&gt;/&lt;code&gt;LAST_VALUE&lt;/code&gt;:&lt;/strong&gt;&amp;nbsp;The&amp;nbsp;&lt;code&gt;FIRST_VALUE&lt;/code&gt;&amp;nbsp;and&amp;nbsp;&lt;code&gt;LAST_VALUE&lt;/code&gt;&amp;nbsp;window functions have been improved by avoiding an internal sort of rows. Instead of sorting each partition, the implementation now uses a direct approach to pick the first/last element. This yields&amp;nbsp;&lt;strong&gt;10&amp;ndash;100% performance improvement&lt;/strong&gt;&amp;nbsp;for these functions, depending on the scenario. Queries using&amp;nbsp;&lt;code&gt;FIRST_VALUE(...) OVER (PARTITION BY ... ORDER BY ...)&lt;/code&gt;&amp;nbsp;will run faster, especially when partitions are large (PR &lt;a href="https://github.com/apache/datafusion/pull/14402"&gt;#14402&lt;/a&gt; by &lt;a href="https://github.com/blaginin"&gt;@blaginin&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;&lt;code&gt;repeat()&lt;/code&gt;&amp;nbsp;String Function Boost:&lt;/strong&gt;&amp;nbsp;Repeating strings is now more efficient &amp;ndash; the&amp;nbsp;&lt;code&gt;repeat(text, n)&lt;/code&gt;&amp;nbsp;function was optimized by about&amp;nbsp;&lt;strong&gt;50%&lt;/strong&gt;. This was achieved by reducing allocations and using a more efficient concatenation strategy. If you generate large repeated strings in queries, this can cut the time nearly in half (PR &lt;a href="https://github.com/apache/datafusion/pull/14697"&gt;#14697&lt;/a&gt; by &lt;a href="https://github.com/zjregee"&gt;@zjregee&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Ultra-fast&amp;nbsp;&lt;code&gt;uuid()&lt;/code&gt;&amp;nbsp;UDF:&lt;/strong&gt;&amp;nbsp;The&amp;nbsp;&lt;code&gt;uuid()&lt;/code&gt;&amp;nbsp;function (which generates random UUID strings) received a major speed-up. It&amp;rsquo;s now roughly&amp;nbsp;&lt;strong&gt;40&amp;times; faster&lt;/strong&gt;&amp;nbsp;than before! The new implementation avoids unnecessary string copying and uses a more direct conversion to hex, making bulk UUID generation far more practical (PR &lt;a href="https://github.com/apache/datafusion/pull/14675"&gt;#14675&lt;/a&gt; by &lt;a href="https://github.com/simonvandel"&gt;@simonvandel&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Accelerated&amp;nbsp;&lt;code&gt;chr()&lt;/code&gt;&amp;nbsp;and&amp;nbsp;&lt;code&gt;to_hex()&lt;/code&gt;:&lt;/strong&gt;&amp;nbsp;Several scalar functions have been micro-optimized. The&amp;nbsp;&lt;code&gt;chr()&lt;/code&gt;&amp;nbsp;function (which returns the character for a given ASCII code) is about&amp;nbsp;&lt;strong&gt;4&amp;times; faster&lt;/strong&gt;&amp;nbsp;now, and the&amp;nbsp;&lt;code&gt;to_hex()&lt;/code&gt;&amp;nbsp;function (which converts numbers to hex string) is roughly&amp;nbsp;&lt;strong&gt;2&amp;times; faster&lt;/strong&gt;. These improvements may be most noticeable in tight loops or when these functions are applied to large arrays of values (PR &lt;a href="https://github.com/apache/datafusion/pull/14700"&gt;#14700&lt;/a&gt; for&amp;nbsp;&lt;code&gt;chr&lt;/code&gt;, &lt;a href="https://github.com/apache/datafusion/pull/14686"&gt;#14686&lt;/a&gt; for&amp;nbsp;&lt;code&gt;to_hex&lt;/code&gt; by &lt;a href="https://github.com/simonvandel"&gt;@simonvandel&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;No More RowConverter in Grouped Ordering:&lt;/strong&gt;&amp;nbsp;We removed an inefficient step in the&amp;nbsp;&lt;em&gt;partial grouping&lt;/em&gt;&amp;nbsp;algorithm. The&amp;nbsp;&lt;code&gt;GroupOrderingPartial&lt;/code&gt;&amp;nbsp;operator no longer converts data to &amp;ldquo;row format&amp;rdquo; for each batch (via&amp;nbsp;&lt;code&gt;RowConverter&lt;/code&gt;). Instead, it uses a direct arrow-based approach to detect sort key changes. This eliminated overhead and yields a nice speedup for certain aggregation queries. (PR &lt;a href="https://github.com/apache/datafusion/pull/14566"&gt;#14566&lt;/a&gt; by &lt;a href="https://github.com/ctsk"&gt;@ctsk&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Predicate Pruning for&amp;nbsp;&lt;code&gt;NOT LIKE&lt;/code&gt;:&lt;/strong&gt;&amp;nbsp;DataFusion&amp;rsquo;s parquet reader can now prune row groups using&amp;nbsp;&lt;code&gt;NOT LIKE&lt;/code&gt;&amp;nbsp;filters, similar to how it handles&amp;nbsp;&lt;code&gt;LIKE&lt;/code&gt;. This means if you have a filter such as&amp;nbsp;&lt;code&gt;column NOT LIKE 'prefix%'&lt;/code&gt;, DataFusion can use min/max statistics to skip reading files/parts that can be determined to either entirely match or not match the predicate. In particular, a pattern like&amp;nbsp;&lt;code&gt;NOT LIKE 'X%'&lt;/code&gt;&amp;nbsp;can skip data ranges that definitely start with "X". While a niche case, it contributes to query efficiency in those scenarios (PR &lt;a href="https://github.com/apache/datafusion/pull/14567"&gt;#14567&lt;/a&gt; by &lt;a href="https://github.com/UBarney"&gt;@UBarney&lt;/a&gt;).&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;Google Summer of Code 2025&lt;/h2&gt;
+&lt;p&gt;Another exciting development:&amp;nbsp;&lt;strong&gt;Apache DataFusion has been accepted as a mentoring organization for Google Summer of Code (GSoC) 2025&lt;/strong&gt;! 🎉 This means that this summer, students from around the world will have the opportunity to contribute to DataFusion under the guidance of our committers. We have put together &lt;a href="https://datafusion.apache.org/contributor-guide/gsoc_project_ideas.html"&gt;a list of project ideas&lt;/a&gt; that candidates can choose from.&lt;/p&gt;
+&lt;p&gt;If you&amp;rsquo;re interested, check out our&amp;nbsp;&lt;a href="https://datafusion.apache.org/contributor-guide/gsoc_application_guidelines.html"&gt;GSoC Application Guidelines&lt;/a&gt;. We encourage students to reach out, discuss ideas with us, and apply.&lt;/p&gt;
+&lt;h2&gt;Highlighted New Features&lt;/h2&gt;
+&lt;h3&gt;Improved Diagnostics&lt;/h3&gt;
+&lt;p&gt;DataFusion 46.0.0 introduces a new&amp;nbsp;&lt;a href="https://github.com/apache/datafusion/issues/14429"&gt;&lt;strong&gt;SQL Diagnostics framework&lt;/strong&gt;&lt;/a&gt;&amp;nbsp;to make error messages more understandable. This comes in the form of new&amp;nbsp;&lt;code&gt;Diagnostic&lt;/code&gt;&amp;nbsp;and&amp;nbsp;&lt;code&gt;DiagnosticEntry&lt;/code&gt;&amp;nbsp;types, which allow the system to attach rich context (like source query text spans) to error messages. In practical terms, certain planner errors will now point to the exact location in your SQL query that caused the issue. &lt;/p&gt;
+&lt;p&gt;For example, if you reference an unknown table or miss a column in &lt;code&gt;GROUP BY&lt;/code&gt; the error message will include the query snippet causing the error. These diagnostics are meant for end-users of applications built on DataFusion, providing clearer messages instead of generic errors. Here&amp;rsquo;s an example:&lt;/p&gt;
+&lt;p&gt;&lt;img alt="diagnostic-example" class="img-responsive" src="/blog/images/datafusion-46.0.0/diagnostic-example.png" width="80%"/&gt;&lt;/p&gt;
+&lt;p&gt;Currently, diagnostics cover unresolved table/column references, missing &lt;code&gt;GROUP BY&lt;/code&gt; columns, ambiguous references, wrong number of UNION columns, type mismatches, and a few others. Future releases will extend this to more error types. This feature should greatly ease debugging of complex SQL by pinpointing errors directly in the query text. We thank &lt;a href="https://github.com/eliaperantoni"&gt;@eliaperantoni&lt;/a&gt; for his contributions in this project.&lt;/p&gt;
+&lt;h3&gt;Unified&amp;nbsp;&lt;code&gt;DataSourceExec&lt;/code&gt;&amp;nbsp;for Table Providers&lt;/h3&gt;
+&lt;p&gt;As mentioned, DataFusion now uses a unified&amp;nbsp;&lt;code&gt;DataSourceExec&lt;/code&gt;&amp;nbsp;for reading tables, which is both a breaking change and a feature.&amp;nbsp;&lt;em&gt;Why is this important?&lt;/em&gt;&amp;nbsp;The new approach simplifies how custom table providers are integrated and optimized. Namely, the optimizer can treat file scans uniformly and push down filters/limits more consistently when there is one execution plan that handles all data sources. The new&amp;nbsp;&lt;code&gt;DataSourceExec&lt;/code&gt;&amp;nbsp;is paired with a&amp;nbsp;&lt;code&gt;DataSource&lt;/code&gt;&amp;nbsp;trait that encapsulates format-specific behaviors (Parquet, CSV, JSON, Avro, etc.) in a pluggable way.&lt;/p&gt;
+&lt;p&gt;All built-in sources (Parquet, CSV, Avro, Arrow, JSON, etc.) have been migrated to this framework. This unification makes the codebase cleaner and sets the stage for future enhancements (like consistent metadata handling and limit pushdown across all formats). Check out PR &lt;a href="https://github.com/apache/datafusion/pull/14224"&gt;#14224&lt;/a&gt; for design details. We thank &lt;a href="https://github.com/mertak-synnada"&gt;@mertak-synnada&lt;/a&gt; and &lt;a href="https://github.com/ozankabak"&gt;@ozankabak&lt;/a&gt; for their contributions.&lt;/p&gt;
+&lt;h3&gt;FFI Support for Scalar UDFs&lt;/h3&gt;
+&lt;p&gt;DataFusion&amp;rsquo;s Foreign Function Interface (FFI) has been extended to support&amp;nbsp;&lt;a href="https://github.com/apache/datafusion/pull/14579"&gt;&lt;strong&gt;user-defined scalar functions&lt;/strong&gt;&lt;/a&gt;&amp;nbsp;defined in external languages. In 46.0.0, you can now expose a custom scalar UDF through the FFI layer and use it in DataFusion as if it were built-in. This is particularly exciting for the &lt;strong&gt;Python bindings&lt;/strong&gt; and other language integrations &amp;ndash; it means you could define a function in Python (or C, etc.) and register it with DataFusion&amp;rsquo;s Rust core via the FFI crate. Thanks, &lt;a href="https://github.com/timsaucer"&gt;@timsaucer&lt;/a&gt;!&lt;/p&gt;
+&lt;h3&gt;New Statistics/Distribution Framework&lt;/h3&gt;
+&lt;p&gt;This release, thanks mainly to &lt;a href="https://github.com/Fly-Style"&gt;@Fly-Style&lt;/a&gt; with contributions from &lt;a href="https://github.com/ozankabak"&gt;@ozankabak&lt;/a&gt; and &lt;a href="https://github.com/berkaysynnada"&gt;@berkaysynnada&lt;/a&gt;, includes the initial pieces of a&amp;nbsp;&lt;a href="https://github.com/apache/datafusion/pull/14699"&gt;**redesigned statistics framework&lt;/a&gt;.&lt;strong&gt; DataFusion&amp;rsquo;s optimizer can now represent column data distributions using a new&amp;nbsp;&lt;code&gt;Distribution&lt;/code&gt;&amp;nbsp;enum, instead of the old precision or range estimations. The supported distribution types currently include&amp;nbsp;&lt;/strong&gt;Uniform, Gaussian (normal), Exponential, Bernoulli&lt;strong&gt;, and a&amp;nbsp;&lt;/strong&gt;Generic**&amp;nbsp;catch-all.&lt;/p&gt;
+&lt;p&gt;For example, if a filter expression is applied to a column with a known uniform distribution range, the optimizer can propagate that to estimate result selectivity more accurately. Similarly, comparisons (&lt;code&gt;=&lt;/code&gt;, &lt;code&gt;&amp;gt;&lt;/code&gt;, etc.) on columns yield Bernoulli distributions (with true/false probabilities) in this model.&lt;/p&gt;
+&lt;p&gt;This is a foundational change with many follow-on PRs underway. Even though the immediate user-visible effect is limited (the optimizer didn't magically improve by an order of magnitude overnight), but it lays groundwork for more advanced query planning in the future. Over time, as statistics information encapsulated in &lt;code&gt;Distribution&lt;/code&gt;s get integrated, DataFusion will be able to make smarter decisions like more aggressive parquet pruning, better join orderings, and so on based on data distribution information. The core framework is now in place and is being hooked up to column and table level statistics.&lt;/p&gt;
+&lt;h3&gt;Aggregate Monotonicity and Window Ordering&lt;/h3&gt;
+&lt;p&gt;DataFusion 46.0.0 adds a new concept of &lt;a href="https://github.com/apache/datafusion/pull/14271"&gt;&lt;strong&gt;set-monotonicity&lt;/strong&gt;&lt;/a&gt; for certain transformations, which helps avoid unnecessary sort operations. In particular, the planner now understands when a &lt;strong&gt;window function introduces new orderings of data&lt;/strong&gt;.&lt;/p&gt;
+&lt;p&gt;For example, DataFusion now recognizes that a window-aggregate like &lt;code&gt;MAX&lt;/code&gt; on a column can produce a result that is &lt;strong&gt;monotonically increasing&lt;/strong&gt;, even if the input column is unordered &amp;mdash; depending on the window frame used.&lt;/p&gt;
+&lt;p&gt;Consider the following query:&lt;/p&gt;
+&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="k"&gt;SELECT&lt;/span&gt; &lt;span class="k"&gt;MAX&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;c1&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="n"&gt;OVER&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;
+    &lt;span class="k"&gt;ROWS&lt;/span&gt; &lt;span class="k"&gt;BETWEEN&lt;/span&gt; &lt;span class="n"&gt;UNBOUNDED&lt;/span&gt; &lt;span class="n"&gt;PRECEDING&lt;/span&gt; &lt;span class="k"&gt;AND&lt;/span&gt; &lt;span class="k"&gt;CURRENT&lt;/span&gt; &lt;span class="k"&gt;ROW&lt;/span&gt;
+&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="k"&gt;AS&lt;/span&gt; &lt;span class="n"&gt;max_c1&lt;/span&gt;
+&lt;span class="k"&gt;FROM&lt;/span&gt; &lt;span class="n"&gt;c1_table&lt;/span&gt;
+&lt;span class="k"&gt;ORDER&lt;/span&gt; &lt;span class="k"&gt;BY&lt;/span&gt; &lt;span class="n"&gt;max_c1&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;In earlier versions of DataFusion, this query would require an additional SortExec on max_c1 to satisfy the ORDER BY clause. However, with the new set-monotonicity logic, the planner knows that MAX(...) OVER (...) produces values that are not smaller than the previous row, making the extra sort redundant. This leads to more efficient query execution.&lt;/p&gt;
+&lt;p&gt;PR &lt;a href="https://github.com/apache/datafusion/pull/14271"&gt;#14271&lt;/a&gt; introduced the core monotonicity tracking for aggregates and window functions.
+PR &lt;a href="https://github.com/apache/datafusion/pull/14813"&gt;#14813&lt;/a&gt; improved ordering preservation within various window frame types, and brought an extensive test coverage.
+Huge thanks to &lt;a href="https://github.com/berkaysynnada"&gt;@berkaysynnada&lt;/a&gt; and &lt;a href="https://github.com/mertak-synnada"&gt;@mertak-synnada&lt;/a&gt; for designing and implementing this optimizer enhancement!&lt;/p&gt;
+&lt;h3&gt;UNION [ALL | DISTINCT] BY NAME Support&lt;/h3&gt;
+&lt;p&gt;DataFusion now supports UNION BY NAME and UNION ALL BY NAME, which align columns by name instead of position. This matches functionality found in systems like Spark and DuckDB and simplifies combining heterogeneously ordered result sets.&lt;/p&gt;
+&lt;p&gt;You no longer need to rewrite column order manually &amp;mdash; just write:&lt;/p&gt;
+&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="k"&gt;SELECT&lt;/span&gt; &lt;span class="n"&gt;col1&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;col2&lt;/span&gt; &lt;span class="k"&gt;FROM&lt;/span&gt; &lt;span class="n"&gt;t1&lt;/span&gt;
+&lt;span class="k"&gt;UNION&lt;/span&gt; &lt;span class="k"&gt;ALL&lt;/span&gt; &lt;span class="k"&gt;BY&lt;/span&gt; &lt;span class="n"&gt;NAME&lt;/span&gt;
+&lt;span class="k"&gt;SELECT&lt;/span&gt; &lt;span class="n"&gt;col2&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;col1&lt;/span&gt; &lt;span class="k"&gt;FROM&lt;/span&gt; &lt;span class="n"&gt;t2&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;Under the hood, this is supported by the new union_by_name() and union_by_name_distinct() plan builder methods.&lt;/p&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/rkrishn7"&gt;@rkrishn7&lt;/a&gt; for PR &lt;a href="https://github.com/apache/datafusion/pull/14538"&gt;#14538&lt;/a&gt;.&lt;/p&gt;
+&lt;h3&gt;New range() Table Function&lt;/h3&gt;
+&lt;p&gt;A new table-valued function range(start, stop, step) has been added to make it easy to generate integer sequences &amp;mdash; similar to PostgreSQL&amp;rsquo;s generate_series() or Spark&amp;rsquo;s range().&lt;/p&gt;
+&lt;p&gt;Example:&lt;/p&gt;
+&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="k"&gt;SELECT&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="k"&gt;FROM&lt;/span&gt; &lt;span class="n"&gt;range&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="mi"&gt;10&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;This returns: 1, 3, 5, 7, 9. It&amp;rsquo;s great for testing, cross joins, surrogate keys, and more.&lt;/p&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/simonvandel"&gt;@simonvandel&lt;/a&gt; for PR &lt;a href="https://github.com/apache/datafusion/pull/14830"&gt;#14830&lt;/a&gt;.&lt;/p&gt;
+&lt;h2&gt;Upgrade Guide and Changelog&lt;/h2&gt;
+&lt;p&gt;Upgrading to 46.0.0 should be straightforward for most users, but do review the&amp;nbsp;&lt;a href="https://datafusion.apache.org/library-user-guide/upgrading.html"&gt;Upgrade Guide for DataFusion 46.0.0&lt;/a&gt;&amp;nbsp;for detailed steps and code changes. The upgrade guide covers the breaking changes mentioned (like replacing old exec nodes with&amp;nbsp;&lt;code&gt;DataSourceExec&lt;/code&gt;, updating UDF invocation to&amp;nbsp;&lt;code&gt;invoke_with_args&lt;/code&gt;, etc.) and provides code snippets to help with the transition. For a comprehensive list of all changes, please refer to the&amp;nbsp;&lt;strong&gt;changelog&lt;/strong&gt;&amp;nbsp;for 46.0.0 (linked above and in the repository). The changelog enumerates every merged PR in this release, including many smaller fixes and improvements that we couldn&amp;rsquo;t cover in this post.&lt;/p&gt;
+&lt;h2&gt;Get Involved&lt;/h2&gt;
+&lt;p&gt;Apache DataFusion is an open-source project, and we welcome involvement from anyone interested. Now is a great time to take 46.0.0 for a spin: try it out on your workloads, and let us know if you encounter any issues or have suggestions. You can report bugs or request features on our&amp;nbsp;GitHub issue tracker, or better yet, submit a pull request. Join our community discussions &amp;ndash; whether you have questions, want to share how you&amp;rsquo;re using DataFusion, or are looking to contribute, we&amp;rsquo;d love to hear from you. A list of open issues suitable for beginners is&amp;nbsp;&lt;a href="https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22"&gt;here&lt;/a&gt;&amp;nbsp;and you can find how to reach us on the&amp;nbsp;&lt;a href="https://datafusion.apache.org/contributor-guide/communication.html"&gt;communication doc&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Happy querying!&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Efficient Filter Pushdown in Parquet</title><link href="https://datafusion.apache.org/blog/2025/03/21/parquet-pushdown" rel="alternate"></link><published>2025-03-21T00:00:00+00:00</published><updated>2025-03-21T00:00:00+00:00</updated><author><name>Xiangpeng Hao</name></author><id>tag:datafusion.apache.org,2025-03-21:/blog/2025/03/21/parquet-pushdown</id><summary type="html">&lt;style&gt;
+figure {
+  margin: 20px 0;
+}
+
+figure img {
+  display: block;
+  max-width: 80%;
+}
+
+figcaption {
+  font-style: italic;
+  margin-top: 10px;
+  color: #555;
+  font-size: 0.9em;
+  max-width: 80%;
+}
+&lt;/style&gt;
+&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+&lt;p&gt;&lt;em&gt;Editor's Note: This blog was first published on &lt;a href="https://blog.xiangpeng.systems/posts/parquet-pushdown/"&gt;Xiangpeng Hao's blog&lt;/a&gt;. Thanks to &lt;a href="https://www.influxdata.com/"&gt;InfluxData&lt;/a&gt; for sponsoring this work as part of his PhD funding.&lt;/em&gt;&lt;/p&gt;
+&lt;hr/&gt;
+&lt;p&gt;In the &lt;a href="https://datafusion.apache.org/blog/2025/03/20/parquet-pruning"&gt;previous post …&lt;/a&gt;&lt;/p&gt;</summary><content type="html">&lt;style&gt;
+figure {
+  margin: 20px 0;
+}
+
+figure img {
+  display: block;
+  max-width: 80%;
+}
+
+figcaption {
+  font-style: italic;
+  margin-top: 10px;
+  color: #555;
+  font-size: 0.9em;
+  max-width: 80%;
+}
+&lt;/style&gt;
+&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+&lt;p&gt;&lt;em&gt;Editor's Note: This blog was first published on &lt;a href="https://blog.xiangpeng.systems/posts/parquet-pushdown/"&gt;Xiangpeng Hao's blog&lt;/a&gt;. Thanks to &lt;a href="https://www.influxdata.com/"&gt;InfluxData&lt;/a&gt; for sponsoring this work as part of his PhD funding.&lt;/em&gt;&lt;/p&gt;
+&lt;hr/&gt;
+&lt;p&gt;In the &lt;a href="https://datafusion.apache.org/blog/2025/03/20/parquet-pruning"&gt;previous post&lt;/a&gt;, we discussed how &lt;a href="https://datafusion.apache.org/"&gt;Apache DataFusion&lt;/a&gt; prunes &lt;a href="https://parquet.apache.org/"&gt;Apache Parquet&lt;/a&gt; files to skip irrelevant &lt;strong&gt;files/row_groups&lt;/strong&gt; (sometimes also &lt;a href="https://parquet.apache.org/docs/file-format/pageindex/"&gt;pages&lt;/a&gt;).&lt;/p&gt;
+&lt;p&gt;This post discusses how Parquet readers skip irrelevant &lt;strong&gt;rows&lt;/strong&gt; while scanning data,
+leveraging Parquet's columnar layout by first reading only filter columns,
+and then selectively reading other columns only for matching rows.&lt;/p&gt;
+&lt;h2&gt;Why filter pushdown in Parquet?&lt;/h2&gt;
+&lt;p&gt;Below is an example query that reads sensor data with filters on &lt;code&gt;date_time&lt;/code&gt; and &lt;code&gt;location&lt;/code&gt;.
+Without filter pushdown, all rows from &lt;code&gt;location&lt;/code&gt;, &lt;code&gt;val&lt;/code&gt;, and &lt;code&gt;date_time&lt;/code&gt; columns are decoded before &lt;code&gt;location='office'&lt;/code&gt; is evaluated. Filter pushdown is especially useful when the filter is selective, i.e., removes many rows.&lt;/p&gt;
+&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="k"&gt;SELECT&lt;/span&gt; &lt;span class="n"&gt;val&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="k"&gt;location&lt;/span&gt; 
+&lt;span class="k"&gt;FROM&lt;/span&gt; &lt;span class="n"&gt;sensor_data&lt;/span&gt; 
+&lt;span class="k"&gt;WHERE&lt;/span&gt; &lt;span class="n"&gt;date_time&lt;/span&gt; &lt;span class="o"&gt;&amp;gt;&lt;/span&gt; &lt;span class="s1"&gt;'2025-03-11'&lt;/span&gt; &lt;span class="k"&gt;AND&lt;/span&gt; &lt;span class="k"&gt;location&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="s1"&gt;'office'&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;figure&gt;
+&lt;img alt="Parquet pruning skips irrelevant files/row_groups, while filter pushdown skips irrelevant rows. Without filter pushdown, all rows from location, val, and date_time columns are decoded before `location='office'` is evaluated. Filter pushdown is especially useful when the filter is selective, i.e., removes many rows." class="img-responsive" src="/blog/images/parquet-pushdown/pushdown-vs-no-pushdown.jpg" width="80%"/&gt;
+&lt;figcaption&gt;
+    Parquet pruning skips irrelevant files/row_groups, while filter pushdown skips irrelevant rows. Without filter pushdown, all rows from location, val, and date_time columns are decoded before `location='office'` is evaluated. Filter pushdown is especially useful when the filter is selective, i.e., removes many rows.
+  &lt;/figcaption&gt;
+&lt;/figure&gt;
+&lt;p&gt;In our setup, sensor data is aggregated by date &amp;mdash; each day has its own Parquet file.
+At planning time, DataFusion prunes the unneeded Parquet files, i.e., &lt;code&gt;2025-03-10.parquet&lt;/code&gt; and &lt;code&gt;2025-03-11.parquet&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;Once the files to read are located, the &lt;a href="https://github.com/apache/datafusion/issues/3463"&gt;&lt;em&gt;DataFusion's current default implementation&lt;/em&gt;&lt;/a&gt; reads all the projected columns (&lt;code&gt;sensor_id&lt;/code&gt;, &lt;code&gt;val&lt;/code&gt;, and &lt;code&gt;location&lt;/code&gt;) into Arrow RecordBatches, then applies the filters over &lt;code&gt;location&lt;/code&gt; to get the final set of rows.&lt;/p&gt;
+&lt;p&gt;A better approach is called &lt;strong&gt;filter pushdown&lt;/strong&gt; with &lt;strong&gt;late materialization&lt;/strong&gt;, which evaluates filter conditions first and only decodes data that passes these conditions.
+In practice, this works by first processing only the filter columns (&lt;code&gt;date_time&lt;/code&gt; and &lt;code&gt;location&lt;/code&gt;), building a boolean mask of rows that satisfy our conditions, then using this mask to selectively decode only the relevant rows from other columns (&lt;code&gt;sensor_id&lt;/code&gt;, &lt;code&gt;val&lt;/code&gt;). 
+This eliminates the waste of decoding rows that will be immediately filtered out.&lt;/p&gt;
+&lt;p&gt;While simple in theory, practical implementations often make performance worse.&lt;/p&gt;
+&lt;h2&gt;How can filter pushdown be slower?&lt;/h2&gt;
+&lt;p&gt;At a high level, the Parquet reader first builds a filter mask -- essentially a boolean array indicating which rows meet the filter criteria -- and then uses this mask to selectively decode only the needed rows from the remaining columns in the projection.&lt;/p&gt;
+&lt;p&gt;Let's dig into details of &lt;a href="https://github.com/apache/arrow-rs/blob/d5339f31a60a4bd8a4256e7120fe32603249d88e/parquet/src/arrow/async_reader/mod.rs#L618-L712"&gt;how filter pushdown is implemented&lt;/a&gt; in the current Rust Parquet reader implementation, illustrated in the following figure.&lt;/p&gt;
+&lt;figure&gt;
+&lt;img alt="Implementation of filter pushdown in Rust Parquet readers" class="img-responsive" src="/blog/images/parquet-pushdown/baseline-impl.jpg" with="70%"/&gt;
+&lt;figcaption&gt;
+    Implementation of filter pushdown in Rust Parquet readers -- the first phase builds the filter mask, the second phase applies the filter mask to the other columns
+  &lt;/figcaption&gt;
+&lt;/figure&gt;
+&lt;p&gt;The filter pushdown has two phases:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;Build the filter mask (steps 1-3)&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Use the filter mask to selectively decode other columns (steps 4-7), e.g., output step 3 is used as input for step 5 and 7.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Within each phase, it takes three steps from Parquet to Arrow:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;Decompress the Parquet pages using generic decompression algorithms like LZ4, Zstd, etc. (steps 1, 4, 6)&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Decode the page content into Arrow format (steps 2, 5, 7)&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Evaluate the filter over Arrow data (step 3)&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;In the figure above, we can see that &lt;code&gt;location&lt;/code&gt; is &lt;strong&gt;decompressed and decoded twice&lt;/strong&gt;, first when building the filter mask (steps 1, 2), and second when building the output (steps 4, 5).
+This happens for all columns that appear both in the filter and output.&lt;/p&gt;
+&lt;p&gt;The table below shows the corresponding CPU time on the &lt;a href="https://github.com/apache/datafusion/blob/main/benchmarks/queries/clickbench/queries.sql#L23"&gt;ClickBench query 22&lt;/a&gt;:&lt;/p&gt;
+&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="err"&gt;+------------+--------+-------------+--------+&lt;/span&gt;
+&lt;span class="err"&gt;| Decompress | Decode | Apply filter| Others |&lt;/span&gt;
+&lt;span class="err"&gt;+------------+--------+-------------+--------+&lt;/span&gt;
+&lt;span class="err"&gt;| 206 ms     | 117 ms | 22 ms       | 48 ms  |&lt;/span&gt;
+&lt;span class="err"&gt;+------------+--------+-------------+--------+&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;Clearly, decompress/decode operations dominate the time spent. With filter pushdown, it needs to decompress/decode twice; but without filter pushdown, it only needs to do this once.
+This explains why filter pushdown is slower in some cases.&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;strong&gt;Note:&lt;/strong&gt; Highly selective filters may skip the entire page; but as long as it reads one row from the page, it needs to decompress and often decode the entire page.&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h2&gt;Attempt: cache filter columns&lt;/h2&gt;
+&lt;p&gt;Intuitively, caching the filter columns and reusing them later could help.&lt;/p&gt;
+&lt;p&gt;But naively caching decoded pages consumes prohibitively high memory:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;It needs to cache Arrow arrays, which are on average &lt;a href="https://github.com/XiangpengHao/liquid-cache/blob/main/dev/doc/liquid-cache-vldb.pdf"&gt;4x larger than Parquet data&lt;/a&gt;.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;It needs to cache the &lt;strong&gt;entire column chunk in memory&lt;/strong&gt;, because in Phase 1 it builds filters over the column chunk, and only use it in Phase 2.  &lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;The memory usage is proportional to the number of filter columns, which can be unboundedly high. &lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Worse, caching filter columns means it needs to read partially from Parquet and partially from cache, which is complex to implement, likely requiring a substantial change to the current implementation. &lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;strong&gt;Feel the complexity:&lt;/strong&gt; consider building a cache that properly handles nested columns, multiple filters, and filters with multiple columns.&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h2&gt;Real solution&lt;/h2&gt;
+&lt;p&gt;We need a solution that:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;Is simple to implement, i.e., doesn't require thousands of lines of code.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Incurs minimal memory overhead.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;This section describes my &lt;a href="https://github.com/apache/arrow-rs/pull/6921#issuecomment-2718792433"&gt;&amp;lt;700 LOC PR (with lots of comments and tests)&lt;/a&gt; that &lt;strong&gt;reduces total ClickBench time by 15%, with up to 2x lower latency for some queries, no obvious regression on other queries, and caches at most 2 pages (~2MB) per column in memory&lt;/strong&gt;.&lt;/p&gt;
+&lt;figure&gt;
+&lt;img alt="New decoding pipeline, building filter mask and output columns are interleaved in a single pass, allowing us to cache minimal pages for minimal amount of time" class="img-responsive" src="/blog/images/parquet-pushdown/new-pipeline.jpg" width="80%"/&gt;
+&lt;figcaption&gt;
+    New decoding pipeline, building filter mask and output columns are interleaved in a single pass, allowing us to cache minimal pages for minimal amount of time
+  &lt;/figcaption&gt;
+&lt;/figure&gt;
+&lt;p&gt;The new pipeline interleaves the previous two phases into a single pass, so that:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;The page being decompressed is immediately used to build filter masks and output columns.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Decompressed pages are cached for minimal time; after one pass (steps 1-6), the cache memory is released for the next pass. &lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;This allows the cache to only hold 1 page at a time, and to immediately discard the previous page after it's used, significantly reducing the memory requirement for caching.&lt;/p&gt;
+&lt;h3&gt;What pages are cached?&lt;/h3&gt;
+&lt;p&gt;You may have noticed that only &lt;code&gt;location&lt;/code&gt; is cached, not &lt;code&gt;val&lt;/code&gt;, because &lt;code&gt;val&lt;/code&gt; is only used for output.
+More generally, only columns that appear both in the filter and output are cached, and at most 1 page is cached for each such column.&lt;/p&gt;
+&lt;p&gt;More examples:&lt;/p&gt;
+&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="k"&gt;SELECT&lt;/span&gt; &lt;span class="n"&gt;val&lt;/span&gt; 
+&lt;span class="k"&gt;FROM&lt;/span&gt; &lt;span class="n"&gt;sensor_data&lt;/span&gt; 
+&lt;span class="k"&gt;WHERE&lt;/span&gt; &lt;span class="n"&gt;date_time&lt;/span&gt; &lt;span class="o"&gt;&amp;gt;&lt;/span&gt; &lt;span class="s1"&gt;'2025-03-11'&lt;/span&gt; &lt;span class="k"&gt;AND&lt;/span&gt; &lt;span class="k"&gt;location&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="s1"&gt;'office'&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;In this case, no columns are cached, because &lt;code&gt;val&lt;/code&gt; is not used for filtering.&lt;/p&gt;
+&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="k"&gt;SELECT&lt;/span&gt; &lt;span class="k"&gt;COUNT&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; 
+&lt;span class="k"&gt;FROM&lt;/span&gt; &lt;span class="n"&gt;sensor_data&lt;/span&gt; 
+&lt;span class="k"&gt;WHERE&lt;/span&gt; &lt;span class="n"&gt;date_time&lt;/span&gt; &lt;span class="o"&gt;&amp;gt;&lt;/span&gt; &lt;span class="s1"&gt;'2025-03-11'&lt;/span&gt; &lt;span class="k"&gt;AND&lt;/span&gt; &lt;span class="k"&gt;location&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="s1"&gt;'office'&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;In this case, again, no columns are cached, because the output projection is empty after query plan optimization.&lt;/p&gt;
+&lt;h3&gt;Then why cache 2 pages per column instead of 1?&lt;/h3&gt;
+&lt;p&gt;This is another real-world nuance regarding how Parquet layouts the pages.&lt;/p&gt;
+&lt;p&gt;Parquet by default encodes data using &lt;a href="https://parquet.apache.org/docs/file-format/data-pages/encodings/"&gt;dictionary encoding&lt;/a&gt;, which writes a dictionary page as the first page of a column chunk, followed by the keys referencing the dictionary.&lt;/p&gt;
+&lt;p&gt;You can see this in action using &lt;a href="https://parquet-viewer.xiangpeng.systems"&gt;parquet-viewer&lt;/a&gt;:&lt;/p&gt;
+&lt;figure&gt;
+&lt;img alt="Parquet viewer shows the page layout of a column chunk" class="img-responsive" src="/blog/images/parquet-pushdown/parquet-viewer.jpg" width="80%"/&gt;
+&lt;figcaption&gt;
+    Parquet viewer shows the page layout of a column chunk
+  &lt;/figcaption&gt;
+&lt;/figure&gt;
+&lt;p&gt;This means that to decode a page of data, it actually references two pages: the dictionary page and the data page.&lt;/p&gt;
+&lt;p&gt;This is why it caches 2 pages per column: one dictionary page and one data page.
+The data page slot will move forward as it reads the data; but the dictionary page slot always references the first page.&lt;/p&gt;
+&lt;figure&gt;
+&lt;img alt="Cached two pages, one for dictionary (pinned), one for data (moves as it reads the data)" class="img-responsive" src="/blog/images/parquet-pushdown/cached-pages.jpg" width="80%"/&gt;
+&lt;figcaption&gt;
+    Cached two pages, one for dictionary (pinned), one for data (moves as it reads the data)
+  &lt;/figcaption&gt;
+&lt;/figure&gt;
+&lt;h2&gt;How does it perform?&lt;/h2&gt;
+&lt;p&gt;Here are my results on &lt;a href="https://github.com/apache/datafusion/tree/main/benchmarks#clickbench"&gt;ClickBench&lt;/a&gt; on my AMD 9900X machine. The total time is reduced by 15%, with Q23 being 2.24x faster,
+and queries that get slower are likely due to noise.&lt;/p&gt;
+&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="err"&gt;┏━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┓&lt;/span&gt;
+&lt;span class="err"&gt;┃ Query        ┃ no-pushdown ┃ new-pushdown ┃        Change ┃&lt;/span&gt;
+&lt;span class="err"&gt;┡━━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━┩&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; QQuery 0     &amp;boxv;      0.47ms &amp;boxv;       0.43ms &amp;boxv; +1.10x faster &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; QQuery 1     &amp;boxv;     51.10ms &amp;boxv;      50.10ms &amp;boxv;     no change &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; QQuery 2     &amp;boxv;     68.23ms &amp;boxv;      64.49ms &amp;boxv; +1.06x faster &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; QQuery 3     &amp;boxv;     90.68ms &amp;boxv;      86.73ms &amp;boxv;     no change &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; QQuery 4     &amp;boxv;    458.93ms &amp;boxv;     458.59ms &amp;boxv;     no change &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; QQuery 5     &amp;boxv;    522.06ms &amp;boxv;     478.50ms &amp;boxv; +1.09x faster &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; QQuery 6     &amp;boxv;     49.84ms &amp;boxv;      49.94ms &amp;boxv;     no change &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; QQuery 7     &amp;boxv;     55.09ms &amp;boxv;      55.77ms &amp;boxv;     no change &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; QQuery 8     &amp;boxv;    565.26ms &amp;boxv;     556.95ms &amp;boxv;     no change &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; QQuery 9     &amp;boxv;    575.83ms &amp;boxv;     575.05ms &amp;boxv;     no change &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; QQuery 10    &amp;boxv;    164.56ms &amp;boxv;     178.23ms &amp;boxv;  1.08x slower &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; QQuery 11    &amp;boxv;    177.20ms &amp;boxv;     191.32ms &amp;boxv;  1.08x slower &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; QQuery 12    &amp;boxv;    591.05ms &amp;boxv;     569.92ms &amp;boxv;     no change &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; QQuery 13    &amp;boxv;    861.06ms &amp;boxv;     848.59ms &amp;boxv;     no change &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; QQuery 14    &amp;boxv;    596.20ms &amp;boxv;     580.73ms &amp;boxv;     no change &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; QQuery 15    &amp;boxv;    554.96ms &amp;boxv;     548.77ms &amp;boxv;     no change &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; QQuery 16    &amp;boxv;   1175.08ms &amp;boxv;    1146.07ms &amp;boxv;     no change &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; QQuery 17    &amp;boxv;   1150.45ms &amp;boxv;    1121.49ms &amp;boxv;     no change &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; QQuery 18    &amp;boxv;   2634.75ms &amp;boxv;    2494.07ms &amp;boxv; +1.06x faster &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; QQuery 19    &amp;boxv;     90.15ms &amp;boxv;      89.24ms &amp;boxv;     no change &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; QQuery 20    &amp;boxv;    620.15ms &amp;boxv;     591.67ms &amp;boxv;     no change &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; QQuery 21    &amp;boxv;    782.38ms &amp;boxv;     703.15ms &amp;boxv; +1.11x faster &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; QQuery 22    &amp;boxv;   1927.94ms &amp;boxv;    1404.35ms &amp;boxv; +1.37x faster &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; QQuery 23    &amp;boxv;   8104.11ms &amp;boxv;    3610.76ms &amp;boxv; +2.24x faster &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; QQuery 24    &amp;boxv;    360.79ms &amp;boxv;     330.55ms &amp;boxv; +1.09x faster &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; QQuery 25    &amp;boxv;    290.61ms &amp;boxv;     252.54ms &amp;boxv; +1.15x faster &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; QQuery 26    &amp;boxv;    395.18ms &amp;boxv;     362.72ms &amp;boxv; +1.09x faster &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; QQuery 27    &amp;boxv;    891.76ms &amp;boxv;     959.39ms &amp;boxv;  1.08x slower &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; QQuery 28    &amp;boxv;   4059.54ms &amp;boxv;    4137.37ms &amp;boxv;     no change &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; QQuery 29    &amp;boxv;    235.88ms &amp;boxv;     228.99ms &amp;boxv;     no change &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; QQuery 30    &amp;boxv;    564.22ms &amp;boxv;     584.65ms &amp;boxv;     no change &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; QQuery 31    &amp;boxv;    741.20ms &amp;boxv;     757.87ms &amp;boxv;     no change &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; QQuery 32    &amp;boxv;   2652.48ms &amp;boxv;    2574.19ms &amp;boxv;     no change &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; QQuery 33    &amp;boxv;   2373.71ms &amp;boxv;    2327.10ms &amp;boxv;     no change &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; QQuery 34    &amp;boxv;   2391.00ms &amp;boxv;    2342.15ms &amp;boxv;     no change &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; QQuery 35    &amp;boxv;    700.79ms &amp;boxv;     694.51ms &amp;boxv;     no change &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; QQuery 36    &amp;boxv;    151.51ms &amp;boxv;     152.93ms &amp;boxv;     no change &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; QQuery 37    &amp;boxv;    108.18ms &amp;boxv;      86.03ms &amp;boxv; +1.26x faster &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; QQuery 38    &amp;boxv;    114.64ms &amp;boxv;     106.22ms &amp;boxv; +1.08x faster &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; QQuery 39    &amp;boxv;    260.80ms &amp;boxv;     239.13ms &amp;boxv; +1.09x faster &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; QQuery 40    &amp;boxv;     60.74ms &amp;boxv;      73.29ms &amp;boxv;  1.21x slower &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; QQuery 41    &amp;boxv;     58.75ms &amp;boxv;      67.85ms &amp;boxv;  1.15x slower &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; QQuery 42    &amp;boxv;     65.49ms &amp;boxv;      68.11ms &amp;boxv;     no change &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxur;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxhu;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxhu;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxhu;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxul;&lt;/span&gt;
+&lt;span class="err"&gt;┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┓&lt;/span&gt;
+&lt;span class="err"&gt;┃ Benchmark Summary           ┃            ┃&lt;/span&gt;
+&lt;span class="err"&gt;┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━┩&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; Total Time (no-pushdown)    &amp;boxv; 38344.79ms &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; Total Time (new-pushdown)   &amp;boxv; 32800.50ms &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; Average Time (no-pushdown)  &amp;boxv;   891.74ms &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; Average Time (new-pushdown) &amp;boxv;   762.80ms &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; Queries Faster              &amp;boxv;         13 &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; Queries Slower              &amp;boxv;          5 &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxv; Queries with No Change      &amp;boxv;         25 &amp;boxv;&lt;/span&gt;
+&lt;span class="err"&gt;&amp;boxur;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxhu;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxul;&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;h2&gt;Conclusion&lt;/h2&gt;
+&lt;p&gt;Despite being simple in theory, filter pushdown in Parquet is non-trivial to implement.
+It requires understanding both the Parquet format and reader implementation details. 
+The challenge lies in efficiently navigating through the dynamics of decoding, filter evaluation, and memory management.&lt;/p&gt;
+&lt;p&gt;If you are interested in this level of optimization and want to help test, document and implement this type of optimization, come find us in the &lt;a href="https://datafusion.apache.org/contributor-guide/communication.html"&gt;DataFusion Community&lt;/a&gt;. We would love to have you. &lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Apache DataFusion Comet 0.7.0 Release</title><link href="https://datafusion.apache.org/blog/2025/03/20/datafusion-comet-0.7.0" rel="alternate"></link><published>2025-03-20T00:00:00+00:00</published><updated>2025-03-20T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2025-03-20:/blog/2025/03/20/datafusion-comet-0.7.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -843,7 +1233,149 @@ project and have a weekly &lt;a href="https://docs.google.com/document/d/1NBpkIA
 &lt;p&gt;The easiest way to get involved is to test Comet with your current Spark jobs and file issues for any bugs or
 performance regressions that you find. See the &lt;a href="https://datafusion.apache.org/comet/user-guide/installation.html"&gt;Getting Started&lt;/a&gt; guide for instructions on downloading and installing
 Comet.&lt;/p&gt;
-&lt;p&gt;There are also many &lt;a href="https://github.com/apache/datafusion-comet/contribute"&gt;good first issues&lt;/a&gt; waiting for contributions.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Apache DataFusion Ballista 43.0.0 Released</title><link href="https://datafusion.apache.org/blog/2025/02/02/datafusion-ballista-43.0.0" rel="alternate"></link><published>2025-02-02T00:00:00+00:00</published><updated>2025-02-02T00:00:00+00:00</updated><author><name>milenkovicm</name></author><id>tag:datafusion.apache.org,2025-02-02:/blog/2025/02/02/datafusion-ballista-43.0.0</id><summary type="html">&lt;!--
+&lt;p&gt;There are also many &lt;a href="https://github.com/apache/datafusion-comet/contribute"&gt;good first issues&lt;/a&gt; waiting for contributions.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Apache DataFusion Python 44.0.0 Released</title><link href="https://datafusion.apache.org/blog/2025/02/07/datafusion-python-46.0.0" rel="alternate"></link><published>2025-02-07T00:00:00+00:00</published><updated>2025-02-07T00:00:00+00:00</updated><author><name>timsaucer</name></author><id>tag:datafusion.apache.org,2025-02-07:/blog/2025/02/07/datafusion-python-46.0.0</id><summary type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+&lt;p&gt;We are happy to announce that &lt;a href="https://pypi.org/project/datafusion/46.0.0/"&gt;datafusion-python 46.0.0&lt;/a&gt; has been released. This release
+brings in all of the new features of the core &lt;a href="https://datafusion.apache.org/blog/2025/03/24/datafusion-46.0.0"&gt;DataFusion 46.0.0&lt;/a&gt; library. Since the last
+blog post for &lt;a href="https://datafusion.apache.org/blog/2024/12/14/datafusion-python-43.1.0/"&gt;datafusion-python 43.1.0&lt;/a&gt;, a large number of improvements have been made
+that can …&lt;/p&gt;</summary><content type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+&lt;p&gt;We are happy to announce that &lt;a href="https://pypi.org/project/datafusion/46.0.0/"&gt;datafusion-python 46.0.0&lt;/a&gt; has been released. This release
+brings in all of the new features of the core &lt;a href="https://datafusion.apache.org/blog/2025/03/24/datafusion-46.0.0"&gt;DataFusion 46.0.0&lt;/a&gt; library. Since the last
+blog post for &lt;a href="https://datafusion.apache.org/blog/2024/12/14/datafusion-python-43.1.0/"&gt;datafusion-python 43.1.0&lt;/a&gt;, a large number of improvements have been made
+that can be found in the &lt;a href="https://github.com/apache/datafusion-python/tree/main/dev/changelog"&gt;changelogs&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;We highly recommend reviewing the upstream &lt;a href="https://datafusion.apache.org/blog/2025/03/24/datafusion-46.0.0"&gt;DataFusion 46.0.0&lt;/a&gt; announcement.&lt;/p&gt;
+&lt;h2&gt;Easier file reading&lt;/h2&gt;
+&lt;p&gt;https://github.com/apache/datafusion-python/pull/982&lt;/p&gt;
+&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="kn"&gt;from&lt;/span&gt; &lt;span class="nn"&gt;datafusion.io&lt;/span&gt; &lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="n"&gt;read_parquet&lt;/span&gt;
+&lt;span class="n"&gt;df&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;read_parquet&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;path&lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="s2"&gt;"./examples/tpch/data/customer.parquet"&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="nn"&gt;datafusion&lt;/span&gt;
+&lt;span class="n"&gt;ctx&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;datafusion&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;SessionContext&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;enable_url_table&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+&lt;span class="n"&gt;df&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;ctx&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;table&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;"./examples/tpch/data/customer.parquet"&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;h2&gt;Registering Table Views&lt;/h2&gt;
+&lt;p&gt;DataFusion supports registering a logical plan as a view with a session context. This
+allows for work flows to create views in one part of the work flow and pass the session
+context around to other places where that logical plan can be reused. This is an useful
+feature for building up complex workflows and for code clarity. &lt;a href="https://github.com/apache/datafusion-python/pull/1016"&gt;PR 1016&lt;/a&gt; enables this
+feature in &lt;code&gt;datafusion-python&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;For example, supposing you have a DataFrame called &lt;code&gt;df1&lt;/code&gt;, you could use this code snippet
+to register the view and then use it in another place:&lt;/p&gt;
+&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="n"&gt;ctx&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;register_view&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;"view1"&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;df1&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;And then in another portion of your code which has access to the same session context
+you can retrive the DataFrame with:&lt;/p&gt;
+&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="err"&gt;df2 = ctx.table("view1")&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;h2&gt;Asynchronous Iteration of Record Batches&lt;/h2&gt;
+&lt;p&gt;Retrieving a &lt;code&gt;RecordBatch&lt;/code&gt; from a &lt;code&gt;RecordBatchStream&lt;/code&gt; was a synchronous call, which would
+require the end user's code to wait for the data retrieval. This is described in
+&lt;a href="https://github.com/apache/datafusion-python/issues/974"&gt;Issue 974&lt;/a&gt;. We continue to support this as a synchronous iterator, but we have also added
+in the ability to retrieve the &lt;code&gt;RecordBatch&lt;/code&gt; using the Python asynchronous &lt;code&gt;anext&lt;/code&gt;
+function.&lt;/p&gt;
+&lt;h1&gt;Default Compression for Parquet files&lt;/h1&gt;
+&lt;p&gt;With &lt;a href="https://github.com/apache/datafusion-python/pull/981"&gt;PR 981&lt;/a&gt;, we change the saving of Parquet files to use zstd compression by default.
+Previously the default was uncompressed, causing excessive disk storage. Zstd is an
+excellent compression scheme that balances speed and compression ratio. Users can still
+save their Parquet files uncompressed by passing in the appropriate value to the
+&lt;code&gt;compression&lt;/code&gt; argument when calling &lt;code&gt;DataFrame.write_parquet&lt;/code&gt;.&lt;/p&gt;
+&lt;h2&gt;UDF Decorators&lt;/h2&gt;
+&lt;p&gt;https://github.com/apache/datafusion-python/pull/1040
+https://github.com/apache/datafusion-python/pull/1061&lt;/p&gt;
+&lt;h2&gt;&lt;code&gt;uv&lt;/code&gt; package management&lt;/h2&gt;
+&lt;p&gt;&lt;a href="https://github.com/astral-sh/uv"&gt;uv&lt;/a&gt; is an extremely fast Python package manager, written in Rust. In the previous version
+of &lt;code&gt;datafusion-python&lt;/code&gt; we had a combination of settings of PyPi and Conda. Instead, we
+switch to using &lt;a href="https://github.com/astral-sh/uv"&gt;uv&lt;/a&gt; is our primary method for dependency management.&lt;/p&gt;
+&lt;p&gt;For most users of DataFusion, this change will be transparent. You can still install
+via &lt;code&gt;pip&lt;/code&gt; or &lt;code&gt;conda&lt;/code&gt;. For developers, the instructions in the repository have been updated.&lt;/p&gt;
+&lt;h2&gt;&lt;code&gt;ruff&lt;/code&gt; code cleanup&lt;/h2&gt;
+&lt;p&gt;https://github.com/apache/datafusion-python/pull/1055
+https://github.com/apache/datafusion-python/pull/1062&lt;/p&gt;
+&lt;h2&gt;Improved Jupyter Notebook rendering&lt;/h2&gt;
+&lt;p&gt;https://github.com/apache/datafusion-python/pull/1036&lt;/p&gt;
+&lt;h2&gt;Documentation&lt;/h2&gt;
+&lt;p&gt;https://github.com/apache/datafusion-python/pull/1031/files&lt;/p&gt;
+&lt;h2&gt;Migration Guide&lt;/h2&gt;
+&lt;p&gt;During the upgrade from &lt;a href="https://github.com/apache/datafusion/blob/main/dev/changelog/43.0.0.md"&gt;DataFusion 43.0.0&lt;/a&gt; to [DataFusion 44.0.0] as our upstream core
+dependency, we discovered a few changes were necessary within our repository and our
+unit tests. These notes serve to help guide users who may encounter similar issues when
+upgrading.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;RuntimeConfig&lt;/code&gt; is now deprecated in favor of &lt;code&gt;RuntimeEnvBuilder&lt;/code&gt;. The migration is
+fairly straightforward, and the corresponding classes have been marked as deprecated. For
+end users it should be simply a matter of changing the class name.&lt;/li&gt;
+&lt;li&gt;If you perform a &lt;code&gt;concat&lt;/code&gt; of a &lt;code&gt;string_view&lt;/code&gt; and &lt;code&gt;string&lt;/code&gt;, it will now return a
+&lt;code&gt;string_view&lt;/code&gt; instead of a &lt;code&gt;string&lt;/code&gt;. This likely only impacts unit tests that are validating
+return types. In general, it is recommended to switch to using &lt;code&gt;string_view&lt;/code&gt; whenever 
+possible. You can see the blog articles &lt;a href="https://datafusion.apache.org/blog/2024/09/13/string-view-german-style-strings-part-1/"&gt;String View Pt 1&lt;/a&gt; and &lt;a href="https://datafusion.apache.org/blog/2024/09/13/string-view-german-style-strings-part-2/"&gt;Pt 2&lt;/a&gt; for more information
+on these performance improvements.&lt;/li&gt;
+&lt;li&gt;The function &lt;code&gt;date_part&lt;/code&gt; now returns an &lt;code&gt;int32&lt;/code&gt; instead of a &lt;code&gt;float64&lt;/code&gt;. This is likely
+only impactful to unit tests.&lt;/li&gt;
+&lt;li&gt;We have upgraded the Python minimum version to 3.9 since 3.8 is no longer officially
+supported.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;Coming Soon&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;Reusable DataFusion UDFs&lt;/li&gt;
+&lt;li&gt;contrib table providers&lt;/li&gt;
+&lt;li&gt;catalog and schema providers&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;Appreciation&lt;/h2&gt;
+&lt;p&gt;TODO : UPDATE WITH LATEST LIST UP TO 46.0.0&lt;/p&gt;
+&lt;p&gt;We would like to thank everyone who has helped with these releases through their helpful
+conversations, code review, issue descriptions, and code authoring. We would especially
+like to thank the following authors of PRs who made these releases possible, listed in
+alphabetical order by username: &lt;a href="https://github.com/chenkovsky"&gt;@chenkovsky&lt;/a&gt;, &lt;a href="https://github.com/ion-elgreco"&gt;@ion-elgreco&lt;/a&gt;, &lt;a href="https://github.com/kylebarron"&gt;@kylebarron&lt;/a&gt;, and
+&lt;a href="https://github.com/kosiew"&gt;@kosiew&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Thank you!&lt;/p&gt;
+&lt;h2&gt;Get Involved&lt;/h2&gt;
+&lt;p&gt;The DataFusion Python team is an active and engaging community and we would love
+to have you join us and help the project.&lt;/p&gt;
+&lt;p&gt;Here are some ways to get involved:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Learn more by visiting the &lt;a href="https://datafusion.apache.org/python/index.html"&gt;DataFusion Python project&lt;/a&gt; page.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Try out the project and provide feedback, file issues, and contribute code.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Join us on &lt;a href="https://s.apache.org/slack-invite"&gt;ASF Slack&lt;/a&gt; or the &lt;a href="https://discord.gg/Qw5gKqHxUM"&gt;Arrow Rust Discord Server&lt;/a&gt;.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;</content><category term="blog"></category></entry><entry><title>Apache DataFusion Ballista 43.0.0 Released</title><link href="https://datafusion.apache.org/blog/2025/02/02/datafusion-ballista-43.0.0" rel="alternate"></link><published>2025-02-02T00:00:00+00:00</published><updated>2025-02-02T00:00:00+00:00</updated><author><name>milenkovicm</name></author><id>tag:datafusion.apache.org,2025-02-02:/blog/2025/02/02/datafusion-ballista-43.0.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
