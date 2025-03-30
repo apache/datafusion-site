@@ -39,18 +39,33 @@ We highly recommend reviewing the upstream [DataFusion 46.0.0] announcement.
 
 ## Easier file reading
 
-https://github.com/apache/datafusion-python/pull/982
+In these releases we have introduced two new ways to more easily read files into
+DataFrames.
+
+[PR 982] introduced a series of easier read functions for Parquet, JSON, CSV, and
+AVRO files. This introduces a concept of a global context that is available by
+default when using these methods. Now instead of creating a default Session
+Context and then calling the read methods, you can simply import these read
+alternative methods and begin working with your DataFrames. Below is an example of
+how easy to use this new approach is.
 
 ```python
 from datafusion.io import read_parquet
 df = read_parquet(path="./examples/tpch/data/customer.parquet")
 ```
 
+[PR 980] adds a method for setting up a session context to use URL tables. With
+this enabled, you can use a path to a local file as a table name. An example
+of how to use this is demonstrated in the following snippet.
+
 ```python
 import datafusion
 ctx = datafusion.SessionContext().enable_url_table()
 df = ctx.table("./examples/tpch/data/customer.parquet")
 ```
+
+[PR 982]: https://github.com/apache/datafusion-python/pull/982
+[PR 980]: https://github.com/apache/datafusion-python/pull/980
 
 ## Registering Table Views
 
@@ -98,8 +113,23 @@ save their Parquet files uncompressed by passing in the appropriate value to the
 
 ## UDF Decorators
 
-https://github.com/apache/datafusion-python/pull/1040
-https://github.com/apache/datafusion-python/pull/1061
+In [PR 1040] and [PR 1061] we add methods to make creating user defined functions
+easier and take advantage of Python decorators. With these PRs you can save a step
+from defining a method and then defining a udf of that method. Instead you can
+simply add the appropriate `udf` decorator. Similar methods exist for aggregate
+and window user defined functions.
+
+```python
+@udf([pa.int64(), pa.int64()], pa.bool_(), "stable")
+def my_custom_function(
+    age: pa.Array,
+    favorite_number: pa.Array,
+) -> pa.Array:
+    pass
+```
+
+[PR 1040]: https://github.com/apache/datafusion-python/pull/1040
+[PR 1061]: https://github.com/apache/datafusion-python/pull/1061
 
 
 ## `uv` package management
@@ -115,16 +145,22 @@ via `pip` or `conda`. For developers, the instructions in the repository have be
 
 ## `ruff` code cleanup
 
-https://github.com/apache/datafusion-python/pull/1055
-https://github.com/apache/datafusion-python/pull/1062
+In [PR 1055] and [PR 1062] - TODO(tsaucer) 
+
+[PR 1055]: https://github.com/apache/datafusion-python/pull/1055
+[PR 1062]: https://github.com/apache/datafusion-python/pull/1062
 
 ## Improved Jupyter Notebook rendering
 
-https://github.com/apache/datafusion-python/pull/1036
+[PR 1036] changed the way tables are rendered in jupyter notebooks - TODO(tsaucer)
 
-## Documentation
+[PR 1036]: https://github.com/apache/datafusion-python/pull/1036
 
-https://github.com/apache/datafusion-python/pull/1031/files
+## Extensions Documentation
+
+We have recently added [Extensions Documentation] to the DataFusion Python website. - TODO(tsaucer)
+
+[Extensions Documentation]: https://datafusion.apache.org/python/contributor-guide/ffi.html
 
 ## Migration Guide
 
@@ -152,9 +188,9 @@ supported.
 
 ## Coming Soon
 
-- Reusable DataFusion UDFs
-- contrib table providers
-- catalog and schema providers
+- Reusable DataFusion UDFs - TODO(tsaucer)
+- contrib table providers - TODO(tsaucer)
+- catalog and schema providers - TODO(tsaucer)
 
 ## Appreciation
 
