@@ -24,13 +24,57 @@ limitations under the License.
 {% endcomment %}
 -->
 
-We are happy to announce that [datafusion-python 44.0.0] has been released. This release
-brings in all of the new features of the core [DataFusion 44.0.0] library. You can see the
-full details of the improvements in the [changelogs].
 
-[DataFusion 44.0.0]: https://github.com/apache/datafusion/blob/main/dev/changelog/44.0.0.md
-[datafusion-python 44.0.0]: https://pypi.org/project/datafusion/44.0.0/
+We are happy to announce that [datafusion-python 46.0.0] has been released. This release
+brings in all of the new features of the core [DataFusion 46.0.0] library. Since the last
+blog post for [datafusion-python 43.1.0], a large number of improvements have been made
+that can be found in the [changelogs].
+
+We highly recommend reviewing the upstream [DataFusion 46.0.0] announcement.
+
+[DataFusion 46.0.0]: https://datafusion.apache.org/blog/2025/03/24/datafusion-46.0.0
+[datafusion-python 43.1.0]: https://datafusion.apache.org/blog/2024/12/14/datafusion-python-43.1.0/
+[datafusion-python 46.0.0]: https://pypi.org/project/datafusion/46.0.0/
 [changelogs]: https://github.com/apache/datafusion-python/tree/main/dev/changelog
+
+## Easier file reading
+
+https://github.com/apache/datafusion-python/pull/982
+
+```python
+from datafusion.io import read_parquet
+df = read_parquet(path="./examples/tpch/data/customer.parquet")
+```
+
+```python
+import datafusion
+ctx = datafusion.SessionContext().enable_url_table()
+df = ctx.table("./examples/tpch/data/customer.parquet")
+```
+
+## Registering Table Views
+
+DataFusion supports registering a logical plan as a view with a session context. This
+allows for work flows to create views in one part of the work flow and pass the session
+context around to other places where that logical plan can be reused. This is an useful
+feature for building up complex workflows and for code clarity. [PR 1016] enables this
+feature in `datafusion-python`.
+
+For example, supposing you have a DataFrame called `df1`, you could use this code snippet
+to register the view and then use it in another place:
+
+```python
+ctx.register_view("view1", df1)
+```
+
+And then in another portion of your code which has access to the same session context
+you can retrive the DataFrame with:
+
+```
+df2 = ctx.table("view1")
+```
+
+[PR 1016]: https://github.com/apache/datafusion-python/pull/1016
 
 ## Asynchronous Iteration of Record Batches
 
@@ -52,6 +96,12 @@ save their Parquet files uncompressed by passing in the appropriate value to the
 
 [PR 981]: https://github.com/apache/datafusion-python/pull/981
 
+## UDF Decorators
+
+https://github.com/apache/datafusion-python/pull/1040
+https://github.com/apache/datafusion-python/pull/1061
+
+
 ## `uv` package management
 
 [uv] is an extremely fast Python package manager, written in Rust. In the previous version
@@ -62,6 +112,19 @@ For most users of DataFusion, this change will be transparent. You can still ins
 via `pip` or `conda`. For developers, the instructions in the repository have been updated.
 
 [uv]: https://github.com/astral-sh/uv
+
+## `ruff` code cleanup
+
+https://github.com/apache/datafusion-python/pull/1055
+https://github.com/apache/datafusion-python/pull/1062
+
+## Improved Jupyter Notebook rendering
+
+https://github.com/apache/datafusion-python/pull/1036
+
+## Documentation
+
+https://github.com/apache/datafusion-python/pull/1031/files
 
 ## Migration Guide
 
@@ -80,12 +143,22 @@ possible. You can see the blog articles [String View Pt 1] and [Pt 2] for more i
 on these performance improvements.
 - The function `date_part` now returns an `int32` instead of a `float64`. This is likely
 only impactful to unit tests.
+- We have upgraded the Python minimum version to 3.9 since 3.8 is no longer officially
+supported.
 
 [DataFusion 43.0.0]: https://github.com/apache/datafusion/blob/main/dev/changelog/43.0.0.md
 [String View Pt 1]: https://datafusion.apache.org/blog/2024/09/13/string-view-german-style-strings-part-1/
 [Pt 2]: https://datafusion.apache.org/blog/2024/09/13/string-view-german-style-strings-part-2/
 
+## Coming Soon
+
+- Reusable DataFusion UDFs
+- contrib table providers
+- catalog and schema providers
+
 ## Appreciation
+
+TODO : UPDATE WITH LATEST LIST UP TO 46.0.0
 
 We would like to thank everyone who has helped with these releases through their helpful
 conversations, code review, issue descriptions, and code authoring. We would especially
