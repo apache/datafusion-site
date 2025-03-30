@@ -1278,10 +1278,20 @@ blog post for &lt;a href="https://datafusion.apache.org/blog/2024/12/14/datafusi
 that can be found in the &lt;a href="https://github.com/apache/datafusion-python/tree/main/dev/changelog"&gt;changelogs&lt;/a&gt;.&lt;/p&gt;
 &lt;p&gt;We highly recommend reviewing the upstream &lt;a href="https://datafusion.apache.org/blog/2025/03/24/datafusion-46.0.0"&gt;DataFusion 46.0.0&lt;/a&gt; announcement.&lt;/p&gt;
 &lt;h2&gt;Easier file reading&lt;/h2&gt;
-&lt;p&gt;https://github.com/apache/datafusion-python/pull/982&lt;/p&gt;
+&lt;p&gt;In these releases we have introduced two new ways to more easily read files into
+DataFrames.&lt;/p&gt;
+&lt;p&gt;&lt;a href="https://github.com/apache/datafusion-python/pull/982"&gt;PR 982&lt;/a&gt; introduced a series of easier read functions for Parquet, JSON, CSV, and
+AVRO files. This introduces a concept of a global context that is available by
+default when using these methods. Now instead of creating a default Session
+Context and then calling the read methods, you can simply import these read
+alternative methods and begin working with your DataFrames. Below is an example of
+how easy to use this new approach is.&lt;/p&gt;
 &lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="kn"&gt;from&lt;/span&gt; &lt;span class="nn"&gt;datafusion.io&lt;/span&gt; &lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="n"&gt;read_parquet&lt;/span&gt;
 &lt;span class="n"&gt;df&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;read_parquet&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;path&lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="s2"&gt;"./examples/tpch/data/customer.parquet"&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
 &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;&lt;a href="https://github.com/apache/datafusion-python/pull/980"&gt;PR 980&lt;/a&gt; adds a method for setting up a session context to use URL tables. With
+this enabled, you can use a path to a local file as a table name. An example
+of how to use this is demonstrated in the following snippet.&lt;/p&gt;
 &lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="nn"&gt;datafusion&lt;/span&gt;
 &lt;span class="n"&gt;ctx&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;datafusion&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;SessionContext&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;enable_url_table&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
 &lt;span class="n"&gt;df&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;ctx&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;table&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;"./examples/tpch/data/customer.parquet"&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
@@ -1313,8 +1323,18 @@ excellent compression scheme that balances speed and compression ratio. Users ca
 save their Parquet files uncompressed by passing in the appropriate value to the
 &lt;code&gt;compression&lt;/code&gt; argument when calling &lt;code&gt;DataFrame.write_parquet&lt;/code&gt;.&lt;/p&gt;
 &lt;h2&gt;UDF Decorators&lt;/h2&gt;
-&lt;p&gt;https://github.com/apache/datafusion-python/pull/1040
-https://github.com/apache/datafusion-python/pull/1061&lt;/p&gt;
+&lt;p&gt;In &lt;a href="https://github.com/apache/datafusion-python/pull/1040"&gt;PR 1040&lt;/a&gt; and &lt;a href="https://github.com/apache/datafusion-python/pull/1061"&gt;PR 1061&lt;/a&gt; we add methods to make creating user defined functions
+easier and take advantage of Python decorators. With these PRs you can save a step
+from defining a method and then defining a udf of that method. Instead you can
+simply add the appropriate &lt;code&gt;udf&lt;/code&gt; decorator. Similar methods exist for aggregate
+and window user defined functions.&lt;/p&gt;
+&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="nd"&gt;@udf&lt;/span&gt;&lt;span class="p"&gt;([&lt;/span&gt;&lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;int64&lt;/span&gt;&lt;span class="p"&gt;(),&lt;/span&gt; &lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;int64&lt;/span&gt;&lt;span class="p"&gt;()],&lt;/span&gt; &lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;bool_&lt;/span&gt;&lt;span class="p"&gt;(),&lt;/span&gt; &lt;span class="s2"&gt;"stable"&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;my_custom_function&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;
+    &lt;span class="n"&gt;age&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Array&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+    &lt;span class="n"&gt;favorite_number&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Array&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Array&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+    &lt;span class="k"&gt;pass&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
 &lt;h2&gt;&lt;code&gt;uv&lt;/code&gt; package management&lt;/h2&gt;
 &lt;p&gt;&lt;a href="https://github.com/astral-sh/uv"&gt;uv&lt;/a&gt; is an extremely fast Python package manager, written in Rust. In the previous version
 of &lt;code&gt;datafusion-python&lt;/code&gt; we had a combination of settings of PyPi and Conda. Instead, we
@@ -1322,12 +1342,11 @@ switch to using &lt;a href="https://github.com/astral-sh/uv"&gt;uv&lt;/a&gt; is 
 &lt;p&gt;For most users of DataFusion, this change will be transparent. You can still install
 via &lt;code&gt;pip&lt;/code&gt; or &lt;code&gt;conda&lt;/code&gt;. For developers, the instructions in the repository have been updated.&lt;/p&gt;
 &lt;h2&gt;&lt;code&gt;ruff&lt;/code&gt; code cleanup&lt;/h2&gt;
-&lt;p&gt;https://github.com/apache/datafusion-python/pull/1055
-https://github.com/apache/datafusion-python/pull/1062&lt;/p&gt;
+&lt;p&gt;In &lt;a href="https://github.com/apache/datafusion-python/pull/1055"&gt;PR 1055&lt;/a&gt; and &lt;a href="https://github.com/apache/datafusion-python/pull/1062"&gt;PR 1062&lt;/a&gt; - TODO(tsaucer) &lt;/p&gt;
 &lt;h2&gt;Improved Jupyter Notebook rendering&lt;/h2&gt;
-&lt;p&gt;https://github.com/apache/datafusion-python/pull/1036&lt;/p&gt;
-&lt;h2&gt;Documentation&lt;/h2&gt;
-&lt;p&gt;https://github.com/apache/datafusion-python/pull/1031/files&lt;/p&gt;
+&lt;p&gt;&lt;a href="https://github.com/apache/datafusion-python/pull/1036"&gt;PR 1036&lt;/a&gt; changed the way tables are rendered in jupyter notebooks - TODO(tsaucer)&lt;/p&gt;
+&lt;h2&gt;Extensions Documentation&lt;/h2&gt;
+&lt;p&gt;We have recently added &lt;a href="https://datafusion.apache.org/python/contributor-guide/ffi.html"&gt;Extensions Documentation&lt;/a&gt; to the DataFusion Python website. - TODO(tsaucer)&lt;/p&gt;
 &lt;h2&gt;Migration Guide&lt;/h2&gt;
 &lt;p&gt;During the upgrade from &lt;a href="https://github.com/apache/datafusion/blob/main/dev/changelog/43.0.0.md"&gt;DataFusion 43.0.0&lt;/a&gt; to [DataFusion 44.0.0] as our upstream core
 dependency, we discovered a few changes were necessary within our repository and our
@@ -1349,9 +1368,9 @@ supported.&lt;/li&gt;
 &lt;/ul&gt;
 &lt;h2&gt;Coming Soon&lt;/h2&gt;
 &lt;ul&gt;
-&lt;li&gt;Reusable DataFusion UDFs&lt;/li&gt;
-&lt;li&gt;contrib table providers&lt;/li&gt;
-&lt;li&gt;catalog and schema providers&lt;/li&gt;
+&lt;li&gt;Reusable DataFusion UDFs - TODO(tsaucer)&lt;/li&gt;
+&lt;li&gt;contrib table providers - TODO(tsaucer)&lt;/li&gt;
+&lt;li&gt;catalog and schema providers - TODO(tsaucer)&lt;/li&gt;
 &lt;/ul&gt;
 &lt;h2&gt;Appreciation&lt;/h2&gt;
 &lt;p&gt;TODO : UPDATE WITH LATEST LIST UP TO 46.0.0&lt;/p&gt;

@@ -67,10 +67,20 @@ blog post for <a href="https://datafusion.apache.org/blog/2024/12/14/datafusion-
 that can be found in the <a href="https://github.com/apache/datafusion-python/tree/main/dev/changelog">changelogs</a>.</p>
 <p>We highly recommend reviewing the upstream <a href="https://datafusion.apache.org/blog/2025/03/24/datafusion-46.0.0">DataFusion 46.0.0</a> announcement.</p>
 <h2>Easier file reading</h2>
-<p>https://github.com/apache/datafusion-python/pull/982</p>
+<p>In these releases we have introduced two new ways to more easily read files into
+DataFrames.</p>
+<p><a href="https://github.com/apache/datafusion-python/pull/982">PR 982</a> introduced a series of easier read functions for Parquet, JSON, CSV, and
+AVRO files. This introduces a concept of a global context that is available by
+default when using these methods. Now instead of creating a default Session
+Context and then calling the read methods, you can simply import these read
+alternative methods and begin working with your DataFrames. Below is an example of
+how easy to use this new approach is.</p>
 <div class="codehilite"><pre><span></span><code><span class="kn">from</span> <span class="nn">datafusion.io</span> <span class="kn">import</span> <span class="n">read_parquet</span>
 <span class="n">df</span> <span class="o">=</span> <span class="n">read_parquet</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="s2">"./examples/tpch/data/customer.parquet"</span><span class="p">)</span>
 </code></pre></div>
+<p><a href="https://github.com/apache/datafusion-python/pull/980">PR 980</a> adds a method for setting up a session context to use URL tables. With
+this enabled, you can use a path to a local file as a table name. An example
+of how to use this is demonstrated in the following snippet.</p>
 <div class="codehilite"><pre><span></span><code><span class="kn">import</span> <span class="nn">datafusion</span>
 <span class="n">ctx</span> <span class="o">=</span> <span class="n">datafusion</span><span class="o">.</span><span class="n">SessionContext</span><span class="p">()</span><span class="o">.</span><span class="n">enable_url_table</span><span class="p">()</span>
 <span class="n">df</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">table</span><span class="p">(</span><span class="s2">"./examples/tpch/data/customer.parquet"</span><span class="p">)</span>
@@ -102,8 +112,18 @@ excellent compression scheme that balances speed and compression ratio. Users ca
 save their Parquet files uncompressed by passing in the appropriate value to the
 <code>compression</code> argument when calling <code>DataFrame.write_parquet</code>.</p>
 <h2>UDF Decorators</h2>
-<p>https://github.com/apache/datafusion-python/pull/1040
-https://github.com/apache/datafusion-python/pull/1061</p>
+<p>In <a href="https://github.com/apache/datafusion-python/pull/1040">PR 1040</a> and <a href="https://github.com/apache/datafusion-python/pull/1061">PR 1061</a> we add methods to make creating user defined functions
+easier and take advantage of Python decorators. With these PRs you can save a step
+from defining a method and then defining a udf of that method. Instead you can
+simply add the appropriate <code>udf</code> decorator. Similar methods exist for aggregate
+and window user defined functions.</p>
+<div class="codehilite"><pre><span></span><code><span class="nd">@udf</span><span class="p">([</span><span class="n">pa</span><span class="o">.</span><span class="n">int64</span><span class="p">(),</span> <span class="n">pa</span><span class="o">.</span><span class="n">int64</span><span class="p">()],</span> <span class="n">pa</span><span class="o">.</span><span class="n">bool_</span><span class="p">(),</span> <span class="s2">"stable"</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">my_custom_function</span><span class="p">(</span>
+    <span class="n">age</span><span class="p">:</span> <span class="n">pa</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span>
+    <span class="n">favorite_number</span><span class="p">:</span> <span class="n">pa</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pa</span><span class="o">.</span><span class="n">Array</span><span class="p">:</span>
+    <span class="k">pass</span>
+</code></pre></div>
 <h2><code>uv</code> package management</h2>
 <p><a href="https://github.com/astral-sh/uv">uv</a> is an extremely fast Python package manager, written in Rust. In the previous version
 of <code>datafusion-python</code> we had a combination of settings of PyPi and Conda. Instead, we
@@ -111,12 +131,11 @@ switch to using <a href="https://github.com/astral-sh/uv">uv</a> is our primary 
 <p>For most users of DataFusion, this change will be transparent. You can still install
 via <code>pip</code> or <code>conda</code>. For developers, the instructions in the repository have been updated.</p>
 <h2><code>ruff</code> code cleanup</h2>
-<p>https://github.com/apache/datafusion-python/pull/1055
-https://github.com/apache/datafusion-python/pull/1062</p>
+<p>In <a href="https://github.com/apache/datafusion-python/pull/1055">PR 1055</a> and <a href="https://github.com/apache/datafusion-python/pull/1062">PR 1062</a> - TODO(tsaucer) </p>
 <h2>Improved Jupyter Notebook rendering</h2>
-<p>https://github.com/apache/datafusion-python/pull/1036</p>
-<h2>Documentation</h2>
-<p>https://github.com/apache/datafusion-python/pull/1031/files</p>
+<p><a href="https://github.com/apache/datafusion-python/pull/1036">PR 1036</a> changed the way tables are rendered in jupyter notebooks - TODO(tsaucer)</p>
+<h2>Extensions Documentation</h2>
+<p>We have recently added <a href="https://datafusion.apache.org/python/contributor-guide/ffi.html">Extensions Documentation</a> to the DataFusion Python website. - TODO(tsaucer)</p>
 <h2>Migration Guide</h2>
 <p>During the upgrade from <a href="https://github.com/apache/datafusion/blob/main/dev/changelog/43.0.0.md">DataFusion 43.0.0</a> to [DataFusion 44.0.0] as our upstream core
 dependency, we discovered a few changes were necessary within our repository and our
@@ -138,9 +157,9 @@ supported.</li>
 </ul>
 <h2>Coming Soon</h2>
 <ul>
-<li>Reusable DataFusion UDFs</li>
-<li>contrib table providers</li>
-<li>catalog and schema providers</li>
+<li>Reusable DataFusion UDFs - TODO(tsaucer)</li>
+<li>contrib table providers - TODO(tsaucer)</li>
+<li>catalog and schema providers - TODO(tsaucer)</li>
 </ul>
 <h2>Appreciation</h2>
 <p>TODO : UPDATE WITH LATEST LIST UP TO 46.0.0</p>
