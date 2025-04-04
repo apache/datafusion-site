@@ -87,7 +87,7 @@ Computing sliding windows efficiently is tricky because:
 
 Many traditional query engines struggle to optimize these computations effectively, leading to sluggish performance.
 
-## How DataFusion Making it fast
+## How DataFusion Evaluates Window Functions Quickly
 In the world of big data, every millisecond counts. Imagine you’re analyzing stock market data, tracking sensor readings from millions of IoT devices, or crunching through massive customer logs—speed matters. This is where [DataFusion](https://datafusion.apache.org/) shines, making window function computations blazing fast. Let’s break down how it achieves this remarkable performance.
 
 DataFusion now supports [user-defined window aggregates (UDWAs)](https://datafusion.apache.org/library-user-guide/adding-udfs.html), meaning you can bring your own aggregation logic and use it within a window function.
@@ -130,7 +130,7 @@ Note: The reference has been taken from [@andygrove]'s blog . [see](https://andy
 
 With the addition of sliding window support and user-defined aggregates, DataFusion continues its march toward being a high-performance analytical engine that balances power, extensibility, and speed.
 
-Window functions may be common in SQL, but *efficient and extensibl*e window engines are rare — and now DataFusion is one of them.
+Window functions may be common in SQL, but *efficient and extensible* window engines are rare — and now DataFusion is one of them.
 
 For anyone who is curious about [DataFusion](https://datafusion.apache.org/) I highly recommend
 giving it a try. This post was designed to make it easier for new users to work with User Defined WIndow Functions by giving a few examples of how one might implement these.
