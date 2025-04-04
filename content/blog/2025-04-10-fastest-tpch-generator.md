@@ -1,6 +1,6 @@
 ---
 layout: post
-title: tpchgen-rs: World’s fastest open source TPCH data generator, written in Rust
+title: `tpchgen-rs` World’s fastest open source TPCH data generator, written in Rust
 date: 2025-04-10
 author: Andrew Lamb, Achraf B, and Sean Smith
 categories: [performance]
@@ -39,7 +39,7 @@ TPCH data generator over 10x faster than any other implementation  we know of.
 
 
 About the Authors:
-- [Andrew Lamb] ([@alamb]) is a Staff Engineer at [InfluxData]) and a PMC member of [Apache DataFusion] and [Apache Arrow].
+- [Andrew Lamb] ([@alamb]) is a Staff Engineer at [InfluxData] and a PMC member of [Apache DataFusion] and [Apache Arrow].
 - Achraf B ([@clflushopt]) is a Software Engineer at [Optable] where he works on data infrastructure.
 - [Sean Smith] ([@scsmithr]) is the founder of  focused on building a fast analytics database.
 
@@ -70,17 +70,19 @@ analytical engines such as DataFusion.
 **Figure 1**: Time to create TPCH dataset for Scale Factor (see below) 1, 10,
 100 and 1000 as 8 individual SNAPPY compressed parquet files using a 22 core GCP
 VM. For Scale Factor(SF) 100 `tpchgen` takes 1 minute and 14 seconds and
-[DuckDB](https://duckdb.org/) takes 17 minutes and 48 seconds. For SF=1000,
-`tpchgen` takes 10 minutes and 26 and uses about 5 GB of RAM at peak, and we
-could not measure DuckDB’s time as it [requires 647 GB of
-RAM](https://duckdb.org/docs/stable/extensions/tpch.html#resource-usage-of-the-data-generator),
-more than the 88 GB that was available on our test machine. The testing
-methodology is in the
-[documentation](https://github.com/clflushopt/tpchgen-rs/blob/main/benchmarks/BENCHMARKS.md).
+[DuckDB] takes 17 minutes and 48 seconds. For SF=1000, `tpchgen` takes 10
+minutes and 26 and uses about 5 GB of RAM at peak, and we could not measure
+DuckDB’s time as it [requires 647 GB of RAM], more than the 88 GB that was
+available on our test machine. The testing methodology is in the
+[documentation].
+
+[DuckDB]: https://duckdb.org
+[requires 647 GB of RAM]: https://duckdb.org/docs/stable/extensions/tpch.html#resource-usage-of-the-data-generator
+[documentation]: https://github.com/clflushopt/tpchgen-rs/blob/main/benchmarks/BENCHMARKS.md
 
 This blog explains what TPCH is, how we ported the vintage C data generator to
 Rust (yes, [RWIR]) and optimized its performance over the course of a few weeks
-of part time work. We began this project so we can easily generate TPCH data in
+of part-time work. We began this project so we can easily generate TPCH data in
 [Apache DataFusion] and [GlareDB].
 
 [RWIR]: https://www.reddit.com/r/rust/comments/4ri2gn/riir_rewrite_it_in_rust/
@@ -243,7 +245,7 @@ TPCH dataset](https://github.com/apache/datafusion/issues/14373) as one reason
 the first student project of [CMU-799 Spring
 2025](https://15799.courses.cs.cmu.edu/spring2025/) used DuckDB.
 
-As beneficial as the DuckDB TPCH extension is, it is non ideal for several reasons:
+As beneficial as the DuckDB TPCH extension is, it is non-ideal for several reasons:
 
 
 1. Creates data in a proprietary format, which requires export to use in other systems.
