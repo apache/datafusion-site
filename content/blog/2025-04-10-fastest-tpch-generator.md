@@ -202,13 +202,16 @@ theoretical upper bound on the Scale Factor.
 </table>
 
 
-**Table 1**: TPCH data set sizes at different scale factors for both TBL and [Apache Parquet](https://parquet.apache.org/).
+**Table 1**: TPCH data set sizes at different scale factors for both TBL and
+[Apache Parquet].
 
+[Apache Parquet]: https://parquet.apache.org/
 
 # Why do we need a new TPCH Data generator?
 
-Despite the known limitations of the TPCH benchmark, it is so well known that it is used frequently in database performance analysis. To run TPCH, you must first load the data, using `dbgen`, which is not ideal for several reasons:
-
+Despite the known limitations of the TPCH benchmark, it is so well known that it
+is used frequently in database performance analysis. To run TPCH, you must first
+load the data, using `dbgen`, which is not ideal for several reasons:
 
 
 1. You must find and compile a copy of the 15+ year old C program (for example [electrum/tpch-dbgen])
@@ -228,40 +231,57 @@ shown in blue. `tpchgen` restricted to a single core is shown in red. Unmodified
 is shown in yellow.
 
 `dbgen` is so inconvenient and takes so long that vendors often provide
-pre-loaded TPCH data, for example [Snowflake Sample
-Data](https://docs.snowflake.com/en/user-guide/sample-data-tpch), [DataBricks
-Sample
-datasets](https://docs.databricks.com/aws/en/discover/databricks-datasets) and
-[DuckDB Pre-Generated Data
-Sets](https://duckdb.org/docs/stable/extensions/tpch.html#pre-generated-data-sets).
+pre-loaded TPCH data, for example [Snowflake Sample Data], [DataBricks Sample
+datasets] and [DuckDB Pre-Generated Data Sets].
 
-In addition to pre-generated datasets, DuckDB also provides a
-[TPCH](https://duckdb.org/docs/stable/extensions/tpch.html) extension for
-generating TPCH datasets within DuckDB. This is so much easier to use than the
-current alternatives that it leads many researchers and other thought leaders to
-use DuckDB to evaluate new ideas. For example, [Wan Shen
-Lim](https://github.com/lmwnshn) explicitly [mentioned the ease of creating the
-TPCH dataset](https://github.com/apache/datafusion/issues/14373) as one reason
-the first student project of [CMU-799 Spring
-2025](https://15799.courses.cs.cmu.edu/spring2025/) used DuckDB.
+[Snowflake Sample  Data]: https://docs.snowflake.com/en/user-guide/sample-data-tpch
+[DataBricks Sample datasets]: https://docs.databricks.com/aws/en/discover/databricks-datasets
+[DuckDB Pre-Generated Data Sets]: https://duckdb.org/docs/stable/extensions/tpch.html#pre-generated-data-sets
+
+
+In addition to pre-generated datasets, DuckDB also provides a [TPCH extension] 
+for generating TPCH datasets within DuckDB. This is so much easier to use than
+the current alternatives that it leads many researchers and other thought
+leaders to use DuckDB to evaluate new ideas. For example, [Wan Shen
+Lim]explicitly [mentioned the ease of creating the TPCH dataset] as one reason
+the first student project of [CMU-799 Spring 2025] used DuckDB.
+
+
+[TPCH extension]: https://duckdb.org/docs/stable/extensions/tpch.html
+[Wan Shen Lim]: https://github.com/lmwnshn
+[mentioned the ease of creating the TPCH dataset]: https://github.com/apache/datafusion/issues/14373
+[CMU-799 Spring 2025]: https://15799.courses.cs.cmu.edu/spring2025/
 
 As beneficial as the DuckDB TPCH extension is, it is non-ideal for several reasons:
-
 
 1. Creates data in a proprietary format, which requires export to use in other systems.
 2. Requires significant time (e.g. 17 minutes for Scale Factor 10).
 3. Requires unnecessarily large amounts of memory (e.g. 71 GB for Scale Factor 10)
 
-The above limitations makes it impractical to generate Scale Factor 100 and above on laptops or standard workstations, though DuckDB offers[ pre-computed files](https://duckdb.org/docs/stable/extensions/tpch.html#pre-generated-data-sets) for larger factors[^3].
+The above limitations makes it impractical to generate Scale Factor 100 and
+above on laptops or standard workstations, though DuckDB offers [pre-computed
+files] for larger factors[^3].
 
+[pre-computed files]: https://duckdb.org/docs/stable/extensions/tpch.html#pre-generated-data-sets
 
 # Why Rust?
 
-Realistically we used Rust because we wanted to integrate the data generator into [Apache DataFusion](https://datafusion.apache.org/) and [GlareDB](https://glaredb.com/). However, we also believe Rust is superior to C/C++ due to its comparable performance, but much higher programmer productivity (Figure 4). Productivity in this case refers to the ease of optimizing and adding multithreading without introducing hard to debug memory safety or concurrency issues.
+Realistically we used Rust because we wanted to integrate the data generator
+into [Apache DataFusion] and [GlareDB]. However, we also believe Rust is
+superior to C/C++ due to its comparable performance, but much higher programmer
+productivity (Figure 4). Productivity in this case refers to the ease of
+optimizing and adding multithreading without introducing hard to debug memory
+safety or concurrency issues.
 
-While Rust does allow unsafe access to memory (eliding bounds checking, for example), when required for performance, our implementation is entirely memory safe. The only [unsafe](https://github.com/search?q=repo%3Aclflushopt%2Ftpchgen-rs%20unsafe&type=code) code is used to [skip](https://github.com/clflushopt/tpchgen-rs/blob/c651da1fc309f9cb3872cbdf71e4796904dc62c6/tpchgen/src/text.rs#L72) UTF8 validation on known ASCII strings.
+While Rust does allow unsafe access to memory (eliding bounds checking, for
+example), when required for performance, our implementation is entirely memory
+safe. The only [unsafe] code is used to [skip] UTF8 validation on known ASCII
+strings.
 
-
+[Apache DataFusion]: https://datafusion.apache.org/
+[GlareDB]: https://glaredb.com/
+[unsafe]: https://github.com/search?q=repo%3Aclflushopt%2Ftpchgen-rs%20unsafe&type=code
+[skip]: https://github.com/clflushopt/tpchgen-rs/blob/c651da1fc309f9cb3872cbdf71e4796904dc62c6/tpchgen/src/text.rs#L72
 
 <img src="/blog/images/fastest-tpch-generator/lamb-theory.png" alt="Lamb Theory on Evolution of Systems Languages" width="80%" class="img-responsive">
 
@@ -277,25 +297,26 @@ thanks to [@KurtFehlhauer]
 # How: The Journey
 
 We did it together as a team in the open over the course of a few weeks weeks.
-[Wan Shen Lim](https://github.com/lmwnshn) inspired the project by pointing out
-the benefits of [easy TPCH dataset
-creation](https://github.com/apache/datafusion/issues/14373)  and [suggesting we
-check out a Java port on February 11,
-2025](https://github.com/apache/datafusion/issues/14608#issuecomment-2651044600).
-Achraf made [first commit a few days
-later](https://github.com/clflushopt/tpchgen-rs/commit/53d3402680422a15349ece0a7ea3c3f001018ba0)
-on February 16, and [Andrew and Sean started helping on March 8,
-2025](https://github.com/clflushopt/tpchgen-rs/commit/9bb386a4c55b8cf93ffac1b98f29b5da990ee79e)
-and we [released version 0.1](https://crates.io/crates/tpchgen/0.1.0) on March
-30, 2025.
+[Wan Shen Lim] inspired the project by pointing out the benefits of [easy TPCH
+dataset creation]  and [suggesting we check out a Java port on February 11,
+2025]. Achraf made [first commit a few days later] on February 16, and [Andrew
+and Sean started helping on March 8, 2025] and we [released version 0.1] on
+March 30, 2025.
 
+[Wan Shen Lim]: https://github.com/lmwnshn
+[easy TPCH dataset creation]: https://github.com/apache/datafusion/issues/14373
+[suggesting we check out a Java port on February 11, 2025]: https://github.com/apache/datafusion/issues/14608#issuecomment-2651044600
+[first commit a few days later]: https://github.com/clflushopt/tpchgen-rs/commit/53d3402680422a15349ece0a7ea3c3f001018ba0
+[Andrew and Sean started helping on March 8, 2025]: https://github.com/clflushopt/tpchgen-rs/commit/9bb386a4c55b8cf93ffac1b98f29b5da990ee79e
+[released version 0.1]: https://crates.io/crates/tpchgen/0.1.0
 
 ## Optimizing Single Threaded Performance
 
-Archaf [completed the end to end conformance
-tests](https://github.com/clflushopt/tpchgen-rs/pull/16), to ensure correctness,
-and an initial [cli check in](https://github.com/clflushopt/tpchgen-rs/pull/12)
-on March 15, 2025.
+Archaf [completed the end to end conformance tests], to ensure correctness, and
+an initial [cli check in] on March 15, 2025.
+
+[completed the end to end conformance tests]: https://github.com/clflushopt/tpchgen-rs/pull/16
+[cli check in]: https://github.com/clflushopt/tpchgen-rs/pull/12
 
 On a Macbook Pro M3 (Nov 2023), the initial performance numbers were actually
 slower than the original Java implementation which was ported 😭. This wasn’t
@@ -332,15 +353,15 @@ approach them.
 </table>
 
 
-**Table 2**: Performance of running [the initial
-tpchgen-cli](https://github.com/clflushopt/tpchgen-rs/pull/12), measured with
+**Table 2**: Performance of running [the initial tpchgen-cli], measured with
 `time target/release/tpchgen-cli -s $SCALE_FACTOR `
+
+[the initial tpchgen-cli]: https://github.com/clflushopt/tpchgen-rs/pull/12
 
 With this strong foundation we began optimizing the code using Rust’s low level
 memory management to improve performance while retaining memory safely. We spent
 several days obsessing over low level details and implemented a textbook like
 list of optimizations:
-
 
 * [Avoiding startup overhead](https://github.com/clflushopt/tpchgen-rs/pull/19),
 * [not](https://github.com/clflushopt/tpchgen-rs/pull/26) [copying](https://github.com/clflushopt/tpchgen-rs/pull/32) strings (many more PRs as well)
@@ -388,18 +409,17 @@ At the time of writing, single threaded performance is now 2.5x-2.7x faster than
 </table>
 
 
-**Table 3**: Current single threaded  tpchgen-cli, measured with `time target/release/tpchgen-cli -s $SCALE_FACTOR --num-threads=1`
-
+**Table 3**: Single threaded `tpchgen-cli` performance, measured with `time target/release/tpchgen-cli -s $SCALE_FACTOR --num-threads=1`
 
 ## Multi-threading
 
-Then we applied [Rust’s fearless
-concurrency](https://doc.rust-lang.org/book/ch16-00-concurrency.html) – with a
-single, [small PR (272 net new lines)
-](https://github.com/clflushopt/tpchgen-rs/commit/ab720a70cdc80a711f4a3dda6bac05445106f499)we
-updated the same memory safe code to run with multiple threads and consume
-bounded memory using [tokio for the thread
-scheduler](https://thenewstack.io/using-rustlangs-async-tokio-runtime-for-cpu-bound-tasks/)[^4].
+Then we applied [Rust’s fearless concurrency] – with a single, [small PR] (272
+net new lines) we updated the same memory safe code to run with multiple threads
+and consume bounded memory using [tokio for the thread scheduler])[^4].
+
+[Rust’s fearless concurrency]: https://doc.rust-lang.org/book/ch16-00-concurrency.html 
+[small PR]: https://github.com/clflushopt/tpchgen-rs/commit/ab720a70cdc80a711f4a3dda6bac05445106f499
+[tokio for the thread scheduler]: https://thenewstack.io/using-rustlangs-async-tokio-runtime-for-cpu-bound-tasks/
 
 As shown in Table 4, with this change, tpchgen-cli generates the full SF=100
 dataset in 32 seconds (which is 3.3 GB/sec 🤯). Further investigation reveals
@@ -465,26 +485,54 @@ When writing to `/dev/null` tpchgen  generates the entire dataset in 25 seconds
 
 **Table 4**: tpchgen-cli (multithreaded) performance measured with `time target/release/tpchgen-cli -s $SCALE_FACTOR`
 
-Using Rust and async streams, the data generator is also fully streaming: memory use does not increase with increasing data size / scale factors[^5]. The DuckDB generator seems to [require far more memory](https://duckdb.org/docs/stable/extensions/tpch.html#resource-usage-of-the-data-generator) than is commonly available on developer laptops and memory use increases with scale factor. With `tpchgen-cli` it is perfectly possible to create data for SF=10000 or larger on a machine with 16GB of memory (assuming sufficient storage capacity).
+Using Rust and async streams, the data generator is also fully streaming: memory
+use does not increase with increasing data size / scale factors[^5]. The DuckDB
+generator seems to [require far more memory] than is commonly available on
+developer laptops and memory use increases with scale factor. With `tpchgen-cli`
+it is perfectly possible to create data for SF=10000 or larger on a machine with
+16GB of memory (assuming sufficient storage capacity).
 
+[require far more memory]: https://duckdb.org/docs/stable/extensions/tpch.html#resource-usage-of-the-data-generator
 
 ## Direct to parquet
 
-At this point, tpchgen-cli could very quickly generate the TBL format. However, as described above, the TBL is annoying to work with, because
-
-
+At this point, `tpchgen-cli` could very quickly generate the TBL format.
+However, as described above, the TBL is annoying to work with, because
 
 1. It has no header
 2. It is like a CSV but the delimiter is ‘|`
 3. Each line ends with an extra `|` delimiter before the newline 🙄
 4. No system that we know can read them without additional configuration.
 
-We next [added support for CSV](https://github.com/clflushopt/tpchgen-rs/pull/54) generation (special thanks [niebayes](https://github.com/niebayes) from Datalayers for finding and [fixing](https://github.com/clflushopt/tpchgen-rs/pull/66) [several](https://github.com/clflushopt/tpchgen-rs/issues/73) [bugs](https://github.com/clflushopt/tpchgen-rs/issues/65)) which performs at the same speed as TBL. While CSV files are far more standard than TBL, they must still be parsed prior to load and automatic type inference may not deduce the types needed for the TPCH benchmarks (e.g. floating point vs Decimal).
+We next [added support for CSV] generation (special thanks [@niebayes] from
+Datalayers for finding and [fixing] [several] [bugs]) which performs at the same
+speed as TBL. While CSV files are far more standard than TBL, they must still be
+parsed prior to load and automatic type inference may not deduce the types
+needed for the TPCH benchmarks (e.g. floating point vs Decimal).
 
-What would be far more useful is a typed, efficient columnar format such as Apache Parquet which is supported by all modern query engines. So we [made](https://github.com/clflushopt/tpchgen-rs/pull/71) a [tpchgen-arrow](https://crates.io/crates/tpchgen-arrow) crate to create[ Apache Arrow](https://arrow.apache.org/) arrays directly and then [a small 300 line PR](https://github.com/clflushopt/tpchgen-rs/pull/61) to feed those arrays to the [Rust Parquet writer](https://arrow.apache.org/), again using tokio for parallelized but memory bound work.
+What would be far more useful is a typed, efficient columnar format such as
+Apache Parquet which is supported by all modern query engines. So we [made] a
+[tpchgen-arrow] crate to create [Apache Arrow] arrays directly and then [a small
+300 line PR] to feed those arrays to the [Rust Parquet writer], again using
+tokio for parallelized but memory bound work.
 
-This approach was simple, fast and scalable, as shown in Table 5. Even though creating Parquet files is significantly more computationally expensive than TBL or CSV, tpchgen-cli creates the full SF=100 parquet format dataset in less than 45 seconds.
+This approach was simple, fast and scalable, as shown in Table 5. Even though
+creating Parquet files is significantly more computationally expensive than TBL
+or CSV, tpchgen-cli creates the full SF=100 parquet format dataset in less than
+45 seconds.
 
+[added support for CSV]: https://github.com/clflushopt/tpchgen-rs/pull/54
+[@niebayes]: https://github.com/niebayes
+[fixing]: https://github.com/clflushopt/tpchgen-rs/pull/66 
+[several]: https://github.com/clflushopt/tpchgen-rs/issues/73 
+[bugs]: https://github.com/clflushopt/tpchgen-rs/issues/65
+[made]: https://github.com/clflushopt/tpchgen-rs/pull/71
+[tpchgen-arrow]: https://crates.io/crates/tpchgen-arrow
+[Apache Arrow]: https://arrow.apache.org/
+[a small 300 line PR]: https://github.com/clflushopt/tpchgen-rs/pull/61
+[Apache Arrow](https://arrow.apache.org/
+[a small 300 line PR]: https://github.com/clflushopt/tpchgen-rs/pull/61
+[Rust Parquet writer]: https://crates.io/crates/parquet
 
 <table>
   <tr>
@@ -530,15 +578,28 @@ This approach was simple, fast and scalable, as shown in Table 5. Even though cr
 </table>
 
 
-**Table 5**: tpchgen-cli parquet generation performance measured with  `time target/release/tpchgen-cli -s $SCALE_FACTOR --format=parquet`
+**Table 5**: `tpchgen-cli` Parquet generation performance measured with  `time
+target/release/tpchgen-cli -s $SCALE_FACTOR --format=parquet`
 
 
 # Conclusion 👊🎤
 
-With a few days, some fellow database nerds, and the power of Rust we made something 10x better than currently exists. We hope it inspires more research into analytical systems using the TPCH dataset and that people build awesome things with it. For example, Sean has already added [on-demand generation of tables to GlareDB](https://github.com/GlareDB/glaredb/pull/3549). Please consider joining us and helping out at [https://github.com/clflushopt/tpchgen-rs](https://github.com/clflushopt/tpchgen-rs)
+With a few days, some fellow database nerds, and the power of Rust we made
+something 10x better than currently exists. We hope it inspires more research
+into analytical systems using the TPCH dataset and that people build awesome
+things with it. For example, Sean has already added [on-demand generation of
+tables to GlareDB]. Please consider joining us and helping out at
+[https://github.com/clflushopt/tpchgen-rs].
 
-We met while working together on Apache DataFusion in various capacities. If you are looking for a community of like minded people hacking on databases, we welcome you to [come join us](https://datafusion.apache.org/contributor-guide/communication.html). We are in the process of integrating this into DataFusion (see [apache/datafusion#14608](https://github.com/apache/datafusion/issues/14608)) if you are interested in helping 🎣
+We met while working together on Apache DataFusion in various capacities. If you
+are looking for a community of like minded people hacking on databases, we
+welcome you to [come join us]. We are in the process of integrating this into
+DataFusion (see [apache/datafusion#14608]) if you are interested in helping 🎣
 
+[on-demand generation of tables to GlareDB]: https://github.com/GlareDB/glaredb/pull/3549
+[https://github.com/clflushopt/tpchgen-rs]: https://github.com/clflushopt/tpchgen-rs
+[come join us]: https://datafusion.apache.org/contributor-guide/communication.html
+[apache/datafusion#14608]: https://github.com/apache/datafusion/issues/14608
 
 <!-- Footnotes themselves at the bottom. -->
 ## Notes
