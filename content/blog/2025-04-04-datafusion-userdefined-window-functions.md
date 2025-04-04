@@ -56,7 +56,7 @@ This helps in analytical queries where we need cumulative sums, moving averages,
 
 Writing a user defined window function is slightly more complex than an aggregate function due
 to the variety of ways that window functions are called. I recommend reviewing the
-[online documentation](https://datafusion.apache.org/library-user-guide/adding-udfs.html)
+[online documentation](https://datafusion.apache.org/library-user-guide/adding-udfs.html#registering-a-window-udf)
 for a description of which functions need to be implemented. The details of how to implement
 these generally follow the same patterns as described above for aggregate functions.
 
@@ -121,7 +121,6 @@ To demonstrate efficiency, we benchmarked a 1-million row dataset with a sliding
 | Spark                    |   0.9s               |
 | DataFusion               |   0.45s              |
 +--------------------------+----------------------+
-
 ```
 DataFusion outperforms traditional SQL engines by leveraging [Apache Arrow](https://arrow.apache.org/) optimizations, making it a great choice for analytical workloads .
 Note: The reference has been taken from [@andygrove]'s blog . [see](https://andygrove.io/2019/04/datafusion-0.13.0-benchmarks/)
