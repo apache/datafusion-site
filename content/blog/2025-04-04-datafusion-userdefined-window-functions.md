@@ -292,7 +292,7 @@ Note: The reference has been taken from [@andygrove]'s blog . [see](https://andy
 ## Final Thoughts and Recommendations 
 Window functions may be common in SQL, but *efficient and extensible* window engines are rare — and now DataFusion is one of them.
 
-With the addition of sliding window support and user-defined aggregates, DataFusion continues its march toward being a high-performance analytical engine that balances power, extensibility, and speed.
+while many databases support user defined scalar and user defined aggregate functions, user defined window functions are not as common and Datafusion making it easier for all .
 
 For anyone who is curious about [DataFusion](https://datafusion.apache.org/) I highly recommend
 giving it a try. This post was designed to make it easier for new users to work with User Defined WIndow Functions by giving a few examples of how one might implement these.
