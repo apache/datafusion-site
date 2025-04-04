@@ -92,20 +92,183 @@ In the world of big data, every millisecond counts. Imagine you’re analyzing s
 
 DataFusion now supports [user-defined window aggregates (UDWAs)](https://datafusion.apache.org/library-user-guide/adding-udfs.html), meaning you can bring your own aggregation logic and use it within a window function.
 
+For example, we will declare a user defined window function that computes a moving average.
 ```sql
-let my_udwa = create_my_custom_udwa();
-ctx.register_udaf("my_moving_avg", my_udwa);
+use datafusion::arrow::{array::{ArrayRef, Float64Array, AsArray}, datatypes::Float64Type};
+use datafusion::logical_expr::{PartitionEvaluator};
+use datafusion::common::ScalarValue;
+use datafusion::error::Result;
+/// This implements the lowest level evaluation for a window function
+///
+/// It handles calculating the value of the window function for each
+/// distinct values of `PARTITION BY`
+#[derive(Clone, Debug)]
+struct MyPartitionEvaluator {}
 
-// Then use in SQL:
-SELECT
-  user_id,
-  my_moving_avg(score) OVER (
-    PARTITION BY user_id
-    ORDER BY game_time
-    ROWS BETWEEN 2 PRECEDING AND CURRENT ROW
-  ) AS moving_score
-FROM leaderboard;
+impl MyPartitionEvaluator {
+    fn new() -> Self {
+        Self {}
+    }
+}
+
+/// Different evaluation methods are called depending on the various
+/// settings of WindowUDF. This example uses the simplest and most
+/// general, `evaluate`. See `PartitionEvaluator` for the other more
+/// advanced uses.
+impl PartitionEvaluator for MyPartitionEvaluator {
+    /// Tell DataFusion the window function varies based on the value
+    /// of the window frame.
+    fn uses_window_frame(&self) -> bool {
+        true
+    }
+
+    /// This function is called once per input row.
+    ///
+    /// `range`specifies which indexes of `values` should be
+    /// considered for the calculation.
+    ///
+    /// Note this is the SLOWEST, but simplest, way to evaluate a
+    /// window function. It is much faster to implement
+    /// evaluate_all or evaluate_all_with_rank, if possible
+    fn evaluate(
+        &mut self,
+        values: &[ArrayRef],
+        range: &std::ops::Range<usize>,
+    ) -> Result<ScalarValue> {
+        // Again, the input argument is an array of floating
+        // point numbers to calculate a moving average
+        let arr: &Float64Array = values[0].as_ref().as_primitive::<Float64Type>();
+
+        let range_len = range.end - range.start;
+
+        // our smoothing function will average all the values in the
+        let output = if range_len > 0 {
+            let sum: f64 = arr.values().iter().skip(range.start).take(range_len).sum();
+            Some(sum / range_len as f64)
+        } else {
+            None
+        };
+
+        Ok(ScalarValue::Float64(output))
+    }
+}
+
+/// Create a `PartitionEvaluator` to evaluate this function on a new
+/// partition.
+fn make_partition_evaluator() -> Result<Box<dyn PartitionEvaluator>> {
+    Ok(Box::new(MyPartitionEvaluator::new()))
+}
 ```
+### Registering a Window UDF
+To register a Window UDF, you need to wrap the function implementation in a `WindowUDF` struct and then register it with the `SessionContext`. DataFusion provides the `create_udwf` helper functions to make this easier. There is a lower level API with more functionality but is more complex, that is documented in [advanced_udwf.rs](https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/advanced_udwf.rs).
+
+```sql
+use datafusion::logical_expr::{Volatility, create_udwf};
+use datafusion::arrow::datatypes::DataType;
+use std::sync::Arc;
+
+// here is where we define the UDWF. We also declare its signature:
+let smooth_it = create_udwf(
+    "smooth_it",
+    DataType::Float64,
+    Arc::new(DataType::Float64),
+    Volatility::Immutable,
+    Arc::new(make_partition_evaluator),
+);
+```
+The `create_udwf` has five arguments to check:
+
+- The first argument is the name of the function. This is the name that will be used in SQL queries.
+
+- The **second argument** is the `DataType of` input array (attention: this is not a list of arrays). I.e. in this case, the function accepts `Float64` as argument.
+
+- The third argument is the return type of the function. I.e. in this case, the function returns an `Float64`.
+
+- The fourth argument is the volatility of the function. In short, this is used to determine if the function’s performance can be optimized in some situations. In this case, the function is `Immutable` because it always returns the same value for the same input. A random number generator would be `Volatile` because it returns a different value for the same input.
+
+- The **fifth argument** is the function implementation. This is the function that we defined above.
+
+That gives us a **WindowUDF** that we can register with the `SessionContext`:
+```sql
+use datafusion::execution::context::SessionContext;
+
+let ctx = SessionContext::new();
+
+ctx.register_udwf(smooth_it);
+```
+For example, if we have a [cars.csv](https://github.com/apache/datafusion/blob/main/datafusion/core/tests/data/cars.csv) whose contents like
+
+```sql
+car,speed,time
+red,20.0,1996-04-12T12:05:03.000000000
+red,20.3,1996-04-12T12:05:04.000000000
+green,10.0,1996-04-12T12:05:03.000000000
+green,10.3,1996-04-12T12:05:04.000000000
+...
+```
+Then, we can query like below:
+```sql
+use datafusion::datasource::file_format::options::CsvReadOptions;
+
+#[tokio::main]
+async fn main() -> Result<()> {
+
+    let ctx = SessionContext::new();
+
+    let smooth_it = create_udwf(
+        "smooth_it",
+        DataType::Float64,
+        Arc::new(DataType::Float64),
+        Volatility::Immutable,
+        Arc::new(make_partition_evaluator),
+    );
+    ctx.register_udwf(smooth_it);
+
+    // register csv table first
+    let csv_path = "../../datafusion/core/tests/data/cars.csv".to_string();
+    ctx.register_csv("cars", &csv_path, CsvReadOptions::default().has_header(true)).await?;
+
+    // do query with smooth_it
+    let df = ctx
+        .sql(r#"
+            SELECT
+                car,
+                speed,
+                smooth_it(speed) OVER (PARTITION BY car ORDER BY time) as smooth_speed,
+                time
+            FROM cars
+            ORDER BY car
+        "#)
+        .await?;
+
+    // print the results
+    df.show().await?;
+    Ok(())
+}
+```
+The output will be like:
+
+```sql
++-------+-------+--------------------+---------------------+
+| car   | speed | smooth_speed       | time                |
++-------+-------+--------------------+---------------------+
+| green | 10.0  | 10.0               | 1996-04-12T12:05:03 |
+| green | 10.3  | 10.15              | 1996-04-12T12:05:04 |
+| green | 10.4  | 10.233333333333334 | 1996-04-12T12:05:05 |
+| green | 10.5  | 10.3               | 1996-04-12T12:05:06 |
+| green | 11.0  | 10.440000000000001 | 1996-04-12T12:05:07 |
+| green | 12.0  | 10.700000000000001 | 1996-04-12T12:05:08 |
+| green | 14.0  | 11.171428571428573 | 1996-04-12T12:05:09 |
+| green | 15.0  | 11.65              | 1996-04-12T12:05:10 |
+| green | 15.1  | 12.033333333333333 | 1996-04-12T12:05:11 |
+| green | 15.2  | 12.35              | 1996-04-12T12:05:12 |
+| green | 8.0   | 11.954545454545455 | 1996-04-12T12:05:13 |
+| green | 2.0   | 11.125             | 1996-04-12T12:05:14 |
+| red   | 20.0  | 20.0               | 1996-04-12T12:05:03 |
+| red   | 20.3  | 20.15              | 1996-04-12T12:05:04 |
+...
+```
+
 This gives you full flexibility to build **domain-specific logic** that plugs seamlessly into DataFusion’s engine — all without sacrificing performance.
 
 
