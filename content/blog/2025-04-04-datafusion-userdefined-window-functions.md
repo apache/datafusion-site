@@ -124,6 +124,7 @@ To demonstrate efficiency, we benchmarked a 1-million row dataset with a sliding
 
 ```
 DataFusion outperforms traditional SQL engines by leveraging [Apache Arrow](https://arrow.apache.org/) optimizations, making it a great choice for analytical workloads .
+Note: The reference has been taken from [@andygrove]'s blog . [see](https://andygrove.io/2019/04/datafusion-0.13.0-benchmarks/)
 
 
 ## Final Thoughts and Recommendations 
