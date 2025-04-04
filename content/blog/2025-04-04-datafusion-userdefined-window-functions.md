@@ -53,12 +53,20 @@ This helps in analytical queries where we need cumulative sums, moving averages,
 
 
 ## User Defined Window Functions
+Built-in window functions serve many use cases, but sometimes custom logic is needed—for example:
+
+- Calculating moving averages with complex conditions
+
+- Implementing a custom ranking strategy
+
+- Tracking non-standard cumulative logic
+
+Thus, **User-Defined Window Functions (UDWFs)** allow developers to define their own behavior using a combination of SQL and bit of logic.
 
 Writing a user defined window function is slightly more complex than an aggregate function due
 to the variety of ways that window functions are called. I recommend reviewing the
 [online documentation](https://datafusion.apache.org/library-user-guide/adding-udfs.html#registering-a-window-udf)
-for a description of which functions need to be implemented. The details of how to implement
-these generally follow the same patterns as described above for aggregate functions.
+for a description of which functions need to be implemented. 
 
 ## Understaing Sliding Window 
 
