@@ -105,23 +105,22 @@ $ tpchgen-cli -s 10 --format=parquet
 
 # What is TPCH / dbgen?
 
-The popular [TPC-H](https://www.tpc.org/tpch/) benchmark (commonly referred to
-as TPCH) helps evaluate the performance of database systems on
-[OLAP](https://en.wikipedia.org/wiki/Online_analytical_processing) queries*,
-*the kind used to build BI dashboards.
+The popular [TPC-H] benchmark (commonly referred to as TPCH) helps evaluate the
+performance of database systems on [OLAP] queries*, *the kind used to build BI
+dashboards.
 
 TPCH has become a de facto standard for analytic systems. While there are [well
-known](https://www.vldb.org/pvldb/vol9/p204-leis.pdf) limitations as the data
-and queries do not well represent many real world use cases, the majority of
-analytic database papers and industrial systems still use TPCH query performance
-benchmarks as a baseline. You will inevitably find multiple results for  “`TPCH
-Performance &lt;your favorite database>`” in any search engine.
+known] limitations as the data and queries do not well represent many real world
+use cases, the majority of analytic database papers and industrial systems still
+use TPCH query performance benchmarks as a baseline. You will inevitably find
+multiple results for  “`TPCH Performance &lt;your favorite database>`” in any
+search engine.
 
 The benchmark was created at a time when access to high performance analytical
-systems was not widespread, so the [Transaction Processing Performance
-Council](https://www.tpc.org/) defined a process of formal result verification.
-More recently, given the broad availability of free and open source database
-systems, it is common for users to run and verify TPCH performance themselves.
+systems was not widespread, so the [Transaction Processing Performance Council]
+defined a process of formal result verification. More recently, given the broad
+availability of free and open source database systems, it is common for users to
+run and verify TPCH performance themselves.
 
 TPCH simulates a business environment with eight tables: `REGION`, `NATION`,
 `SUPPLIER`, `CUSTOMER`, `PART`, `PARTSUPP`, `ORDERS`, and `LINEITEM`. These
@@ -129,14 +128,19 @@ tables are linked by foreign keys in a normalized schema representing a supply
 chain with parts, suppliers, customers and orders. The benchmark itself is 22
 SQL queries containing joins, aggregations, and sorting operations.
 
-The queries run against data created with
-<code>[dbgen](https://github.com/electrum/tpch-dbgen)</code>, a program written
-in a pre [C-99](https://en.wikipedia.org/wiki/C99) dialect, which generates data
-in a format called *TBL* (example in Figure 2). `dbgen` creates data for each of
-the 8 tables for a certain *Scale Factor*, commonly abbreviated as SF. Example
-Scale Factors and corresponding dataset sizes are shown in Table 1. There is no
-theoretical upper bound on the Scale Factor.
+The queries run against data created with <code>[dbgen]</code>, a program
+written in a pre [C-99] dialect, which generates data in a format called *TBL*
+(example in Figure 2). `dbgen` creates data for each of the 8 tables for a
+certain *Scale Factor*, commonly abbreviated as SF. Example Scale Factors and
+corresponding dataset sizes are shown in Table 1. There is no theoretical upper
+bound on the Scale Factor.
 
+[TPC-H]: https://www.tpc.org/tpch/
+[OLAP]: https://en.wikipedia.org/wiki/Online_analytical_processing
+[well known]: https://www.vldb.org/pvldb/vol9/p204-leis.pdf
+[Transaction Processing Performance Council]: https://www.tpc.org/
+[dbgen]: https://github.com/electrum/tpch-dbgen)
+[C-99]: https://en.wikipedia.org/wiki/C99
 
 ```text
 103|2844|845|3|23|40177.32|0.01|0.04|N|O|1996-09-11|1996-09-18|1996-09-26|NONE|FOB|ironic accou|
@@ -146,9 +150,7 @@ theoretical upper bound on the Scale Factor.
 450|5627|393|4|40|61304.80|0.05|0.03|R|F|1995-03-20|1995-05-25|1995-04-14|NONE|RAIL|ve. asymptote|
 ```
 
-
 **Figure 2**: Example TBL formatted output of `dbgen` for the `LINEITEM` table
-
 
 <table>
   <tr>
@@ -202,8 +204,7 @@ theoretical upper bound on the Scale Factor.
 </table>
 
 
-**Table 1**: TPCH data set sizes at different scale factors for both TBL and
-[Apache Parquet].
+**Table 1**: TPCH data set sizes at different scale factors for both TBL and [Apache Parquet].
 
 [Apache Parquet]: https://parquet.apache.org/
 
@@ -212,7 +213,6 @@ theoretical upper bound on the Scale Factor.
 Despite the known limitations of the TPCH benchmark, it is so well known that it
 is used frequently in database performance analysis. To run TPCH, you must first
 load the data, using `dbgen`, which is not ideal for several reasons:
-
 
 1. You must find and compile a copy of the 15+ year old C program (for example [electrum/tpch-dbgen])
 2. `dbgen` requires substantial time (Figure 3) and is not able to use more than one core.
