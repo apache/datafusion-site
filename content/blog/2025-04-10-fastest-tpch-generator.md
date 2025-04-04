@@ -34,33 +34,16 @@ th, td {
 }
 </style>
 
-We used Rust and open source development to build [tpchgen-rs], a fully open
-TPCH data generator over 10x faster than any other implementation  we know of.
-
-
-About the Authors:
-- [Andrew Lamb] ([@alamb]) is a Staff Engineer at [InfluxData] and a PMC member of [Apache DataFusion] and [Apache Arrow].
-- Achraf B ([@clflushopt]) is a Software Engineer at [Optable] where he works on data infrastructure.
-- [Sean Smith] ([@scsmithr]) is the founder of  focused on building a fast analytics database.
+3 members of the [Apache DataFusion] community used Rust and open source
+development to build [tpchgen-rs], a fully open TPCH data generator over 10x
+faster than any other implementation  we know of.
 
 It is now possible to create the TPCH SF=100 dataset in 72.23 seconds (1.4 GB/s
 😎) on a Macbook Air M3 with 16GB of memory, compared to the classic `dbgen`
 which takes 30 minutes[^1] (0.05GB/sec). On the same machine, it takes less than
 2 minutes to create all 3.6 GB of SF=100 in [Apache Parquet] format.
 
-[tpchgen-rs]: https://github.com/alamb/tpchgen-rs
 
-[Andrew Lamb]: https://www.linkedin.com/in/andrewalamb/
-[@alamb]: https://github.com/alamb
-[InfluxData]: https://www.influxdata.com/
-[Apache DataFusion]: https://datafusion.apache.org/
-[Apache Arrow]: https://arrow.apache.org/
-[@clflushopt]: https://github.com/clflushopt
-[Optable]: https://optable.co/
-[Sean Smith]: https://www.linkedin.com/in/scsmithr/
-[@scsmithr]: https://github.com/scsmithr
-[GlareDB]: https://glaredb.com/
-[Apache Parquet]: https://parquet.apache.org/
 
 Finally, it is convenient and efficient to run TPCH queries locally when testing
 analytical engines such as DataFusion.
@@ -231,7 +214,7 @@ shown in blue. `tpchgen` restricted to a single core is shown in red. Unmodified
 is shown in yellow.
 
 `dbgen` is so inconvenient and takes so long that vendors often provide
-pre-loaded TPCH data, for example [Snowflake Sample Data], [DataBricks Sample
+preloaded TPCH data, for example [Snowflake Sample Data], [DataBricks Sample
 datasets] and [DuckDB Pre-Generated Data Sets].
 
 [Snowflake Sample  Data]: https://docs.snowflake.com/en/user-guide/sample-data-tpch
@@ -296,7 +279,7 @@ thanks to [@KurtFehlhauer]
 
 # How: The Journey
 
-We did it together as a team in the open over the course of a few weeks weeks.
+We did it together as a team in the open over the course of a few weeks.
 [Wan Shen Lim] inspired the project by pointing out the benefits of [easy TPCH
 dataset creation]  and [suggesting we check out a Java port on February 11,
 2025]. Achraf made [first commit a few days later] on February 16, and [Andrew
@@ -321,8 +304,8 @@ an initial [cli check in] on March 15, 2025.
 On a Macbook Pro M3 (Nov 2023), the initial performance numbers were actually
 slower than the original Java implementation which was ported 😭. This wasn’t
 surprising since the focus of the first version was to get a byte of byte
-compatible port and we were aware about the performance shortcomings and how to
-approach them.
+compatible port, and knew about the performance shortcomings and how to approach
+them.
 
 
 <table>
@@ -415,7 +398,7 @@ At the time of writing, single threaded performance is now 2.5x-2.7x faster than
 
 Then we applied [Rust’s fearless concurrency] – with a single, [small PR] (272
 net new lines) we updated the same memory safe code to run with multiple threads
-and consume bounded memory using [tokio for the thread scheduler])[^4].
+and consume bounded memory using [tokio for the thread scheduler] [^4].
 
 [Rust’s fearless concurrency]: https://doc.rust-lang.org/book/ch16-00-concurrency.html 
 [small PR]: https://github.com/clflushopt/tpchgen-rs/commit/ab720a70cdc80a711f4a3dda6bac05445106f499
@@ -500,7 +483,7 @@ At this point, `tpchgen-cli` could very quickly generate the TBL format.
 However, as described above, the TBL is annoying to work with, because
 
 1. It has no header
-2. It is like a CSV but the delimiter is ‘|`
+2. It is like a CSV but the delimiter is `|`
 3. Each line ends with an extra `|` delimiter before the newline 🙄
 4. No system that we know can read them without additional configuration.
 
@@ -601,10 +584,29 @@ DataFusion (see [apache/datafusion#14608]) if you are interested in helping 🎣
 [come join us]: https://datafusion.apache.org/contributor-guide/communication.html
 [apache/datafusion#14608]: https://github.com/apache/datafusion/issues/14608
 
+# About the Authors:
+
+- [Andrew Lamb] ([@alamb]) is a Staff Engineer at [InfluxData] and a PMC member of [Apache DataFusion] and [Apache Arrow].
+- Achraf B ([@clflushopt]) is a Software Engineer at [Optable] where he works on data infrastructure.
+- [Sean Smith] ([@scsmithr]) is the founder of  focused on building a fast analytics database.
+
+[tpchgen-rs]: https://github.com/alamb/tpchgen-rs
+[Andrew Lamb]: https://www.linkedin.com/in/andrewalamb/
+[@alamb]: https://github.com/alamb
+[InfluxData]: https://www.influxdata.com/
+[Apache DataFusion]: https://datafusion.apache.org/
+[Apache Arrow]: https://arrow.apache.org/
+[@clflushopt]: https://github.com/clflushopt
+[Optable]: https://optable.co/
+[Sean Smith]: https://www.linkedin.com/in/scsmithr/
+[@scsmithr]: https://github.com/scsmithr
+[GlareDB]: https://glaredb.com/
+[Apache Parquet]: https://parquet.apache.org/
+
 <!-- Footnotes themselves at the bottom. -->
 ## Notes
 
-[^1]: `30:35`
+[^1]: Actual Time: `30:35`
 
 [^2]: It is possible to embed the dbgen code, which appears to be the approach taken by DuckDB. This approach was tried in GlareDB ([GlareDB/glaredb#3313](https://github.com/GlareDB/glaredb/pull/3313)), but ultimately shelved given the amount of effort needed to adapt and isolate the dbgen code.
 
