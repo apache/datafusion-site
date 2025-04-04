@@ -34,18 +34,33 @@ th, td {
 }
 </style>
 
-We used Rust and open source development to build [tpchgen-rs](https://github.com/alamb/tpchgen-rs), a fully open TPCH data generator over 10x faster than any other such generator we know of.
+We used Rust and open source development to build [tpchgen-rs], a fully open
+TPCH data generator over 10x faster than any other implementation  we know of.
 
-Authors:
-* [Andrew Lamb](https://www.linkedin.com/in/andrewalamb/) ([@alamb](https://github.com/alamb)) is a Staff Engineer at [InfluxData](https://www.influxdata.com/) and an [Apache DataFusion](https://datafusion.apache.org/) and Apache Arrow PMC member.
-* Achraf B ([@clflushopt](https://github.com/clflushopt)) is a Software Engineer at [Optable](https://optable.co/) where he works on data infrastructure.
-* [Sean Smith](https://www.linkedin.com/in/scsmithr/) ([@scsmithr](https://github.com/scsmithr)) is the founder of [GlareDB](https://glaredb.com/) focused on building a fast analytics database.
+
+About the Authors:
+- [Andrew Lamb] ([@alamb]) is a Staff Engineer at [InfluxData]) and a PMC member of [Apache DataFusion] and [Apache Arrow].
+- Achraf B ([@clflushopt]) is a Software Engineer at [Optable] where he works on data infrastructure.
+- [Sean Smith] ([@scsmithr]) is the founder of  focused on building a fast analytics database.
 
 It is now possible to create the TPCH SF=100 dataset in 72.23 seconds (1.4 GB/s
 😎) on a Macbook Air M3 with 16GB of memory, compared to the classic `dbgen`
 which takes 30 minutes[^1] (0.05GB/sec). On the same machine, it takes less than
-2 minutes to create all 3.6 GB of SF=100 in [Apache
-Parquet](https://parquet.apache.org/) format.
+2 minutes to create all 3.6 GB of SF=100 in [Apache Parquet] format.
+
+[tpchgen-rs]: https://github.com/alamb/tpchgen-rs
+
+[Andrew Lamb]: https://www.linkedin.com/in/andrewalamb/
+[@alamb]: https://github.com/alamb
+[InfluxData]: https://www.influxdata.com/
+[Apache DataFusion]: https://datafusion.apache.org/
+[Apache Arrow]: https://arrow.apache.org/
+[@clflushopt]: https://github.com/clflushopt
+[Optable]: https://optable.co/
+[Sean Smith]: https://www.linkedin.com/in/scsmithr/
+[@scsmithr]: https://github.com/scsmithr
+[GlareDB]: https://glaredb.com/
+[Apache Parquet]: https://parquet.apache.org/
 
 Finally, it is convenient and efficient to run TPCH queries locally when testing
 analytical engines such as DataFusion.
