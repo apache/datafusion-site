@@ -69,15 +69,12 @@ th, td {
   padding: 3px;
 }
 </style>
-<p>We used Rust and open source development to build <a href="https://github.com/alamb/tpchgen-rs">tpchgen-rs</a>, a fully open
-TPCH data generator over 10x faster than any other implementation  we know of.</p>
-<p>About the Authors:
-- <a href="https://www.linkedin.com/in/andrewalamb/">Andrew Lamb</a> (<a href="https://github.com/alamb">@alamb</a>) is a Staff Engineer at <a href="https://www.influxdata.com/">InfluxData</a> and a PMC member of <a href="https://datafusion.apache.org/">Apache DataFusion</a> and <a href="https://arrow.apache.org/">Apache Arrow</a>.
-- Achraf B (<a href="https://github.com/clflushopt">@clflushopt</a>) is a Software Engineer at <a href="https://optable.co/">Optable</a> where he works on data infrastructure.
-- <a href="https://www.linkedin.com/in/scsmithr/">Sean Smith</a> (<a href="https://github.com/scsmithr">@scsmithr</a>) is the founder of  focused on building a fast analytics database.</p>
+<p>3 members of the <a href="https://datafusion.apache.org/">Apache DataFusion</a> community used Rust and open source
+development to build <a href="https://github.com/alamb/tpchgen-rs">tpchgen-rs</a>, a fully open TPCH data generator over 10x
+faster than any other implementation  we know of.</p>
 <p>It is now possible to create the TPCH SF=100 dataset in 72.23 seconds (1.4 GB/s
 😎) on a Macbook Air M3 with 16GB of memory, compared to the classic <code>dbgen</code>
-which takes 30 minutes<a href="`30:35`">^1</a> (0.05GB/sec). On the same machine, it takes less than
+which takes 30 minutes[^1] (0.05GB/sec). On the same machine, it takes less than
 2 minutes to create all 3.6 GB of SF=100 in <a href="https://parquet.apache.org/">Apache Parquet</a> format.</p>
 <p>Finally, it is convenient and efficient to run TPCH queries locally when testing
 analytical engines such as DataFusion.</p>
@@ -204,7 +201,7 @@ shown in blue. <code>tpchgen</code> restricted to a single core is shown in red.
 <code>dbgen</code> is shown in green and <code>dbgen</code> modified to use <code>-O3</code> optimization level
 is shown in yellow.</p>
 <p><code>dbgen</code> is so inconvenient and takes so long that vendors often provide
-pre-loaded TPCH data, for example [Snowflake Sample Data], <a href="https://docs.databricks.com/aws/en/discover/databricks-datasets">DataBricks Sample
+preloaded TPCH data, for example [Snowflake Sample Data], <a href="https://docs.databricks.com/aws/en/discover/databricks-datasets">DataBricks Sample
 datasets</a> and <a href="https://duckdb.org/docs/stable/extensions/tpch.html#pre-generated-data-sets">DuckDB Pre-Generated Data Sets</a>.</p>
 <p>In addition to pre-generated datasets, DuckDB also provides a <a href="https://duckdb.org/docs/stable/extensions/tpch.html">TPCH extension</a> 
 for generating TPCH datasets within DuckDB. This is so much easier to use than
@@ -237,7 +234,7 @@ strings.</p>
 MiDAS Fall 2024 (Data Systems Seminar)</a>, <a href="https://www.youtube.com/watch?v=CpnxuBwHbUc">recording</a>. Special
 thanks to <a href="https://x.com/KurtFehlhauer">@KurtFehlhauer</a></p>
 <h1>How: The Journey</h1>
-<p>We did it together as a team in the open over the course of a few weeks weeks.
+<p>We did it together as a team in the open over the course of a few weeks.
 <a href="https://github.com/lmwnshn">Wan Shen Lim</a> inspired the project by pointing out the benefits of <a href="https://github.com/apache/datafusion/issues/14373">easy TPCH
 dataset creation</a>  and <a href="https://github.com/apache/datafusion/issues/14608#issuecomment-2651044600">suggesting we check out a Java port on February 11,
 2025</a>. Achraf made <a href="https://github.com/clflushopt/tpchgen-rs/commit/53d3402680422a15349ece0a7ea3c3f001018ba0">first commit a few days later</a> on February 16, and <a href="https://github.com/clflushopt/tpchgen-rs/commit/9bb386a4c55b8cf93ffac1b98f29b5da990ee79e">Andrew
@@ -249,8 +246,8 @@ an initial <a href="https://github.com/clflushopt/tpchgen-rs/pull/12">cli check 
 <p>On a Macbook Pro M3 (Nov 2023), the initial performance numbers were actually
 slower than the original Java implementation which was ported 😭. This wasn&rsquo;t
 surprising since the focus of the first version was to get a byte of byte
-compatible port and we were aware about the performance shortcomings and how to
-approach them.</p>
+compatible port, and knew about the performance shortcomings and how to approach
+them.</p>
 <table>
 <tr>
 <td><strong>Scale Factor</strong>
@@ -330,7 +327,7 @@ list of optimizations:</p>
 <h2>Multi-threading</h2>
 <p>Then we applied <a href="https://doc.rust-lang.org/book/ch16-00-concurrency.html">Rust&rsquo;s fearless concurrency</a> &ndash; with a single, <a href="https://github.com/clflushopt/tpchgen-rs/commit/ab720a70cdc80a711f4a3dda6bac05445106f499">small PR</a> (272
 net new lines) we updated the same memory safe code to run with multiple threads
-and consume bounded memory using <a href="https://thenewstack.io/using-rustlangs-async-tokio-runtime-for-cpu-bound-tasks/">tokio for the thread scheduler</a>)[^4].</p>
+and consume bounded memory using <a href="https://thenewstack.io/using-rustlangs-async-tokio-runtime-for-cpu-bound-tasks/">tokio for the thread scheduler</a> [^4].</p>
 <p>As shown in Table 4, with this change, tpchgen-cli generates the full SF=100
 dataset in 32 seconds (which is 3.3 GB/sec 🤯). Further investigation reveals
 that at SF=100 our generator is actually IO bound (which is not the case for
@@ -401,7 +398,7 @@ it is perfectly possible to create data for SF=10000 or larger on a machine with
 However, as described above, the TBL is annoying to work with, because</p>
 <ol>
 <li>It has no header</li>
-<li>It is like a CSV but the delimiter is &lsquo;|`</li>
+<li>It is like a CSV but the delimiter is <code>|</code></li>
 <li>Each line ends with an extra <code>|</code> delimiter before the newline 🙄</li>
 <li>No system that we know can read them without additional configuration.</li>
 </ol>
@@ -475,8 +472,15 @@ tables to GlareDB</a>. Please consider joining us and helping out at
 are looking for a community of like minded people hacking on databases, we
 welcome you to <a href="https://datafusion.apache.org/contributor-guide/communication.html">come join us</a>. We are in the process of integrating this into
 DataFusion (see <a href="https://github.com/apache/datafusion/issues/14608">apache/datafusion#14608</a>) if you are interested in helping 🎣</p>
+<h1>About the Authors:</h1>
+<ul>
+<li><a href="https://www.linkedin.com/in/andrewalamb/">Andrew Lamb</a> (<a href="https://github.com/alamb">@alamb</a>) is a Staff Engineer at <a href="https://www.influxdata.com/">InfluxData</a> and a PMC member of <a href="https://datafusion.apache.org/">Apache DataFusion</a> and <a href="https://arrow.apache.org/">Apache Arrow</a>.</li>
+<li>Achraf B (<a href="https://github.com/clflushopt">@clflushopt</a>) is a Software Engineer at <a href="https://optable.co/">Optable</a> where he works on data infrastructure.</li>
+<li><a href="https://www.linkedin.com/in/scsmithr/">Sean Smith</a> (<a href="https://github.com/scsmithr">@scsmithr</a>) is the founder of  focused on building a fast analytics database.</li>
+</ul>
 <!-- Footnotes themselves at the bottom. -->
 <h2>Notes</h2>
+<p>[^1]: Actual Time: <code>30:35</code></p>
 <p>[^2]: It is possible to embed the dbgen code, which appears to be the approach taken by DuckDB. This approach was tried in GlareDB (<a href="https://github.com/GlareDB/glaredb/pull/3313">GlareDB/glaredb#3313</a>), but ultimately shelved given the amount of effort needed to adapt and isolate the dbgen code.</p>
 <p>[^3]: It is pretty amazing to imagine the machine required to generate SF300 that had 1.8TB (!!) of RAM</p>
 <p>[^4]: We tried to <a href="https://github.com/clflushopt/tpchgen-rs/pull/34">use Rayon (see discussion here)</a>, but could not easily keep memory bounded.</p>
