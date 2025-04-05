@@ -1,6 +1,6 @@
 ---
 layout: post
-title: `tpchgen-rs` World’s fastest open source TPCH data generator, written in Rust
+title: tpchgen-rs World’s fastest open source TPCH data generator, written in Rust
 date: 2025-04-10
 author: Andrew Lamb, Achraf B, and Sean Smith
 categories: [performance]
