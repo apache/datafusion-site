@@ -42,9 +42,7 @@ It is now possible to create the TPC-H SF=100 dataset in 72.23 seconds (1.4 GB/s
 😎) on a Macbook Air M3 with 16GB of memory, compared to the classic `dbgen`
 which takes 30 minutes[^1] (0.05GB/sec). On the same machine, it takes less than
 2 minutes to create all 3.6 GB of SF=100 in [Apache Parquet] format.
-
-
-Finally, it is convenient and efficient to run TPC-H queries locally when testing
+It is finally convenient and efficient to run TPC-H queries locally when testing
 analytical engines such as DataFusion.
 
 <img src="/blog/images/fastest-tpch-generator/parquet-performance.png" alt="Time to create TPC-H parquet dataset for Scale Factor  1, 10, 100 and 1000" width="80%" class="img-responsive">
@@ -71,7 +69,7 @@ of part-time work. We began this project so we can easily generate TPC-H data in
 [Apache DataFusion]: https://datafusion.apache.org/
 [GlareDB]: https://glaredb.com/
 
-# Try if for yourself
+# Try it for yourself
 
 The tool is entirely open source under the [Apache 2.0 license](https://www.apache.org/licenses/LICENSE-2.0). Visit the [tpchgen-rs repository](https://github.com/clflushopt/tpchgen-rs) or try it for yourself by run the following commands after [installing Rust](https://www.rust-lang.org/tools/install):
 
