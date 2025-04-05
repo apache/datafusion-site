@@ -223,7 +223,7 @@ In addition to pre-generated datasets, DuckDB also provides a [TPCH extension]
 for generating TPC-H datasets within DuckDB. This is so much easier to use than
 the current alternatives that it leads many researchers and other thought
 leaders to use DuckDB to evaluate new ideas. For example, [Wan Shen
-Lim]explicitly [mentioned the ease of creating the TPC-H dataset] as one reason
+Lim] explicitly [mentioned the ease of creating the TPC-H dataset] as one reason
 the first student project of [CMU-799 Spring 2025] used DuckDB.
 
 
