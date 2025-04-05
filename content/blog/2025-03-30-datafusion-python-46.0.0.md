@@ -101,7 +101,7 @@ function.
 
 [Issue 974]: https://github.com/apache/datafusion-python/issues/974
 
-# Default Compression for Parquet files
+## Default Compression for Parquet files
 
 With [PR 981], we change the saving of Parquet files to use zstd compression by default.
 Previously the default was uncompressed, causing excessive disk storage. Zstd is an
