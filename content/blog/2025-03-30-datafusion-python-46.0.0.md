@@ -1,7 +1,7 @@
 ---
 layout: post
-title: Apache DataFusion Python 44.0.0 Released
-date: 2025-02-07
+title: Apache DataFusion Python 46.0.0 Released
+date: 2025-03-30
 author: timsaucer
 categories: [release]
 ---
@@ -143,24 +143,65 @@ via `pip` or `conda`. For developers, the instructions in the repository have be
 
 [uv]: https://github.com/astral-sh/uv
 
-## `ruff` code cleanup
+## Code cleanup
 
-In [PR 1055] and [PR 1062] - TODO(tsaucer) 
+In an effort to improve our code cleanliness and ensure we are following Python best
+practices, we use [ruff] to perform Python linting. Until now we enabled only a portion
+of the available linters available. In [PR 1055] and [PR 1062], we enable many more
+of these linters and made code improvements to ensure we are following these
+recommendations.
 
+[ruff]: https://docs.astral.sh/ruff/
 [PR 1055]: https://github.com/apache/datafusion-python/pull/1055
 [PR 1062]: https://github.com/apache/datafusion-python/pull/1062
 
 ## Improved Jupyter Notebook rendering
 
-[PR 1036] changed the way tables are rendered in jupyter notebooks - TODO(tsaucer)
+Since [PR 839] in DataFusion 41.0.0 we have been able to render DataFrames using html in
+[jupyter] notebooks. This is a big improvement over the `show` command when we have the
+ability to render tables. In [PR 1036] we went a step further and added in a variety
+of features.
 
+- Now html tables are scrollable, vertically and horizontally.
+- When data are truncated, we report this to the user.
+- Instead of showing a small number of rows, we collect up to 2 megabytes of data to
+display. Since we have scrollable tables, we are able to make more data available
+to the user without sacrificing notebook usability.
+- We report explicitly when the DataFrame is empty. Previously we would not output
+anything for an empty table. This indicator is helpful to users to ensure their plans
+are written correctly. Sometimes a non-output can be overlooked.
+- For long output of data, we generate a collapsed view of the data with an option
+for the user to click on it to expand the data.
+
+In the below view you can see an example of some of these features such as the
+expandable text and scroll bars.
+
+<figure style="text-align: center;">
+  <img 
+    src="/blog/images/python-datafusion-46.0.0/html_rendering.png" 
+    width="100%"
+    class="img-responsive"
+    alt="Fig 1: Example html rendering in a jupyter notebook."
+  >
+  <figcaption>
+   <b>Figure 1</b>: With the html rendering enhancements, tables are more easily
+   viewable in jupyter notebooks.
+</figcaption>
+</figure>
+
+[jupyter]: https://jupyter.org/
+[PR 839]: https://github.com/apache/datafusion-python/pull/839
 [PR 1036]: https://github.com/apache/datafusion-python/pull/1036
 
-## Extensions Documentation
+## Extension Documentation
 
-We have recently added [Extensions Documentation] to the DataFusion Python website. - TODO(tsaucer)
+We have recently added [Extension Documentation] to the DataFusion in Python website. We
+have received many requests about how to better understand how to integrate DataFusion
+in Python with other Rust libraries. To address these questions we wrote an article about
+some of the difficulties that we encounter when using Rust libraries in Python and our
+approach to addressing them.
 
-[Extensions Documentation]: https://datafusion.apache.org/python/contributor-guide/ffi.html
+[Extension Documentation]: https://datafusion.apache.org/python/contributor-guide/ffi.html
 
 ## Migration Guide
 
@@ -188,26 +229,57 @@ supported.
 
 ## Coming Soon
 
-- Reusable DataFusion UDFs - TODO(tsaucer)
-- contrib table providers - TODO(tsaucer)
-- catalog and schema providers - TODO(tsaucer)
+There is a lot of excitement around the upcoming work. This list is not comprehensive, but
+a glimpse into some of the upcoming work includes:
+
+- Reusable DataFusion UDFs: The way user defined functions are currently written in
+`datafusion-python` is slightly different from those written for the upstream Rust
+`datafusion`. The core ideas are usually the same, but it means it takes effort for users
+to re-implement functions already written for Rust projects to be usable in Python. Issue
+[#1017] addresses this topic. Work is well underway to make it easier to expose these
+user functions through the FFI boundary. This means that the work that already exists in
+repositories such as those found in the [datafusion-contrib] project can be easily
+re-used in Python. This will provide a low effort way to expose significant functionality
+to the DataFusion in Python community.
+- Additional table providers: We have work well underway to provide a host of table providers
+to `datafusion-python` including: sqlite, duckdb, postgres, odbc, and mysql! In
+[datafusion-contrib #279] we track the progress of this excellent work. Once complete, users
+will be able to `pip install` this library and get easy access to all of these table
+providers. This is another way we are leveraging the FFI work to greatly expand the usability
+of `datafusion-python` with relatively low effort.
+- External catalog and schema providers: For users who wish to go beyond table providers
+and have an entire custom catalog with schema, [#1091] tracks the progress of exposing this
+in Python. With this work, if you have already written a Rust based table catalog you will
+be able to interface it in Python similar to the work described for the table providers
+above.
+
+This is only a sample of the great work that is being done. If there are features you would
+love to see, we encourage you to open an issue and join us as we build something wonderful.
+
+[#1017]: https://github.com/apache/datafusion-python/issues/1017
+[datafusion-contrib #279]: https://github.com/datafusion-contrib/datafusion-table-providers/issues/279
+[#1091]: https://github.com/apache/datafusion-python/issues/1091
+[datafusion-contrib]: https://github.com/datafusion-contrib
 
 ## Appreciation
-
-TODO : UPDATE WITH LATEST LIST UP TO 46.0.0
 
 We would like to thank everyone who has helped with these releases through their helpful
 conversations, code review, issue descriptions, and code authoring. We would especially
 like to thank the following authors of PRs who made these releases possible, listed in
-alphabetical order by username: [@chenkovsky], [@ion-elgreco], [@kylebarron], and
-[@kosiew].
+alphabetical order by username: [@chenkovsky], [@CrystalZhou0529], [@ion-elgreco],
+[@jsai28], [@kevinjqliu], [@kylebarron], [@kosiew], [@nirnayroy], and [@Spaarsh].
 
 Thank you!
 
 [@chenkovsky]: https://github.com/chenkovsky
+[@CrystalZhou0529]: https://github.com/CrystalZhou0529
 [@ion-elgreco]: https://github.com/ion-elgreco
+[@jsai28]: https://github.com/jsai28
+[@kevinjqliu]: https://github.com/kevinjqliu
 [@kylebarron]: https://github.com/kylebarron
 [@kosiew]: https://github.com/kosiew
+[@nirnayroy]: https://github.com/nirnayroy
+[@Spaarsh]: https://github.com/Spaarsh
 
 ## Get Involved
 
