@@ -1,6 +1,6 @@
 ---
 layout: post
-title: tpchgen-rs World’s fastest open source TPCH data generator, written in Rust
+title: tpchgen-rs World’s fastest open source TPC-H data generator, written in Rust
 date: 2025-04-10
 author: Andrew Lamb, Achraf B, and Sean Smith
 categories: [performance]
@@ -35,22 +35,21 @@ th, td {
 </style>
 
 3 members of the [Apache DataFusion] community used Rust and open source
-development to build [tpchgen-rs], a fully open TPCH data generator over 10x
+development to build [tpchgen-rs], a fully open TPC-H data generator over 10x
 faster than any other implementation  we know of.
 
-It is now possible to create the TPCH SF=100 dataset in 72.23 seconds (1.4 GB/s
+It is now possible to create the TPC-H SF=100 dataset in 72.23 seconds (1.4 GB/s
 😎) on a Macbook Air M3 with 16GB of memory, compared to the classic `dbgen`
 which takes 30 minutes[^1] (0.05GB/sec). On the same machine, it takes less than
 2 minutes to create all 3.6 GB of SF=100 in [Apache Parquet] format.
 
 
-
-Finally, it is convenient and efficient to run TPCH queries locally when testing
+Finally, it is convenient and efficient to run TPC-H queries locally when testing
 analytical engines such as DataFusion.
 
-<img src="/blog/images/fastest-tpch-generator/parquet-performance.png" alt="Time to create TPCH parquet dataset for Scale Factor  1, 10, 100 and 1000" width="80%" class="img-responsive">
+<img src="/blog/images/fastest-tpch-generator/parquet-performance.png" alt="Time to create TPC-H parquet dataset for Scale Factor  1, 10, 100 and 1000" width="80%" class="img-responsive">
 
-**Figure 1**: Time to create TPCH dataset for Scale Factor (see below) 1, 10,
+**Figure 1**: Time to create TPC-H dataset for Scale Factor (see below) 1, 10,
 100 and 1000 as 8 individual SNAPPY compressed parquet files using a 22 core GCP
 VM. For Scale Factor(SF) 100 `tpchgen` takes 1 minute and 14 seconds and
 [DuckDB] takes 17 minutes and 48 seconds. For SF=1000, `tpchgen` takes 10
@@ -63,9 +62,9 @@ available on our test machine. The testing methodology is in the
 [requires 647 GB of RAM]: https://duckdb.org/docs/stable/extensions/tpch.html#resource-usage-of-the-data-generator
 [documentation]: https://github.com/clflushopt/tpchgen-rs/blob/main/benchmarks/BENCHMARKS.md
 
-This blog explains what TPCH is, how we ported the vintage C data generator to
+This blog explains what TPC-H is, how we ported the vintage C data generator to
 Rust (yes, [RWIR]) and optimized its performance over the course of a few weeks
-of part-time work. We began this project so we can easily generate TPCH data in
+of part-time work. We began this project so we can easily generate TPC-H data in
 [Apache DataFusion] and [GlareDB].
 
 [RWIR]: https://www.reddit.com/r/rust/comments/4ri2gn/riir_rewrite_it_in_rust/
@@ -86,16 +85,16 @@ $ tpchgen-cli -s 1
 $ tpchgen-cli -s 10 --format=parquet
 ```
 
-# What is TPCH / dbgen?
+# What is TPC-H / dbgen?
 
-The popular [TPC-H] benchmark (commonly referred to as TPCH) helps evaluate the
+The popular [TPC-H] benchmark (often referred to as TPCH) helps evaluate the
 performance of database systems on [OLAP] queries*, *the kind used to build BI
 dashboards.
 
-TPCH has become a de facto standard for analytic systems. While there are [well
+TPC-H has become a de facto standard for analytic systems. While there are [well
 known] limitations as the data and queries do not well represent many real world
 use cases, the majority of analytic database papers and industrial systems still
-use TPCH query performance benchmarks as a baseline. You will inevitably find
+use TPC-H query performance benchmarks as a baseline. You will inevitably find
 multiple results for  “`TPCH Performance &lt;your favorite database>`” in any
 search engine.
 
@@ -103,9 +102,9 @@ The benchmark was created at a time when access to high performance analytical
 systems was not widespread, so the [Transaction Processing Performance Council]
 defined a process of formal result verification. More recently, given the broad
 availability of free and open source database systems, it is common for users to
-run and verify TPCH performance themselves.
+run and verify TPC-H performance themselves.
 
-TPCH simulates a business environment with eight tables: `REGION`, `NATION`,
+TPC-H simulates a business environment with eight tables: `REGION`, `NATION`,
 `SUPPLIER`, `CUSTOMER`, `PART`, `PARTSUPP`, `ORDERS`, and `LINEITEM`. These
 tables are linked by foreign keys in a normalized schema representing a supply
 chain with parts, suppliers, customers and orders. The benchmark itself is 22
@@ -187,14 +186,14 @@ bound on the Scale Factor.
 </table>
 
 
-**Table 1**: TPCH data set sizes at different scale factors for both TBL and [Apache Parquet].
+**Table 1**: TPC-H data set sizes at different scale factors for both TBL and [Apache Parquet].
 
 [Apache Parquet]: https://parquet.apache.org/
 
-# Why do we need a new TPCH Data generator?
+# Why do we need a new TPC-H Data generator?
 
-Despite the known limitations of the TPCH benchmark, it is so well known that it
-is used frequently in database performance analysis. To run TPCH, you must first
+Despite the known limitations of the TPC-H benchmark, it is so well known that it
+is used frequently in database performance analysis. To run TPC-H, you must first
 load the data, using `dbgen`, which is not ideal for several reasons:
 
 1. You must find and compile a copy of the 15+ year old C program (for example [electrum/tpch-dbgen])
@@ -206,15 +205,15 @@ load the data, using `dbgen`, which is not ideal for several reasons:
 [here is how to do so]: https://github.com/apache/datafusion/blob/507f6b6773deac69dd9d90dbe60831f5ea5abed1/datafusion/sqllogictest/test_files/tpch/create_tables.slt.part#L24-L124
  
 
-<img src="/blog/images/fastest-tpch-generator/tbl-performance.png" alt="Time to generate TPCH data in TBL format" width="80%" class="img-responsive">
+<img src="/blog/images/fastest-tpch-generator/tbl-performance.png" alt="Time to generate TPC-H data in TBL format" width="80%" class="img-responsive">
 
-**Figure 3**: Time to generate TPCH data in TBL format. The default `tpchgen` is
+**Figure 3**: Time to generate TPC-H data in TBL format. The default `tpchgen` is
 shown in blue. `tpchgen` restricted to a single core is shown in red. Unmodified
 `dbgen` is shown in green and `dbgen` modified to use `-O3` optimization level
 is shown in yellow.
 
 `dbgen` is so inconvenient and takes so long that vendors often provide
-preloaded TPCH data, for example [Snowflake Sample Data], [DataBricks Sample
+preloaded TPC-H data, for example [Snowflake Sample Data], [DataBricks Sample
 datasets] and [DuckDB Pre-Generated Data Sets].
 
 [Snowflake Sample  Data]: https://docs.snowflake.com/en/user-guide/sample-data-tpch
@@ -223,19 +222,19 @@ datasets] and [DuckDB Pre-Generated Data Sets].
 
 
 In addition to pre-generated datasets, DuckDB also provides a [TPCH extension] 
-for generating TPCH datasets within DuckDB. This is so much easier to use than
+for generating TPC-H datasets within DuckDB. This is so much easier to use than
 the current alternatives that it leads many researchers and other thought
 leaders to use DuckDB to evaluate new ideas. For example, [Wan Shen
-Lim]explicitly [mentioned the ease of creating the TPCH dataset] as one reason
+Lim]explicitly [mentioned the ease of creating the TPC-H dataset] as one reason
 the first student project of [CMU-799 Spring 2025] used DuckDB.
 
 
-[TPCH extension]: https://duckdb.org/docs/stable/extensions/tpch.html
+[TPC-H extension]: https://duckdb.org/docs/stable/extensions/tpch.html
 [Wan Shen Lim]: https://github.com/lmwnshn
-[mentioned the ease of creating the TPCH dataset]: https://github.com/apache/datafusion/issues/14373
+[mentioned the ease of creating the TPC-H dataset]: https://github.com/apache/datafusion/issues/14373
 [CMU-799 Spring 2025]: https://15799.courses.cs.cmu.edu/spring2025/
 
-As beneficial as the DuckDB TPCH extension is, it is non-ideal for several reasons:
+As beneficial as the DuckDB TPC-H extension is, it is non-ideal for several reasons:
 
 1. Creates data in a proprietary format, which requires export to use in other systems.
 2. Requires significant time (e.g. 17 minutes for Scale Factor 10).
@@ -280,14 +279,14 @@ thanks to [@KurtFehlhauer]
 # How: The Journey
 
 We did it together as a team in the open over the course of a few weeks.
-[Wan Shen Lim] inspired the project by pointing out the benefits of [easy TPCH
+[Wan Shen Lim] inspired the project by pointing out the benefits of [easy TPC-H
 dataset creation]  and [suggesting we check out a Java port on February 11,
 2025]. Achraf made [first commit a few days later] on February 16, and [Andrew
 and Sean started helping on March 8, 2025] and we [released version 0.1] on
 March 30, 2025.
 
 [Wan Shen Lim]: https://github.com/lmwnshn
-[easy TPCH dataset creation]: https://github.com/apache/datafusion/issues/14373
+[easy TPC-H dataset creation]: https://github.com/apache/datafusion/issues/14373
 [suggesting we check out a Java port on February 11, 2025]: https://github.com/apache/datafusion/issues/14608#issuecomment-2651044600
 [first commit a few days later]: https://github.com/clflushopt/tpchgen-rs/commit/53d3402680422a15349ece0a7ea3c3f001018ba0
 [Andrew and Sean started helping on March 8, 2025]: https://github.com/clflushopt/tpchgen-rs/commit/9bb386a4c55b8cf93ffac1b98f29b5da990ee79e
@@ -491,7 +490,7 @@ We next [added support for CSV] generation (special thanks [@niebayes] from
 Datalayers for finding and [fixing] [several] [bugs]) which performs at the same
 speed as TBL. While CSV files are far more standard than TBL, they must still be
 parsed prior to load and automatic type inference may not deduce the types
-needed for the TPCH benchmarks (e.g. floating point vs Decimal).
+needed for the TPC-H benchmarks (e.g. floating point vs Decimal).
 
 What would be far more useful is a typed, efficient columnar format such as
 Apache Parquet which is supported by all modern query engines. So we [made] a
@@ -569,7 +568,7 @@ target/release/tpchgen-cli -s $SCALE_FACTOR --format=parquet`
 
 With a few days, some fellow database nerds, and the power of Rust we made
 something 10x better than currently exists. We hope it inspires more research
-into analytical systems using the TPCH dataset and that people build awesome
+into analytical systems using the TPC-H dataset and that people build awesome
 things with it. For example, Sean has already added [on-demand generation of
 tables to GlareDB]. Please consider joining us and helping out at
 [https://github.com/clflushopt/tpchgen-rs].
