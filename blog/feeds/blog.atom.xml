@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - blog</title><link href="https://datafusion.apache.org/blog/" rel="alternate"></link><link href="https://datafusion.apache.org/blog/feeds/blog.atom.xml" rel="self"></link><id>https://datafusion.apache.org/blog/</id><updated>2025-04-10T00:00:00+00:00</updated><subtitle></subtitle><entry><title>tpchgen-rs World’s fastest open source TPC-H data generator, written in Rust</title><link href="https://datafusion.apache.org/blog/2025/04/10/fastest-tpch-generator" rel="alternate"></link><published>2025-04-10T00:00:00+00:00</published><updated>2025-04-10T00:00:00+00:00</updated><author><name>Andrew Lamb, Achraf B, and Sean Smith</name></author><id>tag:datafusion.apache.org,2025-04-10:/blog/2025/04/10/fastest-tpch-generator</id><summary type="html">&lt;!--
+<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - blog</title><link href="https://datafusion.apache.org/blog/" rel="alternate"></link><link href="https://datafusion.apache.org/blog/feeds/blog.atom.xml" rel="self"></link><id>https://datafusion.apache.org/blog/</id><updated>2025-03-30T00:00:00+00:00</updated><subtitle></subtitle><entry><title>Apache DataFusion Python 46.0.0 Released</title><link href="https://datafusion.apache.org/blog/2025/03/30/datafusion-python-46.0.0" rel="alternate"></link><published>2025-03-30T00:00:00+00:00</published><updated>2025-03-30T00:00:00+00:00</updated><author><name>timsaucer</name></author><id>tag:datafusion.apache.org,2025-03-30:/blog/2025/03/30/datafusion-python-46.0.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -7,7 +7,9 @@ this work for additional information regarding copyright ownership.
 The ASF licenses this file to you under the Apache License, Version 2.0
 (the "License"); you may not use this file except in compliance with
 the License.  You may obtain a copy of the License at
+
 http://www.apache.org/licenses/LICENSE-2.0
+
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -15,20 +17,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 {% endcomment %}
 --&gt;
-&lt;style&gt;
-/* Table borders */
-table, th, td {
-  border: 1px solid black;
-  border-collapse: collapse;
-}
-th, td {
-  padding: 3px;
-}
-&lt;/style&gt;
-&lt;p&gt;3 members of the &lt;a href="https://datafusion.apache.org/"&gt;Apache DataFusion&lt;/a&gt; community used Rust and open source
-development to build &lt;a href="https://github.com/clflushopt/tpchgen-rs"&gt;tpchgen-rs&lt;/a&gt;, a fully open TPC-H data generator over 10x
-faster than any other implementation  we know of.&lt;/p&gt;
-&lt;p&gt;It is now …&lt;/p&gt;</summary><content type="html">&lt;!--
+&lt;p&gt;We are happy to announce that &lt;a href="https://pypi.org/project/datafusion/46.0.0/"&gt;datafusion-python 46.0.0&lt;/a&gt; has been released. This release
+brings in all of the new features of the core &lt;a href="https://datafusion.apache.org/blog/2025/03/24/datafusion-46.0.0"&gt;DataFusion 46.0.0&lt;/a&gt; library. Since the last
+blog post for &lt;a href="https://datafusion.apache.org/blog/2024/12/14/datafusion-python-43.1.0/"&gt;datafusion-python 43.1.0&lt;/a&gt;, a large number of improvements have been made
+that can …&lt;/p&gt;</summary><content type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -36,7 +28,9 @@ this work for additional information regarding copyright ownership.
 The ASF licenses this file to you under the Apache License, Version 2.0
 (the "License"); you may not use this file except in compliance with
 the License.  You may obtain a copy of the License at
+
 http://www.apache.org/licenses/LICENSE-2.0
+
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -44,432 +38,181 @@ See the License for the specific language governing permissions and
 limitations under the License.
 {% endcomment %}
 --&gt;
-&lt;style&gt;
-/* Table borders */
-table, th, td {
-  border: 1px solid black;
-  border-collapse: collapse;
-}
-th, td {
-  padding: 3px;
-}
-&lt;/style&gt;
-&lt;p&gt;3 members of the &lt;a href="https://datafusion.apache.org/"&gt;Apache DataFusion&lt;/a&gt; community used Rust and open source
-development to build &lt;a href="https://github.com/clflushopt/tpchgen-rs"&gt;tpchgen-rs&lt;/a&gt;, a fully open TPC-H data generator over 10x
-faster than any other implementation  we know of.&lt;/p&gt;
-&lt;p&gt;It is now possible to create the TPC-H SF=100 dataset in 72.23 seconds (1.4 GB/s
-😎) on a Macbook Air M3 with 16GB of memory, compared to the classic &lt;code&gt;dbgen&lt;/code&gt;
-which takes 30 minutes&lt;sup&gt;1&lt;/sup&gt; (0.05GB/sec). On the same machine, it takes less than
-2 minutes to create all 3.6 GB of SF=100 in &lt;a href="https://parquet.apache.org/"&gt;Apache Parquet&lt;/a&gt; format.
-It is finally convenient and efficient to run TPC-H queries locally when testing
-analytical engines such as DataFusion.&lt;/p&gt;
-&lt;p&gt;&lt;img alt="Time to create TPC-H parquet dataset for Scale Factor  1, 10, 100 and 1000" class="img-responsive" src="/blog/images/fastest-tpch-generator/parquet-performance.png" width="80%"/&gt;&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;Figure 1&lt;/strong&gt;: Time to create TPC-H dataset for Scale Factor (see below) 1, 10,
-100 and 1000 as 8 individual SNAPPY compressed parquet files using a 22 core GCP
-VM. For Scale Factor(SF) 100 &lt;code&gt;tpchgen&lt;/code&gt; takes 1 minute and 14 seconds and
-&lt;a href="https://duckdb.org"&gt;DuckDB&lt;/a&gt; takes 17 minutes and 48 seconds. For SF=1000, &lt;code&gt;tpchgen&lt;/code&gt; takes 10
-minutes and 26 and uses about 5 GB of RAM at peak, and we could not measure
-DuckDB&amp;rsquo;s time as it &lt;a href="https://duckdb.org/docs/stable/extensions/tpch.html#resource-usage-of-the-data-generator"&gt;requires 647 GB of RAM&lt;/a&gt;, more than the 88 GB that was
-available on our test machine. The testing methodology is in the
-&lt;a href="https://github.com/clflushopt/tpchgen-rs/blob/main/benchmarks/BENCHMARKS.md"&gt;documentation&lt;/a&gt;.&lt;/p&gt;
-&lt;p&gt;This blog explains what TPC-H is, how we ported the vintage C data generator to
-Rust (yes, &lt;a href="https://www.reddit.com/r/rust/comments/4ri2gn/riir_rewrite_it_in_rust/"&gt;RWIR&lt;/a&gt;) and optimized its performance over the course of a few weeks
-of part-time work. We began this project so we can easily generate TPC-H data in
-&lt;a href="https://datafusion.apache.org/"&gt;Apache DataFusion&lt;/a&gt; and &lt;a href="https://glaredb.com/"&gt;GlareDB&lt;/a&gt;.&lt;/p&gt;
-&lt;h1&gt;Try it for yourself&lt;/h1&gt;
-&lt;p&gt;The tool is entirely open source under the &lt;a href="https://www.apache.org/licenses/LICENSE-2.0"&gt;Apache 2.0 license&lt;/a&gt;. Visit the &lt;a href="https://github.com/clflushopt/tpchgen-rs"&gt;tpchgen-rs repository&lt;/a&gt; or try it for yourself by run the following commands after &lt;a href="https://www.rust-lang.org/tools/install"&gt;installing Rust&lt;/a&gt;:&lt;/p&gt;
-&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;$ cargo install tpchgen-cli
-
-&lt;span class="c1"&gt;# create SF=1 in classic TBL format&lt;/span&gt;
-$ tpchgen-cli -s &lt;span class="m"&gt;1&lt;/span&gt; 
-
-&lt;span class="c1"&gt;# create SF=10 in Parquet&lt;/span&gt;
-$ tpchgen-cli -s &lt;span class="m"&gt;10&lt;/span&gt; --format&lt;span class="o"&gt;=&lt;/span&gt;parquet
+&lt;p&gt;We are happy to announce that &lt;a href="https://pypi.org/project/datafusion/46.0.0/"&gt;datafusion-python 46.0.0&lt;/a&gt; has been released. This release
+brings in all of the new features of the core &lt;a href="https://datafusion.apache.org/blog/2025/03/24/datafusion-46.0.0"&gt;DataFusion 46.0.0&lt;/a&gt; library. Since the last
+blog post for &lt;a href="https://datafusion.apache.org/blog/2024/12/14/datafusion-python-43.1.0/"&gt;datafusion-python 43.1.0&lt;/a&gt;, a large number of improvements have been made
+that can be found in the &lt;a href="https://github.com/apache/datafusion-python/tree/main/dev/changelog"&gt;changelogs&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;We highly recommend reviewing the upstream &lt;a href="https://datafusion.apache.org/blog/2025/03/24/datafusion-46.0.0"&gt;DataFusion 46.0.0&lt;/a&gt; announcement.&lt;/p&gt;
+&lt;h2&gt;Easier file reading&lt;/h2&gt;
+&lt;p&gt;In these releases we have introduced two new ways to more easily read files into
+DataFrames.&lt;/p&gt;
+&lt;p&gt;&lt;a href="https://github.com/apache/datafusion-python/pull/982"&gt;PR 982&lt;/a&gt; introduced a series of easier read functions for Parquet, JSON, CSV, and
+AVRO files. This introduces a concept of a global context that is available by
+default when using these methods. Now instead of creating a default Session
+Context and then calling the read methods, you can simply import these read
+alternative methods and begin working with your DataFrames. Below is an example of
+how easy to use this new approach is.&lt;/p&gt;
+&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="kn"&gt;from&lt;/span&gt; &lt;span class="nn"&gt;datafusion.io&lt;/span&gt; &lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="n"&gt;read_parquet&lt;/span&gt;
+&lt;span class="n"&gt;df&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;read_parquet&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;path&lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="s2"&gt;"./examples/tpch/data/customer.parquet"&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
 &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;h1&gt;What is TPC-H / dbgen?&lt;/h1&gt;
-&lt;p&gt;The popular &lt;a href="https://www.tpc.org/tpch/"&gt;TPC-H&lt;/a&gt; benchmark (often referred to as TPCH) helps evaluate the
-performance of database systems on &lt;a href="https://en.wikipedia.org/wiki/Online_analytical_processing"&gt;OLAP&lt;/a&gt; queries&lt;em&gt;, &lt;/em&gt;the kind used to build BI
-dashboards.&lt;/p&gt;
-&lt;p&gt;TPC-H has become a de facto standard for analytic systems. While there are &lt;a href="https://www.vldb.org/pvldb/vol9/p204-leis.pdf"&gt;well
-known&lt;/a&gt; limitations as the data and queries do not well represent many real world
-use cases, the majority of analytic database papers and industrial systems still
-use TPC-H query performance benchmarks as a baseline. You will inevitably find
-multiple results for  &amp;ldquo;&lt;code&gt;TPCH Performance &amp;amp;lt;your favorite database&amp;gt;&lt;/code&gt;&amp;rdquo; in any
-search engine.&lt;/p&gt;
-&lt;p&gt;The benchmark was created at a time when access to high performance analytical
-systems was not widespread, so the &lt;a href="https://www.tpc.org/"&gt;Transaction Processing Performance Council&lt;/a&gt;
-defined a process of formal result verification. More recently, given the broad
-availability of free and open source database systems, it is common for users to
-run and verify TPC-H performance themselves.&lt;/p&gt;
-&lt;p&gt;TPC-H simulates a business environment with eight tables: &lt;code&gt;REGION&lt;/code&gt;, &lt;code&gt;NATION&lt;/code&gt;,
-&lt;code&gt;SUPPLIER&lt;/code&gt;, &lt;code&gt;CUSTOMER&lt;/code&gt;, &lt;code&gt;PART&lt;/code&gt;, &lt;code&gt;PARTSUPP&lt;/code&gt;, &lt;code&gt;ORDERS&lt;/code&gt;, and &lt;code&gt;LINEITEM&lt;/code&gt;. These
-tables are linked by foreign keys in a normalized schema representing a supply
-chain with parts, suppliers, customers and orders. The benchmark itself is 22
-SQL queries containing joins, aggregations, and sorting operations.&lt;/p&gt;
-&lt;p&gt;The queries run against data created with &lt;code&gt;&lt;a href="https://github.com/electrum/tpch-dbgen)"&gt;dbgen&lt;/a&gt;&lt;/code&gt;, a program
-written in a pre &lt;a href="https://en.wikipedia.org/wiki/C99"&gt;C-99&lt;/a&gt; dialect, which generates data in a format called &lt;em&gt;TBL&lt;/em&gt;
-(example in Figure 2). &lt;code&gt;dbgen&lt;/code&gt; creates data for each of the 8 tables for a
-certain &lt;em&gt;Scale Factor&lt;/em&gt;, commonly abbreviated as SF. Example Scale Factors and
-corresponding dataset sizes are shown in Table 1. There is no theoretical upper
-bound on the Scale Factor.&lt;/p&gt;
-&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;103|2844|845|3|23|40177.32|0.01|0.04|N|O|1996-09-11|1996-09-18|1996-09-26|NONE|FOB|ironic accou|
-229|10540|801|6|29|42065.66|0.04|0.00|R|F|1994-01-14|1994-02-16|1994-01-22|NONE|FOB|uriously pending |
-263|2396|649|1|22|28564.58|0.06|0.08|R|F|1994-08-24|1994-06-20|1994-09-09|NONE|FOB|efully express fo|
-327|4172|427|2|9|9685.53|0.09|0.05|A|F|1995-05-24|1995-07-11|1995-06-05|NONE|AIR| asymptotes are fu|
-450|5627|393|4|40|61304.80|0.05|0.03|R|F|1995-03-20|1995-05-25|1995-04-14|NONE|RAIL|ve. asymptote|
+&lt;p&gt;&lt;a href="https://github.com/apache/datafusion-python/pull/980"&gt;PR 980&lt;/a&gt; adds a method for setting up a session context to use URL tables. With
+this enabled, you can use a path to a local file as a table name. An example
+of how to use this is demonstrated in the following snippet.&lt;/p&gt;
+&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="nn"&gt;datafusion&lt;/span&gt;
+&lt;span class="n"&gt;ctx&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;datafusion&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;SessionContext&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;enable_url_table&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+&lt;span class="n"&gt;df&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;ctx&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;table&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;"./examples/tpch/data/customer.parquet"&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
 &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;p&gt;&lt;strong&gt;Figure 2&lt;/strong&gt;: Example TBL formatted output of &lt;code&gt;dbgen&lt;/code&gt; for the &lt;code&gt;LINEITEM&lt;/code&gt; table&lt;/p&gt;
-&lt;table&gt;
-&lt;tr&gt;
-&lt;td&gt;&lt;strong&gt;Scale Factor&lt;/strong&gt;
-&lt;/td&gt;
-&lt;td&gt;&lt;strong&gt;Data Size (TBL)&lt;/strong&gt;
-&lt;/td&gt;
-&lt;td&gt;&lt;strong&gt;Data Size (Parquet)&lt;/strong&gt;
-&lt;/td&gt;
-&lt;/tr&gt;
-&lt;tr&gt;
-&lt;td&gt;0.1
-   &lt;/td&gt;
-&lt;td&gt;103 Mb
-   &lt;/td&gt;
-&lt;td&gt;31 Mb
-   &lt;/td&gt;
-&lt;/tr&gt;
-&lt;tr&gt;
-&lt;td&gt;1
-   &lt;/td&gt;
-&lt;td&gt;1 Gb
-   &lt;/td&gt;
-&lt;td&gt;340 Mb
-   &lt;/td&gt;
-&lt;/tr&gt;
-&lt;tr&gt;
-&lt;td&gt;10
-   &lt;/td&gt;
-&lt;td&gt;10 Gb
-   &lt;/td&gt;
-&lt;td&gt;3.6 Gb
-   &lt;/td&gt;
-&lt;/tr&gt;
-&lt;tr&gt;
-&lt;td&gt;100
-   &lt;/td&gt;
-&lt;td&gt;107 Gb
-   &lt;/td&gt;
-&lt;td&gt;38 Gb
-   &lt;/td&gt;
-&lt;/tr&gt;
-&lt;tr&gt;
-&lt;td&gt;1000
-   &lt;/td&gt;
-&lt;td&gt;1089 Gb
-   &lt;/td&gt;
-&lt;td&gt;379 Gb
-   &lt;/td&gt;
-&lt;/tr&gt;
-&lt;/table&gt;
-&lt;p&gt;&lt;strong&gt;Table 1&lt;/strong&gt;: TPC-H data set sizes at different scale factors for both TBL and &lt;a href="https://parquet.apache.org/"&gt;Apache Parquet&lt;/a&gt;.&lt;/p&gt;
-&lt;h1&gt;Why do we need a new TPC-H Data generator?&lt;/h1&gt;
-&lt;p&gt;Despite the known limitations of the TPC-H benchmark, it is so well known that it
-is used frequently in database performance analysis. To run TPC-H, you must first
-load the data, using &lt;code&gt;dbgen&lt;/code&gt;, which is not ideal for several reasons:&lt;/p&gt;
-&lt;ol&gt;
-&lt;li&gt;You must find and compile a copy of the 15+ year old C program (for example &lt;a href="https://github.com/electrum/tpch-dbgen"&gt;electrum/tpch-dbgen&lt;/a&gt;)&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;dbgen&lt;/code&gt; requires substantial time (Figure 3) and is not able to use more than one core.&lt;/li&gt;
-&lt;li&gt;It outputs TBL format, which typically requires loading into your database (for example, &lt;a href="https://github.com/apache/datafusion/blob/507f6b6773deac69dd9d90dbe60831f5ea5abed1/datafusion/sqllogictest/test_files/tpch/create_tables.slt.part#L24-L124"&gt;here is how to do so&lt;/a&gt; in Apache DataFusion) prior to query.&lt;/li&gt;
-&lt;li&gt;The implementation makes substantial assumptions about the operating environment, making it difficult to extend or embed into other systems.&lt;sup&gt;2&lt;/sup&gt;&lt;/li&gt;
-&lt;/ol&gt;
-&lt;p&gt;&lt;img alt="Time to generate TPC-H data in TBL format" class="img-responsive" src="/blog/images/fastest-tpch-generator/tbl-performance.png" width="80%"/&gt;&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;Figure 3&lt;/strong&gt;: Time to generate TPC-H data in TBL format. The default &lt;code&gt;tpchgen&lt;/code&gt; is
-shown in blue. &lt;code&gt;tpchgen&lt;/code&gt; restricted to a single core is shown in red. Unmodified
-&lt;code&gt;dbgen&lt;/code&gt; is shown in green and &lt;code&gt;dbgen&lt;/code&gt; modified to use &lt;code&gt;-O3&lt;/code&gt; optimization level
-is shown in yellow.&lt;/p&gt;
-&lt;p&gt;&lt;code&gt;dbgen&lt;/code&gt; is so inconvenient and takes so long that vendors often provide
-preloaded TPC-H data, for example [Snowflake Sample Data], &lt;a href="https://docs.databricks.com/aws/en/discover/databricks-datasets"&gt;DataBricks Sample
-datasets&lt;/a&gt; and &lt;a href="https://duckdb.org/docs/stable/extensions/tpch.html#pre-generated-data-sets"&gt;DuckDB Pre-Generated Data Sets&lt;/a&gt;.&lt;/p&gt;
-&lt;p&gt;In addition to pre-generated datasets, DuckDB also provides a [TPCH extension] 
-for generating TPC-H datasets within DuckDB. This is so much easier to use than
-the current alternatives that it leads many researchers and other thought
-leaders to use DuckDB to evaluate new ideas. For example, &lt;a href="https://github.com/lmwnshn"&gt;Wan Shen
-Lim&lt;/a&gt; explicitly &lt;a href="https://github.com/apache/datafusion/issues/14373"&gt;mentioned the ease of creating the TPC-H dataset&lt;/a&gt; as one reason
-the first student project of &lt;a href="https://15799.courses.cs.cmu.edu/spring2025/"&gt;CMU-799 Spring 2025&lt;/a&gt; used DuckDB.&lt;/p&gt;
-&lt;p&gt;As beneficial as the DuckDB TPC-H extension is, it is non-ideal for several reasons:&lt;/p&gt;
-&lt;ol&gt;
-&lt;li&gt;Creates data in a proprietary format, which requires export to use in other systems.&lt;/li&gt;
-&lt;li&gt;Requires significant time (e.g. 17 minutes for Scale Factor 10).&lt;/li&gt;
-&lt;li&gt;Requires unnecessarily large amounts of memory (e.g. 71 GB for Scale Factor 10)&lt;/li&gt;
-&lt;/ol&gt;
-&lt;p&gt;The above limitations makes it impractical to generate Scale Factor 100 and
-above on laptops or standard workstations, though DuckDB offers &lt;a href="https://duckdb.org/docs/stable/extensions/tpch.html#pre-generated-data-sets"&gt;pre-computed
-files&lt;/a&gt; for larger factors&lt;sup&gt;3&lt;/sup&gt;&lt;/p&gt;
-&lt;h1&gt;Why Rust?&lt;/h1&gt;
-&lt;p&gt;Realistically we used Rust because we wanted to integrate the data generator
-into &lt;a href="https://datafusion.apache.org/"&gt;Apache DataFusion&lt;/a&gt; and &lt;a href="https://glaredb.com/"&gt;GlareDB&lt;/a&gt;. However, we also believe Rust is
-superior to C/C++ due to its comparable performance, but much higher programmer
-productivity (Figure 4). Productivity in this case refers to the ease of
-optimizing and adding multithreading without introducing hard to debug memory
-safety or concurrency issues.&lt;/p&gt;
-&lt;p&gt;While Rust does allow unsafe access to memory (eliding bounds checking, for
-example), when required for performance, our implementation is entirely memory
-safe. The only &lt;a href="https://github.com/search?q=repo%3Aclflushopt%2Ftpchgen-rs%20unsafe&amp;amp;type=code"&gt;unsafe&lt;/a&gt; code is used to &lt;a href="https://github.com/clflushopt/tpchgen-rs/blob/c651da1fc309f9cb3872cbdf71e4796904dc62c6/tpchgen/src/text.rs#L72"&gt;skip&lt;/a&gt; UTF8 validation on known ASCII
-strings.&lt;/p&gt;
-&lt;p&gt;&lt;img alt="Lamb Theory on Evolution of Systems Languages" class="img-responsive" src="/blog/images/fastest-tpch-generator/lamb-theory.png" width="80%"/&gt;&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;Figure 4&lt;/strong&gt;: Lamb Theory of System Language Evolution from &lt;a href="https://midas.bu.edu/assets/slides/andrew_lamb_slides.pdf"&gt;Boston University
-MiDAS Fall 2024 (Data Systems Seminar)&lt;/a&gt;, &lt;a href="https://www.youtube.com/watch?v=CpnxuBwHbUc"&gt;recording&lt;/a&gt;. Special
-thanks to &lt;a href="https://x.com/KurtFehlhauer"&gt;@KurtFehlhauer&lt;/a&gt;&lt;/p&gt;
-&lt;h1&gt;How: The Journey&lt;/h1&gt;
-&lt;p&gt;We did it together as a team in the open over the course of a few weeks.
-&lt;a href="https://github.com/lmwnshn"&gt;Wan Shen Lim&lt;/a&gt; inspired the project by pointing out the benefits of &lt;a href="https://github.com/apache/datafusion/issues/14373"&gt;easy TPC-H
-dataset creation&lt;/a&gt;  and &lt;a href="https://github.com/apache/datafusion/issues/14608#issuecomment-2651044600"&gt;suggesting we check out a Java port on February 11,
-2025&lt;/a&gt;. Achraf made &lt;a href="https://github.com/clflushopt/tpchgen-rs/commit/53d3402680422a15349ece0a7ea3c3f001018ba0"&gt;first commit a few days later&lt;/a&gt; on February 16, and &lt;a href="https://github.com/clflushopt/tpchgen-rs/commit/9bb386a4c55b8cf93ffac1b98f29b5da990ee79e"&gt;Andrew
-and Sean started helping on March 8, 2025&lt;/a&gt; and we &lt;a href="https://crates.io/crates/tpchgen/0.1.0"&gt;released version 0.1&lt;/a&gt; on
-March 30, 2025.&lt;/p&gt;
-&lt;h2&gt;Optimizing Single Threaded Performance&lt;/h2&gt;
-&lt;p&gt;Archaf &lt;a href="https://github.com/clflushopt/tpchgen-rs/pull/16"&gt;completed the end to end conformance tests&lt;/a&gt;, to ensure correctness, and
-an initial &lt;a href="https://github.com/clflushopt/tpchgen-rs/pull/12"&gt;cli check in&lt;/a&gt; on March 15, 2025.&lt;/p&gt;
-&lt;p&gt;On a Macbook Pro M3 (Nov 2023), the initial performance numbers were actually
-slower than the original Java implementation which was ported 😭. This wasn&amp;rsquo;t
-surprising since the focus of the first version was to get a byte of byte
-compatible port, and knew about the performance shortcomings and how to approach
-them.&lt;/p&gt;
-&lt;table&gt;
-&lt;tr&gt;
-&lt;td&gt;&lt;strong&gt;Scale Factor&lt;/strong&gt;
-&lt;/td&gt;
-&lt;td&gt;&lt;strong&gt;Time&lt;/strong&gt;
-&lt;/td&gt;
-&lt;/tr&gt;
-&lt;tr&gt;
-&lt;td&gt;1
-   &lt;/td&gt;
-&lt;td&gt;0m10.307s
-   &lt;/td&gt;
-&lt;/tr&gt;
-&lt;tr&gt;
-&lt;td&gt;10
-   &lt;/td&gt;
-&lt;td&gt;1m26.530s
-   &lt;/td&gt;
-&lt;/tr&gt;
-&lt;tr&gt;
-&lt;td&gt;100
-   &lt;/td&gt;
-&lt;td&gt;14m56.986s
-   &lt;/td&gt;
-&lt;/tr&gt;
-&lt;/table&gt;
-&lt;p&gt;&lt;strong&gt;Table 2&lt;/strong&gt;: Performance of running &lt;a href="https://github.com/clflushopt/tpchgen-rs/pull/12"&gt;the initial tpchgen-cli&lt;/a&gt;, measured with
-&lt;code&gt;time target/release/tpchgen-cli -s $SCALE_FACTOR&lt;/code&gt;&lt;/p&gt;
-&lt;p&gt;With this strong foundation we began optimizing the code using Rust&amp;rsquo;s low level
-memory management to improve performance while retaining memory safely. We spent
-several days obsessing over low level details and implemented a textbook like
-list of optimizations:&lt;/p&gt;
+&lt;h2&gt;Registering Table Views&lt;/h2&gt;
+&lt;p&gt;DataFusion supports registering a logical plan as a view with a session context. This
+allows for work flows to create views in one part of the work flow and pass the session
+context around to other places where that logical plan can be reused. This is an useful
+feature for building up complex workflows and for code clarity. &lt;a href="https://github.com/apache/datafusion-python/pull/1016"&gt;PR 1016&lt;/a&gt; enables this
+feature in &lt;code&gt;datafusion-python&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;For example, supposing you have a DataFrame called &lt;code&gt;df1&lt;/code&gt;, you could use this code snippet
+to register the view and then use it in another place:&lt;/p&gt;
+&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="n"&gt;ctx&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;register_view&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;"view1"&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;df1&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;And then in another portion of your code which has access to the same session context
+you can retrive the DataFrame with:&lt;/p&gt;
+&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="err"&gt;df2 = ctx.table("view1")&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;h2&gt;Asynchronous Iteration of Record Batches&lt;/h2&gt;
+&lt;p&gt;Retrieving a &lt;code&gt;RecordBatch&lt;/code&gt; from a &lt;code&gt;RecordBatchStream&lt;/code&gt; was a synchronous call, which would
+require the end user's code to wait for the data retrieval. This is described in
+&lt;a href="https://github.com/apache/datafusion-python/issues/974"&gt;Issue 974&lt;/a&gt;. We continue to support this as a synchronous iterator, but we have also added
+in the ability to retrieve the &lt;code&gt;RecordBatch&lt;/code&gt; using the Python asynchronous &lt;code&gt;anext&lt;/code&gt;
+function.&lt;/p&gt;
+&lt;h1&gt;Default Compression for Parquet files&lt;/h1&gt;
+&lt;p&gt;With &lt;a href="https://github.com/apache/datafusion-python/pull/981"&gt;PR 981&lt;/a&gt;, we change the saving of Parquet files to use zstd compression by default.
+Previously the default was uncompressed, causing excessive disk storage. Zstd is an
+excellent compression scheme that balances speed and compression ratio. Users can still
+save their Parquet files uncompressed by passing in the appropriate value to the
+&lt;code&gt;compression&lt;/code&gt; argument when calling &lt;code&gt;DataFrame.write_parquet&lt;/code&gt;.&lt;/p&gt;
+&lt;h2&gt;UDF Decorators&lt;/h2&gt;
+&lt;p&gt;In &lt;a href="https://github.com/apache/datafusion-python/pull/1040"&gt;PR 1040&lt;/a&gt; and &lt;a href="https://github.com/apache/datafusion-python/pull/1061"&gt;PR 1061&lt;/a&gt; we add methods to make creating user defined functions
+easier and take advantage of Python decorators. With these PRs you can save a step
+from defining a method and then defining a udf of that method. Instead you can
+simply add the appropriate &lt;code&gt;udf&lt;/code&gt; decorator. Similar methods exist for aggregate
+and window user defined functions.&lt;/p&gt;
+&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="nd"&gt;@udf&lt;/span&gt;&lt;span class="p"&gt;([&lt;/span&gt;&lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;int64&lt;/span&gt;&lt;span class="p"&gt;(),&lt;/span&gt; &lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;int64&lt;/span&gt;&lt;span class="p"&gt;()],&lt;/span&gt; &lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;bool_&lt;/span&gt;&lt;span class="p"&gt;(),&lt;/span&gt; &lt;span class="s2"&gt;"stable"&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;my_custom_function&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;
+    &lt;span class="n"&gt;age&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Array&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+    &lt;span class="n"&gt;favorite_number&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Array&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="n"&gt;pa&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Array&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+    &lt;span class="k"&gt;pass&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;h2&gt;&lt;code&gt;uv&lt;/code&gt; package management&lt;/h2&gt;
+&lt;p&gt;&lt;a href="https://github.com/astral-sh/uv"&gt;uv&lt;/a&gt; is an extremely fast Python package manager, written in Rust. In the previous version
+of &lt;code&gt;datafusion-python&lt;/code&gt; we had a combination of settings of PyPi and Conda. Instead, we
+switch to using &lt;a href="https://github.com/astral-sh/uv"&gt;uv&lt;/a&gt; is our primary method for dependency management.&lt;/p&gt;
+&lt;p&gt;For most users of DataFusion, this change will be transparent. You can still install
+via &lt;code&gt;pip&lt;/code&gt; or &lt;code&gt;conda&lt;/code&gt;. For developers, the instructions in the repository have been updated.&lt;/p&gt;
+&lt;h2&gt;Code cleanup&lt;/h2&gt;
+&lt;p&gt;In an effort to improve our code cleanliness and ensure we are following Python best
+practices, we use &lt;a href="https://docs.astral.sh/ruff/"&gt;ruff&lt;/a&gt; to perform Python linting. Until now we enabled only a portion
+of the available linters available. In &lt;a href="https://github.com/apache/datafusion-python/pull/1055"&gt;PR 1055&lt;/a&gt; and &lt;a href="https://github.com/apache/datafusion-python/pull/1062"&gt;PR 1062&lt;/a&gt;, we enable many more
+of these linters and made code improvements to ensure we are following these
+recommendations.&lt;/p&gt;
+&lt;h2&gt;Improved Jupyter Notebook rendering&lt;/h2&gt;
+&lt;p&gt;Since &lt;a href="https://github.com/apache/datafusion-python/pull/839"&gt;PR 839&lt;/a&gt; in DataFusion 41.0.0 we have been able to render DataFrames using html in
+&lt;a href="https://jupyter.org/"&gt;jupyter&lt;/a&gt; notebooks. This is a big improvement over the &lt;code&gt;show&lt;/code&gt; command when we have the
+ability to render tables. In &lt;a href="https://github.com/apache/datafusion-python/pull/1036"&gt;PR 1036&lt;/a&gt; we went a step further and added in a variety
+of features.&lt;/p&gt;
 &lt;ul&gt;
-&lt;li&gt;&lt;a href="https://github.com/clflushopt/tpchgen-rs/pull/19"&gt;Avoiding startup overhead&lt;/a&gt;,&lt;/li&gt;
-&lt;li&gt;&lt;a href="https://github.com/clflushopt/tpchgen-rs/pull/26"&gt;not&lt;/a&gt; &lt;a href="https://github.com/clflushopt/tpchgen-rs/pull/32"&gt;copying&lt;/a&gt; strings (many more PRs as well)&lt;/li&gt;
-&lt;li&gt;&lt;a href="https://github.com/clflushopt/tpchgen-rs/pull/27"&gt;Rust&amp;rsquo;s zero overhead abstractions for dates&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href="https://github.com/clflushopt/tpchgen-rs/pull/35"&gt;Static strings&lt;/a&gt; (entirely safely with static lifetimes)&lt;/li&gt;
-&lt;li&gt;&lt;a href="https://github.com/clflushopt/tpchgen-rs/pull/33"&gt;Generics to avoid virtual function call overhead&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href="https://github.com/clflushopt/tpchgen-rs/pull/62"&gt;Moving lookups from runtime&lt;/a&gt; to load time&lt;/li&gt;
+&lt;li&gt;Now html tables are scrollable, vertically and horizontally.&lt;/li&gt;
+&lt;li&gt;When data are truncated, we report this to the user.&lt;/li&gt;
+&lt;li&gt;Instead of showing a small number of rows, we collect up to 2 megabytes of data to
+display. Since we have scrollable tables, we are able to make more data available
+to the user without sacrificing notebook usability.&lt;/li&gt;
+&lt;li&gt;We report explicitly when the DataFrame is empty. Previously we would not output
+anything for an empty table. This indicator is helpful to users to ensure their plans
+are written correctly. Sometimes a non-output can be overlooked.&lt;/li&gt;
+&lt;li&gt;For long output of data, we generate a collapsed view of the data with an option
+for the user to click on it to expand the data.&lt;/li&gt;
 &lt;/ul&gt;
-&lt;p&gt;At the time of writing, single threaded performance is now 2.5x-2.7x faster than the initial version, as shown in Table 3.&lt;/p&gt;
-&lt;table&gt;
-&lt;tr&gt;
-&lt;td&gt;&lt;strong&gt;Scale Factor&lt;/strong&gt;
-&lt;/td&gt;
-&lt;td&gt;&lt;strong&gt;Time&lt;/strong&gt;
-&lt;/td&gt;
-&lt;td&gt;&lt;strong&gt;Times faster&lt;/strong&gt;
-&lt;/td&gt;
-&lt;/tr&gt;
-&lt;tr&gt;
-&lt;td&gt;1
-   &lt;/td&gt;
-&lt;td&gt;0m4.079s
-   &lt;/td&gt;
-&lt;td&gt;2.5x
-   &lt;/td&gt;
-&lt;/tr&gt;
-&lt;tr&gt;
-&lt;td&gt;10
-   &lt;/td&gt;
-&lt;td&gt;0m31.616s
-   &lt;/td&gt;
-&lt;td&gt;2.7x
-   &lt;/td&gt;
-&lt;/tr&gt;
-&lt;tr&gt;
-&lt;td&gt;100
-   &lt;/td&gt;
-&lt;td&gt;5m28.083s
-   &lt;/td&gt;
-&lt;td&gt;2.7x
-   &lt;/td&gt;
-&lt;/tr&gt;
-&lt;/table&gt;
-&lt;p&gt;&lt;strong&gt;Table 3&lt;/strong&gt;: Single threaded &lt;code&gt;tpchgen-cli&lt;/code&gt; performance, measured with &lt;code&gt;time target/release/tpchgen-cli -s $SCALE_FACTOR --num-threads=1&lt;/code&gt;&lt;/p&gt;
-&lt;h2&gt;Multi-threading&lt;/h2&gt;
-&lt;p&gt;Then we applied &lt;a href="https://doc.rust-lang.org/book/ch16-00-concurrency.html"&gt;Rust&amp;rsquo;s fearless concurrency&lt;/a&gt; &amp;ndash; with a single, &lt;a href="https://github.com/clflushopt/tpchgen-rs/commit/ab720a70cdc80a711f4a3dda6bac05445106f499"&gt;small PR&lt;/a&gt; (272
-net new lines) we updated the same memory safe code to run with multiple threads
-and consume bounded memory using &lt;a href="https://thenewstack.io/using-rustlangs-async-tokio-runtime-for-cpu-bound-tasks/"&gt;tokio for the thread scheduler&lt;/a&gt;&lt;sup&gt;4&lt;/sup&gt;.&lt;/p&gt;
-&lt;p&gt;As shown in Table 4, with this change, tpchgen-cli generates the full SF=100
-dataset in 32 seconds (which is 3.3 GB/sec 🤯). Further investigation reveals
-that at SF=100 our generator is actually IO bound (which is not the case for
-&lt;code&gt;dbgen&lt;/code&gt; or &lt;code&gt;duckdb&lt;/code&gt;) &amp;ndash; it creates data &lt;strong&gt;faster than can be written to an SSD&lt;/strong&gt;.
-When writing to &lt;code&gt;/dev/null&lt;/code&gt; tpchgen  generates the entire dataset in 25 seconds
-(4 GB/s).&lt;/p&gt;
-&lt;table&gt;
-&lt;tr&gt;
-&lt;td&gt;&lt;strong&gt;Scale Factor&lt;/strong&gt;
-&lt;/td&gt;
-&lt;td&gt;Time
-   &lt;/td&gt;
-&lt;td&gt;&lt;strong&gt;Times faster than initial implementation&lt;/strong&gt;
-&lt;/td&gt;
-&lt;td&gt;&lt;strong&gt;Times faster than optimized single threaded&lt;/strong&gt;
-&lt;/td&gt;
-&lt;/tr&gt;
-&lt;tr&gt;
-&lt;td&gt;1
-   &lt;/td&gt;
-&lt;td&gt;0m1.369s
-   &lt;/td&gt;
-&lt;td&gt;7.3x
-   &lt;/td&gt;
-&lt;td&gt;3x
-   &lt;/td&gt;
-&lt;/tr&gt;
-&lt;tr&gt;
-&lt;td&gt;10
-   &lt;/td&gt;
-&lt;td&gt;0m3.828s
-   &lt;/td&gt;
-&lt;td&gt;22.6x
-   &lt;/td&gt;
-&lt;td&gt;8.2x
-   &lt;/td&gt;
-&lt;/tr&gt;
-&lt;tr&gt;
-&lt;td&gt;100
-   &lt;/td&gt;
-&lt;td&gt;0m32.615s
-   &lt;/td&gt;
-&lt;td&gt;27.5x
-   &lt;/td&gt;
-&lt;td&gt;10x
-   &lt;/td&gt;
-&lt;/tr&gt;
-&lt;tr&gt;
-&lt;td&gt;100 (to /dev/null)
-   &lt;/td&gt;
-&lt;td&gt;0m25.088s
-   &lt;/td&gt;
-&lt;td&gt;35.7x
-   &lt;/td&gt;
-&lt;td&gt;13.1x
-   &lt;/td&gt;
-&lt;/tr&gt;
-&lt;/table&gt;
-&lt;p&gt;&lt;strong&gt;Table 4&lt;/strong&gt;: tpchgen-cli (multithreaded) performance measured with &lt;code&gt;time target/release/tpchgen-cli -s $SCALE_FACTOR&lt;/code&gt;&lt;/p&gt;
-&lt;p&gt;Using Rust and async streams, the data generator is also fully streaming: memory
-use does not increase with increasing data size / scale factors&lt;sup&gt;5&lt;/sup&gt;. The DuckDB
-generator seems to &lt;a href="https://duckdb.org/docs/stable/extensions/tpch.html#resource-usage-of-the-data-generator"&gt;require far more memory&lt;/a&gt; than is commonly available on
-developer laptops and memory use increases with scale factor. With &lt;code&gt;tpchgen-cli&lt;/code&gt;
-it is perfectly possible to create data for SF=10000 or larger on a machine with
-16GB of memory (assuming sufficient storage capacity).&lt;/p&gt;
-&lt;h2&gt;Direct to parquet&lt;/h2&gt;
-&lt;p&gt;At this point, &lt;code&gt;tpchgen-cli&lt;/code&gt; could very quickly generate the TBL format.
-However, as described above, the TBL is annoying to work with, because&lt;/p&gt;
-&lt;ol&gt;
-&lt;li&gt;It has no header&lt;/li&gt;
-&lt;li&gt;It is like a CSV but the delimiter is &lt;code&gt;|&lt;/code&gt;&lt;/li&gt;
-&lt;li&gt;Each line ends with an extra &lt;code&gt;|&lt;/code&gt; delimiter before the newline 🙄&lt;/li&gt;
-&lt;li&gt;No system that we know can read them without additional configuration.&lt;/li&gt;
-&lt;/ol&gt;
-&lt;p&gt;We next &lt;a href="https://github.com/clflushopt/tpchgen-rs/pull/54"&gt;added support for CSV&lt;/a&gt; generation (special thanks &lt;a href="https://github.com/niebayes"&gt;@niebayes&lt;/a&gt; from
-Datalayers for finding and &lt;a href="https://github.com/clflushopt/tpchgen-rs/issues/73"&gt;fixing&lt;/a&gt; &lt;a href="https://github.com/clflushopt/tpchgen-rs/issues/65"&gt;bugs&lt;/a&gt;) which performs at the same
-speed as TBL. While CSV files are far more standard than TBL, they must still be
-parsed prior to load and automatic type inference may not deduce the types
-needed for the TPC-H benchmarks (e.g. floating point vs Decimal).&lt;/p&gt;
-&lt;p&gt;What would be far more useful is a typed, efficient columnar format such as
-Apache Parquet which is supported by all modern query engines. So we &lt;a href="https://github.com/clflushopt/tpchgen-rs/pull/71"&gt;made&lt;/a&gt; a
-&lt;a href="https://crates.io/crates/tpchgen-arrow"&gt;tpchgen-arrow&lt;/a&gt; crate to create &lt;a href="https://arrow.apache.org/"&gt;Apache Arrow&lt;/a&gt; arrays directly and then &lt;a href="https://github.com/clflushopt/tpchgen-rs/pull/61"&gt;a small
-300 line PR&lt;/a&gt; to feed those arrays to the &lt;a href="https://crates.io/crates/parquet"&gt;Rust Parquet writer&lt;/a&gt;, again using
-tokio for parallelized but memory bound work.&lt;/p&gt;
-&lt;p&gt;This approach was simple, fast and scalable, as shown in Table 5. Even though
-creating Parquet files is significantly more computationally expensive than TBL
-or CSV, tpchgen-cli creates the full SF=100 parquet format dataset in less than
-45 seconds.&lt;/p&gt;
-&lt;p&gt;&lt;a href="https://arrow.apache.org/"&gt;Apache Arrow&lt;/a&gt;(https://arrow.apache.org/&lt;/p&gt;
-&lt;table&gt;
-&lt;tr&gt;
-&lt;td&gt;Scale Factor
-   &lt;/td&gt;
-&lt;td&gt;Time to generate Parquet
-   &lt;/td&gt;
-&lt;td&gt;Speed compared to tbl generation
-   &lt;/td&gt;
-&lt;/tr&gt;
-&lt;tr&gt;
-&lt;td&gt;1
-   &lt;/td&gt;
-&lt;td&gt;0m1.649s
-   &lt;/td&gt;
-&lt;td&gt;0.8
-   &lt;/td&gt;
-&lt;/tr&gt;
-&lt;tr&gt;
-&lt;td&gt;10
-   &lt;/td&gt;
-&lt;td&gt;0m5.643s
-   &lt;/td&gt;
-&lt;td&gt;0.7
-   &lt;/td&gt;
-&lt;/tr&gt;
-&lt;tr&gt;
-&lt;td&gt;100
-   &lt;/td&gt;
-&lt;td&gt;0m45.243s
-   &lt;/td&gt;
-&lt;td&gt;0.7
-   &lt;/td&gt;
-&lt;/tr&gt;
-&lt;tr&gt;
-&lt;td&gt;100 (to /dev/null)
-   &lt;/td&gt;
-&lt;td&gt;0m45.153s
-   &lt;/td&gt;
-&lt;td&gt;0.5
-   &lt;/td&gt;
-&lt;/tr&gt;
-&lt;/table&gt;
-&lt;p&gt;&lt;strong&gt;Table 5&lt;/strong&gt;: &lt;code&gt;tpchgen-cli&lt;/code&gt; Parquet generation performance measured with  &lt;code&gt;time
-target/release/tpchgen-cli -s $SCALE_FACTOR --format=parquet&lt;/code&gt;&lt;/p&gt;
-&lt;h1&gt;Conclusion 👊🎤&lt;/h1&gt;
-&lt;p&gt;With a few days, some fellow database nerds, and the power of Rust we made
-something 10x better than currently exists. We hope it inspires more research
-into analytical systems using the TPC-H dataset and that people build awesome
-things with it. For example, Sean has already added &lt;a href="https://github.com/GlareDB/glaredb/pull/3549"&gt;on-demand generation of
-tables to GlareDB&lt;/a&gt;. Please consider joining us and helping out at
-&lt;a href="https://github.com/clflushopt/tpchgen-rs"&gt;https://github.com/clflushopt/tpchgen-rs&lt;/a&gt;.&lt;/p&gt;
-&lt;p&gt;We met while working together on Apache DataFusion in various capacities. If you
-are looking for a community of like minded people hacking on databases, we
-welcome you to &lt;a href="https://datafusion.apache.org/contributor-guide/communication.html"&gt;come join us&lt;/a&gt;. We are in the process of integrating this into
-DataFusion (see &lt;a href="https://github.com/apache/datafusion/issues/14608"&gt;apache/datafusion#14608&lt;/a&gt;) if you are interested in helping 🎣&lt;/p&gt;
-&lt;h1&gt;About the Authors:&lt;/h1&gt;
+&lt;p&gt;In the below view you can see an example of some of these features such as the
+expandable text and scroll bars.&lt;/p&gt;
+&lt;figure style="text-align: center;"&gt;
+&lt;img alt="Fig 1: Example html rendering in a jupyter notebook." class="img-responsive" src="/blog/images/python-datafusion-46.0.0/html_rendering.png" width="100%"/&gt;
+&lt;figcaption&gt;
+&lt;b&gt;Figure 1&lt;/b&gt;: With the html rendering enhancements, tables are more easily
+   viewable in jupyter notebooks.
+&lt;/figcaption&gt;
+&lt;/figure&gt;
+&lt;h2&gt;Extension Documentation&lt;/h2&gt;
+&lt;p&gt;We have recently added &lt;a href="https://datafusion.apache.org/python/contributor-guide/ffi.html"&gt;Extension Documentation&lt;/a&gt; to the DataFusion in Python website. We
+have received many requests about how to better understand how to integrate DataFusion
+in Python with other Rust libraries. To address these questions we wrote an article about
+some of the difficulties that we encounter when using Rust libraries in Python and our
+approach to addressing them.&lt;/p&gt;
+&lt;h2&gt;Migration Guide&lt;/h2&gt;
+&lt;p&gt;During the upgrade from &lt;a href="https://github.com/apache/datafusion/blob/main/dev/changelog/43.0.0.md"&gt;DataFusion 43.0.0&lt;/a&gt; to [DataFusion 44.0.0] as our upstream core
+dependency, we discovered a few changes were necessary within our repository and our
+unit tests. These notes serve to help guide users who may encounter similar issues when
+upgrading.&lt;/p&gt;
 &lt;ul&gt;
-&lt;li&gt;&lt;a href="https://www.linkedin.com/in/andrewalamb/"&gt;Andrew Lamb&lt;/a&gt; (&lt;a href="https://github.com/alamb"&gt;@alamb&lt;/a&gt;) is a Staff Engineer at &lt;a href="https://www.influxdata.com/"&gt;InfluxData&lt;/a&gt; and a PMC member of &lt;a href="https://datafusion.apache.org/"&gt;Apache DataFusion&lt;/a&gt; and &lt;a href="https://arrow.apache.org/"&gt;Apache Arrow&lt;/a&gt;.&lt;/li&gt;
-&lt;li&gt;Achraf B (&lt;a href="https://github.com/clflushopt"&gt;@clflushopt&lt;/a&gt;) is a Software Engineer at &lt;a href="https://optable.co/"&gt;Optable&lt;/a&gt; where he works on data infrastructure.&lt;/li&gt;
-&lt;li&gt;&lt;a href="https://www.linkedin.com/in/scsmithr/"&gt;Sean Smith&lt;/a&gt; (&lt;a href="https://github.com/scsmithr"&gt;@scsmithr&lt;/a&gt;) is the founder of &lt;a href="https://glaredb.com/"&gt;GlareDB&lt;/a&gt; focused on building a fast analytics database.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;RuntimeConfig&lt;/code&gt; is now deprecated in favor of &lt;code&gt;RuntimeEnvBuilder&lt;/code&gt;. The migration is
+fairly straightforward, and the corresponding classes have been marked as deprecated. For
+end users it should be simply a matter of changing the class name.&lt;/li&gt;
+&lt;li&gt;If you perform a &lt;code&gt;concat&lt;/code&gt; of a &lt;code&gt;string_view&lt;/code&gt; and &lt;code&gt;string&lt;/code&gt;, it will now return a
+&lt;code&gt;string_view&lt;/code&gt; instead of a &lt;code&gt;string&lt;/code&gt;. This likely only impacts unit tests that are validating
+return types. In general, it is recommended to switch to using &lt;code&gt;string_view&lt;/code&gt; whenever 
+possible. You can see the blog articles &lt;a href="https://datafusion.apache.org/blog/2024/09/13/string-view-german-style-strings-part-1/"&gt;String View Pt 1&lt;/a&gt; and &lt;a href="https://datafusion.apache.org/blog/2024/09/13/string-view-german-style-strings-part-2/"&gt;Pt 2&lt;/a&gt; for more information
+on these performance improvements.&lt;/li&gt;
+&lt;li&gt;The function &lt;code&gt;date_part&lt;/code&gt; now returns an &lt;code&gt;int32&lt;/code&gt; instead of a &lt;code&gt;float64&lt;/code&gt;. This is likely
+only impactful to unit tests.&lt;/li&gt;
+&lt;li&gt;We have upgraded the Python minimum version to 3.9 since 3.8 is no longer officially
+supported.&lt;/li&gt;
 &lt;/ul&gt;
-&lt;!-- Footnotes themselves at the bottom. --&gt;
-&lt;h2&gt;Footnotes&lt;/h2&gt;
-&lt;p&gt;&lt;em&gt;1&lt;/em&gt;: Actual Time: &lt;code&gt;30:35&lt;/code&gt;&lt;/p&gt;
-&lt;p&gt;&lt;em&gt;2&lt;/em&gt;: It is possible to embed the dbgen code, which appears to be the approach taken by DuckDB. This approach was tried in GlareDB (&lt;a href="https://github.com/GlareDB/glaredb/pull/3313"&gt;GlareDB/glaredb#3313&lt;/a&gt;), but ultimately shelved given the amount of effort needed to adapt and isolate the dbgen code.&lt;/p&gt;
-&lt;p&gt;&lt;em&gt;3&lt;/em&gt;: It is pretty amazing to imagine the machine required to generate SF300 that had 1.8TB (!!) of RAM&lt;/p&gt;
-&lt;p&gt;&lt;em&gt;4&lt;/em&gt;: We tried to &lt;a href="https://github.com/clflushopt/tpchgen-rs/pull/34"&gt;use Rayon (see discussion here)&lt;/a&gt;, but could not easily keep memory bounded.&lt;/p&gt;
-&lt;p&gt;&lt;em&gt;5&lt;/em&gt;: &lt;code&gt;tpchgen-cli&lt;/code&gt; memory usage is a function of the number of threads:  each thread needs some buffer space&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Apache DataFusion 46.0.0 Released</title><link href="https://datafusion.apache.org/blog/2025/03/24/datafusion-46.0.0" rel="alternate"></link><published>2025-03-24T00:00:00+00:00</published><updated>2025-03-24T00:00:00+00:00</updated><author><name>Oznur Hanci and Berkay Sahin on behalf of the PMC</name></author><id>tag:datafusion.apache.org,2025-03-24:/blog/2025/03/24/datafusion-46.0.0</id><summary type="html">&lt;!--
+&lt;h2&gt;Coming Soon&lt;/h2&gt;
+&lt;p&gt;There is a lot of excitement around the upcoming work. This list is not comprehensive, but
+a glimpse into some of the upcoming work includes:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Reusable DataFusion UDFs: The way user defined functions are currently written in
+&lt;code&gt;datafusion-python&lt;/code&gt; is slightly different from those written for the upstream Rust
+&lt;code&gt;datafusion&lt;/code&gt;. The core ideas are usually the same, but it means it takes effort for users
+to re-implement functions already written for Rust projects to be usable in Python. Issue
+&lt;a href="https://github.com/apache/datafusion-python/issues/1017"&gt;#1017&lt;/a&gt; addresses this topic. Work is well underway to make it easier to expose these
+user functions through the FFI boundary. This means that the work that already exists in
+repositories such as those found in the &lt;a href="https://github.com/datafusion-contrib"&gt;datafusion-contrib&lt;/a&gt; project can be easily
+re-used in Python. This will provide a low effort way to expose significant functionality
+to the DataFusion in Python community.&lt;/li&gt;
+&lt;li&gt;Additional table providers: We have work well underway to provide a host of table providers
+to &lt;code&gt;datafusion-python&lt;/code&gt; including: sqlite, duckdb, postgres, odbc, and mysql! In
+&lt;a href="https://github.com/datafusion-contrib/datafusion-table-providers/issues/279"&gt;datafusion-contrib #279&lt;/a&gt; we track the progress of this excellent work. Once complete, users
+will be able to &lt;code&gt;pip install&lt;/code&gt; this library and get easy access to all of these table
+providers. This is another way we are leveraging the FFI work to greatly expand the usability
+of &lt;code&gt;datafusion-python&lt;/code&gt; with relatively low effort.&lt;/li&gt;
+&lt;li&gt;External catalog and schema providers: For users who wish to go beyond table providers
+and have an entire custom catalog with schema, &lt;a href="https://github.com/apache/datafusion-python/issues/1091"&gt;#1091&lt;/a&gt; tracks the progress of exposing this
+in Python. With this work, if you have already written a Rust based table catalog you will
+be able to interface it in Python similar to the work described for the table providers
+above.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;This is only a sample of the great work that is being done. If there are features you would
+love to see, we encourage you to open an issue and join us as we build something wonderful.&lt;/p&gt;
+&lt;h2&gt;Appreciation&lt;/h2&gt;
+&lt;p&gt;We would like to thank everyone who has helped with these releases through their helpful
+conversations, code review, issue descriptions, and code authoring. We would especially
+like to thank the following authors of PRs who made these releases possible, listed in
+alphabetical order by username: &lt;a href="https://github.com/chenkovsky"&gt;@chenkovsky&lt;/a&gt;, &lt;a href="https://github.com/CrystalZhou0529"&gt;@CrystalZhou0529&lt;/a&gt;, &lt;a href="https://github.com/ion-elgreco"&gt;@ion-elgreco&lt;/a&gt;,
+&lt;a href="https://github.com/jsai28"&gt;@jsai28&lt;/a&gt;, &lt;a href="https://github.com/kevinjqliu"&gt;@kevinjqliu&lt;/a&gt;, &lt;a href="https://github.com/kylebarron"&gt;@kylebarron&lt;/a&gt;, &lt;a href="https://github.com/kosiew"&gt;@kosiew&lt;/a&gt;, &lt;a href="https://github.com/nirnayroy"&gt;@nirnayroy&lt;/a&gt;, and &lt;a href="https://github.com/Spaarsh"&gt;@Spaarsh&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Thank you!&lt;/p&gt;
+&lt;h2&gt;Get Involved&lt;/h2&gt;
+&lt;p&gt;The DataFusion Python team is an active and engaging community and we would love
+to have you join us and help the project.&lt;/p&gt;
+&lt;p&gt;Here are some ways to get involved:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Learn more by visiting the &lt;a href="https://datafusion.apache.org/python/index.html"&gt;DataFusion Python project&lt;/a&gt; page.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Try out the project and provide feedback, file issues, and contribute code.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Join us on &lt;a href="https://s.apache.org/slack-invite"&gt;ASF Slack&lt;/a&gt; or the &lt;a href="https://discord.gg/Qw5gKqHxUM"&gt;Arrow Rust Discord Server&lt;/a&gt;.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;</content><category term="blog"></category></entry><entry><title>Apache DataFusion 46.0.0 Released</title><link href="https://datafusion.apache.org/blog/2025/03/24/datafusion-46.0.0" rel="alternate"></link><published>2025-03-24T00:00:00+00:00</published><updated>2025-03-24T00:00:00+00:00</updated><author><name>Oznur Hanci and Berkay Sahin on behalf of the PMC</name></author><id>tag:datafusion.apache.org,2025-03-24:/blog/2025/03/24/datafusion-46.0.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
