@@ -587,7 +587,7 @@ DataFusion (see [apache/datafusion#14608]) if you are interested in helping 🎣
 - Achraf B ([@clflushopt]) is a Software Engineer at [Optable] where he works on data infrastructure.
 - [Sean Smith] ([@scsmithr]) is the founder of  focused on building a fast analytics database.
 
-[tpchgen-rs]: https://github.com/alamb/tpchgen-rs
+[tpchgen-rs]: https://github.com/clflushopt/tpchgen-rs
 [Andrew Lamb]: https://www.linkedin.com/in/andrewalamb/
 [@alamb]: https://github.com/alamb
 [InfluxData]: https://www.influxdata.com/
