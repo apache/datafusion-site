@@ -59,7 +59,7 @@ development to build &lt;a href="https://github.com/alamb/tpchgen-rs"&gt;tpchgen
 faster than any other implementation  we know of.&lt;/p&gt;
 &lt;p&gt;It is now possible to create the TPC-H SF=100 dataset in 72.23 seconds (1.4 GB/s
 😎) on a Macbook Air M3 with 16GB of memory, compared to the classic &lt;code&gt;dbgen&lt;/code&gt;
-which takes 30 minutes[^1] (0.05GB/sec). On the same machine, it takes less than
+which takes 30 minutes&lt;sup&gt;1&lt;/sup&gt; (0.05GB/sec). On the same machine, it takes less than
 2 minutes to create all 3.6 GB of SF=100 in &lt;a href="https://parquet.apache.org/"&gt;Apache Parquet&lt;/a&gt; format.
 It is finally convenient and efficient to run TPC-H queries locally when testing
 analytical engines such as DataFusion.&lt;/p&gt;
@@ -178,7 +178,7 @@ load the data, using &lt;code&gt;dbgen&lt;/code&gt;, which is not ideal for seve
 &lt;li&gt;You must find and compile a copy of the 15+ year old C program (for example &lt;a href="https://github.com/electrum/tpch-dbgen"&gt;electrum/tpch-dbgen&lt;/a&gt;)&lt;/li&gt;
 &lt;li&gt;&lt;code&gt;dbgen&lt;/code&gt; requires substantial time (Figure 3) and is not able to use more than one core.&lt;/li&gt;
 &lt;li&gt;It outputs TBL format, which typically requires loading into your database (for example, &lt;a href="https://github.com/apache/datafusion/blob/507f6b6773deac69dd9d90dbe60831f5ea5abed1/datafusion/sqllogictest/test_files/tpch/create_tables.slt.part#L24-L124"&gt;here is how to do so&lt;/a&gt; in Apache DataFusion) prior to query.&lt;/li&gt;
-&lt;li&gt;The implementation makes substantial assumptions about the operating environment, making it difficult to extend or embed into other systems.[^2]&lt;/li&gt;
+&lt;li&gt;The implementation makes substantial assumptions about the operating environment, making it difficult to extend or embed into other systems.&lt;sup&gt;2&lt;/sup&gt;&lt;/li&gt;
 &lt;/ol&gt;
 &lt;p&gt;&lt;img alt="Time to generate TPC-H data in TBL format" class="img-responsive" src="/blog/images/fastest-tpch-generator/tbl-performance.png" width="80%"/&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Figure 3&lt;/strong&gt;: Time to generate TPC-H data in TBL format. The default &lt;code&gt;tpchgen&lt;/code&gt; is
@@ -202,7 +202,7 @@ the first student project of &lt;a href="https://15799.courses.cs.cmu.edu/spring
 &lt;/ol&gt;
 &lt;p&gt;The above limitations makes it impractical to generate Scale Factor 100 and
 above on laptops or standard workstations, though DuckDB offers &lt;a href="https://duckdb.org/docs/stable/extensions/tpch.html#pre-generated-data-sets"&gt;pre-computed
-files&lt;/a&gt; for larger factors[^3].&lt;/p&gt;
+files&lt;/a&gt; for larger factors&lt;sup&gt;3&lt;/sup&gt;&lt;/p&gt;
 &lt;h1&gt;Why Rust?&lt;/h1&gt;
 &lt;p&gt;Realistically we used Rust because we wanted to integrate the data generator
 into &lt;a href="https://datafusion.apache.org/"&gt;Apache DataFusion&lt;/a&gt; and &lt;a href="https://glaredb.com/"&gt;GlareDB&lt;/a&gt;. However, we also believe Rust is
@@ -312,7 +312,7 @@ list of optimizations:&lt;/p&gt;
 &lt;h2&gt;Multi-threading&lt;/h2&gt;
 &lt;p&gt;Then we applied &lt;a href="https://doc.rust-lang.org/book/ch16-00-concurrency.html"&gt;Rust&amp;rsquo;s fearless concurrency&lt;/a&gt; &amp;ndash; with a single, &lt;a href="https://github.com/clflushopt/tpchgen-rs/commit/ab720a70cdc80a711f4a3dda6bac05445106f499"&gt;small PR&lt;/a&gt; (272
 net new lines) we updated the same memory safe code to run with multiple threads
-and consume bounded memory using &lt;a href="https://thenewstack.io/using-rustlangs-async-tokio-runtime-for-cpu-bound-tasks/"&gt;tokio for the thread scheduler&lt;/a&gt; [^4].&lt;/p&gt;
+and consume bounded memory using &lt;a href="https://thenewstack.io/using-rustlangs-async-tokio-runtime-for-cpu-bound-tasks/"&gt;tokio for the thread scheduler&lt;/a&gt;&lt;sup&gt;4&lt;/sup&gt;.&lt;/p&gt;
 &lt;p&gt;As shown in Table 4, with this change, tpchgen-cli generates the full SF=100
 dataset in 32 seconds (which is 3.3 GB/sec 🤯). Further investigation reveals
 that at SF=100 our generator is actually IO bound (which is not the case for
@@ -373,7 +373,7 @@ When writing to &lt;code&gt;/dev/null&lt;/code&gt; tpchgen  generates the entire
 &lt;/table&gt;
 &lt;p&gt;&lt;strong&gt;Table 4&lt;/strong&gt;: tpchgen-cli (multithreaded) performance measured with &lt;code&gt;time target/release/tpchgen-cli -s $SCALE_FACTOR&lt;/code&gt;&lt;/p&gt;
 &lt;p&gt;Using Rust and async streams, the data generator is also fully streaming: memory
-use does not increase with increasing data size / scale factors[^5]. The DuckDB
+use does not increase with increasing data size / scale factors&lt;sup&gt;5&lt;/sup&gt;. The DuckDB
 generator seems to &lt;a href="https://duckdb.org/docs/stable/extensions/tpch.html#resource-usage-of-the-data-generator"&gt;require far more memory&lt;/a&gt; than is commonly available on
 developer laptops and memory use increases with scale factor. With &lt;code&gt;tpchgen-cli&lt;/code&gt;
 it is perfectly possible to create data for SF=10000 or larger on a machine with
@@ -464,9 +464,9 @@ DataFusion (see &lt;a href="https://github.com/apache/datafusion/issues/14608"&g
 &lt;li&gt;&lt;a href="https://www.linkedin.com/in/scsmithr/"&gt;Sean Smith&lt;/a&gt; (&lt;a href="https://github.com/scsmithr"&gt;@scsmithr&lt;/a&gt;) is the founder of  focused on building a fast analytics database.&lt;/li&gt;
 &lt;/ul&gt;
 &lt;!-- Footnotes themselves at the bottom. --&gt;
-&lt;h2&gt;Notes&lt;/h2&gt;
-&lt;p&gt;[^1]: Actual Time: &lt;code&gt;30:35&lt;/code&gt;&lt;/p&gt;
-&lt;p&gt;[^2]: It is possible to embed the dbgen code, which appears to be the approach taken by DuckDB. This approach was tried in GlareDB (&lt;a href="https://github.com/GlareDB/glaredb/pull/3313"&gt;GlareDB/glaredb#3313&lt;/a&gt;), but ultimately shelved given the amount of effort needed to adapt and isolate the dbgen code.&lt;/p&gt;
-&lt;p&gt;[^3]: It is pretty amazing to imagine the machine required to generate SF300 that had 1.8TB (!!) of RAM&lt;/p&gt;
-&lt;p&gt;[^4]: We tried to &lt;a href="https://github.com/clflushopt/tpchgen-rs/pull/34"&gt;use Rayon (see discussion here)&lt;/a&gt;, but could not easily keep memory bounded.&lt;/p&gt;
-&lt;p&gt;[^5]: &lt;code&gt;tpchgen-cli&lt;/code&gt; memory usage is a function of the number of threads:  each thread needs some buffer space&lt;/p&gt;</content><category term="blog"></category></entry></feed>
+&lt;h2&gt;Footnotes&lt;/h2&gt;
+&lt;p&gt;&lt;em&gt;1&lt;/em&gt;: Actual Time: &lt;code&gt;30:35&lt;/code&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;2&lt;/em&gt;: It is possible to embed the dbgen code, which appears to be the approach taken by DuckDB. This approach was tried in GlareDB (&lt;a href="https://github.com/GlareDB/glaredb/pull/3313"&gt;GlareDB/glaredb#3313&lt;/a&gt;), but ultimately shelved given the amount of effort needed to adapt and isolate the dbgen code.&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;3&lt;/em&gt;: It is pretty amazing to imagine the machine required to generate SF300 that had 1.8TB (!!) of RAM&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;4&lt;/em&gt;: We tried to &lt;a href="https://github.com/clflushopt/tpchgen-rs/pull/34"&gt;use Rayon (see discussion here)&lt;/a&gt;, but could not easily keep memory bounded.&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;5&lt;/em&gt;: &lt;code&gt;tpchgen-cli&lt;/code&gt; memory usage is a function of the number of threads:  each thread needs some buffer space&lt;/p&gt;</content><category term="blog"></category></entry></feed>
