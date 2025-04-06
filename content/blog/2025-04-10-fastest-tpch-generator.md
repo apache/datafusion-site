@@ -211,11 +211,11 @@ shown in blue. `tpchgen` restricted to a single core is shown in red. Unmodified
 is shown in yellow.
 
 `dbgen` is so inconvenient and takes so long that vendors often provide
-preloaded TPC-H data, for example [Snowflake Sample Data], [DataBricks Sample
+preloaded TPC-H data, for example [Snowflake Sample Data], [Databricks Sample
 datasets] and [DuckDB Pre-Generated Data Sets].
 
 [Snowflake Sample  Data]: https://docs.snowflake.com/en/user-guide/sample-data-tpch
-[DataBricks Sample datasets]: https://docs.databricks.com/aws/en/discover/databricks-datasets
+[Databricks Sample datasets]: https://docs.databricks.com/aws/en/discover/databricks-datasets
 [DuckDB Pre-Generated Data Sets]: https://duckdb.org/docs/stable/extensions/tpch.html#pre-generated-data-sets
 
 
