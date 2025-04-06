@@ -119,7 +119,7 @@ bound on the Scale Factor.
 [OLAP]: https://en.wikipedia.org/wiki/Online_analytical_processing
 [well known]: https://www.vldb.org/pvldb/vol9/p204-leis.pdf
 [Transaction Processing Performance Council]: https://www.tpc.org/
-[dbgen]: https://github.com/electrum/tpch-dbgen)
+[dbgen]: https://github.com/electrum/tpch-dbgen
 [C-99]: https://en.wikipedia.org/wiki/C99
 
 ```text
