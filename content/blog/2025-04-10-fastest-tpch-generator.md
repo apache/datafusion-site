@@ -219,7 +219,7 @@ datasets] and [DuckDB Pre-Generated Data Sets].
 [DuckDB Pre-Generated Data Sets]: https://duckdb.org/docs/stable/extensions/tpch.html#pre-generated-data-sets
 
 
-In addition to pre-generated datasets, DuckDB also provides a [TPCH extension] 
+In addition to pre-generated datasets, DuckDB also provides a [TPC-H extension] 
 for generating TPC-H datasets within DuckDB. This is so much easier to use than
 the current alternatives that it leads many researchers and other thought
 leaders to use DuckDB to evaluate new ideas. For example, [Wan Shen
