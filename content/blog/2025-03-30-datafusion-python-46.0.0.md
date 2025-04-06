@@ -42,7 +42,7 @@ We highly recommend reviewing the upstream [DataFusion 46.0.0] announcement.
 In these releases we have introduced two new ways to more easily read files into
 DataFrames.
 
-[PR 982] introduced a series of easier read functions for Parquet, JSON, CSV, and
+PR [#982] introduced a series of easier read functions for Parquet, JSON, CSV, and
 AVRO files. This introduces a concept of a global context that is available by
 default when using these methods. Now instead of creating a default Session
 Context and then calling the read methods, you can simply import these read
@@ -54,7 +54,7 @@ from datafusion.io import read_parquet
 df = read_parquet(path="./examples/tpch/data/customer.parquet")
 ```
 
-[PR 980] adds a method for setting up a session context to use URL tables. With
+PR [#980] adds a method for setting up a session context to use URL tables. With
 this enabled, you can use a path to a local file as a table name. An example
 of how to use this is demonstrated in the following snippet.
 
@@ -64,15 +64,15 @@ ctx = datafusion.SessionContext().enable_url_table()
 df = ctx.table("./examples/tpch/data/customer.parquet")
 ```
 
-[PR 982]: https://github.com/apache/datafusion-python/pull/982
-[PR 980]: https://github.com/apache/datafusion-python/pull/980
+[#982]: https://github.com/apache/datafusion-python/pull/982
+[#980]: https://github.com/apache/datafusion-python/pull/980
 
 ## Registering Table Views
 
 DataFusion supports registering a logical plan as a view with a session context. This
 allows for work flows to create views in one part of the work flow and pass the session
 context around to other places where that logical plan can be reused. This is an useful
-feature for building up complex workflows and for code clarity. [PR 1016] enables this
+feature for building up complex workflows and for code clarity. PR [#1016] enables this
 feature in `datafusion-python`.
 
 For example, supposing you have a DataFrame called `df1`, you could use this code snippet
@@ -89,7 +89,7 @@ you can retrive the DataFrame with:
 df2 = ctx.table("view1")
 ```
 
-[PR 1016]: https://github.com/apache/datafusion-python/pull/1016
+[#1016]: https://github.com/apache/datafusion-python/pull/1016
 
 ## Asynchronous Iteration of Record Batches
 
@@ -103,17 +103,17 @@ function.
 
 ## Default Compression for Parquet files
 
-With [PR 981], we change the saving of Parquet files to use zstd compression by default.
+With PR [#981], we change the saving of Parquet files to use zstd compression by default.
 Previously the default was uncompressed, causing excessive disk storage. Zstd is an
 excellent compression scheme that balances speed and compression ratio. Users can still
 save their Parquet files uncompressed by passing in the appropriate value to the
 `compression` argument when calling `DataFrame.write_parquet`.
 
-[PR 981]: https://github.com/apache/datafusion-python/pull/981
+[#981]: https://github.com/apache/datafusion-python/pull/981
 
 ## UDF Decorators
 
-In [PR 1040] and [PR 1061] we add methods to make creating user defined functions
+In PRs [#1040] and [#1061] we add methods to make creating user defined functions
 easier and take advantage of Python decorators. With these PRs you can save a step
 from defining a method and then defining a udf of that method. Instead you can
 simply add the appropriate `udf` decorator. Similar methods exist for aggregate
@@ -128,8 +128,8 @@ def my_custom_function(
     pass
 ```
 
-[PR 1040]: https://github.com/apache/datafusion-python/pull/1040
-[PR 1061]: https://github.com/apache/datafusion-python/pull/1061
+[#1040]: https://github.com/apache/datafusion-python/pull/1040
+[#1061]: https://github.com/apache/datafusion-python/pull/1061
 
 
 ## `uv` package management
@@ -147,19 +147,19 @@ via `pip` or `conda`. For developers, the instructions in the repository have be
 
 In an effort to improve our code cleanliness and ensure we are following Python best
 practices, we use [ruff] to perform Python linting. Until now we enabled only a portion
-of the available linters available. In [PR 1055] and [PR 1062], we enable many more
+of the available linters available. In PRs [#1055] and [#1062], we enable many more
 of these linters and made code improvements to ensure we are following these
 recommendations.
 
 [ruff]: https://docs.astral.sh/ruff/
-[PR 1055]: https://github.com/apache/datafusion-python/pull/1055
-[PR 1062]: https://github.com/apache/datafusion-python/pull/1062
+[#1055]: https://github.com/apache/datafusion-python/pull/1055
+[#1062]: https://github.com/apache/datafusion-python/pull/1062
 
 ## Improved Jupyter Notebook rendering
 
-Since [PR 839] in DataFusion 41.0.0 we have been able to render DataFrames using html in
+Since PR [#839] in DataFusion 41.0.0 we have been able to render DataFrames using html in
 [jupyter] notebooks. This is a big improvement over the `show` command when we have the
-ability to render tables. In [PR 1036] we went a step further and added in a variety
+ability to render tables. In PR [#1036] we went a step further and added in a variety
 of features.
 
 - Now html tables are scrollable, vertically and horizontally.
@@ -190,8 +190,8 @@ expandable text and scroll bars.
 </figure>
 
 [jupyter]: https://jupyter.org/
-[PR 839]: https://github.com/apache/datafusion-python/pull/839
-[PR 1036]: https://github.com/apache/datafusion-python/pull/1036
+[#839]: https://github.com/apache/datafusion-python/pull/839
+[#1036]: https://github.com/apache/datafusion-python/pull/1036
 
 ## Extension Documentation
 
@@ -224,6 +224,7 @@ only impactful to unit tests.
 supported.
 
 [DataFusion 43.0.0]: https://github.com/apache/datafusion/blob/main/dev/changelog/43.0.0.md
+[DataFusion 44.0.0]: https://github.com/apache/datafusion/blob/main/dev/changelog/44.0.0.md
 [String View Pt 1]: https://datafusion.apache.org/blog/2024/09/13/string-view-german-style-strings-part-1/
 [Pt 2]: https://datafusion.apache.org/blog/2024/09/13/string-view-german-style-strings-part-2/
 
@@ -248,10 +249,10 @@ will be able to `pip install` this library and get easy access to all of these t
 providers. This is another way we are leveraging the FFI work to greatly expand the usability
 of `datafusion-python` with relatively low effort.
 - External catalog and schema providers: For users who wish to go beyond table providers
-and have an entire custom catalog with schema, [#1091] tracks the progress of exposing this
-in Python. With this work, if you have already written a Rust based table catalog you will
-be able to interface it in Python similar to the work described for the table providers
-above.
+and have an entire custom catalog with schema, Issue [#1091] tracks the progress of exposing
+this in Python. With this work, if you have already written a Rust based table catalog you
+will be able to interface it in Python similar to the work described for the table
+providers above.
 
 This is only a sample of the great work that is being done. If there are features you would
 love to see, we encourage you to open an issue and join us as we build something wonderful.
