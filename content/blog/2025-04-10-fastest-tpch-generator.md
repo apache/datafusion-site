@@ -585,7 +585,7 @@ DataFusion (see [apache/datafusion#14608]) if you are interested in helping 🎣
 
 - [Andrew Lamb] ([@alamb]) is a Staff Engineer at [InfluxData] and a PMC member of [Apache DataFusion] and [Apache Arrow].
 - Achraf B ([@clflushopt]) is a Software Engineer at [Optable] where he works on data infrastructure.
-- [Sean Smith] ([@scsmithr]) is the founder of  focused on building a fast analytics database.
+- [Sean Smith] ([@scsmithr]) is the founder of [GlareDB] focused on building a fast analytics database.
 
 [tpchgen-rs]: https://github.com/clflushopt/tpchgen-rs
 [Andrew Lamb]: https://www.linkedin.com/in/andrewalamb/
