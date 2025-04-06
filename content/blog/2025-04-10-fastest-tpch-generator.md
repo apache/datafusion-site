@@ -35,7 +35,7 @@ th, td {
 </style>
 
 3 members of the [Apache DataFusion] community used Rust and open source
-development to build [tpchgen-rs], a fully open TPC-H data generator over 2 0x
+development to build [tpchgen-rs], a fully open TPC-H data generator over 20x
 faster than any other implementation we know of.
 
 It is now possible to create the TPC-H SF=100 dataset in 72.23 seconds (1.4 GB/s
