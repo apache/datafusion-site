@@ -41,7 +41,7 @@ faster than any other implementation  we know of.
 It is now possible to create the TPC-H SF=100 dataset in 72.23 seconds (1.4 GB/s
 😎) on a Macbook Air M3 with 16GB of memory, compared to the classic `dbgen`
 which takes 30 minutes<sup>1</sup> (0.05GB/sec). On the same machine, it takes less than
-2 minutes to create all 3.6 GB of SF=100 in [Apache Parquet] format.
+2 minutes to create all 3.6 GB of SF=100 in [Apache Parquet] format, which takes 44 minutes using [DuckDB].
 It is finally convenient and efficient to run TPC-H queries locally when testing
 analytical engines such as DataFusion.
 
@@ -49,7 +49,7 @@ analytical engines such as DataFusion.
 
 **Figure 1**: Time to create TPC-H dataset for Scale Factor (see below) 1, 10,
 100 and 1000 as 8 individual SNAPPY compressed parquet files using a 22 core GCP
-VM. For Scale Factor(SF) 100 `tpchgen` takes 1 minute and 14 seconds and
+VM with 88GB of memory. For Scale Factor(SF) 100 `tpchgen` takes 1 minute and 14 seconds and
 [DuckDB] takes 17 minutes and 48 seconds. For SF=1000, `tpchgen` takes 10
 minutes and 26 and uses about 5 GB of RAM at peak, and we could not measure
 DuckDB’s time as it [requires 647 GB of RAM], more than the 88 GB that was
@@ -205,7 +205,7 @@ load the data, using `dbgen`, which is not ideal for several reasons:
 
 <img src="/blog/images/fastest-tpch-generator/tbl-performance.png" alt="Time to generate TPC-H data in TBL format" width="80%" class="img-responsive">
 
-**Figure 3**: Time to generate TPC-H data in TBL format. The default `tpchgen` is
+**Figure 3**: Time to generate TPC-H data in TBL format. `tpchgen` is
 shown in blue. `tpchgen` restricted to a single core is shown in red. Unmodified
 `dbgen` is shown in green and `dbgen` modified to use `-O3` optimization level
 is shown in yellow.
