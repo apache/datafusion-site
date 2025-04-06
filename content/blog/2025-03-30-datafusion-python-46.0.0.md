@@ -70,8 +70,8 @@ df = ctx.table("./examples/tpch/data/customer.parquet")
 ## Registering Table Views
 
 DataFusion supports registering a logical plan as a view with a session context. This
-allows for work flows to create views in one part of the work flow and pass the session
-context around to other places where that logical plan can be reused. This is an useful
+allows creating views in one part of your work flow and passinng the session
+context to other places where that logical plan can be reused. This is an useful
 feature for building up complex workflows and for code clarity. PR [#1016] enables this
 feature in `datafusion-python`.
 
@@ -101,7 +101,7 @@ function.
 
 [Issue 974]: https://github.com/apache/datafusion-python/issues/974
 
-## Default Compression for Parquet files
+## Default ZSTD Compression for Parquet files
 
 With PR [#981], we change the saving of Parquet files to use zstd compression by default.
 Previously the default was uncompressed, causing excessive disk storage. Zstd is an
