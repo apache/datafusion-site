@@ -35,8 +35,8 @@ th, td {
 </style>
 
 3 members of the [Apache DataFusion] community used Rust and open source
-development to build [tpchgen-rs], a fully open TPC-H data generator over 10x
-faster than any other implementation  we know of.
+development to build [tpchgen-rs], a fully open TPC-H data generator over 2 0x
+faster than any other implementation we know of.
 
 It is now possible to create the TPC-H SF=100 dataset in 72.23 seconds (1.4 GB/s
 😎) on a Macbook Air M3 with 16GB of memory, compared to the classic `dbgen`
@@ -240,7 +240,7 @@ As beneficial as the DuckDB TPC-H extension is, it is non-ideal for several reas
 
 The above limitations makes it impractical to generate Scale Factor 100 and
 above on laptops or standard workstations, though DuckDB offers [pre-computed
-files] for larger factors<sup>3</sup>
+files] for larger factors<sup>3</sup>.
 
 [pre-computed files]: https://duckdb.org/docs/stable/extensions/tpch.html#pre-generated-data-sets
 
