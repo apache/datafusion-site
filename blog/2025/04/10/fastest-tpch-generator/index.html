@@ -75,13 +75,13 @@ faster than any other implementation  we know of.</p>
 <p>It is now possible to create the TPC-H SF=100 dataset in 72.23 seconds (1.4 GB/s
 😎) on a Macbook Air M3 with 16GB of memory, compared to the classic <code>dbgen</code>
 which takes 30 minutes<sup>1</sup> (0.05GB/sec). On the same machine, it takes less than
-2 minutes to create all 3.6 GB of SF=100 in <a href="https://parquet.apache.org/">Apache Parquet</a> format.
+2 minutes to create all 3.6 GB of SF=100 in <a href="https://parquet.apache.org/">Apache Parquet</a> format, which takes 44 minutes using <a href="https://duckdb.org">DuckDB</a>.
 It is finally convenient and efficient to run TPC-H queries locally when testing
 analytical engines such as DataFusion.</p>
 <p><img alt="Time to create TPC-H parquet dataset for Scale Factor  1, 10, 100 and 1000" class="img-responsive" src="/blog/images/fastest-tpch-generator/parquet-performance.png" width="80%"/></p>
 <p><strong>Figure 1</strong>: Time to create TPC-H dataset for Scale Factor (see below) 1, 10,
 100 and 1000 as 8 individual SNAPPY compressed parquet files using a 22 core GCP
-VM. For Scale Factor(SF) 100 <code>tpchgen</code> takes 1 minute and 14 seconds and
+VM with 88GB of memory. For Scale Factor(SF) 100 <code>tpchgen</code> takes 1 minute and 14 seconds and
 <a href="https://duckdb.org">DuckDB</a> takes 17 minutes and 48 seconds. For SF=1000, <code>tpchgen</code> takes 10
 minutes and 26 and uses about 5 GB of RAM at peak, and we could not measure
 DuckDB&rsquo;s time as it <a href="https://duckdb.org/docs/stable/extensions/tpch.html#resource-usage-of-the-data-generator">requires 647 GB of RAM</a>, more than the 88 GB that was
@@ -196,14 +196,14 @@ load the data, using <code>dbgen</code>, which is not ideal for several reasons:
 <li>The implementation makes substantial assumptions about the operating environment, making it difficult to extend or embed into other systems.<sup>2</sup></li>
 </ol>
 <p><img alt="Time to generate TPC-H data in TBL format" class="img-responsive" src="/blog/images/fastest-tpch-generator/tbl-performance.png" width="80%"/></p>
-<p><strong>Figure 3</strong>: Time to generate TPC-H data in TBL format. The default <code>tpchgen</code> is
+<p><strong>Figure 3</strong>: Time to generate TPC-H data in TBL format. <code>tpchgen</code> is
 shown in blue. <code>tpchgen</code> restricted to a single core is shown in red. Unmodified
 <code>dbgen</code> is shown in green and <code>dbgen</code> modified to use <code>-O3</code> optimization level
 is shown in yellow.</p>
 <p><code>dbgen</code> is so inconvenient and takes so long that vendors often provide
-preloaded TPC-H data, for example <a href="https://docs.snowflake.com/en/user-guide/sample-data-tpch">Snowflake Sample Data</a>, <a href="https://docs.databricks.com/aws/en/discover/databricks-datasets">DataBricks Sample
+preloaded TPC-H data, for example <a href="https://docs.snowflake.com/en/user-guide/sample-data-tpch">Snowflake Sample Data</a>, <a href="https://docs.databricks.com/aws/en/discover/databricks-datasets">Databricks Sample
 datasets</a> and <a href="https://duckdb.org/docs/stable/extensions/tpch.html#pre-generated-data-sets">DuckDB Pre-Generated Data Sets</a>.</p>
-<p>In addition to pre-generated datasets, DuckDB also provides a [TPCH extension] 
+<p>In addition to pre-generated datasets, DuckDB also provides a <a href="https://duckdb.org/docs/stable/extensions/tpch.html">TPC-H extension</a> 
 for generating TPC-H datasets within DuckDB. This is so much easier to use than
 the current alternatives that it leads many researchers and other thought
 leaders to use DuckDB to evaluate new ideas. For example, <a href="https://github.com/lmwnshn">Wan Shen
