@@ -888,41 +888,41 @@ are some highlights:&lt;/p&gt;
 &lt;p&gt;DataFusion now has much improved support for structured types such &lt;code&gt;STRUCT&lt;/code&gt;,
 &lt;code&gt;LIST&lt;/code&gt;/&lt;code&gt;ARRAY&lt;/code&gt; and &lt;code&gt;MAP&lt;/code&gt;. For example, you can now create &lt;code&gt;STRUCT&lt;/code&gt; literals 
 in SQL like this:&lt;/p&gt;
-&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;select&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="na"&gt;'foo&lt;/span&gt;&lt;span class="err"&gt;'&lt;/span&gt;: &lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="na"&gt;'bar&lt;/span&gt;&lt;span class="err"&gt;'&lt;/span&gt;: &lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;}};&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="o"&gt;+--------------------------------------------------------------+&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;named_struct&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Utf8&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s"&gt;"foo"&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt;&lt;span class="n"&gt;named_struct&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Utf8&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s"&gt;"bar"&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt;&lt;span class="n"&gt;Int64&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;)))&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="o"&gt;+--------------------------------------------------------------+&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="n"&gt;foo&lt;/span&gt;: &lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="n"&gt;bar&lt;/span&gt;: &lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;}}&lt;/span&gt;&lt;span class="w"&gt;                                              &lt;/span&gt;&lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="o"&gt;+--------------------------------------------------------------+&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;row&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;s&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;fetched&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="n"&gt;Elapsed&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="mf"&gt;0.002&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;seconds&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;&amp;gt; select {'foo': {'bar': 2}};
++--------------------------------------------------------------+
+| named_struct(Utf8("foo"),named_struct(Utf8("bar"),Int64(2))) |
++--------------------------------------------------------------+
+| {foo: {bar: 2}}                                              |
++--------------------------------------------------------------+
+1 row(s) fetched.
+Elapsed 0.002 seconds.
+&lt;/code&gt;&lt;/pre&gt;
 &lt;h1&gt;SQL Unparser (SQL Formatter)&lt;/h1&gt;
 &lt;p&gt;DataFusion now supports converting &lt;code&gt;Expr&lt;/code&gt;s and &lt;code&gt;LogicalPlan&lt;/code&gt;s BACK to SQL text.
 This can be useful in query federation to push predicates down into other
 systems that only accept SQL, and for building systems that generate SQL.&lt;/p&gt;
 &lt;p&gt;For example, you can now convert a logical expression back to SQL text:&lt;/p&gt;
-&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="c1"&gt;// Form a logical expression that represents the SQL "a &amp;lt; 5 OR a = 8"&lt;/span&gt;
-&lt;span class="kd"&gt;let&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;expr&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;col&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s"&gt;"a"&lt;/span&gt;&lt;span class="p"&gt;).&lt;/span&gt;&lt;span class="n"&gt;lt&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;lit&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;5&lt;/span&gt;&lt;span class="p"&gt;)).&lt;/span&gt;&lt;span class="n"&gt;or&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;col&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s"&gt;"a"&lt;/span&gt;&lt;span class="p"&gt;).&lt;/span&gt;&lt;span class="n"&gt;eq&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;lit&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;8&lt;/span&gt;&lt;span class="p"&gt;)));&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="c1"&gt;// convert the expression back to SQL text&lt;/span&gt;
-&lt;span class="kd"&gt;let&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;sql&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;expr_to_sql&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;expr&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="o"&gt;?&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;to_string&lt;/span&gt;&lt;span class="p"&gt;();&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="n"&gt;assert_eq&lt;/span&gt;&lt;span class="o"&gt;!&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;sql&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="s"&gt;"a &amp;lt; 5 OR a = 8"&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;// Form a logical expression that represents the SQL "a &amp;lt; 5 OR a = 8"
+let expr = col("a").lt(lit(5)).or(col("a").eq(lit(8)));
+// convert the expression back to SQL text
+let sql = expr_to_sql(&amp;amp;expr)?.to_string();
+assert_eq!(sql, "a &amp;lt; 5 OR a = 8");
+&lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;You can also do complex things like parsing SQL, modifying the plan, and convert
 it back to SQL:&lt;/p&gt;
-&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="kd"&gt;let&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;df&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;ctx&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="c1"&gt;// Use SQL to read some data from the parquet file&lt;/span&gt;
-&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;sql&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s"&gt;"SELECT int_col, double_col, CAST(date_string_col as VARCHAR) FROM alltypes_plain"&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="k"&gt;await&lt;/span&gt;&lt;span class="o"&gt;?&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="c1"&gt;// Programmatically add new filters `id &amp;gt; 1 and tinyint_col &amp;lt; double_col`&lt;/span&gt;
-&lt;span class="kd"&gt;let&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;df&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;df&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;filter&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;col&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s"&gt;"id"&lt;/span&gt;&lt;span class="p"&gt;).&lt;/span&gt;&lt;span class="n"&gt;gt&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;lit&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;)).&lt;/span&gt;&lt;span class="n"&gt;and&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;col&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s"&gt;"tinyint_col"&lt;/span&gt;&lt;span class="p"&gt;).&lt;/span&gt;&lt;span class="n"&gt;lt&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;col&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s"&gt;"double_col"&lt;/span&gt;&lt;span class="p"&gt;))))&lt;/span&gt;&lt;span class="o"&gt;?&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="c1"&gt;// Convert the new logical plan back to SQL&lt;/span&gt;
-&lt;span class="kd"&gt;let&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;sql&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;plan_to_sql&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;df&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;logical_plan&lt;/span&gt;&lt;span class="p"&gt;())&lt;/span&gt;&lt;span class="o"&gt;?&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;to_string&lt;/span&gt;&lt;span class="p"&gt;();&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="n"&gt;assert_eq&lt;/span&gt;&lt;span class="o"&gt;!&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;sql&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;
-&lt;span class="w"&gt;           &lt;/span&gt;&lt;span class="s"&gt;"SELECT alltypes_plain.int_col, alltypes_plain.double_col, CAST(alltypes_plain.date_string_col AS VARCHAR) \&lt;/span&gt;
-&lt;span class="s"&gt;           FROM alltypes_plain WHERE ((alltypes_plain.id &amp;gt; 1) AND (alltypes_plain.tinyint_col &amp;lt; alltypes_plain.double_col))"&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="p"&gt;);&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;let df = ctx
+  // Use SQL to read some data from the parquet file
+  .sql("SELECT int_col, double_col, CAST(date_string_col as VARCHAR) FROM alltypes_plain")
+  .await?;
+// Programmatically add new filters `id &amp;gt; 1 and tinyint_col &amp;lt; double_col`
+let df = df.filter(col("id").gt(lit(1)).and(col("tinyint_col").lt(col("double_col"))))?
+// Convert the new logical plan back to SQL
+let sql = plan_to_sql(df.logical_plan())?.to_string();
+assert_eq!(sql, 
+           "SELECT alltypes_plain.int_col, alltypes_plain.double_col, CAST(alltypes_plain.date_string_col AS VARCHAR) \
+           FROM alltypes_plain WHERE ((alltypes_plain.id &amp;gt; 1) AND (alltypes_plain.tinyint_col &amp;lt; alltypes_plain.double_col))")
+);
+&lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;See the &lt;a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/plan_to_sql.rs"&gt;Plan to SQL example&lt;/a&gt; or the APIs &lt;a href="https://docs.rs/datafusion/latest/datafusion/sql/unparser/fn.expr_to_sql.html"&gt;expr_to_sql&lt;/a&gt; and &lt;a href="https://docs.rs/datafusion/latest/datafusion/sql/unparser/fn.plan_to_sql.html"&gt;plan_to_sql&lt;/a&gt; for more details.&lt;/p&gt;
 &lt;h1&gt;Low Level APIs for Fast Parquet Access (indexing)&lt;/h1&gt;
 &lt;p&gt;With their rising prevalence, supporting efficient access to Parquet files
@@ -937,7 +937,7 @@ API.&lt;/p&gt;
 &lt;p&gt;This API can be used along with index information to selectively skip decoding
 parts of the file. For example, Spice AI used this feature to add &lt;a href="https://github.com/spiceai/spiceai/pull/1891"&gt;efficient
 support&lt;/a&gt; for reading from DeltaLake tables and handling &lt;a href="https://docs.delta.io/latest/delta-deletion-vectors.html"&gt;deletion vectors&lt;/a&gt;.&lt;/p&gt;
-&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;        &amp;boxdr;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxdl;   If the RowSelection does not include any
+&lt;pre&gt;&lt;code class="language-text"&gt;        &amp;boxdr;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxdl;   If the RowSelection does not include any
         &amp;boxv;          ...          &amp;boxv;   rows from a particular Data Page, that
         &amp;boxv;                       &amp;boxv;   Data Page is not fetched or decoded.
         &amp;boxv; &amp;boxdr;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxdl; &amp;boxv;   Note this requires a PageIndex
@@ -959,7 +959,7 @@ Groups  &amp;boxv; &amp;boxv;     &amp;boxur;&amp;boxh;&amp;boxh;&amp;boxh;&amp;
         &amp;boxv; &amp;boxUR;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxUL; &amp;boxv;
         &amp;boxur;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxul;
          Parquet File
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;See the &lt;a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/parquet_index.rs"&gt;parquet_index.rs&lt;/a&gt; and &lt;a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/advanced_parquet_index.rs"&gt;advanced_parquet_index.rs&lt;/a&gt; examples for more details. &lt;/p&gt;
 &lt;p&gt;Thanks to &lt;a href="https://github.com/alamb"&gt;@alamb&lt;/a&gt; and &lt;a href="https://github.com/Ted-Jiang"&gt;@Ted-Jiang&lt;/a&gt; for this feature.  &lt;/p&gt;
 &lt;h2&gt;Building Systems is Easier with DataFusion 🛠️&lt;/h2&gt;
@@ -977,43 +977,43 @@ DataFusion's SQL planner to support custom operators or syntax.&lt;/p&gt;
 &lt;p&gt;For example the &lt;a href="https://github.com/datafusion-contrib/datafusion-functions-json"&gt;datafusion-functions-json&lt;/a&gt; project uses this API to support
 JSON operators in SQL queries. It provides a custom implementation for
 planning JSON operators such as &lt;code&gt;-&amp;gt;&lt;/code&gt; and &lt;code&gt;-&amp;gt;&amp;gt;&lt;/code&gt; with code like:&lt;/p&gt;
-&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="nc"&gt;MyCustomPlanner&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;struct MyCustomPlanner;
 
-&lt;span class="k"&gt;impl&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;ExprPlanner&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="k"&gt;for&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;MyCustomPlanner&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="c1"&gt;// Provide custom implementation for planning a binary operators&lt;/span&gt;
-&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="c1"&gt;// such as `-&amp;gt;` and `-&amp;gt;&amp;gt;`&lt;/span&gt;
-&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="k"&gt;fn&lt;/span&gt; &lt;span class="nf"&gt;plan_binary_op&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="n"&gt;expr&lt;/span&gt;: &lt;span class="nc"&gt;RawBinaryExpr&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="n"&gt;_schema&lt;/span&gt;: &lt;span class="kp"&gt;&amp;amp;&lt;/span&gt;&lt;span class="nc"&gt;DFSchema&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;-&amp;gt; &lt;span class="nb"&gt;Result&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="n"&gt;PlannerResult&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="n"&gt;RawBinaryExpr&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="k"&gt;match&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;expr&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;op&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;           &lt;/span&gt;&lt;span class="n"&gt;BinaryOperator&lt;/span&gt;::&lt;span class="n"&gt;Arrow&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="cm"&gt;/* plan -&amp;gt; operator */&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;           &lt;/span&gt;&lt;span class="n"&gt;BinaryOperator&lt;/span&gt;::&lt;span class="n"&gt;LongArrow&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="cm"&gt;/* plan -&amp;gt;&amp;gt; operator */&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;           &lt;/span&gt;&lt;span class="o"&gt;..&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+impl ExprPlanner for MyCustomPlanner {
+    // Provide custom implementation for planning a binary operators
+    // such as `-&amp;gt;` and `-&amp;gt;&amp;gt;`
+    fn plan_binary_op(
+        &amp;amp;self,
+        expr: RawBinaryExpr,
+        _schema: &amp;amp;DFSchema,
+    ) -&amp;gt; Result&amp;lt;PlannerResult&amp;lt;RawBinaryExpr&amp;gt;&amp;gt; {
+        match &amp;amp;expr.op {
+           BinaryOperator::Arrow =&amp;gt; { /* plan -&amp;gt; operator */ }
+           BinaryOperator::LongArrow =&amp;gt; { /* plan -&amp;gt;&amp;gt; operator */ }
+           ...
+        }
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;Thanks to &lt;a href="https://github.com/samuelcolvin"&gt;@samuelcolvin&lt;/a&gt;, &lt;a href="https://github.com/jayzhan211"&gt;@jayzhan211&lt;/a&gt; and &lt;a href="https://github.com/dharanad"&gt;@dharanad&lt;/a&gt; for helping make this
 feature happen.&lt;/p&gt;
 &lt;h1&gt;Pluggable Support for &lt;code&gt;CREATE FUNCTION&lt;/code&gt;&lt;/h1&gt;
 &lt;p&gt;DataFusion's new [&lt;code&gt;FunctionFactory&lt;/code&gt;] API let's users provide a handler for
 &lt;code&gt;CREATE FUNCTION&lt;/code&gt; SQL statements. This feature lets you build systems that
 support defining functions in SQL such as&lt;/p&gt;
-&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="c1"&gt;-- SQL based functions&lt;/span&gt;
-&lt;span class="k"&gt;CREATE&lt;/span&gt; &lt;span class="k"&gt;FUNCTION&lt;/span&gt; &lt;span class="n"&gt;my_func&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;DOUBLE&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;DOUBLE&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="k"&gt;RETURNS&lt;/span&gt; &lt;span class="n"&gt;DOUBLE&lt;/span&gt;
-    &lt;span class="k"&gt;RETURN&lt;/span&gt; &lt;span class="err"&gt;$&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="err"&gt;$&lt;/span&gt;&lt;span class="mi"&gt;3&lt;/span&gt;
-&lt;span class="p"&gt;;&lt;/span&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;-- SQL based functions
+CREATE FUNCTION my_func(DOUBLE, DOUBLE) RETURNS DOUBLE
+    RETURN $1 + $3
+;
 
-&lt;span class="c1"&gt;-- ML Models&lt;/span&gt;
-&lt;span class="k"&gt;CREATE&lt;/span&gt; &lt;span class="k"&gt;FUNCTION&lt;/span&gt; &lt;span class="n"&gt;iris&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nb"&gt;FLOAT&lt;/span&gt;&lt;span class="p"&gt;[])&lt;/span&gt; &lt;span class="k"&gt;RETURNS&lt;/span&gt; &lt;span class="nb"&gt;FLOAT&lt;/span&gt;&lt;span class="p"&gt;[]&lt;/span&gt; 
-&lt;span class="k"&gt;LANGUAGE&lt;/span&gt; &lt;span class="n"&gt;TORCH&lt;/span&gt; &lt;span class="k"&gt;AS&lt;/span&gt; &lt;span class="s1"&gt;'models:/iris@champion'&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+-- ML Models
+CREATE FUNCTION iris(FLOAT[]) RETURNS FLOAT[] 
+LANGUAGE TORCH AS 'models:/iris@champion';
 
-&lt;span class="c1"&gt;-- WebAssembly&lt;/span&gt;
-&lt;span class="k"&gt;CREATE&lt;/span&gt; &lt;span class="k"&gt;FUNCTION&lt;/span&gt; &lt;span class="n"&gt;func&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nb"&gt;FLOAT&lt;/span&gt;&lt;span class="p"&gt;[])&lt;/span&gt; &lt;span class="k"&gt;RETURNS&lt;/span&gt; &lt;span class="nb"&gt;FLOAT&lt;/span&gt;&lt;span class="p"&gt;[]&lt;/span&gt; 
-&lt;span class="k"&gt;LANGUAGE&lt;/span&gt; &lt;span class="n"&gt;WASM&lt;/span&gt; &lt;span class="k"&gt;AS&lt;/span&gt; &lt;span class="s1"&gt;'func.wasm'&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+-- WebAssembly
+CREATE FUNCTION func(FLOAT[]) RETURNS FLOAT[] 
+LANGUAGE WASM AS 'func.wasm'
+&lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;Huge thanks to &lt;a href="https://github.com/milenkovicm"&gt;@milenkovicm&lt;/a&gt; for this feature. There is an example of how to
 make macro like functions in &lt;a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/function_factory.rs"&gt;function_factory.rs&lt;/a&gt;. It would be
 great if &lt;a href="https://github.com/apache/datafusion/issues/9326"&gt;someone made a demo&lt;/a&gt; showing how to create WASMs 🎣.&lt;/p&gt;
@@ -1451,31 +1451,31 @@ files, and user defined implementations. While reading from &lt;a href="https://
 partitioned tables&lt;/a&gt; has long been supported, it is now possible to write to such
 tables as well.&lt;/p&gt;
 &lt;p&gt;For example, to write to a local file:&lt;/p&gt;
-&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="err"&gt;❯&lt;/span&gt; &lt;span class="k"&gt;CREATE&lt;/span&gt; &lt;span class="k"&gt;EXTERNAL&lt;/span&gt; &lt;span class="k"&gt;TABLE&lt;/span&gt; &lt;span class="n"&gt;awesome_table&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;x&lt;/span&gt; &lt;span class="nb"&gt;INT&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="n"&gt;STORED&lt;/span&gt; &lt;span class="k"&gt;AS&lt;/span&gt; &lt;span class="n"&gt;PARQUET&lt;/span&gt; &lt;span class="k"&gt;LOCATION&lt;/span&gt; &lt;span class="s1"&gt;'/tmp/my_awesome_table'&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
-&lt;span class="mi"&gt;0&lt;/span&gt; &lt;span class="k"&gt;rows&lt;/span&gt; &lt;span class="k"&gt;in&lt;/span&gt; &lt;span class="k"&gt;set&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt; &lt;span class="n"&gt;Query&lt;/span&gt; &lt;span class="n"&gt;took&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="mi"&gt;003&lt;/span&gt; &lt;span class="n"&gt;seconds&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;❯ CREATE EXTERNAL TABLE awesome_table(x INT) STORED AS PARQUET LOCATION '/tmp/my_awesome_table';
+0 rows in set. Query took 0.003 seconds.
 
-&lt;span class="err"&gt;❯&lt;/span&gt; &lt;span class="k"&gt;INSERT&lt;/span&gt; &lt;span class="k"&gt;INTO&lt;/span&gt; &lt;span class="n"&gt;awesome_table&lt;/span&gt; &lt;span class="k"&gt;SELECT&lt;/span&gt; &lt;span class="n"&gt;x&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="mi"&gt;10&lt;/span&gt; &lt;span class="k"&gt;FROM&lt;/span&gt; &lt;span class="n"&gt;my_source_table&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
-&lt;span class="o"&gt;+&lt;/span&gt;&lt;span class="c1"&gt;-------+&lt;/span&gt;
-&lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="k"&gt;count&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt;
-&lt;span class="o"&gt;+&lt;/span&gt;&lt;span class="c1"&gt;-------+&lt;/span&gt;
-&lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="mi"&gt;3&lt;/span&gt;     &lt;span class="o"&gt;|&lt;/span&gt;
-&lt;span class="o"&gt;+&lt;/span&gt;&lt;span class="c1"&gt;-------+&lt;/span&gt;
-&lt;span class="mi"&gt;1&lt;/span&gt; &lt;span class="k"&gt;row&lt;/span&gt; &lt;span class="k"&gt;in&lt;/span&gt; &lt;span class="k"&gt;set&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt; &lt;span class="n"&gt;Query&lt;/span&gt; &lt;span class="n"&gt;took&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="mi"&gt;024&lt;/span&gt; &lt;span class="n"&gt;seconds&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+❯ INSERT INTO awesome_table SELECT x * 10 FROM my_source_table;
++-------+
+| count |
++-------+
+| 3     |
++-------+
+1 row in set. Query took 0.024 seconds.
+&lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;You can also write to files with the [&lt;code&gt;COPY&lt;/code&gt;], similarly to [DuckDB&amp;rsquo;s &lt;code&gt;COPY&lt;/code&gt;]:&lt;/p&gt;
-&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="err"&gt;❯&lt;/span&gt; &lt;span class="k"&gt;COPY&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;SELECT&lt;/span&gt; &lt;span class="n"&gt;x&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt; &lt;span class="k"&gt;FROM&lt;/span&gt; &lt;span class="n"&gt;my_source_table&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="k"&gt;TO&lt;/span&gt; &lt;span class="s1"&gt;'/tmp/output.json'&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
-&lt;span class="o"&gt;+&lt;/span&gt;&lt;span class="c1"&gt;-------+&lt;/span&gt;
-&lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="k"&gt;count&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt;
-&lt;span class="o"&gt;+&lt;/span&gt;&lt;span class="c1"&gt;-------+&lt;/span&gt;
-&lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="mi"&gt;3&lt;/span&gt;     &lt;span class="o"&gt;|&lt;/span&gt;
-&lt;span class="o"&gt;+&lt;/span&gt;&lt;span class="c1"&gt;-------+&lt;/span&gt;
-&lt;span class="mi"&gt;1&lt;/span&gt; &lt;span class="k"&gt;row&lt;/span&gt; &lt;span class="k"&gt;in&lt;/span&gt; &lt;span class="k"&gt;set&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt; &lt;span class="n"&gt;Query&lt;/span&gt; &lt;span class="n"&gt;took&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="mi"&gt;014&lt;/span&gt; &lt;span class="n"&gt;seconds&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;$ cat /tmp/output.json
-&lt;span class="o"&gt;{&lt;/span&gt;&lt;span class="s2"&gt;"x"&lt;/span&gt;:1&lt;span class="o"&gt;}&lt;/span&gt;
-&lt;span class="o"&gt;{&lt;/span&gt;&lt;span class="s2"&gt;"x"&lt;/span&gt;:2&lt;span class="o"&gt;}&lt;/span&gt;
-&lt;span class="o"&gt;{&lt;/span&gt;&lt;span class="s2"&gt;"x"&lt;/span&gt;:3&lt;span class="o"&gt;}&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;❯ COPY (SELECT x + 1 FROM my_source_table) TO '/tmp/output.json';
++-------+
+| count |
++-------+
+| 3     |
++-------+
+1 row in set. Query took 0.014 seconds.
+&lt;/code&gt;&lt;/pre&gt;
+&lt;pre&gt;&lt;code class="language-shell"&gt;$ cat /tmp/output.json
+{"x":1}
+{"x":2}
+{"x":3}
+&lt;/code&gt;&lt;/pre&gt;
 &lt;h2&gt;Improved &lt;code&gt;STRUCT&lt;/code&gt; and &lt;code&gt;ARRAY&lt;/code&gt; support&lt;/h2&gt;
 &lt;p&gt;DataFusion &lt;code&gt;34.0.0&lt;/code&gt; has much improved &lt;code&gt;STRUCT&lt;/code&gt; and &lt;code&gt;ARRAY&lt;/code&gt;
 support, including a full range of &lt;a href="https://arrow.apache.org/datafusion/user-guide/sql/scalar_functions.html#struct-functions"&gt;struct functions&lt;/a&gt; and &lt;a href="https://arrow.apache.org/datafusion/user-guide/sql/scalar_functions.html#array-functions"&gt;array functions&lt;/a&gt;.&lt;/p&gt;
@@ -1483,27 +1483,27 @@ support, including a full range of &lt;a href="https://arrow.apache.org/datafusi
 ❯ create table my_table as values ([1,2,3]), ([2]), ([4,5]);
 --&gt;
 &lt;p&gt;For example, you can now use &lt;code&gt;[]&lt;/code&gt; syntax and &lt;code&gt;array_length&lt;/code&gt; to access and inspect arrays:&lt;/p&gt;
-&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="err"&gt;❯&lt;/span&gt; &lt;span class="k"&gt;SELECT&lt;/span&gt; &lt;span class="n"&gt;column1&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; 
-         &lt;span class="n"&gt;column1&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="k"&gt;AS&lt;/span&gt; &lt;span class="n"&gt;first_element&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; 
-         &lt;span class="n"&gt;array_length&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;column1&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="k"&gt;AS&lt;/span&gt; &lt;span class="n"&gt;len&lt;/span&gt; 
-  &lt;span class="k"&gt;FROM&lt;/span&gt; &lt;span class="n"&gt;my_table&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
-&lt;span class="o"&gt;+&lt;/span&gt;&lt;span class="c1"&gt;-----------+---------------+-----+&lt;/span&gt;
-&lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="n"&gt;column1&lt;/span&gt;   &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="n"&gt;first_element&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="n"&gt;len&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt;
-&lt;span class="o"&gt;+&lt;/span&gt;&lt;span class="c1"&gt;-----------+---------------+-----+&lt;/span&gt;
-&lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;             &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="mi"&gt;3&lt;/span&gt;   &lt;span class="o"&gt;|&lt;/span&gt;
-&lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;       &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="mi"&gt;2&lt;/span&gt;             &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;   &lt;span class="o"&gt;|&lt;/span&gt;
-&lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;4&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="mi"&gt;5&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;    &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="mi"&gt;4&lt;/span&gt;             &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="mi"&gt;2&lt;/span&gt;   &lt;span class="o"&gt;|&lt;/span&gt;
-&lt;span class="o"&gt;+&lt;/span&gt;&lt;span class="c1"&gt;-----------+---------------+-----+&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="err"&gt;❯&lt;/span&gt; &lt;span class="k"&gt;SELECT&lt;/span&gt; &lt;span class="n"&gt;column1&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;column1&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="s1"&gt;'c0'&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="k"&gt;FROM&lt;/span&gt;  &lt;span class="n"&gt;my_table&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
-&lt;span class="o"&gt;+&lt;/span&gt;&lt;span class="c1"&gt;------------------+----------------------+&lt;/span&gt;
-&lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="n"&gt;column1&lt;/span&gt;          &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="n"&gt;my_table&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;column1&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;c0&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt;
-&lt;span class="o"&gt;+&lt;/span&gt;&lt;span class="c1"&gt;------------------+----------------------+&lt;/span&gt;
-&lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="err"&gt;{&lt;/span&gt;&lt;span class="n"&gt;c0&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;foo&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;c1&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="err"&gt;}&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="n"&gt;foo&lt;/span&gt;                  &lt;span class="o"&gt;|&lt;/span&gt;
-&lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="err"&gt;{&lt;/span&gt;&lt;span class="n"&gt;c0&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="n"&gt;bar&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;c1&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="err"&gt;}&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="n"&gt;bar&lt;/span&gt;                  &lt;span class="o"&gt;|&lt;/span&gt;
-&lt;span class="o"&gt;+&lt;/span&gt;&lt;span class="c1"&gt;------------------+----------------------+&lt;/span&gt;
-&lt;span class="mi"&gt;2&lt;/span&gt; &lt;span class="k"&gt;rows&lt;/span&gt; &lt;span class="k"&gt;in&lt;/span&gt; &lt;span class="k"&gt;set&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt; &lt;span class="n"&gt;Query&lt;/span&gt; &lt;span class="n"&gt;took&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="mi"&gt;002&lt;/span&gt; &lt;span class="n"&gt;seconds&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;❯ SELECT column1, 
+         column1[1] AS first_element, 
+         array_length(column1) AS len 
+  FROM my_table;
++-----------+---------------+-----+
+| column1   | first_element | len |
++-----------+---------------+-----+
+| [1, 2, 3] | 1             | 3   |
+| [2]       | 2             | 1   |
+| [4, 5]    | 4             | 2   |
++-----------+---------------+-----+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;❯ SELECT column1, column1['c0'] FROM  my_table;
++------------------+----------------------+
+| column1          | my_table.column1[c0] |
++------------------+----------------------+
+| {c0: foo, c1: 1} | foo                  |
+| {c0: bar, c1: 2} | bar                  |
++------------------+----------------------+
+2 rows in set. Query took 0.002 seconds.
+&lt;/code&gt;&lt;/pre&gt;
 &lt;h2&gt;Other Features&lt;/h2&gt;
 &lt;p&gt;Other notable features include:
 * Support aggregating datasets that exceed memory size, with &lt;a href="https://github.com/apache/arrow-datafusion/pull/7400"&gt;group by spill to disk&lt;/a&gt;
@@ -1517,22 +1517,22 @@ new &lt;a href="https://arrow.apache.org/datafusion/library-user-guide/index.htm
  and &lt;a href="https://arrow.apache.org/datafusion/library-user-guide/adding-udfs.html#adding-a-user-defined-table-function"&gt;User Defined Table Functions&lt;/a&gt;.&lt;/p&gt;
 &lt;p&gt;For example, [the &lt;code&gt;datafusion-cli&lt;/code&gt;] implements a DuckDB style [&lt;code&gt;parquet_metadata&lt;/code&gt;]
 function as a user defined table function (&lt;a href="https://github.com/apache/arrow-datafusion/blob/3f219bc929cfd418b0e3d3501f8eba1d5a2c87ae/datafusion-cli/src/functions.rs#L222-L248"&gt;source code here&lt;/a&gt;): &lt;/p&gt;
-&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="err"&gt;❯&lt;/span&gt; &lt;span class="k"&gt;SELECT&lt;/span&gt; 
-      &lt;span class="n"&gt;path_in_schema&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;row_group_id&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;row_group_num_rows&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;stats_min&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;stats_max&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;total_compressed_size&lt;/span&gt; 
-&lt;span class="k"&gt;FROM&lt;/span&gt; 
-      &lt;span class="n"&gt;parquet_metadata&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;'hits.parquet'&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
-&lt;span class="k"&gt;WHERE&lt;/span&gt; &lt;span class="n"&gt;path_in_schema&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="s1"&gt;'"WatchID"'&lt;/span&gt; 
-&lt;span class="k"&gt;LIMIT&lt;/span&gt; &lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;❯ SELECT 
+      path_in_schema, row_group_id, row_group_num_rows, stats_min, stats_max, total_compressed_size 
+FROM 
+      parquet_metadata('hits.parquet')
+WHERE path_in_schema = '"WatchID"' 
+LIMIT 3;
 
-&lt;span class="o"&gt;+&lt;/span&gt;&lt;span class="c1"&gt;----------------+--------------+--------------------+---------------------+---------------------+-----------------------+&lt;/span&gt;
-&lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="n"&gt;path_in_schema&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="n"&gt;row_group_id&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="n"&gt;row_group_num_rows&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="n"&gt;stats_min&lt;/span&gt;           &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="n"&gt;stats_max&lt;/span&gt;           &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="n"&gt;total_compressed_size&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt;
-&lt;span class="o"&gt;+&lt;/span&gt;&lt;span class="c1"&gt;----------------+--------------+--------------------+---------------------+---------------------+-----------------------+&lt;/span&gt;
-&lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="ss"&gt;"WatchID"&lt;/span&gt;      &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;            &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="mi"&gt;450560&lt;/span&gt;             &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="mi"&gt;4611687214012840539&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="mi"&gt;9223369186199968220&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="mi"&gt;3883759&lt;/span&gt;               &lt;span class="o"&gt;|&lt;/span&gt;
-&lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="ss"&gt;"WatchID"&lt;/span&gt;      &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;            &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="mi"&gt;612174&lt;/span&gt;             &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="mi"&gt;4611689135232456464&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="mi"&gt;9223371478009085789&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="mi"&gt;5176803&lt;/span&gt;               &lt;span class="o"&gt;|&lt;/span&gt;
-&lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="ss"&gt;"WatchID"&lt;/span&gt;      &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="mi"&gt;2&lt;/span&gt;            &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="mi"&gt;344064&lt;/span&gt;             &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="mi"&gt;4611692774829951781&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="mi"&gt;9223363791697310021&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="mi"&gt;3031680&lt;/span&gt;               &lt;span class="o"&gt;|&lt;/span&gt;
-&lt;span class="o"&gt;+&lt;/span&gt;&lt;span class="c1"&gt;----------------+--------------+--------------------+---------------------+---------------------+-----------------------+&lt;/span&gt;
-&lt;span class="mi"&gt;3&lt;/span&gt; &lt;span class="k"&gt;rows&lt;/span&gt; &lt;span class="k"&gt;in&lt;/span&gt; &lt;span class="k"&gt;set&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt; &lt;span class="n"&gt;Query&lt;/span&gt; &lt;span class="n"&gt;took&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="mi"&gt;053&lt;/span&gt; &lt;span class="n"&gt;seconds&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
++----------------+--------------+--------------------+---------------------+---------------------+-----------------------+
+| path_in_schema | row_group_id | row_group_num_rows | stats_min           | stats_max           | total_compressed_size |
++----------------+--------------+--------------------+---------------------+---------------------+-----------------------+
+| "WatchID"      | 0            | 450560             | 4611687214012840539 | 9223369186199968220 | 3883759               |
+| "WatchID"      | 1            | 612174             | 4611689135232456464 | 9223371478009085789 | 5176803               |
+| "WatchID"      | 2            | 344064             | 4611692774829951781 | 9223363791697310021 | 3031680               |
++----------------+--------------+--------------------+---------------------+---------------------+-----------------------+
+3 rows in set. Query took 0.053 seconds.
+&lt;/code&gt;&lt;/pre&gt;
 &lt;h3&gt;Growth of DataFusion 📈&lt;/h3&gt;
 &lt;p&gt;DataFusion has been appearing more publically in the wild. For example
 * New projects built using DataFusion such as &lt;a href="https://lancedb.com/"&gt;lancedb&lt;/a&gt;, &lt;a href="https://glaredb.com/"&gt;GlareDB&lt;/a&gt;, &lt;a href="https://www.arroyo.dev/"&gt;Arroyo&lt;/a&gt;, and &lt;a href="https://github.com/cmu-db/optd"&gt;optd&lt;/a&gt;.
@@ -1719,56 +1719,56 @@ for more details.&lt;/p&gt;
 world of timestamp, date, times and interval arithmetic. DataFusion is
 feature complete in this area and behaves as you would expect,
 supporting queries such as&lt;/p&gt;
-&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="k"&gt;SELECT&lt;/span&gt; &lt;span class="n"&gt;now&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="s1"&gt;'1 month'&lt;/span&gt; &lt;span class="k"&gt;FROM&lt;/span&gt; &lt;span class="n"&gt;my_table&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT now() + '1 month' FROM my_table;
+&lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;We still have a long tail of &lt;a href="https://github.com/apache/arrow-datafusion/issues/3148"&gt;date and time improvements&lt;/a&gt;, which we are working on as well.&lt;/p&gt;
 &lt;h3&gt;Querying Structured Types (&lt;code&gt;List&lt;/code&gt; and &lt;code&gt;Struct&lt;/code&gt;s)&lt;/h3&gt;
 &lt;p&gt;Arrow and Parquet &lt;a href="https://arrow.apache.org/blog/2022/10/08/arrow-parquet-encoding-part-2/"&gt;support nested data&lt;/a&gt; well and DataFusion lets you
 easily query such &lt;code&gt;Struct&lt;/code&gt; and &lt;code&gt;List&lt;/code&gt;. For example, you can use
 DataFusion to read and query the &lt;a href="https://data.mendeley.com/datasets/ct8f9skv97"&gt;JSON Datasets for Exploratory OLAP -
 Mendeley Data&lt;/a&gt; like this:&lt;/p&gt;
-&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="c1"&gt;----------&lt;/span&gt;
-&lt;span class="c1"&gt;-- Explore structured data using SQL&lt;/span&gt;
-&lt;span class="c1"&gt;----------&lt;/span&gt;
-&lt;span class="k"&gt;SELECT&lt;/span&gt; &lt;span class="k"&gt;delete&lt;/span&gt; &lt;span class="k"&gt;FROM&lt;/span&gt; &lt;span class="s1"&gt;'twitter-sample-head-100000.parquet'&lt;/span&gt; &lt;span class="k"&gt;WHERE&lt;/span&gt; &lt;span class="k"&gt;delete&lt;/span&gt; &lt;span class="k"&gt;IS&lt;/span&gt; &lt;span class="k"&gt;NOT&lt;/span&gt; &lt;span class="k"&gt;NULL&lt;/span&gt; &lt;span class="k"&gt;limit&lt;/span&gt; &lt;span class="mi"&gt;10&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
-&lt;span class="o"&gt;+&lt;/span&gt;&lt;span class="c1"&gt;---------------------------------------------------------------------------------------------------------------------------+&lt;/span&gt;
-&lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="k"&gt;delete&lt;/span&gt;                                                                                                                    &lt;span class="o"&gt;|&lt;/span&gt;
-&lt;span class="o"&gt;+&lt;/span&gt;&lt;span class="c1"&gt;---------------------------------------------------------------------------------------------------------------------------+&lt;/span&gt;
-&lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="err"&gt;{&lt;/span&gt;&lt;span class="n"&gt;status&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="err"&gt;{&lt;/span&gt;&lt;span class="n"&gt;id&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="err"&gt;{$&lt;/span&gt;&lt;span class="n"&gt;numberLong&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="mi"&gt;135037425050320896&lt;/span&gt;&lt;span class="err"&gt;}&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;id_str&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="mi"&gt;135037425050320896&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;user_id&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="mi"&gt;334902461&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;user_id_str&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="mi"&gt;334902461&lt;/span&gt;&lt;span class="err"&gt;}}&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt;
-&lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="err"&gt;{&lt;/span&gt;&lt;span class="n"&gt;status&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="err"&gt;{&lt;/span&gt;&lt;span class="n"&gt;id&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="err"&gt;{$&lt;/span&gt;&lt;span class="n"&gt;numberLong&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="mi"&gt;134703982051463168&lt;/span&gt;&lt;span class="err"&gt;}&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;id_str&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="mi"&gt;134703982051463168&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;user_id&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="mi"&gt;405383453&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;user_id_str&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="mi"&gt;405383453&lt;/span&gt;&lt;span class="err"&gt;}}&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt;
-&lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="err"&gt;{&lt;/span&gt;&lt;span class="n"&gt;status&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="err"&gt;{&lt;/span&gt;&lt;span class="n"&gt;id&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="err"&gt;{$&lt;/span&gt;&lt;span class="n"&gt;numberLong&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="mi"&gt;134773741740765184&lt;/span&gt;&lt;span class="err"&gt;}&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;id_str&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="mi"&gt;134773741740765184&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;user_id&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="mi"&gt;64823441&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;user_id_str&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="mi"&gt;64823441&lt;/span&gt;&lt;span class="err"&gt;}}&lt;/span&gt;   &lt;span class="o"&gt;|&lt;/span&gt;
-&lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="err"&gt;{&lt;/span&gt;&lt;span class="n"&gt;status&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="err"&gt;{&lt;/span&gt;&lt;span class="n"&gt;id&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="err"&gt;{$&lt;/span&gt;&lt;span class="n"&gt;numberLong&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="mi"&gt;132543659655704576&lt;/span&gt;&lt;span class="err"&gt;}&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;id_str&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="mi"&gt;132543659655704576&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;user_id&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="mi"&gt;45917834&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;user_id_str&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="mi"&gt;45917834&lt;/span&gt;&lt;span class="err"&gt;}}&lt;/span&gt;   &lt;span class="o"&gt;|&lt;/span&gt;
-&lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="err"&gt;{&lt;/span&gt;&lt;span class="n"&gt;status&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="err"&gt;{&lt;/span&gt;&lt;span class="n"&gt;id&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="err"&gt;{$&lt;/span&gt;&lt;span class="n"&gt;numberLong&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="mi"&gt;133786431926697984&lt;/span&gt;&lt;span class="err"&gt;}&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;id_str&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="mi"&gt;133786431926697984&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;user_id&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="mi"&gt;67229952&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;user_id_str&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="mi"&gt;67229952&lt;/span&gt;&lt;span class="err"&gt;}}&lt;/span&gt;   &lt;span class="o"&gt;|&lt;/span&gt;
-&lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="err"&gt;{&lt;/span&gt;&lt;span class="n"&gt;status&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="err"&gt;{&lt;/span&gt;&lt;span class="n"&gt;id&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="err"&gt;{$&lt;/span&gt;&lt;span class="n"&gt;numberLong&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="mi"&gt;134619093570560002&lt;/span&gt;&lt;span class="err"&gt;}&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;id_str&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="mi"&gt;134619093570560002&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;user_id&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="mi"&gt;182430773&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;user_id_str&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="mi"&gt;182430773&lt;/span&gt;&lt;span class="err"&gt;}}&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt;
-&lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="err"&gt;{&lt;/span&gt;&lt;span class="n"&gt;status&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="err"&gt;{&lt;/span&gt;&lt;span class="n"&gt;id&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="err"&gt;{$&lt;/span&gt;&lt;span class="n"&gt;numberLong&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="mi"&gt;134019857527214080&lt;/span&gt;&lt;span class="err"&gt;}&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;id_str&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="mi"&gt;134019857527214080&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;user_id&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="mi"&gt;257396311&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;user_id_str&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="mi"&gt;257396311&lt;/span&gt;&lt;span class="err"&gt;}}&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt;
-&lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="err"&gt;{&lt;/span&gt;&lt;span class="n"&gt;status&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="err"&gt;{&lt;/span&gt;&lt;span class="n"&gt;id&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="err"&gt;{$&lt;/span&gt;&lt;span class="n"&gt;numberLong&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="mi"&gt;133931546469076993&lt;/span&gt;&lt;span class="err"&gt;}&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;id_str&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="mi"&gt;133931546469076993&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;user_id&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="mi"&gt;124539548&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;user_id_str&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="mi"&gt;124539548&lt;/span&gt;&lt;span class="err"&gt;}}&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt;
-&lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="err"&gt;{&lt;/span&gt;&lt;span class="n"&gt;status&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="err"&gt;{&lt;/span&gt;&lt;span class="n"&gt;id&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="err"&gt;{$&lt;/span&gt;&lt;span class="n"&gt;numberLong&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="mi"&gt;134397743350296576&lt;/span&gt;&lt;span class="err"&gt;}&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;id_str&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="mi"&gt;134397743350296576&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;user_id&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="mi"&gt;139836391&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;user_id_str&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="mi"&gt;139836391&lt;/span&gt;&lt;span class="err"&gt;}}&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt;
-&lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="err"&gt;{&lt;/span&gt;&lt;span class="n"&gt;status&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="err"&gt;{&lt;/span&gt;&lt;span class="n"&gt;id&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="err"&gt;{$&lt;/span&gt;&lt;span class="n"&gt;numberLong&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="mi"&gt;127833661767823360&lt;/span&gt;&lt;span class="err"&gt;}&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;id_str&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="mi"&gt;127833661767823360&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;user_id&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="mi"&gt;244442687&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;user_id_str&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="mi"&gt;244442687&lt;/span&gt;&lt;span class="err"&gt;}}&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt;
-&lt;span class="o"&gt;+&lt;/span&gt;&lt;span class="c1"&gt;---------------------------------------------------------------------------------------------------------------------------+&lt;/span&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;----------
+-- Explore structured data using SQL
+----------
+SELECT delete FROM 'twitter-sample-head-100000.parquet' WHERE delete IS NOT NULL limit 10;
++---------------------------------------------------------------------------------------------------------------------------+
+| delete                                                                                                                    |
++---------------------------------------------------------------------------------------------------------------------------+
+| {status: {id: {$numberLong: 135037425050320896}, id_str: 135037425050320896, user_id: 334902461, user_id_str: 334902461}} |
+| {status: {id: {$numberLong: 134703982051463168}, id_str: 134703982051463168, user_id: 405383453, user_id_str: 405383453}} |
+| {status: {id: {$numberLong: 134773741740765184}, id_str: 134773741740765184, user_id: 64823441, user_id_str: 64823441}}   |
+| {status: {id: {$numberLong: 132543659655704576}, id_str: 132543659655704576, user_id: 45917834, user_id_str: 45917834}}   |
+| {status: {id: {$numberLong: 133786431926697984}, id_str: 133786431926697984, user_id: 67229952, user_id_str: 67229952}}   |
+| {status: {id: {$numberLong: 134619093570560002}, id_str: 134619093570560002, user_id: 182430773, user_id_str: 182430773}} |
+| {status: {id: {$numberLong: 134019857527214080}, id_str: 134019857527214080, user_id: 257396311, user_id_str: 257396311}} |
+| {status: {id: {$numberLong: 133931546469076993}, id_str: 133931546469076993, user_id: 124539548, user_id_str: 124539548}} |
+| {status: {id: {$numberLong: 134397743350296576}, id_str: 134397743350296576, user_id: 139836391, user_id_str: 139836391}} |
+| {status: {id: {$numberLong: 127833661767823360}, id_str: 127833661767823360, user_id: 244442687, user_id_str: 244442687}} |
++---------------------------------------------------------------------------------------------------------------------------+
 
-&lt;span class="c1"&gt;----------&lt;/span&gt;
-&lt;span class="c1"&gt;-- Select some deeply nested fields&lt;/span&gt;
-&lt;span class="c1"&gt;----------&lt;/span&gt;
-&lt;span class="k"&gt;SELECT&lt;/span&gt;
-  &lt;span class="k"&gt;delete&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="s1"&gt;'status'&lt;/span&gt;&lt;span class="p"&gt;][&lt;/span&gt;&lt;span class="s1"&gt;'id'&lt;/span&gt;&lt;span class="p"&gt;][&lt;/span&gt;&lt;span class="s1"&gt;'$numberLong'&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="k"&gt;as&lt;/span&gt; &lt;span class="n"&gt;delete_id&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
-  &lt;span class="k"&gt;delete&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="s1"&gt;'status'&lt;/span&gt;&lt;span class="p"&gt;][&lt;/span&gt;&lt;span class="s1"&gt;'user_id'&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="k"&gt;as&lt;/span&gt; &lt;span class="n"&gt;delete_user_id&lt;/span&gt;
-&lt;span class="k"&gt;FROM&lt;/span&gt; &lt;span class="s1"&gt;'twitter-sample-head-100000.parquet'&lt;/span&gt; &lt;span class="k"&gt;WHERE&lt;/span&gt; &lt;span class="k"&gt;delete&lt;/span&gt; &lt;span class="k"&gt;IS&lt;/span&gt; &lt;span class="k"&gt;NOT&lt;/span&gt; &lt;span class="k"&gt;NULL&lt;/span&gt; &lt;span class="k"&gt;LIMIT&lt;/span&gt; &lt;span class="mi"&gt;10&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+----------
+-- Select some deeply nested fields
+----------
+SELECT
+  delete['status']['id']['$numberLong'] as delete_id,
+  delete['status']['user_id'] as delete_user_id
+FROM 'twitter-sample-head-100000.parquet' WHERE delete IS NOT NULL LIMIT 10;
 
-&lt;span class="o"&gt;+&lt;/span&gt;&lt;span class="c1"&gt;--------------------+----------------+&lt;/span&gt;
-&lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="n"&gt;delete_id&lt;/span&gt;          &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="n"&gt;delete_user_id&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt;
-&lt;span class="o"&gt;+&lt;/span&gt;&lt;span class="c1"&gt;--------------------+----------------+&lt;/span&gt;
-&lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="mi"&gt;135037425050320896&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="mi"&gt;334902461&lt;/span&gt;      &lt;span class="o"&gt;|&lt;/span&gt;
-&lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="mi"&gt;134703982051463168&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="mi"&gt;405383453&lt;/span&gt;      &lt;span class="o"&gt;|&lt;/span&gt;
-&lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="mi"&gt;134773741740765184&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="mi"&gt;64823441&lt;/span&gt;       &lt;span class="o"&gt;|&lt;/span&gt;
-&lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="mi"&gt;132543659655704576&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="mi"&gt;45917834&lt;/span&gt;       &lt;span class="o"&gt;|&lt;/span&gt;
-&lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="mi"&gt;133786431926697984&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="mi"&gt;67229952&lt;/span&gt;       &lt;span class="o"&gt;|&lt;/span&gt;
-&lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="mi"&gt;134619093570560002&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="mi"&gt;182430773&lt;/span&gt;      &lt;span class="o"&gt;|&lt;/span&gt;
-&lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="mi"&gt;134019857527214080&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="mi"&gt;257396311&lt;/span&gt;      &lt;span class="o"&gt;|&lt;/span&gt;
-&lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="mi"&gt;133931546469076993&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="mi"&gt;124539548&lt;/span&gt;      &lt;span class="o"&gt;|&lt;/span&gt;
-&lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="mi"&gt;134397743350296576&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="mi"&gt;139836391&lt;/span&gt;      &lt;span class="o"&gt;|&lt;/span&gt;
-&lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="mi"&gt;127833661767823360&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="mi"&gt;244442687&lt;/span&gt;      &lt;span class="o"&gt;|&lt;/span&gt;
-&lt;span class="o"&gt;+&lt;/span&gt;&lt;span class="c1"&gt;--------------------+----------------+&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
++--------------------+----------------+
+| delete_id          | delete_user_id |
++--------------------+----------------+
+| 135037425050320896 | 334902461      |
+| 134703982051463168 | 405383453      |
+| 134773741740765184 | 64823441       |
+| 132543659655704576 | 45917834       |
+| 133786431926697984 | 67229952       |
+| 134619093570560002 | 182430773      |
+| 134019857527214080 | 257396311      |
+| 133931546469076993 | 124539548      |
+| 134397743350296576 | 139836391      |
+| 127833661767823360 | 244442687      |
++--------------------+----------------+
+&lt;/code&gt;&lt;/pre&gt;
 &lt;h3&gt;Subqueries All the Way Down&lt;/h3&gt;
 &lt;p&gt;DataFusion can run many different subqueries by rewriting them to
 joins. It has been able to run the full suite of TPC-H queries for at
@@ -1977,80 +1977,80 @@ beginners is
 ways to engage with the community.&lt;/p&gt;
 &lt;h2&gt;Appendix: Contributor Shoutout&lt;/h2&gt;
 &lt;p&gt;Here is a list of people who have contributed PRs to this project over the last three releases, derived from &lt;code&gt;git shortlog -sn 13.0.0..16.0.0 .&lt;/code&gt; Thank you all!&lt;/p&gt;
-&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="w"&gt;   &lt;/span&gt;&lt;span class="mi"&gt;113&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Andrew&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Lamb&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="mi"&gt;58&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;jakevin&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="mi"&gt;46&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Raphael&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Taylor&lt;/span&gt;&lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="n"&gt;Davies&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="mi"&gt;30&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Andy&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Grove&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="mi"&gt;19&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Batuhan&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Taskaya&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="mi"&gt;19&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Remzi&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Yang&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="mi"&gt;17&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;ygf11&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="mi"&gt;16&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Burak&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="mi"&gt;16&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Jeffrey&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="mi"&gt;16&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Marco&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Neumann&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="mi"&gt;14&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Kun&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Liu&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="mi"&gt;12&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Yang&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Jiang&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="mi"&gt;10&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;mingmwang&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;9&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Dani&amp;euml;l&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Heres&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;9&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Mustafa&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;akur&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;9&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;comphead&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;9&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;mvanschellebeeck&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;9&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;xudong&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;w&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;7&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;dependabot&lt;/span&gt;&lt;span class="o"&gt;[&lt;/span&gt;&lt;span class="n"&gt;bot&lt;/span&gt;&lt;span class="o"&gt;]&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;7&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;yahoNanJing&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;6&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Brent&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Gardner&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;5&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;AssHero&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;4&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Jiayu&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Liu&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;4&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Wei&lt;/span&gt;&lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="n"&gt;Ting&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Kuo&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;4&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;askoa&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Andr&amp;eacute;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Calado&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Coroado&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Jie&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Han&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Jon&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Mease&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Metehan&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Y&amp;inodot;ld&amp;inodot;r&amp;inodot;m&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Nga&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="k"&gt;Tran&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Ruihang&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Xia&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;baishen&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Berkay&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;&amp;Scedil;ahin&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Dan&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Harris&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Dongyan&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Zhou&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Eduard&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Karacharov&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Kikkon&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Liang&lt;/span&gt;&lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="n"&gt;Chi&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Hsieh&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Marko&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Milenkovi&amp;cacute;&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Martin&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Grigorov&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Roman&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Nozdrin&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Tim&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Van&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Wassenhove&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;r&lt;/span&gt;&lt;span class="mf"&gt;.4&lt;/span&gt;&lt;span class="n"&gt;ntix&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;unconsolable&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;unvalley&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Ajaya&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Agrawal&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Alexander&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Spies&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;ArkashaJavelin&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Artjoms&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Iskovs&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;BoredPerson&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Christian&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Salvati&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Creampanda&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="k"&gt;Data&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Psycho&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Francis&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Du&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Francis&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Le&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Roy&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;LFC&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Marko&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Grujic&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Matt&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Willian&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Matthijs&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Brobbel&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="nf"&gt;Max&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Burke&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Mehmet&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Ozan&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Kabak&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Rito&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Takeuchi&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Roman&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Zeyde&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Vrishabh&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Zhang&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Li&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;ZuoTiJia&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;byteink&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;cfraz89&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;nbr&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;xxchan&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;yujie&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;zhang&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;zembunia&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;哇呜哇呜呀咦耶&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;</content><category term="blog"></category></entry><entry><title>Apache Arrow Ballista 0.9.0 Release</title><link href="https://datafusion.apache.org/blog/2022/10/28/ballista-0.9.0" rel="alternate"></link><published>2022-10-28T00:00:00+00:00</published><updated>2022-10-28T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2022-10-28:/blog/2022/10/28/ballista-0.9.0</id><summary type="html">&lt;!--
+&lt;pre&gt;&lt;code&gt;   113  Andrew Lamb
+    58  jakevin
+    46  Raphael Taylor-Davies
+    30  Andy Grove
+    19  Batuhan Taskaya
+    19  Remzi Yang
+    17  ygf11
+    16  Burak
+    16  Jeffrey
+    16  Marco Neumann
+    14  Kun Liu
+    12  Yang Jiang
+    10  mingmwang
+     9  Dani&amp;euml;l Heres
+     9  Mustafa akur
+     9  comphead
+     9  mvanschellebeeck
+     9  xudong.w
+     7  dependabot[bot]
+     7  yahoNanJing
+     6  Brent Gardner
+     5  AssHero
+     4  Jiayu Liu
+     4  Wei-Ting Kuo
+     4  askoa
+     3  Andr&amp;eacute; Calado Coroado
+     3  Jie Han
+     3  Jon Mease
+     3  Metehan Y&amp;inodot;ld&amp;inodot;r&amp;inodot;m
+     3  Nga Tran
+     3  Ruihang Xia
+     3  baishen
+     2  Berkay &amp;Scedil;ahin
+     2  Dan Harris
+     2  Dongyan Zhou
+     2  Eduard Karacharov
+     2  Kikkon
+     2  Liang-Chi Hsieh
+     2  Marko Milenkovi&amp;cacute;
+     2  Martin Grigorov
+     2  Roman Nozdrin
+     2  Tim Van Wassenhove
+     2  r.4ntix
+     2  unconsolable
+     2  unvalley
+     1  Ajaya Agrawal
+     1  Alexander Spies
+     1  ArkashaJavelin
+     1  Artjoms Iskovs
+     1  BoredPerson
+     1  Christian Salvati
+     1  Creampanda
+     1  Data Psycho
+     1  Francis Du
+     1  Francis Le Roy
+     1  LFC
+     1  Marko Grujic
+     1  Matt Willian
+     1  Matthijs Brobbel
+     1  Max Burke
+     1  Mehmet Ozan Kabak
+     1  Rito Takeuchi
+     1  Roman Zeyde
+     1  Vrishabh
+     1  Zhang Li
+     1  ZuoTiJia
+     1  byteink
+     1  cfraz89
+     1  nbr
+     1  xxchan
+     1  yujie.zhang
+     1  zembunia
+     1  哇呜哇呜呀咦耶
+&lt;/code&gt;&lt;/pre&gt;</content><category term="blog"></category></entry><entry><title>Apache Arrow Ballista 0.9.0 Release</title><link href="https://datafusion.apache.org/blog/2022/10/28/ballista-0.9.0" rel="alternate"></link><published>2022-10-28T00:00:00+00:00</published><updated>2022-10-28T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2022-10-28:/blog/2022/10/28/ballista-0.9.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -2073,7 +2073,7 @@ limitations under the License.
 &lt;p&gt;Ballista 0.9.0 is now available and is the most significant release since the project was &lt;a href="http://arrow.apache.org/blog/2021/04/12/ballista-donation/"&gt;donated&lt;/a&gt; to Apache
 Arrow in 2021.&lt;/p&gt;
 &lt;p&gt;This release represents 4 weeks of work, with 66 commits from 14 contributors:&lt;/p&gt;
-&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="mi"&gt;22&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Andy …&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;</summary><content type="html">&lt;!--
+&lt;pre&gt;&lt;code&gt;    22  Andy …&lt;/code&gt;&lt;/pre&gt;</summary><content type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -2096,21 +2096,21 @@ limitations under the License.
 &lt;p&gt;Ballista 0.9.0 is now available and is the most significant release since the project was &lt;a href="http://arrow.apache.org/blog/2021/04/12/ballista-donation/"&gt;donated&lt;/a&gt; to Apache
 Arrow in 2021.&lt;/p&gt;
 &lt;p&gt;This release represents 4 weeks of work, with 66 commits from 14 contributors:&lt;/p&gt;
-&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="mi"&gt;22&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Andy&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Grove&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="mi"&gt;12&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;yahoNanJing&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;6&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Dani&amp;euml;l&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Heres&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;4&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Brent&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Gardner&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;4&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;dependabot&lt;/span&gt;&lt;span class="o"&gt;[&lt;/span&gt;&lt;span class="n"&gt;bot&lt;/span&gt;&lt;span class="o"&gt;]&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;4&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;r&lt;/span&gt;&lt;span class="mf"&gt;.4&lt;/span&gt;&lt;span class="n"&gt;ntix&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Stefan&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Stanciulescu&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;mingmwang&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Ken&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Suenobu&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Yang&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Jiang&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Metehan&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Y&amp;inodot;ld&amp;inodot;r&amp;inodot;m&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Trent&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Feda&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;askoa&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;yangzhong&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;pre&gt;&lt;code&gt;    22  Andy Grove
+    12  yahoNanJing
+     6  Dani&amp;euml;l Heres
+     4  Brent Gardner
+     4  dependabot[bot]
+     4  r.4ntix
+     3  Stefan Stanciulescu
+     3  mingmwang
+     2  Ken Suenobu
+     2  Yang Jiang
+     1  Metehan Y&amp;inodot;ld&amp;inodot;r&amp;inodot;m
+     1  Trent Feda
+     1  askoa
+     1  yangzhong
+&lt;/code&gt;&lt;/pre&gt;
 &lt;h2&gt;Release Highlights&lt;/h2&gt;
 &lt;p&gt;The release notes below are not exhaustive and only expose selected highlights of the release. Many other bug fixes
 and improvements have been made: we refer you to the &lt;a href="https://github.com/apache/arrow-ballista/blob/0.9.0-rc2/ballista/CHANGELOG.md"&gt;complete changelog&lt;/a&gt;.&lt;/p&gt;
@@ -2300,70 +2300,70 @@ ways to engage with the community.&lt;/p&gt;
 &lt;h2&gt;Appendix: Contributor Shoutout&lt;/h2&gt;
 &lt;p&gt;To give a sense of the number of people who contribute to this project regularly, we present for your consideration the following list derived from &lt;code&gt;git shortlog -sn 9.0.0..13.0.0 .&lt;/code&gt; Thank you all again!&lt;/p&gt;
 &lt;!-- Note: combined kmitchener and Kirk Mitchener --&gt;
-&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="err"&gt;    87  Andy Grove&lt;/span&gt;
-&lt;span class="err"&gt;    71  Andrew Lamb&lt;/span&gt;
-&lt;span class="err"&gt;    29  Kun Liu&lt;/span&gt;
-&lt;span class="err"&gt;    29  Kirk Mitchener&lt;/span&gt;
-&lt;span class="err"&gt;    17  Wei-Ting Kuo&lt;/span&gt;
-&lt;span class="err"&gt;    14  Yang Jiang&lt;/span&gt;
-&lt;span class="err"&gt;    12  Raphael Taylor-Davies&lt;/span&gt;
-&lt;span class="err"&gt;    11  Batuhan Taskaya&lt;/span&gt;
-&lt;span class="err"&gt;    10  Brent Gardner&lt;/span&gt;
-&lt;span class="err"&gt;    10  Remzi Yang&lt;/span&gt;
-&lt;span class="err"&gt;    10  comphead&lt;/span&gt;
-&lt;span class="err"&gt;    10  xudong.w&lt;/span&gt;
-&lt;span class="err"&gt;     8  AssHero&lt;/span&gt;
-&lt;span class="err"&gt;     7  Ruihang Xia&lt;/span&gt;
-&lt;span class="err"&gt;     6  Dan Harris&lt;/span&gt;
-&lt;span class="err"&gt;     6  Dani&amp;euml;l Heres&lt;/span&gt;
-&lt;span class="err"&gt;     6  Ian Alexander Joiner&lt;/span&gt;
-&lt;span class="err"&gt;     6  Mike Roberts&lt;/span&gt;
-&lt;span class="err"&gt;     6  askoa&lt;/span&gt;
-&lt;span class="err"&gt;     4  BaymaxHWY&lt;/span&gt;
-&lt;span class="err"&gt;     4  gorkem&lt;/span&gt;
-&lt;span class="err"&gt;     4  jakevin&lt;/span&gt;
-&lt;span class="err"&gt;     3  George Andronchik&lt;/span&gt;
-&lt;span class="err"&gt;     3  Sarah Yurick&lt;/span&gt;
-&lt;span class="err"&gt;     3  Stuart Carnie&lt;/span&gt;
-&lt;span class="err"&gt;     2  Dalton Modlin&lt;/span&gt;
-&lt;span class="err"&gt;     2  Dmitry Patsura&lt;/span&gt;
-&lt;span class="err"&gt;     2  JasonLi&lt;/span&gt;
-&lt;span class="err"&gt;     2  Jon Mease&lt;/span&gt;
-&lt;span class="err"&gt;     2  Marco Neumann&lt;/span&gt;
-&lt;span class="err"&gt;     2  yahoNanJing&lt;/span&gt;
-&lt;span class="err"&gt;     1  Adilet Sarsembayev&lt;/span&gt;
-&lt;span class="err"&gt;     1  Ayush Dattagupta&lt;/span&gt;
-&lt;span class="err"&gt;     1  Dezhi Wu&lt;/span&gt;
-&lt;span class="err"&gt;     1  Dhamotharan Sritharan&lt;/span&gt;
-&lt;span class="err"&gt;     1  Eduard Karacharov&lt;/span&gt;
-&lt;span class="err"&gt;     1  Francis Du&lt;/span&gt;
-&lt;span class="err"&gt;     1  Harbour Zheng&lt;/span&gt;
-&lt;span class="err"&gt;     1  Isma&amp;euml;l Mej&amp;iacute;a&lt;/span&gt;
-&lt;span class="err"&gt;     1  Jack Klamer&lt;/span&gt;
-&lt;span class="err"&gt;     1  Jeremy Dyer&lt;/span&gt;
-&lt;span class="err"&gt;     1  Jiayu Liu&lt;/span&gt;
-&lt;span class="err"&gt;     1  Kamil Konior&lt;/span&gt;
-&lt;span class="err"&gt;     1  Liang-Chi Hsieh&lt;/span&gt;
-&lt;span class="err"&gt;     1  Martin Grigorov&lt;/span&gt;
-&lt;span class="err"&gt;     1  Matthijs Brobbel&lt;/span&gt;
-&lt;span class="err"&gt;     1  Mehmet Ozan Kabak&lt;/span&gt;
-&lt;span class="err"&gt;     1  Metehan Y&amp;inodot;ld&amp;inodot;r&amp;inodot;m&lt;/span&gt;
-&lt;span class="err"&gt;     1  Morgan Cassels&lt;/span&gt;
-&lt;span class="err"&gt;     1  Nitish Tiwari&lt;/span&gt;
-&lt;span class="err"&gt;     1  Renjie Liu&lt;/span&gt;
-&lt;span class="err"&gt;     1  Rito Takeuchi&lt;/span&gt;
-&lt;span class="err"&gt;     1  Robert Pack&lt;/span&gt;
-&lt;span class="err"&gt;     1  Thomas Cameron&lt;/span&gt;
-&lt;span class="err"&gt;     1  Vrishabh&lt;/span&gt;
-&lt;span class="err"&gt;     1  Xin Hao&lt;/span&gt;
-&lt;span class="err"&gt;     1  Yijie Shen&lt;/span&gt;
-&lt;span class="err"&gt;     1  byteink&lt;/span&gt;
-&lt;span class="err"&gt;     1  kamille&lt;/span&gt;
-&lt;span class="err"&gt;     1  mateuszkj&lt;/span&gt;
-&lt;span class="err"&gt;     1  nvartolomei&lt;/span&gt;
-&lt;span class="err"&gt;     1  yourenawo&lt;/span&gt;
-&lt;span class="err"&gt;     1  &amp;Ouml;zg&amp;uuml;r Akkurt&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;</content><category term="blog"></category></entry><entry><title>Apache Arrow DataFusion 8.0.0 Release</title><link href="https://datafusion.apache.org/blog/2022/05/16/datafusion-8.0.0" rel="alternate"></link><published>2022-05-16T00:00:00+00:00</published><updated>2022-05-16T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2022-05-16:/blog/2022/05/16/datafusion-8.0.0</id><summary type="html">&lt;!--
+&lt;pre&gt;&lt;code&gt;    87  Andy Grove
+    71  Andrew Lamb
+    29  Kun Liu
+    29  Kirk Mitchener
+    17  Wei-Ting Kuo
+    14  Yang Jiang
+    12  Raphael Taylor-Davies
+    11  Batuhan Taskaya
+    10  Brent Gardner
+    10  Remzi Yang
+    10  comphead
+    10  xudong.w
+     8  AssHero
+     7  Ruihang Xia
+     6  Dan Harris
+     6  Dani&amp;euml;l Heres
+     6  Ian Alexander Joiner
+     6  Mike Roberts
+     6  askoa
+     4  BaymaxHWY
+     4  gorkem
+     4  jakevin
+     3  George Andronchik
+     3  Sarah Yurick
+     3  Stuart Carnie
+     2  Dalton Modlin
+     2  Dmitry Patsura
+     2  JasonLi
+     2  Jon Mease
+     2  Marco Neumann
+     2  yahoNanJing
+     1  Adilet Sarsembayev
+     1  Ayush Dattagupta
+     1  Dezhi Wu
+     1  Dhamotharan Sritharan
+     1  Eduard Karacharov
+     1  Francis Du
+     1  Harbour Zheng
+     1  Isma&amp;euml;l Mej&amp;iacute;a
+     1  Jack Klamer
+     1  Jeremy Dyer
+     1  Jiayu Liu
+     1  Kamil Konior
+     1  Liang-Chi Hsieh
+     1  Martin Grigorov
+     1  Matthijs Brobbel
+     1  Mehmet Ozan Kabak
+     1  Metehan Y&amp;inodot;ld&amp;inodot;r&amp;inodot;m
+     1  Morgan Cassels
+     1  Nitish Tiwari
+     1  Renjie Liu
+     1  Rito Takeuchi
+     1  Robert Pack
+     1  Thomas Cameron
+     1  Vrishabh
+     1  Xin Hao
+     1  Yijie Shen
+     1  byteink
+     1  kamille
+     1  mateuszkj
+     1  nvartolomei
+     1  yourenawo
+     1  &amp;Ouml;zg&amp;uuml;r Akkurt
+&lt;/code&gt;&lt;/pre&gt;</content><category term="blog"></category></entry><entry><title>Apache Arrow DataFusion 8.0.0 Release</title><link href="https://datafusion.apache.org/blog/2022/05/16/datafusion-8.0.0" rel="alternate"></link><published>2022-05-16T00:00:00+00:00</published><updated>2022-05-16T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2022-05-16:/blog/2022/05/16/datafusion-8.0.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -2425,54 +2425,54 @@ $ git shortlog -sn 7.0.0..8.0.0 datafusion datafusion-cli datafusion-examples ba
 
 (feynman han, feynman.h, Feynman Han were assumed to be the same person)
 --&gt;
-&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="mi"&gt;39&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Andy&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Grove&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="mi"&gt;33&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Andrew&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Lamb&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="mi"&gt;21&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;DuRipeng&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="mi"&gt;20&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Yijie&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Shen&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="mi"&gt;19&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Yang&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Jiang&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="mi"&gt;17&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Raphael&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Taylor&lt;/span&gt;&lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="n"&gt;Davies&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="mi"&gt;11&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Dan&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Harris&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="mi"&gt;11&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Matthew&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Turner&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="mi"&gt;11&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;yahoNanJing&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;9&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;dependabot&lt;/span&gt;&lt;span class="o"&gt;[&lt;/span&gt;&lt;span class="n"&gt;bot&lt;/span&gt;&lt;span class="o"&gt;]&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;8&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;jakevin&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;6&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Kun&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Liu&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;5&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Jiayu&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Liu&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;4&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Dani&amp;euml;l&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Heres&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;4&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;mingmwang&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;4&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;xudong&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;w&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Carol&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Nichols&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;||&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Goulding&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Dmitry&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Patsura&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Eduard&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Karacharov&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Jeremy&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Dyer&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Kaushik&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Rich&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;comphead&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;gaojun2048&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Feynman&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Han&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Jie&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Han&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Jon&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Mease&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Tim&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Van&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Wassenhove&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Yt&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Zhang&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Li&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;silence&lt;/span&gt;&lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="n"&gt;coding&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Alexander&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Spies&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;George&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Andronchik&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Guillaume&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Balaine&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Hao&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Xin&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Jiacai&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Liu&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;J&amp;ouml;rn&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Horstmann&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Liang&lt;/span&gt;&lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="n"&gt;Chi&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Hsieh&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="nf"&gt;Max&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Burke&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;NaincyKumariKnoldus&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Nga&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="k"&gt;Tran&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Patrick&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;More&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Pierre&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Zemb&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Remzi&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Yang&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Sergey&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Melnychuk&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Stephen&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Carman&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;doki&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;pre&gt;&lt;code&gt;    39  Andy Grove
+    33  Andrew Lamb
+    21  DuRipeng
+    20  Yijie Shen
+    19  Yang Jiang
+    17  Raphael Taylor-Davies
+    11  Dan Harris
+    11  Matthew Turner
+    11  yahoNanJing
+     9  dependabot[bot]
+     8  jakevin
+     6  Kun Liu
+     5  Jiayu Liu
+     4  Dani&amp;euml;l Heres
+     4  mingmwang
+     4  xudong.w
+     3  Carol (Nichols || Goulding)
+     3  Dmitry Patsura
+     3  Eduard Karacharov
+     3  Jeremy Dyer
+     3  Kaushik
+     3  Rich
+     3  comphead
+     3  gaojun2048
+     3  Feynman Han
+     2  Jie Han
+     2  Jon Mease
+     2  Tim Van Wassenhove
+     2  Yt
+     2  Zhang Li
+     2  silence-coding
+     1  Alexander Spies
+     1  George Andronchik
+     1  Guillaume Balaine
+     1  Hao Xin
+     1  Jiacai Liu
+     1  J&amp;ouml;rn Horstmann
+     1  Liang-Chi Hsieh
+     1  Max Burke
+     1  NaincyKumariKnoldus
+     1  Nga Tran
+     1  Patrick More
+     1  Pierre Zemb
+     1  Remzi Yang
+     1  Sergey Melnychuk
+     1  Stephen Carman
+     1  doki
+&lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;The following sections highlight some of the changes in this release. Of course, many other bug fixes and
 improvements have been made and we encourage you to check out the
 &lt;a href="https://github.com/apache/arrow-datafusion/blob/8.0.0/datafusion/CHANGELOG.md"&gt;changelog&lt;/a&gt; for full details.&lt;/p&gt;
@@ -2605,11 +2605,11 @@ limitations under the License.
 &lt;p&gt;The team is focusing on exposing more features from the underlying Rust implementation of DataFusion and improving documentation.&lt;/p&gt;
 &lt;h3&gt;How to install&lt;/h3&gt;
 &lt;p&gt;From &lt;code&gt;pip&lt;/code&gt;&lt;/p&gt;
-&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;pip install datafusion
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;pre&gt;&lt;code class="language-bash"&gt;pip install datafusion
+&lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;Or&lt;/p&gt;
-&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;python -m pip install datafusion
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;pre&gt;&lt;code class="language-bash"&gt;python -m pip install datafusion
+&lt;/code&gt;&lt;/pre&gt;
 &lt;h2&gt;DataFusion-ObjectStore-S3&lt;/h2&gt;
 &lt;p&gt;This &lt;a href="https://github.com/datafusion-contrib/datafusion-objectstore-s3"&gt;crate&lt;/a&gt; provides an &lt;code&gt;ObjectStore&lt;/code&gt; implementation for querying data stored in S3 or S3 compatible storage. This makes it almost as easy to query data that lives on S3 as lives in local files&lt;/p&gt;
 &lt;ul&gt;
@@ -2620,8 +2620,8 @@ limitations under the License.
 &lt;p&gt;The current priority is adding python bindings for &lt;code&gt;S3FileSystem&lt;/code&gt;.  After that there will be async improvements as DataFusion adopts more of that functionality and we are looking into S3 Select functionality.&lt;/p&gt;
 &lt;h3&gt;How to Install&lt;/h3&gt;
 &lt;p&gt;Add the below to your &lt;code&gt;Cargo.toml&lt;/code&gt; in your Rust Project with DataFusion.&lt;/p&gt;
-&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="n"&gt;datafusion-objectstore-s3&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="s"&gt;"0.1.0"&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;pre&gt;&lt;code class="language-toml"&gt;datafusion-objectstore-s3 = "0.1.0"
+&lt;/code&gt;&lt;/pre&gt;
 &lt;h2&gt;DataFusion-Substrait&lt;/h2&gt;
 &lt;p&gt;&lt;a href="https://substrait.io/"&gt;Substrait&lt;/a&gt; is an emerging standard that provides a cross-language serialization format for relational algebra (e.g. expressions and query plans).&lt;/p&gt;
 &lt;p&gt;This &lt;a href="https://github.com/datafusion-contrib/datafusion-substrait"&gt;crate&lt;/a&gt; provides a Substrait producer and consumer for DataFusion.  A producer converts a DataFusion logical plan into a Substrait protobuf and a consumer does the reverse.&lt;/p&gt;
@@ -2646,8 +2646,8 @@ limitations under the License.
 &lt;/ul&gt;
 &lt;h3&gt;How to Install&lt;/h3&gt;
 &lt;p&gt;Add the below to your &lt;code&gt;Cargo.toml&lt;/code&gt; in your Rust Project with DataFusion.&lt;/p&gt;
-&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="n"&gt;datafusion-bigtable&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="s"&gt;"0.1.0"&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;pre&gt;&lt;code class="language-toml"&gt;datafusion-bigtable = "0.1.0"
+&lt;/code&gt;&lt;/pre&gt;
 &lt;h2&gt;DataFusion-HDFS&lt;/h2&gt;
 &lt;p&gt;This &lt;a href="https://github.com/datafusion-contrib/datafusion-objectstore-hdfs"&gt;crate&lt;/a&gt; introduces &lt;code&gt;HadoopFileSystem&lt;/code&gt; as a remote &lt;code&gt;ObjectStore&lt;/code&gt; which provides the ability to query HDFS files.  For HDFS access the &lt;a href="https://github.com/yahoNanJing/fs-hdfs"&gt;fs-hdfs&lt;/a&gt; library is used.&lt;/p&gt;
 &lt;h2&gt;DataFusion-Tokomak&lt;/h2&gt;
@@ -2758,43 +2758,43 @@ git shortlog -sn 5.0.0..6.0.0 datafusion datafusion-cli datafusion-examples | wc
 
       Carlos and xudong963 are same individual
 --&gt;
-&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="mi"&gt;44&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Andrew&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Lamb&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="mi"&gt;24&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Kun&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Liu&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="mi"&gt;23&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Jiayu&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Liu&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="mi"&gt;17&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;xudong&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;w&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="mi"&gt;11&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Yijie&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Shen&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;9&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Matthew&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Turner&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;7&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Liang&lt;/span&gt;&lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="n"&gt;Chi&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Hsieh&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;5&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Lin&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Ma&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;4&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Stephen&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Carman&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;4&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;James&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Katz&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;4&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Dmitry&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Patsura&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;4&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;QP&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Hou&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;dependabot&lt;/span&gt;&lt;span class="o"&gt;[&lt;/span&gt;&lt;span class="n"&gt;bot&lt;/span&gt;&lt;span class="o"&gt;]&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Remzi&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Yang&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Yang&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;ic4y&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Dani&amp;euml;l&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Heres&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Andy&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Grove&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Raphael&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Taylor&lt;/span&gt;&lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="n"&gt;Davies&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Jason&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Tianyi&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Wang&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Dan&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Harris&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Sergey&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Melnychuk&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Nitish&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Tiwari&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Dom&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Eduard&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Karacharov&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Javier&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Goday&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Boaz&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Marko&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Mikulicic&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="nf"&gt;Max&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Burke&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Carol&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Nichols&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;||&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Goulding&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Phillip&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Cloud&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Rich&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Toby&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Hede&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;Will&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Jones&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;r&lt;/span&gt;&lt;span class="mf"&gt;.4&lt;/span&gt;&lt;span class="n"&gt;ntix&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;span class="w"&gt;     &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="n"&gt;rdettai&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;pre&gt;&lt;code&gt;    44  Andrew Lamb
+    24  Kun Liu
+    23  Jiayu Liu
+    17  xudong.w
+    11  Yijie Shen
+     9  Matthew Turner
+     7  Liang-Chi Hsieh
+     5  Lin Ma
+     4  Stephen Carman
+     4  James Katz
+     4  Dmitry Patsura
+     4  QP Hou
+     3  dependabot[bot]
+     3  Remzi Yang
+     3  Yang
+     3  ic4y
+     3  Dani&amp;euml;l Heres
+     2  Andy Grove
+     2  Raphael Taylor-Davies
+     2  Jason Tianyi Wang
+     2  Dan Harris
+     2  Sergey Melnychuk
+     1  Nitish Tiwari
+     1  Dom
+     1  Eduard Karacharov
+     1  Javier Goday
+     1  Boaz
+     1  Marko Mikulicic
+     1  Max Burke
+     1  Carol (Nichols || Goulding)
+     1  Phillip Cloud
+     1  Rich
+     1  Toby Hede
+     1  Will Jones
+     1  r.4ntix
+     1  rdettai
+&lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;The following section highlights some of the improvements in this release. Of course, many other bug fixes and improvements have also been made and we refer you to the complete &lt;a href="https://github.com/apache/arrow-datafusion/blob/7.0.0/datafusion/CHANGELOG.md"&gt;changelog&lt;/a&gt; for the full detail.&lt;/p&gt;
 &lt;h1&gt;Summary&lt;/h1&gt;
 &lt;ul&gt;
@@ -2922,35 +2922,35 @@ git shortlog -sn 5.0.0..6.0.0 datafusion datafusion-cli datafusion-examples | wc
 
       Carlos and xudong963 are same individual
 --&gt;
-&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="err"&gt;    28  Andrew Lamb&lt;/span&gt;
-&lt;span class="err"&gt;    26  Jiayu Liu&lt;/span&gt;
-&lt;span class="err"&gt;    13  xudong963&lt;/span&gt;
-&lt;span class="err"&gt;     9  rdettai&lt;/span&gt;
-&lt;span class="err"&gt;     9  QP Hou&lt;/span&gt;
-&lt;span class="err"&gt;     6  Matthew Turner&lt;/span&gt;
-&lt;span class="err"&gt;     5  Dani&amp;euml;l Heres&lt;/span&gt;
-&lt;span class="err"&gt;     4  Guillaume Balaine&lt;/span&gt;
-&lt;span class="err"&gt;     3  Francis Du&lt;/span&gt;
-&lt;span class="err"&gt;     3  Marco Neumann&lt;/span&gt;
-&lt;span class="err"&gt;     3  Jon Mease&lt;/span&gt;
-&lt;span class="err"&gt;     3  Nga Tran&lt;/span&gt;
-&lt;span class="err"&gt;     2  Yijie Shen&lt;/span&gt;
-&lt;span class="err"&gt;     2  Ruihang Xia&lt;/span&gt;
-&lt;span class="err"&gt;     2  Liang-Chi Hsieh&lt;/span&gt;
-&lt;span class="err"&gt;     2  baishen&lt;/span&gt;
-&lt;span class="err"&gt;     2  Andy Grove&lt;/span&gt;
-&lt;span class="err"&gt;     2  Jason Tianyi Wang&lt;/span&gt;
-&lt;span class="err"&gt;     1  Nan Zhu&lt;/span&gt;
-&lt;span class="err"&gt;     1  Antoine Wendlinger&lt;/span&gt;
-&lt;span class="err"&gt;     1  Kriszti&amp;aacute;n Sz&amp;udblac;cs&lt;/span&gt;
-&lt;span class="err"&gt;     1  Mike Seddon&lt;/span&gt;
-&lt;span class="err"&gt;     1  Conner Murphy&lt;/span&gt;
-&lt;span class="err"&gt;     1  Patrick More&lt;/span&gt;
-&lt;span class="err"&gt;     1  Taehoon Moon&lt;/span&gt;
-&lt;span class="err"&gt;     1  Tiphaine Ruy&lt;/span&gt;
-&lt;span class="err"&gt;     1  adsharma&lt;/span&gt;
-&lt;span class="err"&gt;     1  lichuan6&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;pre&gt;&lt;code&gt;    28  Andrew Lamb
+    26  Jiayu Liu
+    13  xudong963
+     9  rdettai
+     9  QP Hou
+     6  Matthew Turner
+     5  Dani&amp;euml;l Heres
+     4  Guillaume Balaine
+     3  Francis Du
+     3  Marco Neumann
+     3  Jon Mease
+     3  Nga Tran
+     2  Yijie Shen
+     2  Ruihang Xia
+     2  Liang-Chi Hsieh
+     2  baishen
+     2  Andy Grove
+     2  Jason Tianyi Wang
+     1  Nan Zhu
+     1  Antoine Wendlinger
+     1  Kriszti&amp;aacute;n Sz&amp;udblac;cs
+     1  Mike Seddon
+     1  Conner Murphy
+     1  Patrick More
+     1  Taehoon Moon
+     1  Tiphaine Ruy
+     1  adsharma
+     1  lichuan6
+&lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;The release notes below are not exhaustive and only expose selected highlights of the release. Many other bug fixes
 and improvements have been made: we refer you to the complete
 &lt;a href="https://github.com/apache/arrow-datafusion/blob/6.0.0/datafusion/CHANGELOG.md"&gt;changelog&lt;/a&gt;.&lt;/p&gt;
@@ -3040,7 +3040,7 @@ limitations under the License.
 &lt;p&gt;Ballista extends DataFusion to provide support for distributed queries. This is the first release of Ballista since 
 the project was &lt;a href="https://arrow.apache.org/blog/2021/04/12/ballista-donation/"&gt;donated&lt;/a&gt; to the Apache Arrow project 
 and includes 80 commits from 11 contributors.&lt;/p&gt;
-&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="err"&gt;git shortlog -sn 4.0.0..5.0.0 ballista/rust/client ballista/rust/core ballista/rust …&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;</summary><content type="html">&lt;!--
+&lt;pre&gt;&lt;code&gt;git shortlog -sn 4.0.0..5.0.0 ballista/rust/client ballista/rust/core ballista/rust …&lt;/code&gt;&lt;/pre&gt;</summary><content type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -3061,19 +3061,19 @@ limitations under the License.
 &lt;p&gt;Ballista extends DataFusion to provide support for distributed queries. This is the first release of Ballista since 
 the project was &lt;a href="https://arrow.apache.org/blog/2021/04/12/ballista-donation/"&gt;donated&lt;/a&gt; to the Apache Arrow project 
 and includes 80 commits from 11 contributors.&lt;/p&gt;
-&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="err"&gt;git shortlog -sn 4.0.0..5.0.0 ballista/rust/client ballista/rust/core ballista/rust/executor ballista/rust/scheduler&lt;/span&gt;
-&lt;span class="err"&gt;  27  Andy Grove&lt;/span&gt;
-&lt;span class="err"&gt;  15  Jiayu Liu&lt;/span&gt;
-&lt;span class="err"&gt;  12  Andrew Lamb&lt;/span&gt;
-&lt;span class="err"&gt;   8  Ximo Guanter&lt;/span&gt;
-&lt;span class="err"&gt;   6  Dani&amp;euml;l Heres&lt;/span&gt;
-&lt;span class="err"&gt;   5  QP Hou&lt;/span&gt;
-&lt;span class="err"&gt;   2  Jorge Leitao&lt;/span&gt;
-&lt;span class="err"&gt;   1  Javier Goday&lt;/span&gt;
-&lt;span class="err"&gt;   1  K.I. (Dennis) Jung&lt;/span&gt;
-&lt;span class="err"&gt;   1  Mike Seddon&lt;/span&gt;
-&lt;span class="err"&gt;   1  sathis&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;pre&gt;&lt;code&gt;git shortlog -sn 4.0.0..5.0.0 ballista/rust/client ballista/rust/core ballista/rust/executor ballista/rust/scheduler
+  27  Andy Grove
+  15  Jiayu Liu
+  12  Andrew Lamb
+   8  Ximo Guanter
+   6  Dani&amp;euml;l Heres
+   5  QP Hou
+   2  Jorge Leitao
+   1  Javier Goday
+   1  K.I. (Dennis) Jung
+   1  Mike Seddon
+   1  sathis
+&lt;/code&gt;&lt;/pre&gt;
 &lt;!--
 $ git log --pretty=oneline 4.0.0..5.0.0 ballista/rust/client ballista/rust/core ballista/rust/executor ballista/rust/scheduler ballista-examples/ | wc -l
 80
@@ -3123,10 +3123,10 @@ limitations under the License.
 --&gt;
 &lt;p&gt;The Apache Arrow team is pleased to announce the DataFusion 5.0.0 release. This covers 4 months of development work 
 and includes 211 commits from the following 31 distinct contributors.&lt;/p&gt;
-&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;$ git shortlog -sn &lt;span class="m"&gt;4&lt;/span&gt;.0.0..5.0.0 datafusion datafusion-cli datafusion-examples
-    &lt;span class="m"&gt;61&lt;/span&gt;  Jiayu Liu
-    &lt;span class="m"&gt;47&lt;/span&gt;  Andrew Lamb
-    &lt;span class="m"&gt;27 …&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;</summary><content type="html">&lt;!--
+&lt;pre&gt;&lt;code&gt;$ git shortlog -sn 4.0.0..5.0.0 datafusion datafusion-cli datafusion-examples
+    61  Jiayu Liu
+    47  Andrew Lamb
+    27 …&lt;/code&gt;&lt;/pre&gt;</summary><content type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -3146,39 +3146,39 @@ limitations under the License.
 --&gt;
 &lt;p&gt;The Apache Arrow team is pleased to announce the DataFusion 5.0.0 release. This covers 4 months of development work 
 and includes 211 commits from the following 31 distinct contributors.&lt;/p&gt;
-&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;$ git shortlog -sn &lt;span class="m"&gt;4&lt;/span&gt;.0.0..5.0.0 datafusion datafusion-cli datafusion-examples
-    &lt;span class="m"&gt;61&lt;/span&gt;  Jiayu Liu
-    &lt;span class="m"&gt;47&lt;/span&gt;  Andrew Lamb
-    &lt;span class="m"&gt;27&lt;/span&gt;  Dani&amp;euml;l Heres
-    &lt;span class="m"&gt;13&lt;/span&gt;  QP Hou
-    &lt;span class="m"&gt;13&lt;/span&gt;  Andy Grove
-     &lt;span class="m"&gt;4&lt;/span&gt;  Javier Goday
-     &lt;span class="m"&gt;4&lt;/span&gt;  sathis
-     &lt;span class="m"&gt;3&lt;/span&gt;  Ruan Pearce-Authers
-     &lt;span class="m"&gt;3&lt;/span&gt;  Raphael Taylor-Davies
-     &lt;span class="m"&gt;3&lt;/span&gt;  Jorge Leitao
-     &lt;span class="m"&gt;3&lt;/span&gt;  Cui Wenzheng
-     &lt;span class="m"&gt;3&lt;/span&gt;  Mike Seddon
-     &lt;span class="m"&gt;3&lt;/span&gt;  Edd Robinson
-     &lt;span class="m"&gt;2&lt;/span&gt;  思维
-     &lt;span class="m"&gt;2&lt;/span&gt;  Liang-Chi Hsieh
-     &lt;span class="m"&gt;2&lt;/span&gt;  Michael Lu
-     &lt;span class="m"&gt;2&lt;/span&gt;  Parth Sarthy
-     &lt;span class="m"&gt;2&lt;/span&gt;  Patrick More
-     &lt;span class="m"&gt;2&lt;/span&gt;  Rich
-     &lt;span class="m"&gt;1&lt;/span&gt;  Charlie Evans
-     &lt;span class="m"&gt;1&lt;/span&gt;  Gang Liao
-     &lt;span class="m"&gt;1&lt;/span&gt;  Agata Naomichi
-     &lt;span class="m"&gt;1&lt;/span&gt;  Ritchie Vink
-     &lt;span class="m"&gt;1&lt;/span&gt;  Evan Chan
-     &lt;span class="m"&gt;1&lt;/span&gt;  Ruihang Xia
-     &lt;span class="m"&gt;1&lt;/span&gt;  Todd Treece
-     &lt;span class="m"&gt;1&lt;/span&gt;  Yichen Wang
-     &lt;span class="m"&gt;1&lt;/span&gt;  baishen
-     &lt;span class="m"&gt;1&lt;/span&gt;  Nga Tran
-     &lt;span class="m"&gt;1&lt;/span&gt;  rdettai
-     &lt;span class="m"&gt;1&lt;/span&gt;  Marco Neumann
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;pre&gt;&lt;code&gt;$ git shortlog -sn 4.0.0..5.0.0 datafusion datafusion-cli datafusion-examples
+    61  Jiayu Liu
+    47  Andrew Lamb
+    27  Dani&amp;euml;l Heres
+    13  QP Hou
+    13  Andy Grove
+     4  Javier Goday
+     4  sathis
+     3  Ruan Pearce-Authers
+     3  Raphael Taylor-Davies
+     3  Jorge Leitao
+     3  Cui Wenzheng
+     3  Mike Seddon
+     3  Edd Robinson
+     2  思维
+     2  Liang-Chi Hsieh
+     2  Michael Lu
+     2  Parth Sarthy
+     2  Patrick More
+     2  Rich
+     1  Charlie Evans
+     1  Gang Liao
+     1  Agata Naomichi
+     1  Ritchie Vink
+     1  Evan Chan
+     1  Ruihang Xia
+     1  Todd Treece
+     1  Yichen Wang
+     1  baishen
+     1  Nga Tran
+     1  rdettai
+     1  Marco Neumann
+&lt;/code&gt;&lt;/pre&gt;
 &lt;!--
 $ git log --pretty=oneline 4.0.0..5.0.0 datafusion datafusion-cli datafusion-examples | wc -l
      211

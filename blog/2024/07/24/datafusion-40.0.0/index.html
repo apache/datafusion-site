@@ -181,41 +181,41 @@ are some highlights:</p>
 <p>DataFusion now has much improved support for structured types such <code>STRUCT</code>,
 <code>LIST</code>/<code>ARRAY</code> and <code>MAP</code>. For example, you can now create <code>STRUCT</code> literals 
 in SQL like this:</p>
-<div class="codehilite"><pre><span></span><code><span class="o">&gt;</span><span class="w"> </span><span class="n">select</span><span class="w"> </span><span class="p">{</span><span class="na">'foo</span><span class="err">'</span>: <span class="p">{</span><span class="na">'bar</span><span class="err">'</span>: <span class="mi">2</span><span class="p">}};</span><span class="w"></span>
-<span class="o">+--------------------------------------------------------------+</span><span class="w"></span>
-<span class="o">|</span><span class="w"> </span><span class="n">named_struct</span><span class="p">(</span><span class="n">Utf8</span><span class="p">(</span><span class="s">"foo"</span><span class="p">),</span><span class="n">named_struct</span><span class="p">(</span><span class="n">Utf8</span><span class="p">(</span><span class="s">"bar"</span><span class="p">),</span><span class="n">Int64</span><span class="p">(</span><span class="mi">2</span><span class="p">)))</span><span class="w"> </span><span class="o">|</span><span class="w"></span>
-<span class="o">+--------------------------------------------------------------+</span><span class="w"></span>
-<span class="o">|</span><span class="w"> </span><span class="p">{</span><span class="n">foo</span>: <span class="p">{</span><span class="n">bar</span>: <span class="mi">2</span><span class="p">}}</span><span class="w">                                              </span><span class="o">|</span><span class="w"></span>
-<span class="o">+--------------------------------------------------------------+</span><span class="w"></span>
-<span class="mi">1</span><span class="w"> </span><span class="n">row</span><span class="p">(</span><span class="n">s</span><span class="p">)</span><span class="w"> </span><span class="n">fetched</span><span class="p">.</span><span class="w"></span>
-<span class="n">Elapsed</span><span class="w"> </span><span class="mf">0.002</span><span class="w"> </span><span class="n">seconds</span><span class="p">.</span><span class="w"></span>
-</code></pre></div>
+<pre><code class="language-rust">&gt; select {'foo': {'bar': 2}};
++--------------------------------------------------------------+
+| named_struct(Utf8("foo"),named_struct(Utf8("bar"),Int64(2))) |
++--------------------------------------------------------------+
+| {foo: {bar: 2}}                                              |
++--------------------------------------------------------------+
+1 row(s) fetched.
+Elapsed 0.002 seconds.
+</code></pre>
 <h1>SQL Unparser (SQL Formatter)</h1>
 <p>DataFusion now supports converting <code>Expr</code>s and <code>LogicalPlan</code>s BACK to SQL text.
 This can be useful in query federation to push predicates down into other
 systems that only accept SQL, and for building systems that generate SQL.</p>
 <p>For example, you can now convert a logical expression back to SQL text:</p>
-<div class="codehilite"><pre><span></span><code><span class="c1">// Form a logical expression that represents the SQL "a &lt; 5 OR a = 8"</span>
-<span class="kd">let</span><span class="w"> </span><span class="n">expr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">col</span><span class="p">(</span><span class="s">"a"</span><span class="p">).</span><span class="n">lt</span><span class="p">(</span><span class="n">lit</span><span class="p">(</span><span class="mi">5</span><span class="p">)).</span><span class="n">or</span><span class="p">(</span><span class="n">col</span><span class="p">(</span><span class="s">"a"</span><span class="p">).</span><span class="n">eq</span><span class="p">(</span><span class="n">lit</span><span class="p">(</span><span class="mi">8</span><span class="p">)));</span><span class="w"></span>
-<span class="c1">// convert the expression back to SQL text</span>
-<span class="kd">let</span><span class="w"> </span><span class="n">sql</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">expr_to_sql</span><span class="p">(</span><span class="o">&amp;</span><span class="n">expr</span><span class="p">)</span><span class="o">?</span><span class="p">.</span><span class="n">to_string</span><span class="p">();</span><span class="w"></span>
-<span class="n">assert_eq</span><span class="o">!</span><span class="p">(</span><span class="n">sql</span><span class="p">,</span><span class="w"> </span><span class="s">"a &lt; 5 OR a = 8"</span><span class="p">);</span><span class="w"></span>
-</code></pre></div>
+<pre><code class="language-rust">// Form a logical expression that represents the SQL "a &lt; 5 OR a = 8"
+let expr = col("a").lt(lit(5)).or(col("a").eq(lit(8)));
+// convert the expression back to SQL text
+let sql = expr_to_sql(&amp;expr)?.to_string();
+assert_eq!(sql, "a &lt; 5 OR a = 8");
+</code></pre>
 <p>You can also do complex things like parsing SQL, modifying the plan, and convert
 it back to SQL:</p>
-<div class="codehilite"><pre><span></span><code><span class="kd">let</span><span class="w"> </span><span class="n">df</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ctx</span><span class="w"></span>
-<span class="w">  </span><span class="c1">// Use SQL to read some data from the parquet file</span>
-<span class="w">  </span><span class="p">.</span><span class="n">sql</span><span class="p">(</span><span class="s">"SELECT int_col, double_col, CAST(date_string_col as VARCHAR) FROM alltypes_plain"</span><span class="p">)</span><span class="w"></span>
-<span class="w">  </span><span class="p">.</span><span class="k">await</span><span class="o">?</span><span class="p">;</span><span class="w"></span>
-<span class="c1">// Programmatically add new filters `id &gt; 1 and tinyint_col &lt; double_col`</span>
-<span class="kd">let</span><span class="w"> </span><span class="n">df</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">df</span><span class="p">.</span><span class="n">filter</span><span class="p">(</span><span class="n">col</span><span class="p">(</span><span class="s">"id"</span><span class="p">).</span><span class="n">gt</span><span class="p">(</span><span class="n">lit</span><span class="p">(</span><span class="mi">1</span><span class="p">)).</span><span class="n">and</span><span class="p">(</span><span class="n">col</span><span class="p">(</span><span class="s">"tinyint_col"</span><span class="p">).</span><span class="n">lt</span><span class="p">(</span><span class="n">col</span><span class="p">(</span><span class="s">"double_col"</span><span class="p">))))</span><span class="o">?</span><span class="w"></span>
-<span class="c1">// Convert the new logical plan back to SQL</span>
-<span class="kd">let</span><span class="w"> </span><span class="n">sql</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">plan_to_sql</span><span class="p">(</span><span class="n">df</span><span class="p">.</span><span class="n">logical_plan</span><span class="p">())</span><span class="o">?</span><span class="p">.</span><span class="n">to_string</span><span class="p">();</span><span class="w"></span>
-<span class="n">assert_eq</span><span class="o">!</span><span class="p">(</span><span class="n">sql</span><span class="p">,</span><span class="w"> </span>
-<span class="w">           </span><span class="s">"SELECT alltypes_plain.int_col, alltypes_plain.double_col, CAST(alltypes_plain.date_string_col AS VARCHAR) \</span>
-<span class="s">           FROM alltypes_plain WHERE ((alltypes_plain.id &gt; 1) AND (alltypes_plain.tinyint_col &lt; alltypes_plain.double_col))"</span><span class="p">)</span><span class="w"></span>
-<span class="p">);</span><span class="w"></span>
-</code></pre></div>
+<pre><code class="language-rust">let df = ctx
+  // Use SQL to read some data from the parquet file
+  .sql("SELECT int_col, double_col, CAST(date_string_col as VARCHAR) FROM alltypes_plain")
+  .await?;
+// Programmatically add new filters `id &gt; 1 and tinyint_col &lt; double_col`
+let df = df.filter(col("id").gt(lit(1)).and(col("tinyint_col").lt(col("double_col"))))?
+// Convert the new logical plan back to SQL
+let sql = plan_to_sql(df.logical_plan())?.to_string();
+assert_eq!(sql, 
+           "SELECT alltypes_plain.int_col, alltypes_plain.double_col, CAST(alltypes_plain.date_string_col AS VARCHAR) \
+           FROM alltypes_plain WHERE ((alltypes_plain.id &gt; 1) AND (alltypes_plain.tinyint_col &lt; alltypes_plain.double_col))")
+);
+</code></pre>
 <p>See the <a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/plan_to_sql.rs">Plan to SQL example</a> or the APIs <a href="https://docs.rs/datafusion/latest/datafusion/sql/unparser/fn.expr_to_sql.html">expr_to_sql</a> and <a href="https://docs.rs/datafusion/latest/datafusion/sql/unparser/fn.plan_to_sql.html">plan_to_sql</a> for more details.</p>
 <h1>Low Level APIs for Fast Parquet Access (indexing)</h1>
 <p>With their rising prevalence, supporting efficient access to Parquet files
@@ -230,7 +230,7 @@ API.</p>
 <p>This API can be used along with index information to selectively skip decoding
 parts of the file. For example, Spice AI used this feature to add <a href="https://github.com/spiceai/spiceai/pull/1891">efficient
 support</a> for reading from DeltaLake tables and handling <a href="https://docs.delta.io/latest/delta-deletion-vectors.html">deletion vectors</a>.</p>
-<div class="codehilite"><pre><span></span><code>        &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;   If the RowSelection does not include any
+<pre><code class="language-text">        &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;   If the RowSelection does not include any
         &boxv;          ...          &boxv;   rows from a particular Data Page, that
         &boxv;                       &boxv;   Data Page is not fetched or decoded.
         &boxv; &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl; &boxv;   Note this requires a PageIndex
@@ -252,7 +252,7 @@ Groups  &boxv; &boxv;     &boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh
         &boxv; &boxUR;&boxH;&boxH;&boxH;&boxH;&boxH;&boxH;&boxH;&boxH;&boxH;&boxH;&boxH;&boxH;&boxH;&boxH;&boxH;&boxH;&boxH;&boxH;&boxH;&boxUL; &boxv;
         &boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul;
          Parquet File
-</code></pre></div>
+</code></pre>
 <p>See the <a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/parquet_index.rs">parquet_index.rs</a> and <a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/advanced_parquet_index.rs">advanced_parquet_index.rs</a> examples for more details. </p>
 <p>Thanks to <a href="https://github.com/alamb">@alamb</a> and <a href="https://github.com/Ted-Jiang">@Ted-Jiang</a> for this feature.  </p>
 <h2>Building Systems is Easier with DataFusion 🛠️</h2>
@@ -270,43 +270,43 @@ DataFusion's SQL planner to support custom operators or syntax.</p>
 <p>For example the <a href="https://github.com/datafusion-contrib/datafusion-functions-json">datafusion-functions-json</a> project uses this API to support
 JSON operators in SQL queries. It provides a custom implementation for
 planning JSON operators such as <code>-&gt;</code> and <code>-&gt;&gt;</code> with code like:</p>
-<div class="codehilite"><pre><span></span><code><span class="k">struct</span> <span class="nc">MyCustomPlanner</span><span class="p">;</span><span class="w"></span>
+<pre><code class="language-rust">struct MyCustomPlanner;
 
-<span class="k">impl</span><span class="w"> </span><span class="n">ExprPlanner</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">MyCustomPlanner</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
-<span class="w">    </span><span class="c1">// Provide custom implementation for planning a binary operators</span>
-<span class="w">    </span><span class="c1">// such as `-&gt;` and `-&gt;&gt;`</span>
-<span class="w">    </span><span class="k">fn</span> <span class="nf">plan_binary_op</span><span class="p">(</span><span class="w"></span>
-<span class="w">        </span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"></span>
-<span class="w">        </span><span class="n">expr</span>: <span class="nc">RawBinaryExpr</span><span class="p">,</span><span class="w"></span>
-<span class="w">        </span><span class="n">_schema</span>: <span class="kp">&amp;</span><span class="nc">DFSchema</span><span class="p">,</span><span class="w"></span>
-<span class="w">    </span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nb">Result</span><span class="o">&lt;</span><span class="n">PlannerResult</span><span class="o">&lt;</span><span class="n">RawBinaryExpr</span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
-<span class="w">        </span><span class="k">match</span><span class="w"> </span><span class="o">&amp;</span><span class="n">expr</span><span class="p">.</span><span class="n">op</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
-<span class="w">           </span><span class="n">BinaryOperator</span>::<span class="n">Arrow</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="cm">/* plan -&gt; operator */</span><span class="w"> </span><span class="p">}</span><span class="w"></span>
-<span class="w">           </span><span class="n">BinaryOperator</span>::<span class="n">LongArrow</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="cm">/* plan -&gt;&gt; operator */</span><span class="w"> </span><span class="p">}</span><span class="w"></span>
-<span class="w">           </span><span class="o">..</span><span class="p">.</span><span class="w"></span>
-<span class="w">        </span><span class="p">}</span><span class="w"></span>
-<span class="w">    </span><span class="p">}</span><span class="w"></span>
-<span class="p">}</span><span class="w"></span>
-</code></pre></div>
+impl ExprPlanner for MyCustomPlanner {
+    // Provide custom implementation for planning a binary operators
+    // such as `-&gt;` and `-&gt;&gt;`
+    fn plan_binary_op(
+        &amp;self,
+        expr: RawBinaryExpr,
+        _schema: &amp;DFSchema,
+    ) -&gt; Result&lt;PlannerResult&lt;RawBinaryExpr&gt;&gt; {
+        match &amp;expr.op {
+           BinaryOperator::Arrow =&gt; { /* plan -&gt; operator */ }
+           BinaryOperator::LongArrow =&gt; { /* plan -&gt;&gt; operator */ }
+           ...
+        }
+    }
+}
+</code></pre>
 <p>Thanks to <a href="https://github.com/samuelcolvin">@samuelcolvin</a>, <a href="https://github.com/jayzhan211">@jayzhan211</a> and <a href="https://github.com/dharanad">@dharanad</a> for helping make this
 feature happen.</p>
 <h1>Pluggable Support for <code>CREATE FUNCTION</code></h1>
 <p>DataFusion's new [<code>FunctionFactory</code>] API let's users provide a handler for
 <code>CREATE FUNCTION</code> SQL statements. This feature lets you build systems that
 support defining functions in SQL such as</p>
-<div class="codehilite"><pre><span></span><code><span class="c1">-- SQL based functions</span>
-<span class="k">CREATE</span> <span class="k">FUNCTION</span> <span class="n">my_func</span><span class="p">(</span><span class="n">DOUBLE</span><span class="p">,</span> <span class="n">DOUBLE</span><span class="p">)</span> <span class="k">RETURNS</span> <span class="n">DOUBLE</span>
-    <span class="k">RETURN</span> <span class="err">$</span><span class="mi">1</span> <span class="o">+</span> <span class="err">$</span><span class="mi">3</span>
-<span class="p">;</span>
+<pre><code class="language-sql">-- SQL based functions
+CREATE FUNCTION my_func(DOUBLE, DOUBLE) RETURNS DOUBLE
+    RETURN $1 + $3
+;
 
-<span class="c1">-- ML Models</span>
-<span class="k">CREATE</span> <span class="k">FUNCTION</span> <span class="n">iris</span><span class="p">(</span><span class="nb">FLOAT</span><span class="p">[])</span> <span class="k">RETURNS</span> <span class="nb">FLOAT</span><span class="p">[]</span> 
-<span class="k">LANGUAGE</span> <span class="n">TORCH</span> <span class="k">AS</span> <span class="s1">'models:/iris@champion'</span><span class="p">;</span>
+-- ML Models
+CREATE FUNCTION iris(FLOAT[]) RETURNS FLOAT[] 
+LANGUAGE TORCH AS 'models:/iris@champion';
 
-<span class="c1">-- WebAssembly</span>
-<span class="k">CREATE</span> <span class="k">FUNCTION</span> <span class="n">func</span><span class="p">(</span><span class="nb">FLOAT</span><span class="p">[])</span> <span class="k">RETURNS</span> <span class="nb">FLOAT</span><span class="p">[]</span> 
-<span class="k">LANGUAGE</span> <span class="n">WASM</span> <span class="k">AS</span> <span class="s1">'func.wasm'</span>
-</code></pre></div>
+-- WebAssembly
+CREATE FUNCTION func(FLOAT[]) RETURNS FLOAT[] 
+LANGUAGE WASM AS 'func.wasm'
+</code></pre>
 <p>Huge thanks to <a href="https://github.com/milenkovicm">@milenkovicm</a> for this feature. There is an example of how to
 make macro like functions in <a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/function_factory.rs">function_factory.rs</a>. It would be
 great if <a href="https://github.com/apache/datafusion/issues/9326">someone made a demo</a> showing how to create WASMs 🎣.</p>

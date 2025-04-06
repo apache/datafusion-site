@@ -84,20 +84,20 @@ a table from <strong>any</strong> Python library that implements the <a href="ht
 Many popular libaries, such as <a href="https://pandas.pydata.org/">Pandas</a> and <a href="https://pola.rs/">Polars</a>
 already support these interfaces.</p>
 <p>Suppose you have a Pandas and Polars DataFrames named <code>df_pandas</code> or <code>df_polars</code>, respectively:</p>
-<div class="codehilite"><pre><span></span><code><span class="n">ctx</span> <span class="o">=</span> <span class="n">SessionContext</span><span class="p">()</span>
-<span class="n">df_dfn1</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">from_arrow</span><span class="p">(</span><span class="n">df_pandas</span><span class="p">)</span>
-<span class="n">df_dfn1</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+<pre><code class="language-python">ctx = SessionContext()
+df_dfn1 = ctx.from_arrow(df_pandas)
+df_dfn1.show()
 
-<span class="n">df_dfn2</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">from_arrow</span><span class="p">(</span><span class="n">df_polars</span><span class="p">)</span>
-<span class="n">df_dfn2</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
-</code></pre></div>
+df_dfn2 = ctx.from_arrow(df_polars)
+df_dfn2.show()
+</code></pre>
 <p>One great thing about using this interface is that as any new library is developed and
 uses these stable interfaces, they will work out of the box with DataFusion!</p>
 <p>Additionally, DataFusion DataFrames allow for exporting via the PyCapsule interface. For example,
 to convert a DataFrame to a PyArrow table, it is simply</p>
-<div class="codehilite"><pre><span></span><code><span class="kn">import</span> <span class="nn">pyarrow</span> <span class="k">as</span> <span class="nn">pa</span>
-<span class="n">table</span> <span class="o">=</span> <span class="n">pa</span><span class="o">.</span><span class="n">table</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
-</code></pre></div>
+<pre><code class="language-python">import pyarrow as pa
+table = pa.table(df)
+</code></pre>
 <h2>User-Defined Window Functions</h2>
 <p>In <code>datafusion-python 42.0.0</code> we released User-Defined Window Support in <a href="https://github.com/apache/datafusion-python/pull/880">PR #880</a>.
 For a detailed description of how these work please see the online documentation for
@@ -116,20 +116,20 @@ were built against.</p>
 <p>To implement this feature in a table provider is quite simple. There is a complete
 example in the <a href="https://github.com/apache/datafusion-python/tree/main/examples">examples folder</a>, but the relevant code is here, exposed as a
 Python function via <a href="https://pyo3.rs/">pyo3</a>:</p>
-<div class="codehilite"><pre><span></span><code><span class="w">    </span><span class="k">fn</span> <span class="nf">__datafusion_table_provider__</span><span class="o">&lt;</span><span class="na">'py</span><span class="o">&gt;</span><span class="p">(</span><span class="w"></span>
-<span class="w">        </span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"></span>
-<span class="w">        </span><span class="n">py</span>: <span class="nc">Python</span><span class="o">&lt;</span><span class="na">'py</span><span class="o">&gt;</span><span class="p">,</span><span class="w"></span>
-<span class="w">    </span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">PyResult</span><span class="o">&lt;</span><span class="n">Bound</span><span class="o">&lt;</span><span class="na">'py</span><span class="p">,</span><span class="w"> </span><span class="n">PyCapsule</span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
-<span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">CString</span>::<span class="n">new</span><span class="p">(</span><span class="s">"datafusion_table_provider"</span><span class="p">).</span><span class="n">unwrap</span><span class="p">();</span><span class="w"></span>
+<pre><code class="language-rust">    fn __datafusion_table_provider__&lt;'py&gt;(
+        &amp;self,
+        py: Python&lt;'py&gt;,
+    ) -&gt; PyResult&lt;Bound&lt;'py, PyCapsule&gt;&gt; {
+        let name = CString::new("datafusion_table_provider").unwrap();
 
-<span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">provider</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="bp">self</span><span class="w"></span>
-<span class="w">            </span><span class="p">.</span><span class="n">create_table</span><span class="p">()</span><span class="w"></span>
-<span class="w">            </span><span class="p">.</span><span class="n">map_err</span><span class="p">(</span><span class="o">|</span><span class="n">e</span><span class="o">|</span><span class="w"> </span><span class="n">PyRuntimeError</span>::<span class="n">new_err</span><span class="p">(</span><span class="n">e</span><span class="p">.</span><span class="n">to_string</span><span class="p">()))</span><span class="o">?</span><span class="p">;</span><span class="w"></span>
-<span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">provider</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">FFI_TableProvider</span>::<span class="n">new</span><span class="p">(</span><span class="n">Arc</span>::<span class="n">new</span><span class="p">(</span><span class="n">provider</span><span class="p">),</span><span class="w"> </span><span class="kc">false</span><span class="p">);</span><span class="w"></span>
+        let provider = self
+            .create_table()
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        let provider = FFI_TableProvider::new(Arc::new(provider), false);
 
-<span class="w">        </span><span class="n">PyCapsule</span>::<span class="n">new_bound</span><span class="p">(</span><span class="n">py</span><span class="p">,</span><span class="w"> </span><span class="n">provider</span><span class="p">,</span><span class="w"> </span><span class="nb">Some</span><span class="p">(</span><span class="n">name</span><span class="p">.</span><span class="n">clone</span><span class="p">()))</span><span class="w"></span>
-<span class="w">    </span><span class="p">}</span><span class="w"></span>
-</code></pre></div>
+        PyCapsule::new_bound(py, provider, Some(name.clone()))
+    }
+</code></pre>
 <p>That's it! All of the work of converting the table provider to use the FFI interface
 is performed by the core library.</p>
 <h2>String View performance enhancements</h2>
@@ -149,11 +149,11 @@ likely need to change from <code>pa.string()</code> to <code>pa.string_view()</c
 primarily happens during data loading operations and in unit tests.</p>
 <p>If you wish to disable StringView as the default type to retain the old approach,
 you can do so following this example:</p>
-<div class="codehilite"><pre><span></span><code><span class="kn">from</span> <span class="nn">datafusion</span> <span class="kn">import</span> <span class="n">SessionContext</span>
-<span class="kn">from</span> <span class="nn">datafusion</span> <span class="kn">import</span> <span class="n">SessionConfig</span>
-<span class="n">config</span> <span class="o">=</span> <span class="n">SessionConfig</span><span class="p">({</span><span class="s2">"datafusion.execution.parquet.schema_force_view_types"</span><span class="p">:</span> <span class="s2">"false"</span><span class="p">})</span>
-<span class="n">ctx</span> <span class="o">=</span> <span class="n">SessionContext</span><span class="p">(</span><span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">)</span>
-</code></pre></div>
+<pre><code class="language-python">from datafusion import SessionContext
+from datafusion import SessionConfig
+config = SessionConfig({"datafusion.execution.parquet.schema_force_view_types": "false"})
+ctx = SessionContext(config=config)
+</code></pre>
 <h2>Appreciation</h2>
 <p>We would like to thank everyone who has helped with these releases through their helpful
 conversations, code review, issue descriptions, and code authoring. We would especially

@@ -70,29 +70,29 @@ limitations under the License.
 <p>There are various use cases where this type of analysis can be useful such as the following examples.</p>
 <h3>Removing Unnecessary Sorts</h3>
 <p>Imagine a user wants to execute the following query:</p>
-<div class="codehilite"><pre><span></span><code><span class="k">SELECT</span> <span class="n">hostname</span><span class="p">,</span> <span class="n">log_line</span> 
-<span class="k">FROM</span> <span class="n">telemetry</span> <span class="k">ORDER</span> <span class="k">BY</span> <span class="k">time</span> <span class="k">ASC</span> <span class="k">limit</span> <span class="mi">10</span>
-</code></pre></div>
+<pre><code class="language-SQL">SELECT hostname, log_line 
+FROM telemetry ORDER BY time ASC limit 10
+</code></pre>
 <p>If we don't know anything about the <code>telemetry</code> table we need to sort it by <code>time ASC</code> and then retrieve the first 10 rows to get the correct result. However, if the table is already ordered by <code>time ASC</code>, we can simply retrieve the first 10 rows. This approach executes much faster and uses less memory compared to resorting the entire table, even when the <a href="https://docs.rs/datafusion/latest/datafusion/physical_plan/struct.TopK.html">TopK</a> operator is used. </p>
 <p>In order to avoid the sort the query optimizer must determine the data is already sorted. For simple queries the analysis is straightforward however it gets complicated fast. For example, what if your data is sorted by <code>[hostname, time ASC]</code> and your query is</p>
-<div class="codehilite"><pre><span></span><code><span class="k">SELECT</span> <span class="n">hostname</span><span class="p">,</span> <span class="n">log_line</span> 
-<span class="k">FROM</span> <span class="n">telemetry</span> <span class="k">WHERE</span> <span class="n">hostname</span> <span class="o">=</span> <span class="s1">'app.example.com'</span> <span class="k">ORDER</span> <span class="k">BY</span> <span class="k">time</span> <span class="k">ASC</span><span class="p">;</span>
-</code></pre></div>
+<pre><code class="language-sql">SELECT hostname, log_line 
+FROM telemetry WHERE hostname = 'app.example.com' ORDER BY time ASC;
+</code></pre>
 <p>In this case a sort still isn't needed, but the analysis must reason about the sortedness of the stream when it knows <code>hostname</code> has a single value.</p>
 <h3>Optimized Operator Implementations</h3>
 <p>As another use case, some operators can utilize the ordering information to change its underlying algorithm to execute more efficiently. Consider the following query:</p>
-<div class="codehilite"><pre><span></span><code><span class="k">SELECT</span> <span class="k">COUNT</span><span class="p">(</span><span class="n">log_line</span><span class="p">)</span> 
-<span class="k">FROM</span> <span class="n">telemetry</span> <span class="k">GROUP</span> <span class="k">BY</span> <span class="n">hostname</span><span class="p">;</span>
-</code></pre></div>
+<pre><code class="language-SQL">SELECT COUNT(log_line) 
+FROM telemetry GROUP BY hostname;
+</code></pre>
 <p>Most analytic systems, including DataFusion, by default implement such a query using a hash table keyed on values of <code>hostname</code> to store the counts. However, if the <code>telemetry</code> table is sorted by <code>hostname</code>,  there are much more efficient algorithms for grouping on <code>hostname</code> values than hashing every value and storing it in memory. However, the more efficient algorithm can only be used when the input is sorted correctly. To see this in practice, check out the <a href="https://github.com/apache/datafusion/tree/main/datafusion/physical-plan/src/aggregates/order">source</a> for ordered variant of the <code>Aggregation</code> in <code>DataFusion</code>.</p>
 <h3>Streaming-Friendly Execution</h3>
 <p>Stream processing aims to produce results immediately as they become available ensuring minimal latency for real-time workloads. However, some operators need to consume all input data before producing any output. Consider the <code>Sort</code> operation: before it can start generating output, the algorithm must first process all input data. As a result, data flow halts whenever such an operator is encountered until all input is consumed. When a physical query plan contains such an operator (<code>Sort</code>, <code>CrossJoin</code>, ..) we refer to this as pipeline breaking, meaning the query cannot be executed in a streaming fashion.</p>
 <p>For a query to be executed in a streaming fashion we need to satisfy 2 conditions:</p>
 <p><strong>Logically Streamable</strong><br/>
 It should be possible to generate what user wants in streaming fashion. Consider following query:</p>
-<div class="codehilite"><pre><span></span><code><span class="k">SELECT</span> <span class="k">SUM</span><span class="p">(</span><span class="n">amount</span><span class="p">)</span>  
-<span class="k">FROM</span> <span class="n">orders</span>  
-</code></pre></div>
+<pre><code class="language-SQL">SELECT SUM(amount)  
+FROM orders  
+</code></pre>
 <p>Here, the user wants to compute the sum of all amounts in the orders table. By the nature of the query this requires scanning the entire table to generate a result making it impossible to execute in a streaming fashion.</p>
 <p><strong>Streaming Aware Planner</strong><br/>
 Being logically streamable does not guarantee that a query will execute in a streaming fashion. SQL is a declarative language, meaning it specifies 'WHAT' user wants. It is up to the planner 'HOW' to generate the result. In most cases there are many ways to compute the correct result for a given query. The query planner is responsible for choosing "a way" (ideally the best<sup id="optimal1"><a href="#optimal">*</a></sup> one) among the all alternatives to generate what user asks for. If a plan contains a pipeline-breaking operator the execution will not be streaming&mdash;even if the query is logically streamable. To generate truly streaming plans from logically streamable queries the planner must carefully analyze the existing orderings in the source tables to ensure that the final plan does not contain any pipeline-breaking operators.</p>
@@ -151,10 +151,9 @@ Being logically streamable does not guarantee that a query will execute in a str
 For example consider the following query:
 
 
-<div class="codehilite"><pre><span></span><code><span class="k">SELECT</span> <span class="k">time</span><span class="p">,</span> <span class="n">date_bin</span><span class="p">(</span><span class="s1">'1 hour'</span><span class="p">,</span> <span class="k">time</span><span class="p">,</span> <span class="s1">'1970-01-01'</span><span class="p">)</span> <span class="k">as</span> <span class="n">time_bin</span>  
-<span class="k">FROM</span> <span class="k">table</span><span class="p">;</span>
-</code></pre></div>
-
+<pre><code class="language-sql">SELECT time, date_bin('1 hour', time, '1970-01-01') as time_bin  
+FROM table;
+</code></pre>
 
 If we know that the table is ordered by <code>time ASC</code> we can infer that <code>time_bin ASC</code> is also a valid ordering. This is because the <code>date_bin</code> function is monotonic, meaning it preserves the order of its input.
 
@@ -356,9 +355,9 @@ using the orderings of the query intermediates.<br/>
 <p>If, at the end of the procedure above, the ordering requirement is an empty list, we can conclude that the requirement is satisfied by the table.</p>
 <h3>Example Walkthrough</h3>
 <p>Let's say the user provided a query such as the following:</p>
-<div class="codehilite"><pre><span></span><code><span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="k">table</span>
-<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">hostname</span> <span class="k">DESC</span><span class="p">,</span> <span class="n">amount</span> <span class="k">ASC</span><span class="p">,</span> <span class="n">time_bin</span> <span class="k">ASC</span><span class="p">,</span> <span class="n">price_cloned</span> <span class="k">ASC</span><span class="p">,</span> <span class="k">time</span> <span class="k">ASC</span><span class="p">,</span> <span class="n">currency</span> <span class="k">ASC</span><span class="p">,</span> <span class="n">price</span> <span class="k">DESC</span><span class="p">;</span>
-</code></pre></div>
+<pre><code class="language-sql">SELECT * FROM table
+ORDER BY hostname DESC, amount ASC, time_bin ASC, price_cloned ASC, time ASC, currency ASC, price DESC;
+</code></pre>
 <p>And the input has the same properties explained above</p>
 <ul>
 <li><strong>Constant Expressions</strong> = <code>hostname, currency</code></li>

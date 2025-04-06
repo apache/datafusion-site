@@ -88,10 +88,10 @@ and then selectively reading other columns only for matching rows.</p>
 <h2>Why filter pushdown in Parquet?</h2>
 <p>Below is an example query that reads sensor data with filters on <code>date_time</code> and <code>location</code>.
 Without filter pushdown, all rows from <code>location</code>, <code>val</code>, and <code>date_time</code> columns are decoded before <code>location='office'</code> is evaluated. Filter pushdown is especially useful when the filter is selective, i.e., removes many rows.</p>
-<div class="codehilite"><pre><span></span><code><span class="k">SELECT</span> <span class="n">val</span><span class="p">,</span> <span class="k">location</span> 
-<span class="k">FROM</span> <span class="n">sensor_data</span> 
-<span class="k">WHERE</span> <span class="n">date_time</span> <span class="o">&gt;</span> <span class="s1">'2025-03-11'</span> <span class="k">AND</span> <span class="k">location</span> <span class="o">=</span> <span class="s1">'office'</span><span class="p">;</span>
-</code></pre></div>
+<pre><code class="language-sql">SELECT val, location 
+FROM sensor_data 
+WHERE date_time &gt; '2025-03-11' AND location = 'office';
+</code></pre>
 <figure>
 <img alt="Parquet pruning skips irrelevant files/row_groups, while filter pushdown skips irrelevant rows. Without filter pushdown, all rows from location, val, and date_time columns are decoded before `location='office'` is evaluated. Filter pushdown is especially useful when the filter is selective, i.e., removes many rows." class="img-responsive" src="/blog/images/parquet-pushdown/pushdown-vs-no-pushdown.jpg" width="80%"/>
 <figcaption>
@@ -138,12 +138,12 @@ This eliminates the waste of decoding rows that will be immediately filtered out
 <p>In the figure above, we can see that <code>location</code> is <strong>decompressed and decoded twice</strong>, first when building the filter mask (steps 1, 2), and second when building the output (steps 4, 5).
 This happens for all columns that appear both in the filter and output.</p>
 <p>The table below shows the corresponding CPU time on the <a href="https://github.com/apache/datafusion/blob/main/benchmarks/queries/clickbench/queries.sql#L23">ClickBench query 22</a>:</p>
-<div class="codehilite"><pre><span></span><code><span class="err">+------------+--------+-------------+--------+</span>
-<span class="err">| Decompress | Decode | Apply filter| Others |</span>
-<span class="err">+------------+--------+-------------+--------+</span>
-<span class="err">| 206 ms     | 117 ms | 22 ms       | 48 ms  |</span>
-<span class="err">+------------+--------+-------------+--------+</span>
-</code></pre></div>
+<pre><code>+------------+--------+-------------+--------+
+| Decompress | Decode | Apply filter| Others |
++------------+--------+-------------+--------+
+| 206 ms     | 117 ms | 22 ms       | 48 ms  |
++------------+--------+-------------+--------+
+</code></pre>
 <p>Clearly, decompress/decode operations dominate the time spent. With filter pushdown, it needs to decompress/decode twice; but without filter pushdown, it only needs to do this once.
 This explains why filter pushdown is slower in some cases.</p>
 <blockquote>
@@ -198,15 +198,15 @@ This explains why filter pushdown is slower in some cases.</p>
 <p>You may have noticed that only <code>location</code> is cached, not <code>val</code>, because <code>val</code> is only used for output.
 More generally, only columns that appear both in the filter and output are cached, and at most 1 page is cached for each such column.</p>
 <p>More examples:</p>
-<div class="codehilite"><pre><span></span><code><span class="k">SELECT</span> <span class="n">val</span> 
-<span class="k">FROM</span> <span class="n">sensor_data</span> 
-<span class="k">WHERE</span> <span class="n">date_time</span> <span class="o">&gt;</span> <span class="s1">'2025-03-11'</span> <span class="k">AND</span> <span class="k">location</span> <span class="o">=</span> <span class="s1">'office'</span><span class="p">;</span>
-</code></pre></div>
+<pre><code class="language-sql">SELECT val 
+FROM sensor_data 
+WHERE date_time &gt; '2025-03-11' AND location = 'office';
+</code></pre>
 <p>In this case, no columns are cached, because <code>val</code> is not used for filtering.</p>
-<div class="codehilite"><pre><span></span><code><span class="k">SELECT</span> <span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span> 
-<span class="k">FROM</span> <span class="n">sensor_data</span> 
-<span class="k">WHERE</span> <span class="n">date_time</span> <span class="o">&gt;</span> <span class="s1">'2025-03-11'</span> <span class="k">AND</span> <span class="k">location</span> <span class="o">=</span> <span class="s1">'office'</span><span class="p">;</span>
-</code></pre></div>
+<pre><code class="language-sql">SELECT COUNT(*) 
+FROM sensor_data 
+WHERE date_time &gt; '2025-03-11' AND location = 'office';
+</code></pre>
 <p>In this case, again, no columns are cached, because the output projection is empty after query plan optimization.</p>
 <h3>Then why cache 2 pages per column instead of 1?</h3>
 <p>This is another real-world nuance regarding how Parquet layouts the pages.</p>
@@ -230,65 +230,65 @@ The data page slot will move forward as it reads the data; but the dictionary pa
 <h2>How does it perform?</h2>
 <p>Here are my results on <a href="https://github.com/apache/datafusion/tree/main/benchmarks#clickbench">ClickBench</a> on my AMD 9900X machine. The total time is reduced by 15%, with Q23 being 2.24x faster,
 and queries that get slower are likely due to noise.</p>
-<div class="codehilite"><pre><span></span><code><span class="err">┏━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┓</span>
-<span class="err">┃ Query        ┃ no-pushdown ┃ new-pushdown ┃        Change ┃</span>
-<span class="err">┡━━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━┩</span>
-<span class="err">&boxv; QQuery 0     &boxv;      0.47ms &boxv;       0.43ms &boxv; +1.10x faster &boxv;</span>
-<span class="err">&boxv; QQuery 1     &boxv;     51.10ms &boxv;      50.10ms &boxv;     no change &boxv;</span>
-<span class="err">&boxv; QQuery 2     &boxv;     68.23ms &boxv;      64.49ms &boxv; +1.06x faster &boxv;</span>
-<span class="err">&boxv; QQuery 3     &boxv;     90.68ms &boxv;      86.73ms &boxv;     no change &boxv;</span>
-<span class="err">&boxv; QQuery 4     &boxv;    458.93ms &boxv;     458.59ms &boxv;     no change &boxv;</span>
-<span class="err">&boxv; QQuery 5     &boxv;    522.06ms &boxv;     478.50ms &boxv; +1.09x faster &boxv;</span>
-<span class="err">&boxv; QQuery 6     &boxv;     49.84ms &boxv;      49.94ms &boxv;     no change &boxv;</span>
-<span class="err">&boxv; QQuery 7     &boxv;     55.09ms &boxv;      55.77ms &boxv;     no change &boxv;</span>
-<span class="err">&boxv; QQuery 8     &boxv;    565.26ms &boxv;     556.95ms &boxv;     no change &boxv;</span>
-<span class="err">&boxv; QQuery 9     &boxv;    575.83ms &boxv;     575.05ms &boxv;     no change &boxv;</span>
-<span class="err">&boxv; QQuery 10    &boxv;    164.56ms &boxv;     178.23ms &boxv;  1.08x slower &boxv;</span>
-<span class="err">&boxv; QQuery 11    &boxv;    177.20ms &boxv;     191.32ms &boxv;  1.08x slower &boxv;</span>
-<span class="err">&boxv; QQuery 12    &boxv;    591.05ms &boxv;     569.92ms &boxv;     no change &boxv;</span>
-<span class="err">&boxv; QQuery 13    &boxv;    861.06ms &boxv;     848.59ms &boxv;     no change &boxv;</span>
-<span class="err">&boxv; QQuery 14    &boxv;    596.20ms &boxv;     580.73ms &boxv;     no change &boxv;</span>
-<span class="err">&boxv; QQuery 15    &boxv;    554.96ms &boxv;     548.77ms &boxv;     no change &boxv;</span>
-<span class="err">&boxv; QQuery 16    &boxv;   1175.08ms &boxv;    1146.07ms &boxv;     no change &boxv;</span>
-<span class="err">&boxv; QQuery 17    &boxv;   1150.45ms &boxv;    1121.49ms &boxv;     no change &boxv;</span>
-<span class="err">&boxv; QQuery 18    &boxv;   2634.75ms &boxv;    2494.07ms &boxv; +1.06x faster &boxv;</span>
-<span class="err">&boxv; QQuery 19    &boxv;     90.15ms &boxv;      89.24ms &boxv;     no change &boxv;</span>
-<span class="err">&boxv; QQuery 20    &boxv;    620.15ms &boxv;     591.67ms &boxv;     no change &boxv;</span>
-<span class="err">&boxv; QQuery 21    &boxv;    782.38ms &boxv;     703.15ms &boxv; +1.11x faster &boxv;</span>
-<span class="err">&boxv; QQuery 22    &boxv;   1927.94ms &boxv;    1404.35ms &boxv; +1.37x faster &boxv;</span>
-<span class="err">&boxv; QQuery 23    &boxv;   8104.11ms &boxv;    3610.76ms &boxv; +2.24x faster &boxv;</span>
-<span class="err">&boxv; QQuery 24    &boxv;    360.79ms &boxv;     330.55ms &boxv; +1.09x faster &boxv;</span>
-<span class="err">&boxv; QQuery 25    &boxv;    290.61ms &boxv;     252.54ms &boxv; +1.15x faster &boxv;</span>
-<span class="err">&boxv; QQuery 26    &boxv;    395.18ms &boxv;     362.72ms &boxv; +1.09x faster &boxv;</span>
-<span class="err">&boxv; QQuery 27    &boxv;    891.76ms &boxv;     959.39ms &boxv;  1.08x slower &boxv;</span>
-<span class="err">&boxv; QQuery 28    &boxv;   4059.54ms &boxv;    4137.37ms &boxv;     no change &boxv;</span>
-<span class="err">&boxv; QQuery 29    &boxv;    235.88ms &boxv;     228.99ms &boxv;     no change &boxv;</span>
-<span class="err">&boxv; QQuery 30    &boxv;    564.22ms &boxv;     584.65ms &boxv;     no change &boxv;</span>
-<span class="err">&boxv; QQuery 31    &boxv;    741.20ms &boxv;     757.87ms &boxv;     no change &boxv;</span>
-<span class="err">&boxv; QQuery 32    &boxv;   2652.48ms &boxv;    2574.19ms &boxv;     no change &boxv;</span>
-<span class="err">&boxv; QQuery 33    &boxv;   2373.71ms &boxv;    2327.10ms &boxv;     no change &boxv;</span>
-<span class="err">&boxv; QQuery 34    &boxv;   2391.00ms &boxv;    2342.15ms &boxv;     no change &boxv;</span>
-<span class="err">&boxv; QQuery 35    &boxv;    700.79ms &boxv;     694.51ms &boxv;     no change &boxv;</span>
-<span class="err">&boxv; QQuery 36    &boxv;    151.51ms &boxv;     152.93ms &boxv;     no change &boxv;</span>
-<span class="err">&boxv; QQuery 37    &boxv;    108.18ms &boxv;      86.03ms &boxv; +1.26x faster &boxv;</span>
-<span class="err">&boxv; QQuery 38    &boxv;    114.64ms &boxv;     106.22ms &boxv; +1.08x faster &boxv;</span>
-<span class="err">&boxv; QQuery 39    &boxv;    260.80ms &boxv;     239.13ms &boxv; +1.09x faster &boxv;</span>
-<span class="err">&boxv; QQuery 40    &boxv;     60.74ms &boxv;      73.29ms &boxv;  1.21x slower &boxv;</span>
-<span class="err">&boxv; QQuery 41    &boxv;     58.75ms &boxv;      67.85ms &boxv;  1.15x slower &boxv;</span>
-<span class="err">&boxv; QQuery 42    &boxv;     65.49ms &boxv;      68.11ms &boxv;     no change &boxv;</span>
-<span class="err">&boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxhu;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxhu;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxhu;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul;</span>
-<span class="err">┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┓</span>
-<span class="err">┃ Benchmark Summary           ┃            ┃</span>
-<span class="err">┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━┩</span>
-<span class="err">&boxv; Total Time (no-pushdown)    &boxv; 38344.79ms &boxv;</span>
-<span class="err">&boxv; Total Time (new-pushdown)   &boxv; 32800.50ms &boxv;</span>
-<span class="err">&boxv; Average Time (no-pushdown)  &boxv;   891.74ms &boxv;</span>
-<span class="err">&boxv; Average Time (new-pushdown) &boxv;   762.80ms &boxv;</span>
-<span class="err">&boxv; Queries Faster              &boxv;         13 &boxv;</span>
-<span class="err">&boxv; Queries Slower              &boxv;          5 &boxv;</span>
-<span class="err">&boxv; Queries with No Change      &boxv;         25 &boxv;</span>
-<span class="err">&boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxhu;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul;</span>
-</code></pre></div>
+<pre><code>┏━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┓
+┃ Query        ┃ no-pushdown ┃ new-pushdown ┃        Change ┃
+┡━━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━┩
+&boxv; QQuery 0     &boxv;      0.47ms &boxv;       0.43ms &boxv; +1.10x faster &boxv;
+&boxv; QQuery 1     &boxv;     51.10ms &boxv;      50.10ms &boxv;     no change &boxv;
+&boxv; QQuery 2     &boxv;     68.23ms &boxv;      64.49ms &boxv; +1.06x faster &boxv;
+&boxv; QQuery 3     &boxv;     90.68ms &boxv;      86.73ms &boxv;     no change &boxv;
+&boxv; QQuery 4     &boxv;    458.93ms &boxv;     458.59ms &boxv;     no change &boxv;
+&boxv; QQuery 5     &boxv;    522.06ms &boxv;     478.50ms &boxv; +1.09x faster &boxv;
+&boxv; QQuery 6     &boxv;     49.84ms &boxv;      49.94ms &boxv;     no change &boxv;
+&boxv; QQuery 7     &boxv;     55.09ms &boxv;      55.77ms &boxv;     no change &boxv;
+&boxv; QQuery 8     &boxv;    565.26ms &boxv;     556.95ms &boxv;     no change &boxv;
+&boxv; QQuery 9     &boxv;    575.83ms &boxv;     575.05ms &boxv;     no change &boxv;
+&boxv; QQuery 10    &boxv;    164.56ms &boxv;     178.23ms &boxv;  1.08x slower &boxv;
+&boxv; QQuery 11    &boxv;    177.20ms &boxv;     191.32ms &boxv;  1.08x slower &boxv;
+&boxv; QQuery 12    &boxv;    591.05ms &boxv;     569.92ms &boxv;     no change &boxv;
+&boxv; QQuery 13    &boxv;    861.06ms &boxv;     848.59ms &boxv;     no change &boxv;
+&boxv; QQuery 14    &boxv;    596.20ms &boxv;     580.73ms &boxv;     no change &boxv;
+&boxv; QQuery 15    &boxv;    554.96ms &boxv;     548.77ms &boxv;     no change &boxv;
+&boxv; QQuery 16    &boxv;   1175.08ms &boxv;    1146.07ms &boxv;     no change &boxv;
+&boxv; QQuery 17    &boxv;   1150.45ms &boxv;    1121.49ms &boxv;     no change &boxv;
+&boxv; QQuery 18    &boxv;   2634.75ms &boxv;    2494.07ms &boxv; +1.06x faster &boxv;
+&boxv; QQuery 19    &boxv;     90.15ms &boxv;      89.24ms &boxv;     no change &boxv;
+&boxv; QQuery 20    &boxv;    620.15ms &boxv;     591.67ms &boxv;     no change &boxv;
+&boxv; QQuery 21    &boxv;    782.38ms &boxv;     703.15ms &boxv; +1.11x faster &boxv;
+&boxv; QQuery 22    &boxv;   1927.94ms &boxv;    1404.35ms &boxv; +1.37x faster &boxv;
+&boxv; QQuery 23    &boxv;   8104.11ms &boxv;    3610.76ms &boxv; +2.24x faster &boxv;
+&boxv; QQuery 24    &boxv;    360.79ms &boxv;     330.55ms &boxv; +1.09x faster &boxv;
+&boxv; QQuery 25    &boxv;    290.61ms &boxv;     252.54ms &boxv; +1.15x faster &boxv;
+&boxv; QQuery 26    &boxv;    395.18ms &boxv;     362.72ms &boxv; +1.09x faster &boxv;
+&boxv; QQuery 27    &boxv;    891.76ms &boxv;     959.39ms &boxv;  1.08x slower &boxv;
+&boxv; QQuery 28    &boxv;   4059.54ms &boxv;    4137.37ms &boxv;     no change &boxv;
+&boxv; QQuery 29    &boxv;    235.88ms &boxv;     228.99ms &boxv;     no change &boxv;
+&boxv; QQuery 30    &boxv;    564.22ms &boxv;     584.65ms &boxv;     no change &boxv;
+&boxv; QQuery 31    &boxv;    741.20ms &boxv;     757.87ms &boxv;     no change &boxv;
+&boxv; QQuery 32    &boxv;   2652.48ms &boxv;    2574.19ms &boxv;     no change &boxv;
+&boxv; QQuery 33    &boxv;   2373.71ms &boxv;    2327.10ms &boxv;     no change &boxv;
+&boxv; QQuery 34    &boxv;   2391.00ms &boxv;    2342.15ms &boxv;     no change &boxv;
+&boxv; QQuery 35    &boxv;    700.79ms &boxv;     694.51ms &boxv;     no change &boxv;
+&boxv; QQuery 36    &boxv;    151.51ms &boxv;     152.93ms &boxv;     no change &boxv;
+&boxv; QQuery 37    &boxv;    108.18ms &boxv;      86.03ms &boxv; +1.26x faster &boxv;
+&boxv; QQuery 38    &boxv;    114.64ms &boxv;     106.22ms &boxv; +1.08x faster &boxv;
+&boxv; QQuery 39    &boxv;    260.80ms &boxv;     239.13ms &boxv; +1.09x faster &boxv;
+&boxv; QQuery 40    &boxv;     60.74ms &boxv;      73.29ms &boxv;  1.21x slower &boxv;
+&boxv; QQuery 41    &boxv;     58.75ms &boxv;      67.85ms &boxv;  1.15x slower &boxv;
+&boxv; QQuery 42    &boxv;     65.49ms &boxv;      68.11ms &boxv;     no change &boxv;
+&boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxhu;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxhu;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxhu;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul;
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┓
+┃ Benchmark Summary           ┃            ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━┩
+&boxv; Total Time (no-pushdown)    &boxv; 38344.79ms &boxv;
+&boxv; Total Time (new-pushdown)   &boxv; 32800.50ms &boxv;
+&boxv; Average Time (no-pushdown)  &boxv;   891.74ms &boxv;
+&boxv; Average Time (new-pushdown) &boxv;   762.80ms &boxv;
+&boxv; Queries Faster              &boxv;         13 &boxv;
+&boxv; Queries Slower              &boxv;          5 &boxv;
+&boxv; Queries with No Change      &boxv;         25 &boxv;
+&boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxhu;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul;
+</code></pre>
 <h2>Conclusion</h2>
 <p>Despite being simple in theory, filter pushdown in Parquet is non-trivial to implement.
 It requires understanding both the Parquet format and reader implementation details. 

@@ -99,12 +99,12 @@ limitations under the License.
 <p>DataFusion 46.0.0 adds a new concept of <a href="https://github.com/apache/datafusion/pull/14271"><strong>set-monotonicity</strong></a> for certain transformations, which helps avoid unnecessary sort operations. In particular, the planner now understands when a <strong>window function introduces new orderings of data</strong>.</p>
 <p>For example, DataFusion now recognizes that a window-aggregate like <code>MAX</code> on a column can produce a result that is <strong>monotonically increasing</strong>, even if the input column is unordered &mdash; depending on the window frame used.</p>
 <p>Consider the following query:</p>
-<div class="codehilite"><pre><span></span><code><span class="k">SELECT</span> <span class="k">MAX</span><span class="p">(</span><span class="n">c1</span><span class="p">)</span> <span class="n">OVER</span> <span class="p">(</span>
-    <span class="k">ROWS</span> <span class="k">BETWEEN</span> <span class="n">UNBOUNDED</span> <span class="n">PRECEDING</span> <span class="k">AND</span> <span class="k">CURRENT</span> <span class="k">ROW</span>
-<span class="p">)</span> <span class="k">AS</span> <span class="n">max_c1</span>
-<span class="k">FROM</span> <span class="n">c1_table</span>
-<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">max_c1</span><span class="p">;</span>
-</code></pre></div>
+<pre><code class="language-sql">SELECT MAX(c1) OVER (
+    ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+) AS max_c1
+FROM c1_table
+ORDER BY max_c1;
+</code></pre>
 <p>In earlier versions of DataFusion, this query would require an additional SortExec on max_c1 to satisfy the ORDER BY clause. However, with the new set-monotonicity logic, the planner knows that MAX(...) OVER (...) produces values that are not smaller than the previous row, making the extra sort redundant. This leads to more efficient query execution.</p>
 <p>PR <a href="https://github.com/apache/datafusion/pull/14271">#14271</a> introduced the core monotonicity tracking for aggregates and window functions.
 PR <a href="https://github.com/apache/datafusion/pull/14813">#14813</a> improved ordering preservation within various window frame types, and brought an extensive test coverage.
@@ -112,17 +112,17 @@ Huge thanks to <a href="https://github.com/berkaysynnada">@berkaysynnada</a> and
 <h3>UNION [ALL | DISTINCT] BY NAME Support</h3>
 <p>DataFusion now supports UNION BY NAME and UNION ALL BY NAME, which align columns by name instead of position. This matches functionality found in systems like Spark and DuckDB and simplifies combining heterogeneously ordered result sets.</p>
 <p>You no longer need to rewrite column order manually &mdash; just write:</p>
-<div class="codehilite"><pre><span></span><code><span class="k">SELECT</span> <span class="n">col1</span><span class="p">,</span> <span class="n">col2</span> <span class="k">FROM</span> <span class="n">t1</span>
-<span class="k">UNION</span> <span class="k">ALL</span> <span class="k">BY</span> <span class="n">NAME</span>
-<span class="k">SELECT</span> <span class="n">col2</span><span class="p">,</span> <span class="n">col1</span> <span class="k">FROM</span> <span class="n">t2</span><span class="p">;</span>
-</code></pre></div>
+<pre><code class="language-sql">SELECT col1, col2 FROM t1
+UNION ALL BY NAME
+SELECT col2, col1 FROM t2;
+</code></pre>
 <p>Under the hood, this is supported by the new union_by_name() and union_by_name_distinct() plan builder methods.</p>
 <p>Thanks to <a href="https://github.com/rkrishn7">@rkrishn7</a> for PR <a href="https://github.com/apache/datafusion/pull/14538">#14538</a>.</p>
 <h3>New range() Table Function</h3>
 <p>A new table-valued function range(start, stop, step) has been added to make it easy to generate integer sequences &mdash; similar to PostgreSQL&rsquo;s generate_series() or Spark&rsquo;s range().</p>
 <p>Example:</p>
-<div class="codehilite"><pre><span></span><code><span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">2</span><span class="p">);</span>
-</code></pre></div>
+<pre><code class="language-sql">SELECT * FROM range(1, 10, 2);
+</code></pre>
 <p>This returns: 1, 3, 5, 7, 9. It&rsquo;s great for testing, cross joins, surrogate keys, and more.</p>
 <p>Thanks to <a href="https://github.com/simonvandel">@simonvandel</a> for PR <a href="https://github.com/apache/datafusion/pull/14830">#14830</a>.</p>
 <h2>Upgrade Guide and Changelog</h2>

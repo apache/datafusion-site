@@ -135,41 +135,41 @@ tuple&rdquo;. I&rsquo;ve published this as
 <a href="https://github.com/apache/datafusion-python/blob/main/examples/python-udf-comparisons.py">an example</a>
 in the <a href="https://github.com/apache/datafusion-python">datafusion-python repository</a>. Here is an
 example of how this can be done:</p>
-<div class="codehilite"><pre><span></span><code><span class="n">values_of_interest</span> <span class="o">=</span> <span class="p">[</span>
-    <span class="p">(</span><span class="mi">1530</span><span class="p">,</span> <span class="mi">4031</span><span class="p">,</span> <span class="s2">"N"</span><span class="p">),</span>
-    <span class="p">(</span><span class="mi">6530</span><span class="p">,</span> <span class="mi">1531</span><span class="p">,</span> <span class="s2">"N"</span><span class="p">),</span>
-    <span class="p">(</span><span class="mi">5618</span><span class="p">,</span> <span class="mi">619</span><span class="p">,</span> <span class="s2">"N"</span><span class="p">),</span>
-    <span class="p">(</span><span class="mi">8118</span><span class="p">,</span> <span class="mi">8119</span><span class="p">,</span> <span class="s2">"N"</span><span class="p">),</span>
-<span class="p">]</span>
+<pre><code class="language-python">values_of_interest = [
+    (1530, 4031, "N"),
+    (6530, 1531, "N"),
+    (5618, 619, "N"),
+    (8118, 8119, "N"),
+]
 
-<span class="k">def</span> <span class="nf">is_of_interest_impl</span><span class="p">(</span>
-    <span class="n">partkey_arr</span><span class="p">:</span> <span class="n">pa</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span>
-    <span class="n">suppkey_arr</span><span class="p">:</span> <span class="n">pa</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span>
-    <span class="n">returnflag_arr</span><span class="p">:</span> <span class="n">pa</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span>
-<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pa</span><span class="o">.</span><span class="n">Array</span><span class="p">:</span>
-    <span class="n">result</span> <span class="o">=</span> <span class="p">[]</span>
-    <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">partkey</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">partkey_arr</span><span class="p">):</span>
-        <span class="n">partkey</span> <span class="o">=</span> <span class="n">partkey</span><span class="o">.</span><span class="n">as_py</span><span class="p">()</span>
-        <span class="n">suppkey</span> <span class="o">=</span> <span class="n">suppkey_arr</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span><span class="o">.</span><span class="n">as_py</span><span class="p">()</span>
-        <span class="n">returnflag</span> <span class="o">=</span> <span class="n">returnflag_arr</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span><span class="o">.</span><span class="n">as_py</span><span class="p">()</span>
-        <span class="n">value</span> <span class="o">=</span> <span class="p">(</span><span class="n">partkey</span><span class="p">,</span> <span class="n">suppkey</span><span class="p">,</span> <span class="n">returnflag</span><span class="p">)</span>
-        <span class="n">result</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">value</span> <span class="ow">in</span> <span class="n">values_of_interest</span><span class="p">)</span>
+def is_of_interest_impl(
+    partkey_arr: pa.Array,
+    suppkey_arr: pa.Array,
+    returnflag_arr: pa.Array,
+) -&gt; pa.Array:
+    result = []
+    for idx, partkey in enumerate(partkey_arr):
+        partkey = partkey.as_py()
+        suppkey = suppkey_arr[idx].as_py()
+        returnflag = returnflag_arr[idx].as_py()
+        value = (partkey, suppkey, returnflag)
+        result.append(value in values_of_interest)
 
-    <span class="k">return</span> <span class="n">pa</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+    return pa.array(result)
 
-<span class="c1"># Wrap our custom function with `datafusion.udf`, annotating expected </span>
-<span class="c1"># parameter and return types</span>
-<span class="n">is_of_interest</span> <span class="o">=</span> <span class="n">udf</span><span class="p">(</span>
-    <span class="n">is_of_interest_impl</span><span class="p">,</span>
-    <span class="p">[</span><span class="n">pa</span><span class="o">.</span><span class="n">int64</span><span class="p">(),</span> <span class="n">pa</span><span class="o">.</span><span class="n">int64</span><span class="p">(),</span> <span class="n">pa</span><span class="o">.</span><span class="n">utf8</span><span class="p">()],</span>
-    <span class="n">pa</span><span class="o">.</span><span class="n">bool_</span><span class="p">(),</span>
-    <span class="s2">"stable"</span><span class="p">,</span>
-<span class="p">)</span>
+# Wrap our custom function with `datafusion.udf`, annotating expected 
+# parameter and return types
+is_of_interest = udf(
+    is_of_interest_impl,
+    [pa.int64(), pa.int64(), pa.utf8()],
+    pa.bool_(),
+    "stable",
+)
 
-<span class="n">df_udf_filter</span> <span class="o">=</span> <span class="n">df_lineitem</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span>
-    <span class="n">is_of_interest</span><span class="p">(</span><span class="n">col</span><span class="p">(</span><span class="s2">"l_partkey"</span><span class="p">),</span> <span class="n">col</span><span class="p">(</span><span class="s2">"l_suppkey"</span><span class="p">),</span> <span class="n">col</span><span class="p">(</span><span class="s2">"l_returnflag"</span><span class="p">))</span>
-<span class="p">)</span>
-</code></pre></div>
+df_udf_filter = df_lineitem.filter(
+    is_of_interest(col("l_partkey"), col("l_suppkey"), col("l_returnflag"))
+)
+</code></pre>
 <p>When working with a DataFusion UDF in Python, you define your function to take in some number of
 expressions. During the evaluation, these will get computed into their corresponding values and
 passed to your UDF as a PyArrow Array. We must return an Array also with the same number of
@@ -196,41 +196,41 @@ useful functions. In the example below, we are only using a few of the boolean f
 equality function. Each of these functions takes two arrays and analyzes them row by row. In the
 below example, we shift the logic around a little since we are now operating on an entire array of
 values instead of checking a single row ourselves.</p>
-<div class="codehilite"><pre><span></span><code><span class="kn">import</span> <span class="nn">pyarrow.compute</span> <span class="k">as</span> <span class="nn">pc</span>
+<pre><code class="language-python">import pyarrow.compute as pc
 
-<span class="k">def</span> <span class="nf">udf_using_pyarrow_compute_impl</span><span class="p">(</span>
-    <span class="n">partkey_arr</span><span class="p">:</span> <span class="n">pa</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span>
-    <span class="n">suppkey_arr</span><span class="p">:</span> <span class="n">pa</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span>
-    <span class="n">returnflag_arr</span><span class="p">:</span> <span class="n">pa</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span>
-<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pa</span><span class="o">.</span><span class="n">Array</span><span class="p">:</span>
-    <span class="n">results</span> <span class="o">=</span> <span class="kc">None</span>
-    <span class="k">for</span> <span class="n">partkey</span><span class="p">,</span> <span class="n">suppkey</span><span class="p">,</span> <span class="n">returnflag</span> <span class="ow">in</span> <span class="n">values_of_interest</span><span class="p">:</span>
-        <span class="n">filtered_partkey_arr</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">equal</span><span class="p">(</span><span class="n">partkey_arr</span><span class="p">,</span> <span class="n">partkey</span><span class="p">)</span>
-        <span class="n">filtered_suppkey_arr</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">equal</span><span class="p">(</span><span class="n">suppkey_arr</span><span class="p">,</span> <span class="n">suppkey</span><span class="p">)</span>
-        <span class="n">filtered_returnflag_arr</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">equal</span><span class="p">(</span><span class="n">returnflag_arr</span><span class="p">,</span> <span class="n">returnflag</span><span class="p">)</span>
+def udf_using_pyarrow_compute_impl(
+    partkey_arr: pa.Array,
+    suppkey_arr: pa.Array,
+    returnflag_arr: pa.Array,
+) -&gt; pa.Array:
+    results = None
+    for partkey, suppkey, returnflag in values_of_interest:
+        filtered_partkey_arr = pc.equal(partkey_arr, partkey)
+        filtered_suppkey_arr = pc.equal(suppkey_arr, suppkey)
+        filtered_returnflag_arr = pc.equal(returnflag_arr, returnflag)
 
-        <span class="n">resultant_arr</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">and_</span><span class="p">(</span><span class="n">filtered_partkey_arr</span><span class="p">,</span> <span class="n">filtered_suppkey_arr</span><span class="p">)</span>
-        <span class="n">resultant_arr</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">and_</span><span class="p">(</span><span class="n">resultant_arr</span><span class="p">,</span> <span class="n">filtered_returnflag_arr</span><span class="p">)</span>
+        resultant_arr = pc.and_(filtered_partkey_arr, filtered_suppkey_arr)
+        resultant_arr = pc.and_(resultant_arr, filtered_returnflag_arr)
 
-        <span class="k">if</span> <span class="n">results</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">results</span> <span class="o">=</span> <span class="n">resultant_arr</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="n">results</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">or_</span><span class="p">(</span><span class="n">results</span><span class="p">,</span> <span class="n">resultant_arr</span><span class="p">)</span>
+        if results is None:
+            results = resultant_arr
+        else:
+            results = pc.or_(results, resultant_arr)
 
-    <span class="k">return</span> <span class="n">results</span>
+    return results
 
 
-<span class="n">udf_using_pyarrow_compute</span> <span class="o">=</span> <span class="n">udf</span><span class="p">(</span>
-    <span class="n">udf_using_pyarrow_compute_impl</span><span class="p">,</span>
-    <span class="p">[</span><span class="n">pa</span><span class="o">.</span><span class="n">int64</span><span class="p">(),</span> <span class="n">pa</span><span class="o">.</span><span class="n">int64</span><span class="p">(),</span> <span class="n">pa</span><span class="o">.</span><span class="n">utf8</span><span class="p">()],</span>
-    <span class="n">pa</span><span class="o">.</span><span class="n">bool_</span><span class="p">(),</span>
-    <span class="s2">"stable"</span><span class="p">,</span>
-<span class="p">)</span>
+udf_using_pyarrow_compute = udf(
+    udf_using_pyarrow_compute_impl,
+    [pa.int64(), pa.int64(), pa.utf8()],
+    pa.bool_(),
+    "stable",
+)
 
-<span class="n">df_udf_pyarrow_compute</span> <span class="o">=</span> <span class="n">df_lineitem</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span>
-    <span class="n">udf_using_pyarrow_compute</span><span class="p">(</span><span class="n">col</span><span class="p">(</span><span class="s2">"l_partkey"</span><span class="p">),</span> <span class="n">col</span><span class="p">(</span><span class="s2">"l_suppkey"</span><span class="p">),</span> <span class="n">col</span><span class="p">(</span><span class="s2">"l_returnflag"</span><span class="p">))</span>
-<span class="p">)</span>
-</code></pre></div>
+df_udf_pyarrow_compute = df_lineitem.filter(
+    udf_using_pyarrow_compute(col("l_partkey"), col("l_suppkey"), col("l_returnflag"))
+)
+</code></pre>
 <p>The idea in the code above is that we will iterate through each of the values of interest, which we
 expect to be small. For each of the columns, we compare the value of interest to it&rsquo;s corresponding
 array using <code>pyarrow.compute.equal</code>. This will give use three boolean arrays. We have a match to
@@ -261,8 +261,8 @@ dependencies on the Rust side, <a href="https://github.com/apache/arrow-rs">arro
 <a href="https://pyo3.rs/">pyo3</a>. I have posted a <a href="https://github.com/timsaucer/tuple_filter_example">minimal example</a>.
 You&rsquo;ll need <a href="https://github.com/PyO3/maturin">maturin</a> to build the project, and you must use
 release mode when building to get the expected performance.</p>
-<div class="codehilite"><pre><span></span><code>maturin develop --release
-</code></pre></div>
+<pre><code class="language-bash">maturin develop --release
+</code></pre>
 <p>When you write your UDF in Rust you generally will need to take these steps</p>
 <ol>
 <li>Write a function description that takes in some number of Python generic objects.</li>
@@ -286,67 +286,67 @@ transition. In the second implementation you can see how we can iterate through 
 ourselves.</p>
 <p>In this first example, we are hard coding the values of interest, but in the following section
 we demonstrate passing these in during initalization.</p>
-<div class="codehilite"><pre><span></span><code><span class="cp">#[pyfunction]</span><span class="w"></span>
-<span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">tuple_filter_fn</span><span class="p">(</span><span class="w"></span>
-<span class="w">    </span><span class="n">py</span>: <span class="nc">Python</span><span class="o">&lt;</span><span class="nb">'_</span><span class="o">&gt;</span><span class="p">,</span><span class="w"></span>
-<span class="w">    </span><span class="n">partkey_expr</span>: <span class="kp">&amp;</span><span class="nc">Bound</span><span class="o">&lt;</span><span class="nb">'_</span><span class="p">,</span><span class="w"> </span><span class="n">PyAny</span><span class="o">&gt;</span><span class="p">,</span><span class="w"></span>
-<span class="w">    </span><span class="n">suppkey_expr</span>: <span class="kp">&amp;</span><span class="nc">Bound</span><span class="o">&lt;</span><span class="nb">'_</span><span class="p">,</span><span class="w"> </span><span class="n">PyAny</span><span class="o">&gt;</span><span class="p">,</span><span class="w"></span>
-<span class="w">    </span><span class="n">returnflag_expr</span>: <span class="kp">&amp;</span><span class="nc">Bound</span><span class="o">&lt;</span><span class="nb">'_</span><span class="p">,</span><span class="w"> </span><span class="n">PyAny</span><span class="o">&gt;</span><span class="p">,</span><span class="w"></span>
-<span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">PyResult</span><span class="o">&lt;</span><span class="n">Py</span><span class="o">&lt;</span><span class="n">PyAny</span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
-<span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">partkey_arr</span>: <span class="nc">PrimitiveArray</span><span class="o">&lt;</span><span class="n">Int64Type</span><span class="o">&gt;</span><span class="w"> </span><span class="o">=</span><span class="w"></span>
-<span class="w">        </span><span class="n">ArrayData</span>::<span class="n">from_pyarrow_bound</span><span class="p">(</span><span class="n">partkey_expr</span><span class="p">)</span><span class="o">?</span><span class="p">.</span><span class="n">into</span><span class="p">();</span><span class="w"></span>
-<span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">suppkey_arr</span>: <span class="nc">PrimitiveArray</span><span class="o">&lt;</span><span class="n">Int64Type</span><span class="o">&gt;</span><span class="w"> </span><span class="o">=</span><span class="w"></span>
-<span class="w">        </span><span class="n">ArrayData</span>::<span class="n">from_pyarrow_bound</span><span class="p">(</span><span class="n">suppkey_expr</span><span class="p">)</span><span class="o">?</span><span class="p">.</span><span class="n">into</span><span class="p">();</span><span class="w"></span>
-<span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">returnflag_arr</span>: <span class="nc">StringArray</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ArrayData</span>::<span class="n">from_pyarrow_bound</span><span class="p">(</span><span class="n">returnflag_expr</span><span class="p">)</span><span class="o">?</span><span class="p">.</span><span class="n">into</span><span class="p">();</span><span class="w"></span>
+<pre><code class="language-rust">#[pyfunction]
+pub fn tuple_filter_fn(
+    py: Python&lt;'_&gt;,
+    partkey_expr: &amp;Bound&lt;'_, PyAny&gt;,
+    suppkey_expr: &amp;Bound&lt;'_, PyAny&gt;,
+    returnflag_expr: &amp;Bound&lt;'_, PyAny&gt;,
+) -&gt; PyResult&lt;Py&lt;PyAny&gt;&gt; {
+    let partkey_arr: PrimitiveArray&lt;Int64Type&gt; =
+        ArrayData::from_pyarrow_bound(partkey_expr)?.into();
+    let suppkey_arr: PrimitiveArray&lt;Int64Type&gt; =
+        ArrayData::from_pyarrow_bound(suppkey_expr)?.into();
+    let returnflag_arr: StringArray = ArrayData::from_pyarrow_bound(returnflag_expr)?.into();
 
-<span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">values_of_interest</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">vec</span><span class="o">!</span><span class="p">[</span><span class="w"></span>
-<span class="w">        </span><span class="p">(</span><span class="mi">1530</span><span class="p">,</span><span class="w"> </span><span class="mi">4031</span><span class="p">,</span><span class="w"> </span><span class="s">"N"</span><span class="p">.</span><span class="n">to_string</span><span class="p">()),</span><span class="w"></span>
-<span class="w">        </span><span class="p">(</span><span class="mi">6530</span><span class="p">,</span><span class="w"> </span><span class="mi">1531</span><span class="p">,</span><span class="w"> </span><span class="s">"N"</span><span class="p">.</span><span class="n">to_string</span><span class="p">()),</span><span class="w"></span>
-<span class="w">        </span><span class="p">(</span><span class="mi">5618</span><span class="p">,</span><span class="w"> </span><span class="mi">619</span><span class="p">,</span><span class="w"> </span><span class="s">"N"</span><span class="p">.</span><span class="n">to_string</span><span class="p">()),</span><span class="w"></span>
-<span class="w">        </span><span class="p">(</span><span class="mi">8118</span><span class="p">,</span><span class="w"> </span><span class="mi">8119</span><span class="p">,</span><span class="w"> </span><span class="s">"N"</span><span class="p">.</span><span class="n">to_string</span><span class="p">()),</span><span class="w"></span>
-<span class="w">    </span><span class="p">];</span><span class="w"></span>
+    let values_of_interest = vec![
+        (1530, 4031, "N".to_string()),
+        (6530, 1531, "N".to_string()),
+        (5618, 619, "N".to_string()),
+        (8118, 8119, "N".to_string()),
+    ];
 
-<span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">res</span>: <span class="nb">Option</span><span class="o">&lt;</span><span class="n">BooleanArray</span><span class="o">&gt;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">None</span><span class="p">;</span><span class="w"></span>
+    let mut res: Option&lt;BooleanArray&gt; = None;
 
-<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">partkey</span><span class="p">,</span><span class="w"> </span><span class="n">suppkey</span><span class="p">,</span><span class="w"> </span><span class="n">returnflag</span><span class="p">)</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="o">&amp;</span><span class="n">values_of_interest</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
-<span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">filtered_partkey_arr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">BooleanArray</span>::<span class="n">from_unary</span><span class="p">(</span><span class="o">&amp;</span><span class="n">partkey_arr</span><span class="p">,</span><span class="w"> </span><span class="o">|</span><span class="n">p</span><span class="o">|</span><span class="w"> </span><span class="n">p</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="o">*</span><span class="n">partkey</span><span class="p">);</span><span class="w"></span>
-<span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">filtered_suppkey_arr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">BooleanArray</span>::<span class="n">from_unary</span><span class="p">(</span><span class="o">&amp;</span><span class="n">suppkey_arr</span><span class="p">,</span><span class="w"> </span><span class="o">|</span><span class="n">s</span><span class="o">|</span><span class="w"> </span><span class="n">s</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="o">*</span><span class="n">suppkey</span><span class="p">);</span><span class="w"></span>
-<span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">filtered_returnflag_arr</span><span class="w"> </span><span class="o">=</span><span class="w"></span>
-<span class="w">            </span><span class="n">BooleanArray</span>::<span class="n">from_unary</span><span class="p">(</span><span class="o">&amp;</span><span class="n">returnflag_arr</span><span class="p">,</span><span class="w"> </span><span class="o">|</span><span class="n">s</span><span class="o">|</span><span class="w"> </span><span class="n">s</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">returnflag</span><span class="p">);</span><span class="w"></span>
+    for (partkey, suppkey, returnflag) in &amp;values_of_interest {
+        let filtered_partkey_arr = BooleanArray::from_unary(&amp;partkey_arr, |p| p == *partkey);
+        let filtered_suppkey_arr = BooleanArray::from_unary(&amp;suppkey_arr, |s| s == *suppkey);
+        let filtered_returnflag_arr =
+            BooleanArray::from_unary(&amp;returnflag_arr, |s| s == returnflag);
 
-<span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">part_and_supp</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">compute</span>::<span class="n">and</span><span class="p">(</span><span class="o">&amp;</span><span class="n">filtered_partkey_arr</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">filtered_suppkey_arr</span><span class="p">)</span><span class="w"></span>
-<span class="w">            </span><span class="p">.</span><span class="n">map_err</span><span class="p">(</span><span class="o">|</span><span class="n">e</span><span class="o">|</span><span class="w"> </span><span class="n">PyValueError</span>::<span class="n">new_err</span><span class="p">(</span><span class="n">e</span><span class="p">.</span><span class="n">to_string</span><span class="p">()))</span><span class="o">?</span><span class="p">;</span><span class="w"></span>
-<span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">resultant_arr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">compute</span>::<span class="n">and</span><span class="p">(</span><span class="o">&amp;</span><span class="n">part_and_supp</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">filtered_returnflag_arr</span><span class="p">)</span><span class="w"></span>
-<span class="w">            </span><span class="p">.</span><span class="n">map_err</span><span class="p">(</span><span class="o">|</span><span class="n">e</span><span class="o">|</span><span class="w"> </span><span class="n">PyValueError</span>::<span class="n">new_err</span><span class="p">(</span><span class="n">e</span><span class="p">.</span><span class="n">to_string</span><span class="p">()))</span><span class="o">?</span><span class="p">;</span><span class="w"></span>
+        let part_and_supp = compute::and(&amp;filtered_partkey_arr, &amp;filtered_suppkey_arr)
+            .map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let resultant_arr = compute::and(&amp;part_and_supp, &amp;filtered_returnflag_arr)
+            .map_err(|e| PyValueError::new_err(e.to_string()))?;
 
-<span class="w">        </span><span class="n">res</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">match</span><span class="w"> </span><span class="n">res</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
-<span class="w">            </span><span class="nb">Some</span><span class="p">(</span><span class="n">r</span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">compute</span>::<span class="n">or</span><span class="p">(</span><span class="o">&amp;</span><span class="n">r</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">resultant_arr</span><span class="p">).</span><span class="n">ok</span><span class="p">(),</span><span class="w"></span>
-<span class="w">            </span><span class="nb">None</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="nb">Some</span><span class="p">(</span><span class="n">resultant_arr</span><span class="p">),</span><span class="w"></span>
-<span class="w">        </span><span class="p">};</span><span class="w"></span>
-<span class="w">    </span><span class="p">}</span><span class="w"></span>
+        res = match res {
+            Some(r) =&gt; compute::or(&amp;r, &amp;resultant_arr).ok(),
+            None =&gt; Some(resultant_arr),
+        };
+    }
 
-<span class="w">    </span><span class="n">res</span><span class="p">.</span><span class="n">unwrap</span><span class="p">().</span><span class="n">into_data</span><span class="p">().</span><span class="n">to_pyarrow</span><span class="p">(</span><span class="n">py</span><span class="p">)</span><span class="w"></span>
-<span class="p">}</span><span class="w"></span>
+    res.unwrap().into_data().to_pyarrow(py)
+}
 
 
-<span class="cp">#[pymodule]</span><span class="w"></span>
-<span class="k">fn</span> <span class="nf">tuple_filter_example</span><span class="p">(</span><span class="n">module</span>: <span class="kp">&amp;</span><span class="nc">Bound</span><span class="o">&lt;</span><span class="nb">'_</span><span class="p">,</span><span class="w"> </span><span class="n">PyModule</span><span class="o">&gt;</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">PyResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
-<span class="w">    </span><span class="n">module</span><span class="p">.</span><span class="n">add_function</span><span class="p">(</span><span class="n">wrap_pyfunction</span><span class="o">!</span><span class="p">(</span><span class="n">tuple_filter_fn</span><span class="p">,</span><span class="w"> </span><span class="n">module</span><span class="p">)</span><span class="o">?</span><span class="p">)</span><span class="o">?</span><span class="p">;</span><span class="w"></span>
-<span class="w">    </span><span class="nb">Ok</span><span class="p">(())</span><span class="w"></span>
-<span class="p">}</span><span class="w"></span>
-</code></pre></div>
+#[pymodule]
+fn tuple_filter_example(module: &amp;Bound&lt;'_, PyModule&gt;) -&gt; PyResult&lt;()&gt; {
+    module.add_function(wrap_pyfunction!(tuple_filter_fn, module)?)?;
+    Ok(())
+}
+</code></pre>
 <p>To use this we use the <code>udf</code> function in <code>datafusion-python</code> just as before.</p>
-<div class="codehilite"><pre><span></span><code><span class="kn">from</span> <span class="nn">datafusion</span> <span class="kn">import</span> <span class="n">udf</span>
-<span class="kn">import</span> <span class="nn">pyarrow</span> <span class="k">as</span> <span class="nn">pa</span>
-<span class="kn">from</span> <span class="nn">tuple_filter_example</span> <span class="kn">import</span> <span class="n">tuple_filter_fn</span>
+<pre><code class="language-python">from datafusion import udf
+import pyarrow as pa
+from tuple_filter_example import tuple_filter_fn
 
-<span class="n">udf_using_custom_rust_fn</span> <span class="o">=</span> <span class="n">udf</span><span class="p">(</span>
-    <span class="n">tuple_filter_fn</span><span class="p">,</span>
-    <span class="p">[</span><span class="n">pa</span><span class="o">.</span><span class="n">int64</span><span class="p">(),</span> <span class="n">pa</span><span class="o">.</span><span class="n">int64</span><span class="p">(),</span> <span class="n">pa</span><span class="o">.</span><span class="n">utf8</span><span class="p">()],</span>
-    <span class="n">pa</span><span class="o">.</span><span class="n">bool_</span><span class="p">(),</span>
-    <span class="s2">"stable"</span><span class="p">,</span>
-<span class="p">)</span>
-</code></pre></div>
+udf_using_custom_rust_fn = udf(
+    tuple_filter_fn,
+    [pa.int64(), pa.int64(), pa.utf8()],
+    pa.bool_(),
+    "stable",
+)
+</code></pre>
 <p>That's it! We've now got a third party Rust UDF with Python wrappers working with DataFusion's
 Python bindings!</p>
 <h3>Rust UDF with initialization</h3>
@@ -358,79 +358,79 @@ that they expect to operate on entire arrays of data at a time. We can get aroun
 creating an initializer for our UDF. We do this by defining a Rust struct that contains the data we
 need and implement two methods on this struct, <code>new</code> and <code>__call__</code>. By doing this we will create a
 Python object that is callable, so it can be the function we provide to <code>udf</code>.</p>
-<div class="codehilite"><pre><span></span><code><span class="cp">#[pyclass]</span><span class="w"></span>
-<span class="k">pub</span><span class="w"> </span><span class="k">struct</span> <span class="nc">TupleFilterClass</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
-<span class="w">    </span><span class="n">values_of_interest</span>: <span class="nb">Vec</span><span class="o">&lt;</span><span class="p">(</span><span class="kt">i64</span><span class="p">,</span><span class="w"> </span><span class="kt">i64</span><span class="p">,</span><span class="w"> </span><span class="nb">String</span><span class="p">)</span><span class="o">&gt;</span><span class="p">,</span><span class="w"></span>
-<span class="p">}</span><span class="w"></span>
+<pre><code class="language-rust">#[pyclass]
+pub struct TupleFilterClass {
+    values_of_interest: Vec&lt;(i64, i64, String)&gt;,
+}
 
-<span class="cp">#[pymethods]</span><span class="w"></span>
-<span class="k">impl</span><span class="w"> </span><span class="n">TupleFilterClass</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
-<span class="w">    </span><span class="cp">#[new]</span><span class="w"></span>
-<span class="w">    </span><span class="k">fn</span> <span class="nf">new</span><span class="p">(</span><span class="n">values_of_interest</span>: <span class="nb">Vec</span><span class="o">&lt;</span><span class="p">(</span><span class="kt">i64</span><span class="p">,</span><span class="w"> </span><span class="kt">i64</span><span class="p">,</span><span class="w"> </span><span class="nb">String</span><span class="p">)</span><span class="o">&gt;</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Self</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
-<span class="w">        </span><span class="bp">Self</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
-<span class="w">            </span><span class="n">values_of_interest</span><span class="p">,</span><span class="w"></span>
-<span class="w">        </span><span class="p">}</span><span class="w"></span>
-<span class="w">    </span><span class="p">}</span><span class="w"></span>
+#[pymethods]
+impl TupleFilterClass {
+    #[new]
+    fn new(values_of_interest: Vec&lt;(i64, i64, String)&gt;) -&gt; Self {
+        Self {
+            values_of_interest,
+        }
+    }
 
-<span class="w">    </span><span class="k">fn</span> <span class="nf">__call__</span><span class="p">(</span><span class="w"></span>
-<span class="w">        </span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"></span>
-<span class="w">        </span><span class="n">py</span>: <span class="nc">Python</span><span class="o">&lt;</span><span class="nb">'_</span><span class="o">&gt;</span><span class="p">,</span><span class="w"></span>
-<span class="w">        </span><span class="n">partkey_expr</span>: <span class="kp">&amp;</span><span class="nc">Bound</span><span class="o">&lt;</span><span class="nb">'_</span><span class="p">,</span><span class="w"> </span><span class="n">PyAny</span><span class="o">&gt;</span><span class="p">,</span><span class="w"></span>
-<span class="w">        </span><span class="n">suppkey_expr</span>: <span class="kp">&amp;</span><span class="nc">Bound</span><span class="o">&lt;</span><span class="nb">'_</span><span class="p">,</span><span class="w"> </span><span class="n">PyAny</span><span class="o">&gt;</span><span class="p">,</span><span class="w"></span>
-<span class="w">        </span><span class="n">returnflag_expr</span>: <span class="kp">&amp;</span><span class="nc">Bound</span><span class="o">&lt;</span><span class="nb">'_</span><span class="p">,</span><span class="w"> </span><span class="n">PyAny</span><span class="o">&gt;</span><span class="p">,</span><span class="w"></span>
-<span class="w">    </span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">PyResult</span><span class="o">&lt;</span><span class="n">Py</span><span class="o">&lt;</span><span class="n">PyAny</span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
-<span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">partkey_arr</span>: <span class="nc">PrimitiveArray</span><span class="o">&lt;</span><span class="n">Int64Type</span><span class="o">&gt;</span><span class="w"> </span><span class="o">=</span><span class="w"></span>
-<span class="w">            </span><span class="n">ArrayData</span>::<span class="n">from_pyarrow_bound</span><span class="p">(</span><span class="n">partkey_expr</span><span class="p">)</span><span class="o">?</span><span class="p">.</span><span class="n">into</span><span class="p">();</span><span class="w"></span>
-<span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">suppkey_arr</span>: <span class="nc">PrimitiveArray</span><span class="o">&lt;</span><span class="n">Int64Type</span><span class="o">&gt;</span><span class="w"> </span><span class="o">=</span><span class="w"></span>
-<span class="w">            </span><span class="n">ArrayData</span>::<span class="n">from_pyarrow_bound</span><span class="p">(</span><span class="n">suppkey_expr</span><span class="p">)</span><span class="o">?</span><span class="p">.</span><span class="n">into</span><span class="p">();</span><span class="w"></span>
-<span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">returnflag_arr</span>: <span class="nc">StringArray</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ArrayData</span>::<span class="n">from_pyarrow_bound</span><span class="p">(</span><span class="n">returnflag_expr</span><span class="p">)</span><span class="o">?</span><span class="p">.</span><span class="n">into</span><span class="p">();</span><span class="w"></span>
+    fn __call__(
+        &amp;self,
+        py: Python&lt;'_&gt;,
+        partkey_expr: &amp;Bound&lt;'_, PyAny&gt;,
+        suppkey_expr: &amp;Bound&lt;'_, PyAny&gt;,
+        returnflag_expr: &amp;Bound&lt;'_, PyAny&gt;,
+    ) -&gt; PyResult&lt;Py&lt;PyAny&gt;&gt; {
+        let partkey_arr: PrimitiveArray&lt;Int64Type&gt; =
+            ArrayData::from_pyarrow_bound(partkey_expr)?.into();
+        let suppkey_arr: PrimitiveArray&lt;Int64Type&gt; =
+            ArrayData::from_pyarrow_bound(suppkey_expr)?.into();
+        let returnflag_arr: StringArray = ArrayData::from_pyarrow_bound(returnflag_expr)?.into();
 
-<span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">res</span>: <span class="nb">Option</span><span class="o">&lt;</span><span class="n">BooleanArray</span><span class="o">&gt;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">None</span><span class="p">;</span><span class="w"></span>
+        let mut res: Option&lt;BooleanArray&gt; = None;
 
-<span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">partkey</span><span class="p">,</span><span class="w"> </span><span class="n">suppkey</span><span class="p">,</span><span class="w"> </span><span class="n">returnflag</span><span class="p">)</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="o">&amp;</span><span class="bp">self</span><span class="p">.</span><span class="n">values_of_interest</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
-<span class="w">            </span><span class="kd">let</span><span class="w"> </span><span class="n">filtered_partkey_arr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">BooleanArray</span>::<span class="n">from_unary</span><span class="p">(</span><span class="o">&amp;</span><span class="n">partkey_arr</span><span class="p">,</span><span class="w"> </span><span class="o">|</span><span class="n">p</span><span class="o">|</span><span class="w"> </span><span class="n">p</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="o">*</span><span class="n">partkey</span><span class="p">);</span><span class="w"></span>
-<span class="w">            </span><span class="kd">let</span><span class="w"> </span><span class="n">filtered_suppkey_arr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">BooleanArray</span>::<span class="n">from_unary</span><span class="p">(</span><span class="o">&amp;</span><span class="n">suppkey_arr</span><span class="p">,</span><span class="w"> </span><span class="o">|</span><span class="n">s</span><span class="o">|</span><span class="w"> </span><span class="n">s</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="o">*</span><span class="n">suppkey</span><span class="p">);</span><span class="w"></span>
-<span class="w">            </span><span class="kd">let</span><span class="w"> </span><span class="n">filtered_returnflag_arr</span><span class="w"> </span><span class="o">=</span><span class="w"></span>
-<span class="w">                </span><span class="n">BooleanArray</span>::<span class="n">from_unary</span><span class="p">(</span><span class="o">&amp;</span><span class="n">returnflag_arr</span><span class="p">,</span><span class="w"> </span><span class="o">|</span><span class="n">s</span><span class="o">|</span><span class="w"> </span><span class="n">s</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">returnflag</span><span class="p">);</span><span class="w"></span>
+        for (partkey, suppkey, returnflag) in &amp;self.values_of_interest {
+            let filtered_partkey_arr = BooleanArray::from_unary(&amp;partkey_arr, |p| p == *partkey);
+            let filtered_suppkey_arr = BooleanArray::from_unary(&amp;suppkey_arr, |s| s == *suppkey);
+            let filtered_returnflag_arr =
+                BooleanArray::from_unary(&amp;returnflag_arr, |s| s == returnflag);
 
-<span class="w">            </span><span class="kd">let</span><span class="w"> </span><span class="n">part_and_supp</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">compute</span>::<span class="n">and</span><span class="p">(</span><span class="o">&amp;</span><span class="n">filtered_partkey_arr</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">filtered_suppkey_arr</span><span class="p">)</span><span class="w"></span>
-<span class="w">                </span><span class="p">.</span><span class="n">map_err</span><span class="p">(</span><span class="o">|</span><span class="n">e</span><span class="o">|</span><span class="w"> </span><span class="n">PyValueError</span>::<span class="n">new_err</span><span class="p">(</span><span class="n">e</span><span class="p">.</span><span class="n">to_string</span><span class="p">()))</span><span class="o">?</span><span class="p">;</span><span class="w"></span>
-<span class="w">            </span><span class="kd">let</span><span class="w"> </span><span class="n">resultant_arr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">compute</span>::<span class="n">and</span><span class="p">(</span><span class="o">&amp;</span><span class="n">part_and_supp</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">filtered_returnflag_arr</span><span class="p">)</span><span class="w"></span>
-<span class="w">                </span><span class="p">.</span><span class="n">map_err</span><span class="p">(</span><span class="o">|</span><span class="n">e</span><span class="o">|</span><span class="w"> </span><span class="n">PyValueError</span>::<span class="n">new_err</span><span class="p">(</span><span class="n">e</span><span class="p">.</span><span class="n">to_string</span><span class="p">()))</span><span class="o">?</span><span class="p">;</span><span class="w"></span>
+            let part_and_supp = compute::and(&amp;filtered_partkey_arr, &amp;filtered_suppkey_arr)
+                .map_err(|e| PyValueError::new_err(e.to_string()))?;
+            let resultant_arr = compute::and(&amp;part_and_supp, &amp;filtered_returnflag_arr)
+                .map_err(|e| PyValueError::new_err(e.to_string()))?;
 
-<span class="w">            </span><span class="n">res</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">match</span><span class="w"> </span><span class="n">res</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
-<span class="w">                </span><span class="nb">Some</span><span class="p">(</span><span class="n">r</span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">compute</span>::<span class="n">or</span><span class="p">(</span><span class="o">&amp;</span><span class="n">r</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">resultant_arr</span><span class="p">).</span><span class="n">ok</span><span class="p">(),</span><span class="w"></span>
-<span class="w">                </span><span class="nb">None</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="nb">Some</span><span class="p">(</span><span class="n">resultant_arr</span><span class="p">),</span><span class="w"></span>
-<span class="w">            </span><span class="p">};</span><span class="w"></span>
-<span class="w">        </span><span class="p">}</span><span class="w"></span>
+            res = match res {
+                Some(r) =&gt; compute::or(&amp;r, &amp;resultant_arr).ok(),
+                None =&gt; Some(resultant_arr),
+            };
+        }
 
-<span class="w">        </span><span class="n">res</span><span class="p">.</span><span class="n">unwrap</span><span class="p">().</span><span class="n">into_data</span><span class="p">().</span><span class="n">to_pyarrow</span><span class="p">(</span><span class="n">py</span><span class="p">)</span><span class="w"></span>
-<span class="w">    </span><span class="p">}</span><span class="w"></span>
-<span class="p">}</span><span class="w"></span>
+        res.unwrap().into_data().to_pyarrow(py)
+    }
+}
 
-<span class="cp">#[pymodule]</span><span class="w"></span>
-<span class="k">fn</span> <span class="nf">tuple_filter_example</span><span class="p">(</span><span class="n">module</span>: <span class="kp">&amp;</span><span class="nc">Bound</span><span class="o">&lt;</span><span class="nb">'_</span><span class="p">,</span><span class="w"> </span><span class="n">PyModule</span><span class="o">&gt;</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">PyResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
-<span class="w">    </span><span class="n">module</span><span class="p">.</span><span class="n">add_class</span>::<span class="o">&lt;</span><span class="n">TupleFilterClass</span><span class="o">&gt;</span><span class="p">()</span><span class="o">?</span><span class="p">;</span><span class="w"></span>
-<span class="w">    </span><span class="nb">Ok</span><span class="p">(())</span><span class="w"></span>
-<span class="p">}</span><span class="w"></span>
-</code></pre></div>
+#[pymodule]
+fn tuple_filter_example(module: &amp;Bound&lt;'_, PyModule&gt;) -&gt; PyResult&lt;()&gt; {
+    module.add_class::&lt;TupleFilterClass&gt;()?;
+    Ok(())
+}
+</code></pre>
 <p>When you write this, you don't have to call your constructor <code>new</code>. The more important part is that
 you have <code>#[new]</code> designated on the function. With this you can provide any kinds of data you need
 during processing. Using this initializer in Python is fairly straightforward.</p>
-<div class="codehilite"><pre><span></span><code><span class="kn">from</span> <span class="nn">datafusion</span> <span class="kn">import</span> <span class="n">udf</span>
-<span class="kn">import</span> <span class="nn">pyarrow</span> <span class="k">as</span> <span class="nn">pa</span>
-<span class="kn">from</span> <span class="nn">tuple_filter_example</span> <span class="kn">import</span> <span class="n">TupleFilterClass</span>
+<pre><code class="language-python">from datafusion import udf
+import pyarrow as pa
+from tuple_filter_example import TupleFilterClass
 
-<span class="n">tuple_filter_class</span> <span class="o">=</span> <span class="n">TupleFilterClass</span><span class="p">(</span><span class="n">values_of_interest</span><span class="p">)</span>
+tuple_filter_class = TupleFilterClass(values_of_interest)
 
-<span class="n">udf_using_custom_rust_fn_with_data</span> <span class="o">=</span> <span class="n">udf</span><span class="p">(</span>
-    <span class="n">tuple_filter_class</span><span class="p">,</span>
-    <span class="p">[</span><span class="n">pa</span><span class="o">.</span><span class="n">int64</span><span class="p">(),</span> <span class="n">pa</span><span class="o">.</span><span class="n">int64</span><span class="p">(),</span> <span class="n">pa</span><span class="o">.</span><span class="n">utf8</span><span class="p">()],</span>
-    <span class="n">pa</span><span class="o">.</span><span class="n">bool_</span><span class="p">(),</span>
-    <span class="s2">"stable"</span><span class="p">,</span>
-    <span class="n">name</span><span class="o">=</span><span class="s2">"tuple_filter_with_data"</span>
-<span class="p">)</span>
-</code></pre></div>
+udf_using_custom_rust_fn_with_data = udf(
+    tuple_filter_class,
+    [pa.int64(), pa.int64(), pa.utf8()],
+    pa.bool_(),
+    "stable",
+    name="tuple_filter_with_data"
+)
+</code></pre>
 <p>When you use this approach you will need to provide a <code>name</code> argument to <code>udf</code>. This is because our
 class/struct does not get the <code>__qualname__</code> attribute that the <code>udf</code> function is looking for. You
 can give this udf any name you choose.</p>
@@ -440,50 +440,50 @@ the arrays ourselves. If you are iterating through more than 3 arrays at a time 
 at <a href="https://docs.rs/itertools/latest/itertools/macro.izip.html">izip</a> in the
 <a href="https://crates.io/crates/itertools">itertools crate</a>. For ease of understanding and since we only
 have 3 arrays here I will just explicitly create my own tuple here.</p>
-<div class="codehilite"><pre><span></span><code><span class="cp">#[pyclass]</span><span class="w"></span>
-<span class="k">pub</span><span class="w"> </span><span class="k">struct</span> <span class="nc">TupleFilterDirectIterationClass</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
-<span class="w">    </span><span class="n">values_of_interest</span>: <span class="nb">Vec</span><span class="o">&lt;</span><span class="p">(</span><span class="kt">i64</span><span class="p">,</span><span class="w"> </span><span class="kt">i64</span><span class="p">,</span><span class="w"> </span><span class="nb">String</span><span class="p">)</span><span class="o">&gt;</span><span class="p">,</span><span class="w"></span>
-<span class="p">}</span><span class="w"></span>
+<pre><code class="language-rust">#[pyclass]
+pub struct TupleFilterDirectIterationClass {
+    values_of_interest: Vec&lt;(i64, i64, String)&gt;,
+}
 
-<span class="cp">#[pymethods]</span><span class="w"></span>
-<span class="k">impl</span><span class="w"> </span><span class="n">TupleFilterDirectIterationClass</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
-<span class="w">    </span><span class="cp">#[new]</span><span class="w"></span>
-<span class="w">    </span><span class="k">fn</span> <span class="nf">new</span><span class="p">(</span><span class="n">values_of_interest</span>: <span class="nb">Vec</span><span class="o">&lt;</span><span class="p">(</span><span class="kt">i64</span><span class="p">,</span><span class="w"> </span><span class="kt">i64</span><span class="p">,</span><span class="w"> </span><span class="nb">String</span><span class="p">)</span><span class="o">&gt;</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">Self</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
-<span class="w">        </span><span class="bp">Self</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">values_of_interest</span><span class="w"> </span><span class="p">}</span><span class="w"></span>
-<span class="w">    </span><span class="p">}</span><span class="w"></span>
+#[pymethods]
+impl TupleFilterDirectIterationClass {
+    #[new]
+    fn new(values_of_interest: Vec&lt;(i64, i64, String)&gt;) -&gt; Self {
+        Self { values_of_interest }
+    }
 
-<span class="w">    </span><span class="k">fn</span> <span class="nf">__call__</span><span class="p">(</span><span class="w"></span>
-<span class="w">        </span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"></span>
-<span class="w">        </span><span class="n">py</span>: <span class="nc">Python</span><span class="o">&lt;</span><span class="nb">'_</span><span class="o">&gt;</span><span class="p">,</span><span class="w"></span>
-<span class="w">        </span><span class="n">partkey_expr</span>: <span class="kp">&amp;</span><span class="nc">Bound</span><span class="o">&lt;</span><span class="nb">'_</span><span class="p">,</span><span class="w"> </span><span class="n">PyAny</span><span class="o">&gt;</span><span class="p">,</span><span class="w"></span>
-<span class="w">        </span><span class="n">suppkey_expr</span>: <span class="kp">&amp;</span><span class="nc">Bound</span><span class="o">&lt;</span><span class="nb">'_</span><span class="p">,</span><span class="w"> </span><span class="n">PyAny</span><span class="o">&gt;</span><span class="p">,</span><span class="w"></span>
-<span class="w">        </span><span class="n">returnflag_expr</span>: <span class="kp">&amp;</span><span class="nc">Bound</span><span class="o">&lt;</span><span class="nb">'_</span><span class="p">,</span><span class="w"> </span><span class="n">PyAny</span><span class="o">&gt;</span><span class="p">,</span><span class="w"></span>
-<span class="w">    </span><span class="p">)</span><span class="w"> </span>-&gt; <span class="nc">PyResult</span><span class="o">&lt;</span><span class="n">Py</span><span class="o">&lt;</span><span class="n">PyAny</span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
-<span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">partkey_arr</span>: <span class="nc">PrimitiveArray</span><span class="o">&lt;</span><span class="n">Int64Type</span><span class="o">&gt;</span><span class="w"> </span><span class="o">=</span><span class="w"></span>
-<span class="w">            </span><span class="n">ArrayData</span>::<span class="n">from_pyarrow_bound</span><span class="p">(</span><span class="n">partkey_expr</span><span class="p">)</span><span class="o">?</span><span class="p">.</span><span class="n">into</span><span class="p">();</span><span class="w"></span>
-<span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">suppkey_arr</span>: <span class="nc">PrimitiveArray</span><span class="o">&lt;</span><span class="n">Int64Type</span><span class="o">&gt;</span><span class="w"> </span><span class="o">=</span><span class="w"></span>
-<span class="w">            </span><span class="n">ArrayData</span>::<span class="n">from_pyarrow_bound</span><span class="p">(</span><span class="n">suppkey_expr</span><span class="p">)</span><span class="o">?</span><span class="p">.</span><span class="n">into</span><span class="p">();</span><span class="w"></span>
-<span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">returnflag_arr</span>: <span class="nc">StringArray</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ArrayData</span>::<span class="n">from_pyarrow_bound</span><span class="p">(</span><span class="n">returnflag_expr</span><span class="p">)</span><span class="o">?</span><span class="p">.</span><span class="n">into</span><span class="p">();</span><span class="w"></span>
+    fn __call__(
+        &amp;self,
+        py: Python&lt;'_&gt;,
+        partkey_expr: &amp;Bound&lt;'_, PyAny&gt;,
+        suppkey_expr: &amp;Bound&lt;'_, PyAny&gt;,
+        returnflag_expr: &amp;Bound&lt;'_, PyAny&gt;,
+    ) -&gt; PyResult&lt;Py&lt;PyAny&gt;&gt; {
+        let partkey_arr: PrimitiveArray&lt;Int64Type&gt; =
+            ArrayData::from_pyarrow_bound(partkey_expr)?.into();
+        let suppkey_arr: PrimitiveArray&lt;Int64Type&gt; =
+            ArrayData::from_pyarrow_bound(suppkey_expr)?.into();
+        let returnflag_arr: StringArray = ArrayData::from_pyarrow_bound(returnflag_expr)?.into();
 
-<span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">values_to_search</span>: <span class="nb">Vec</span><span class="o">&lt;</span><span class="p">(</span><span class="o">&amp;</span><span class="kt">i64</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="kt">i64</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="kt">str</span><span class="p">)</span><span class="o">&gt;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">.</span><span class="n">values_of_interest</span><span class="p">)</span><span class="w"></span>
-<span class="w">            </span><span class="p">.</span><span class="n">iter</span><span class="p">()</span><span class="w"></span>
-<span class="w">            </span><span class="p">.</span><span class="n">map</span><span class="p">(</span><span class="o">|</span><span class="p">(</span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="n">b</span><span class="p">,</span><span class="w"> </span><span class="n">c</span><span class="p">)</span><span class="o">|</span><span class="w"> </span><span class="p">(</span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="n">b</span><span class="p">,</span><span class="w"> </span><span class="n">c</span><span class="p">.</span><span class="n">as_str</span><span class="p">()))</span><span class="w"></span>
-<span class="w">            </span><span class="p">.</span><span class="n">collect</span><span class="p">();</span><span class="w"></span>
+        let values_to_search: Vec&lt;(&amp;i64, &amp;i64, &amp;str)&gt; = (&amp;self.values_of_interest)
+            .iter()
+            .map(|(a, b, c)| (a, b, c.as_str()))
+            .collect();
 
-<span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">values</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">partkey_arr</span><span class="w"></span>
-<span class="w">            </span><span class="p">.</span><span class="n">values</span><span class="p">()</span><span class="w"></span>
-<span class="w">            </span><span class="p">.</span><span class="n">iter</span><span class="p">()</span><span class="w"></span>
-<span class="w">            </span><span class="p">.</span><span class="n">zip</span><span class="p">(</span><span class="n">suppkey_arr</span><span class="p">.</span><span class="n">values</span><span class="p">().</span><span class="n">iter</span><span class="p">())</span><span class="w"></span>
-<span class="w">            </span><span class="p">.</span><span class="n">zip</span><span class="p">(</span><span class="n">returnflag_arr</span><span class="p">.</span><span class="n">iter</span><span class="p">())</span><span class="w"></span>
-<span class="w">            </span><span class="p">.</span><span class="n">map</span><span class="p">(</span><span class="o">|</span><span class="p">((</span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="n">b</span><span class="p">),</span><span class="w"> </span><span class="n">c</span><span class="p">)</span><span class="o">|</span><span class="w"> </span><span class="p">(</span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="n">b</span><span class="p">,</span><span class="w"> </span><span class="n">c</span><span class="p">.</span><span class="n">unwrap_or_default</span><span class="p">()))</span><span class="w"></span>
-<span class="w">            </span><span class="p">.</span><span class="n">map</span><span class="p">(</span><span class="o">|</span><span class="n">v</span><span class="o">|</span><span class="w"> </span><span class="n">values_to_search</span><span class="p">.</span><span class="n">contains</span><span class="p">(</span><span class="o">&amp;</span><span class="n">v</span><span class="p">));</span><span class="w"></span>
+        let values = partkey_arr
+            .values()
+            .iter()
+            .zip(suppkey_arr.values().iter())
+            .zip(returnflag_arr.iter())
+            .map(|((a, b), c)| (a, b, c.unwrap_or_default()))
+            .map(|v| values_to_search.contains(&amp;v));
 
-<span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">res</span>: <span class="nc">BooleanArray</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">BooleanBuffer</span>::<span class="n">from_iter</span><span class="p">(</span><span class="n">values</span><span class="p">).</span><span class="n">into</span><span class="p">();</span><span class="w"></span>
+        let res: BooleanArray = BooleanBuffer::from_iter(values).into();
 
-<span class="w">        </span><span class="n">res</span><span class="p">.</span><span class="n">into_data</span><span class="p">().</span><span class="n">to_pyarrow</span><span class="p">(</span><span class="n">py</span><span class="p">)</span><span class="w"></span>
-<span class="w">    </span><span class="p">}</span><span class="w"></span>
-<span class="p">}</span><span class="w"></span>
-</code></pre></div>
+        res.into_data().to_pyarrow(py)
+    }
+}
+</code></pre>
 <p>We convert the <code>values_of_interest</code> into a vector of borrowed types so that we can do a fast search
 without creating additional memory. The other option is to turn the <code>returnflag</code> into a <code>String</code>
 but that memory allocation is unnecessary. After that we use two <code>zip</code> operations so that we can
@@ -504,35 +504,35 @@ batch will contain all the values we are aggregating over. For this we need to d
 <p>In the example below, we're going to look at customer orders and we want to know per customer ID,
 how much they have ordered total. We want to ignore small orders, which we define as anything under
 5000.</p>
-<div class="codehilite"><pre><span></span><code><span class="kn">from</span> <span class="nn">datafusion</span> <span class="kn">import</span> <span class="n">Accumulator</span><span class="p">,</span> <span class="n">udaf</span>
-<span class="kn">import</span> <span class="nn">pyarrow</span> <span class="k">as</span> <span class="nn">pa</span>
-<span class="kn">import</span> <span class="nn">pyarrow.compute</span> <span class="k">as</span> <span class="nn">pc</span>
+<pre><code class="language-python">from datafusion import Accumulator, udaf
+import pyarrow as pa
+import pyarrow.compute as pc
 
-<span class="n">IGNORE_THESHOLD</span> <span class="o">=</span> <span class="mf">5000.0</span>
-<span class="k">class</span> <span class="nc">AboveThresholdAccum</span><span class="p">(</span><span class="n">Accumulator</span><span class="p">):</span>
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_sum</span> <span class="o">=</span> <span class="mf">0.0</span>
+IGNORE_THESHOLD = 5000.0
+class AboveThresholdAccum(Accumulator):
+    def __init__(self) -&gt; None:
+        self._sum = 0.0
 
-    <span class="k">def</span> <span class="nf">update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">values</span><span class="p">:</span> <span class="n">pa</span><span class="o">.</span><span class="n">Array</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="n">over_threshold</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">greater</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="n">pa</span><span class="o">.</span><span class="n">scalar</span><span class="p">(</span><span class="n">IGNORE_THESHOLD</span><span class="p">))</span>
-        <span class="n">sum_above</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">values</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">over_threshold</span><span class="p">))</span><span class="o">.</span><span class="n">as_py</span><span class="p">()</span>
-        <span class="k">if</span> <span class="n">sum_above</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">sum_above</span> <span class="o">=</span> <span class="mf">0.0</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_sum</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sum</span> <span class="o">+</span> <span class="n">sum_above</span>
+    def update(self, values: pa.Array) -&gt; None:
+        over_threshold = pc.greater(values, pa.scalar(IGNORE_THESHOLD))
+        sum_above = pc.sum(values.filter(over_threshold)).as_py()
+        if sum_above is None:
+            sum_above = 0.0
+        self._sum = self._sum + sum_above
 
-    <span class="k">def</span> <span class="nf">merge</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">states</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">pa</span><span class="o">.</span><span class="n">Array</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_sum</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sum</span> <span class="o">+</span> <span class="n">pc</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">states</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="n">as_py</span><span class="p">()</span>
+    def merge(self, states: List[pa.Array]) -&gt; None:
+        self._sum = self._sum + pc.sum(states[0]).as_py()
 
-    <span class="k">def</span> <span class="nf">state</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">pa</span><span class="o">.</span><span class="n">Scalar</span><span class="p">]:</span>
-        <span class="k">return</span> <span class="p">[</span><span class="n">pa</span><span class="o">.</span><span class="n">scalar</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_sum</span><span class="p">)]</span>
+    def state(self) -&gt; List[pa.Scalar]:
+        return [pa.scalar(self._sum)]
 
-    <span class="k">def</span> <span class="nf">evaluate</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pa</span><span class="o">.</span><span class="n">Scalar</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">pa</span><span class="o">.</span><span class="n">scalar</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_sum</span><span class="p">)</span>
+    def evaluate(self) -&gt; pa.Scalar:
+        return pa.scalar(self._sum)
 
-<span class="n">sum_above_threshold</span> <span class="o">=</span> <span class="n">udaf</span><span class="p">(</span><span class="n">AboveThresholdAccum</span><span class="p">,</span> <span class="p">[</span><span class="n">pa</span><span class="o">.</span><span class="n">float64</span><span class="p">()],</span> <span class="n">pa</span><span class="o">.</span><span class="n">float64</span><span class="p">(),</span> <span class="p">[</span><span class="n">pa</span><span class="o">.</span><span class="n">float64</span><span class="p">()],</span> <span class="s1">'stable'</span><span class="p">)</span>
+sum_above_threshold = udaf(AboveThresholdAccum, [pa.float64()], pa.float64(), [pa.float64()], 'stable')
 
-<span class="n">df_orders</span><span class="o">.</span><span class="n">aggregate</span><span class="p">([</span><span class="n">col</span><span class="p">(</span><span class="s2">"o_custkey"</span><span class="p">)],[</span><span class="n">sum_above_threshold</span><span class="p">(</span><span class="n">col</span><span class="p">(</span><span class="s2">"o_totalprice"</span><span class="p">))</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">"sales"</span><span class="p">)])</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
-</code></pre></div>
+df_orders.aggregate([col("o_custkey")],[sum_above_threshold(col("o_totalprice")).alias("sales")]).show()
+</code></pre>
 <p>Since we are doing a <code>sum</code> we can keep a single value as our internal state. When we call <code>update()</code>
 we will process a single array and update the internal state, which we share with the <code>state()</code>
 function. For larger batches we may <code>merge()</code> these states. It is important to note that the
@@ -552,18 +552,18 @@ these generally follow the same patterns as described above for aggregate functi
 <h2>Performance Comparison</h2>
 <p>For the scalar functions above, we performed a timing evaluation, repeating the operation 100
 times. For this simple example these are our results.</p>
-<div class="codehilite"><pre><span></span><code><span class="err">+-----------------------------+--------------+---------+</span>
-<span class="err">| approach                    | Average Time | Std Dev |</span>
-<span class="err">+-----------------------------+--------------+---------+</span>
-<span class="err">| python udf                  | 4.969        | 0.062   |</span>
-<span class="err">| simple filter               | 1.075        | 0.022   |</span>
-<span class="err">| explicit filter             | 0.685        | 0.063   |</span>
-<span class="err">| pyarrow compute             | 0.529        | 0.017   |</span>
-<span class="err">| arrow rust compute          | 0.511        | 0.034   |</span>
-<span class="err">| arrow rust compute as class | 0.502        | 0.011   |</span>
-<span class="err">| rust custom iterator        | 0.478        | 0.009   |</span>
-<span class="err">+-----------------------------+--------------+---------+</span>
-</code></pre></div>
+<pre><code>+-----------------------------+--------------+---------+
+| approach                    | Average Time | Std Dev |
++-----------------------------+--------------+---------+
+| python udf                  | 4.969        | 0.062   |
+| simple filter               | 1.075        | 0.022   |
+| explicit filter             | 0.685        | 0.063   |
+| pyarrow compute             | 0.529        | 0.017   |
+| arrow rust compute          | 0.511        | 0.034   |
+| arrow rust compute as class | 0.502        | 0.011   |
+| rust custom iterator        | 0.478        | 0.009   |
++-----------------------------+--------------+---------+
+</code></pre>
 <p>As expected, the conversion to Python objects is by far the worst performance. As soon as we drop
 into using any functions that keep the data entirely on the Native (Rust or C/C++) side we see a
 near 10x speed improvement. Then as we increase our complexity from using PyArrow compute functions

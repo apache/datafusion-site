@@ -67,32 +67,32 @@ limitations under the License.
 <p>The primary objective of this release has been to achieve a more seamless integration with the DataFusion ecosystem and try to achieve the same level of flexibility as DataFusion.</p>
 <p>In recent months, our development efforts have been directed toward providing a robust and extensible Ballista API. This new API empowers end-users to tailor Ballista's core functionality to their specific use cases. As a result, we have deprecated several experimental features from the Ballista core, allowing users to reintroduce them as custom extensions outside the core framework. This shift reduces the maintenance burden on Ballista's core maintainers and paves the way for optional features, such as <a href="https://github.com/delta-io/delta-rs">delta-rs</a> support, to be added externally when needed.</p>
 <p>The most significant enhancement in this release is the deprecation of <code>BallistaContext</code>, which has been superseded by the DataFusion <code>SessionContext</code>. This change enables DataFusion applications written in Rust to execute on a Ballista cluster with minimal modifications. Beyond simplifying migration and reducing maintenance overhead, this update introduces distributed write functionality to Ballista for the first time, significantly enhancing its capabilities.</p>
-<div class="codehilite"><pre><span></span><code><span class="k">use</span><span class="w"> </span><span class="n">ballista</span>::<span class="n">prelude</span>::<span class="o">*</span><span class="p">;</span><span class="w"></span>
-<span class="k">use</span><span class="w"> </span><span class="n">datafusion</span>::<span class="n">prelude</span>::<span class="o">*</span><span class="p">;</span><span class="w"></span>
+<pre><code class="language-rust">use ballista::prelude::*;
+use datafusion::prelude::*;
 
-<span class="cp">#[tokio::main]</span><span class="w"></span>
-<span class="k">async</span><span class="w"> </span><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span>-&gt; <span class="nc">datafusion</span>::<span class="n">error</span>::<span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+#[tokio::main]
+async fn main() -&gt; datafusion::error::Result&lt;()&gt; {
 
-<span class="w">  </span><span class="c1">// Instead of creating classic SessionContext</span>
-<span class="w">  </span><span class="c1">// let ctx = SessionContext::new();</span>
+  // Instead of creating classic SessionContext
+  // let ctx = SessionContext::new();
 
-<span class="w">  </span><span class="c1">// create DataFusion SessionContext with ballista standalone cluster started</span>
-<span class="w">  </span><span class="c1">// let ctx = SessionContext::standalone().await;</span>
+  // create DataFusion SessionContext with ballista standalone cluster started
+  // let ctx = SessionContext::standalone().await;
 
-<span class="w">  </span><span class="c1">// create DataFusion SessionContext with ballista remote cluster started</span>
-<span class="w">  </span><span class="kd">let</span><span class="w"> </span><span class="n">ctx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">SessionContext</span>::<span class="n">remote</span><span class="p">(</span><span class="s">"df://localhost:50050"</span><span class="p">).</span><span class="k">await</span><span class="p">;</span><span class="w"></span>
+  // create DataFusion SessionContext with ballista remote cluster started
+  let ctx = SessionContext::remote("df://localhost:50050").await;
 
-<span class="w">  </span><span class="c1">// register the table</span>
-<span class="w">  </span><span class="n">ctx</span><span class="p">.</span><span class="n">register_csv</span><span class="p">(</span><span class="s">"example"</span><span class="p">,</span><span class="w"> </span><span class="s">"tests/data/example.csv"</span><span class="p">,</span><span class="w"> </span><span class="n">CsvReadOptions</span>::<span class="n">new</span><span class="p">()).</span><span class="k">await</span><span class="o">?</span><span class="p">;</span><span class="w"></span>
+  // register the table
+  ctx.register_csv("example", "tests/data/example.csv", CsvReadOptions::new()).await?;
 
-<span class="w">  </span><span class="c1">// create a plan to run a SQL query</span>
-<span class="w">  </span><span class="kd">let</span><span class="w"> </span><span class="n">df</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ctx</span><span class="p">.</span><span class="n">sql</span><span class="p">(</span><span class="s">"SELECT a, MIN(b) FROM example WHERE a &lt;= b GROUP BY a LIMIT 100"</span><span class="p">).</span><span class="k">await</span><span class="o">?</span><span class="p">;</span><span class="w"></span>
+  // create a plan to run a SQL query
+  let df = ctx.sql("SELECT a, MIN(b) FROM example WHERE a &lt;= b GROUP BY a LIMIT 100").await?;
 
-<span class="w">  </span><span class="c1">// execute and print results</span>
-<span class="w">  </span><span class="n">df</span><span class="p">.</span><span class="n">show</span><span class="p">().</span><span class="k">await</span><span class="o">?</span><span class="p">;</span><span class="w"></span>
-<span class="w">  </span><span class="nb">Ok</span><span class="p">(())</span><span class="w"></span>
-<span class="p">}</span><span class="w"></span>
-</code></pre></div>
+  // execute and print results
+  df.show().await?;
+  Ok(())
+}
+</code></pre>
 <p>Additionally, Ballista&rsquo;s versioning scheme has been aligned with that of DataFusion, ensuring that Ballista's version number reflects the compatible DataFusion version.</p>
 <p>At the moment there is a gap between DataFusion and Ballista, which we will try to bridge in the future.</p>
 <h3>Removal of Experimental Features</h3>

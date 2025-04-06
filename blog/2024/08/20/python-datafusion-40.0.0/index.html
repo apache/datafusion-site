@@ -114,9 +114,9 @@ easy to use.</p>
 <p>You can now apply multiple <code>filter</code> statements in a single step. When using <code>DataFrame.filter</code> you
 can pass in multiple arguments, separated by a comma. These will act as a logical <code>AND</code> of all of
 the filter arguments. The following two statements are equivalent:</p>
-<div class="codehilite"><pre><span></span><code><span class="n">df</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">col</span><span class="p">(</span><span class="s2">"size"</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">col</span><span class="p">(</span><span class="s2">"max_size"</span><span class="p">))</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">col</span><span class="p">(</span><span class="s2">"color"</span><span class="p">)</span> <span class="o">==</span> <span class="n">lit</span><span class="p">(</span><span class="s2">"green"</span><span class="p">))</span>
-<span class="n">df</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">col</span><span class="p">(</span><span class="s2">"size"</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">col</span><span class="p">(</span><span class="s2">"max_size"</span><span class="p">),</span> <span class="n">col</span><span class="p">(</span><span class="s2">"color"</span><span class="p">)</span> <span class="o">==</span> <span class="n">lit</span><span class="p">(</span><span class="s2">"green"</span><span class="p">))</span>
-</code></pre></div>
+<pre><code class="language-python">df.filter(col("size") &lt; col("max_size")).filter(col("color") == lit("green"))
+df.filter(col("size") &lt; col("max_size"), col("color") == lit("green"))
+</code></pre>
 <h3>Comparison against literal values</h3>
 <p>It is very common to write DataFrame operations that compare an expression to some fixed value.
 For example, filtering a DataFrame might have an operation such as <code>df.filter(col("size") &lt; lit(16))</code>.
@@ -126,43 +126,43 @@ coerced into a <code>Literal</code>. This gives an easy to ready expression. For
 lines from one of the
 <a href="https://github.com/apache/datafusion-python/tree/main/examples/tpch">TPC-H examples</a> provided in
 the DataFusion Python repository.</p>
-<div class="codehilite"><pre><span></span><code><span class="n">df</span> <span class="o">=</span> <span class="p">(</span>
-    <span class="n">df_lineitem</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">col</span><span class="p">(</span><span class="s2">"l_shipdate"</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="n">lit</span><span class="p">(</span><span class="n">date</span><span class="p">))</span>
-    <span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">col</span><span class="p">(</span><span class="s2">"l_discount"</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="n">lit</span><span class="p">(</span><span class="n">DISCOUNT</span><span class="p">)</span> <span class="o">-</span> <span class="n">lit</span><span class="p">(</span><span class="n">DELTA</span><span class="p">))</span>
-    <span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">col</span><span class="p">(</span><span class="s2">"l_discount"</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="n">lit</span><span class="p">(</span><span class="n">DISCOUNT</span><span class="p">)</span> <span class="o">+</span> <span class="n">lit</span><span class="p">(</span><span class="n">DELTA</span><span class="p">))</span>
-    <span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">col</span><span class="p">(</span><span class="s2">"l_quantity"</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">lit</span><span class="p">(</span><span class="n">QUANTITY</span><span class="p">))</span>
-<span class="p">)</span>
-</code></pre></div>
+<pre><code class="language-python">df = (
+    df_lineitem.filter(col("l_shipdate") &gt;= lit(date))
+    .filter(col("l_discount") &gt;= lit(DISCOUNT) - lit(DELTA))
+    .filter(col("l_discount") &lt;= lit(DISCOUNT) + lit(DELTA))
+    .filter(col("l_quantity") &lt; lit(QUANTITY))
+)
+</code></pre>
 <p>The above code mirrors closely how these filters would need to be applied in rust. With this new
 release, the user can simplify these lines. Also shown in the example below is that <code>filter()</code>
 now accepts a variable number of arguments and filters on all such arguments (boolean AND).</p>
-<div class="codehilite"><pre><span></span><code><span class="n">df</span> <span class="o">=</span> <span class="n">df_lineitem</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span>
-    <span class="n">col</span><span class="p">(</span><span class="s2">"l_shipdate"</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="n">date</span><span class="p">,</span>
-    <span class="n">col</span><span class="p">(</span><span class="s2">"l_discount"</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="n">DISCOUNT</span> <span class="o">-</span> <span class="n">DELTA</span><span class="p">,</span>
-    <span class="n">col</span><span class="p">(</span><span class="s2">"l_discount"</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="n">DISCOUNT</span> <span class="o">+</span> <span class="n">DELTA</span><span class="p">,</span>
-    <span class="n">col</span><span class="p">(</span><span class="s2">"l_quantity"</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">QUANTITY</span><span class="p">,</span>
-<span class="p">)</span>
-</code></pre></div>
+<pre><code class="language-python">df = df_lineitem.filter(
+    col("l_shipdate") &gt;= date,
+    col("l_discount") &gt;= DISCOUNT - DELTA,
+    col("l_discount") &lt;= DISCOUNT + DELTA,
+    col("l_quantity") &lt; QUANTITY,
+)
+</code></pre>
 <h3>Select columns by name</h3>
 <p>It is very common for users to perform <code>DataFrame</code> selection where they simply want a column. For
 this we have had the function <code>select_columns("a", "b")</code> or the user could perform
 <code>select(col("a"), col("b"))</code>. In the new release, we accept either full expressions in <code>select()</code>
 or strings of the column names. You can mix these as well.</p>
 <p>Where before you may have to do an operation like</p>
-<div class="codehilite"><pre><span></span><code><span class="n">df_subset</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">col</span><span class="p">(</span><span class="s2">"a"</span><span class="p">),</span> <span class="n">col</span><span class="p">(</span><span class="s2">"b"</span><span class="p">),</span> <span class="n">f</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">col</span><span class="p">(</span><span class="s2">"c"</span><span class="p">)))</span>
-</code></pre></div>
+<pre><code class="language-python">df_subset = df.select(col("a"), col("b"), f.abs(col("c")))
+</code></pre>
 <p>You can now simplify this to</p>
-<div class="codehilite"><pre><span></span><code><span class="n">df_subset</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="s2">"a"</span><span class="p">,</span> <span class="s2">"b"</span><span class="p">,</span> <span class="n">f</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">col</span><span class="p">(</span><span class="s2">"c"</span><span class="p">)))</span>
-</code></pre></div>
+<pre><code class="language-python">df_subset = df.select("a", "b", f.abs(col("c")))
+</code></pre>
 <h3>Creating named structs</h3>
 <p>Creating a <code>struct</code> with named fields was previously difficult to use and allowed for potential
 user errors when specifying the name of each field. Now we have a cleaner interface where the
 user passes a list of tuples containing the name of the field and the expression to create.</p>
-<div class="codehilite"><pre><span></span><code><span class="n">df</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">named_struct</span><span class="p">([</span>
-  <span class="p">(</span><span class="s2">"a"</span><span class="p">,</span> <span class="n">col</span><span class="p">(</span><span class="s2">"a"</span><span class="p">)),</span>
-  <span class="p">(</span><span class="s2">"b"</span><span class="p">,</span> <span class="n">col</span><span class="p">(</span><span class="s2">"b"</span><span class="p">))</span>
-<span class="p">]))</span>
-</code></pre></div>
+<pre><code class="language-python">df.select(f.named_struct([
+  ("a", col("a")),
+  ("b", col("b"))
+]))
+</code></pre>
 <h2>Next Steps</h2>
 <p>While most of the user facing classes and functions have been exposed, there are a few that require
 exposure. Namely the classes in <code>datafusion.object_store</code> and the logical plans used by
