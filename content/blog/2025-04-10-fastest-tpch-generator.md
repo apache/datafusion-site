@@ -93,7 +93,7 @@ TPC-H has become a de facto standard for analytic systems. While there are [well
 known] limitations as the data and queries do not well represent many real world
 use cases, the majority of analytic database papers and industrial systems still
 use TPC-H query performance benchmarks as a baseline. You will inevitably find
-multiple results for  “`TPCH Performance &lt;your favorite database>`” in any
+multiple results for  “`TPCH Performance <your favorite database>`” in any
 search engine.
 
 The benchmark was created at a time when access to high performance analytical
@@ -214,7 +214,7 @@ is shown in yellow.
 preloaded TPC-H data, for example [Snowflake Sample Data], [Databricks Sample
 datasets] and [DuckDB Pre-Generated Data Sets].
 
-[Snowflake Sample  Data]: https://docs.snowflake.com/en/user-guide/sample-data-tpch
+[Snowflake Sample Data]: https://docs.snowflake.com/en/user-guide/sample-data-tpch
 [Databricks Sample datasets]: https://docs.databricks.com/aws/en/discover/databricks-datasets
 [DuckDB Pre-Generated Data Sets]: https://duckdb.org/docs/stable/extensions/tpch.html#pre-generated-data-sets
 
@@ -413,7 +413,7 @@ When writing to `/dev/null` tpchgen  generates the entire dataset in 25 seconds
   <tr>
    <td><strong>Scale Factor</strong>
    </td>
-   <td>Time
+   <td><strong>Time</strong>
    </td>
    <td><strong>Times faster than initial implementation</strong>    
    </td>
@@ -510,17 +510,16 @@ or CSV, tpchgen-cli creates the full SF=100 parquet format dataset in less than
 [tpchgen-arrow]: https://crates.io/crates/tpchgen-arrow
 [Apache Arrow]: https://arrow.apache.org/
 [a small 300 line PR]: https://github.com/clflushopt/tpchgen-rs/pull/61
-[Apache Arrow](https://arrow.apache.org/
 [a small 300 line PR]: https://github.com/clflushopt/tpchgen-rs/pull/61
 [Rust Parquet writer]: https://crates.io/crates/parquet
 
 <table>
   <tr>
-   <td>Scale Factor
+   <td><strong>Scale Factor</strong>
    </td>
-   <td>Time to generate Parquet
+   <td><strong>Time to generate Parquet</strong>
    </td>
-   <td>Speed compared to tbl generation
+   <td><strong>Speed compared to tbl generation</strong>
    </td>
   </tr>
   <tr>
@@ -528,7 +527,7 @@ or CSV, tpchgen-cli creates the full SF=100 parquet format dataset in less than
    </td>
    <td>0m1.649s
    </td>
-   <td>0.8
+   <td>0.8x
    </td>
   </tr>
   <tr>
@@ -536,7 +535,7 @@ or CSV, tpchgen-cli creates the full SF=100 parquet format dataset in less than
    </td>
    <td>0m5.643s
    </td>
-   <td>0.7
+   <td>0.7x
    </td>
   </tr>
   <tr>
@@ -544,7 +543,7 @@ or CSV, tpchgen-cli creates the full SF=100 parquet format dataset in less than
    </td>
    <td>0m45.243s
    </td>
-   <td>0.7
+   <td>0.7x
    </td>
   </tr>
   <tr>
@@ -552,7 +551,7 @@ or CSV, tpchgen-cli creates the full SF=100 parquet format dataset in less than
    </td>
    <td>0m45.153s
    </td>
-   <td>0.5
+   <td>0.5x
    </td>
   </tr>
 </table>
