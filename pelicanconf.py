@@ -67,7 +67,6 @@ FEED_RSS = "feed.xml"
 
 MARKDOWN = {
     'extension_configs': {
-        'markdown.extensions.codehilite': {'linenums': False},
         'markdown.extensions.fenced_code': {},
     },
     'output_format': 'html5',
