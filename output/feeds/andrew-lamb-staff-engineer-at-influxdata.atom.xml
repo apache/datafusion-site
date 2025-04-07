@@ -134,12 +134,12 @@ have large numbers of groups), &lt;a href="https://github.com/apache/datafusion/
 DataFusion was inefficient&lt;/a&gt;,
 manifesting in relatively slower performance compared to other engines for
 ClickBench queries such as&lt;/p&gt;
-&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="k"&gt;SELECT&lt;/span&gt; &lt;span class="ss"&gt;"WatchID"&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="ss"&gt;"ClientIP"&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="k"&gt;COUNT&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="k"&gt;AS&lt;/span&gt; &lt;span class="k"&gt;c&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="p"&gt;...&lt;/span&gt; 
-&lt;span class="k"&gt;FROM&lt;/span&gt; &lt;span class="n"&gt;hits&lt;/span&gt; 
-&lt;span class="k"&gt;GROUP&lt;/span&gt; &lt;span class="k"&gt;BY&lt;/span&gt; &lt;span class="ss"&gt;"WatchID"&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="ss"&gt;"ClientIP"&lt;/span&gt; &lt;span class="cm"&gt;/* &amp;lt;----- 13M Distinct Groups!!! */&lt;/span&gt;
-&lt;span class="k"&gt;ORDER&lt;/span&gt; &lt;span class="k"&gt;BY&lt;/span&gt; &lt;span class="k"&gt;c&lt;/span&gt; &lt;span class="k"&gt;DESC&lt;/span&gt; 
-&lt;span class="k"&gt;LIMIT&lt;/span&gt; &lt;span class="mi"&gt;10&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT "WatchID", "ClientIP", COUNT(*) AS c, ... 
+FROM hits 
+GROUP BY "WatchID", "ClientIP" /* &amp;lt;----- 13M Distinct Groups!!! */
+ORDER BY c DESC 
+LIMIT 10;
+&lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;For such queries, the first aggregation phase does not significantly
 reduce the number of rows, which wastes significant effort. &lt;a href="https://github.com/korowa"&gt;Eduard
 Karacharov&lt;/a&gt; contributed a &lt;a href="https://github.com/apache/datafusion/pull/11627"&gt;dynamic strategy&lt;/a&gt; to

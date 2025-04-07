@@ -71,12 +71,12 @@ limitations under the License.
 &lt;p&gt;DataFusion 46.0.0 adds a new concept of &lt;a href="https://github.com/apache/datafusion/pull/14271"&gt;&lt;strong&gt;set-monotonicity&lt;/strong&gt;&lt;/a&gt; for certain transformations, which helps avoid unnecessary sort operations. In particular, the planner now understands when a &lt;strong&gt;window function introduces new orderings of data&lt;/strong&gt;.&lt;/p&gt;
 &lt;p&gt;For example, DataFusion now recognizes that a window-aggregate like &lt;code&gt;MAX&lt;/code&gt; on a column can produce a result that is &lt;strong&gt;monotonically increasing&lt;/strong&gt;, even if the input column is unordered &amp;mdash; depending on the window frame used.&lt;/p&gt;
 &lt;p&gt;Consider the following query:&lt;/p&gt;
-&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="k"&gt;SELECT&lt;/span&gt; &lt;span class="k"&gt;MAX&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;c1&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="n"&gt;OVER&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;
-    &lt;span class="k"&gt;ROWS&lt;/span&gt; &lt;span class="k"&gt;BETWEEN&lt;/span&gt; &lt;span class="n"&gt;UNBOUNDED&lt;/span&gt; &lt;span class="n"&gt;PRECEDING&lt;/span&gt; &lt;span class="k"&gt;AND&lt;/span&gt; &lt;span class="k"&gt;CURRENT&lt;/span&gt; &lt;span class="k"&gt;ROW&lt;/span&gt;
-&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="k"&gt;AS&lt;/span&gt; &lt;span class="n"&gt;max_c1&lt;/span&gt;
-&lt;span class="k"&gt;FROM&lt;/span&gt; &lt;span class="n"&gt;c1_table&lt;/span&gt;
-&lt;span class="k"&gt;ORDER&lt;/span&gt; &lt;span class="k"&gt;BY&lt;/span&gt; &lt;span class="n"&gt;max_c1&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT MAX(c1) OVER (
+    ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+) AS max_c1
+FROM c1_table
+ORDER BY max_c1;
+&lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;In earlier versions of DataFusion, this query would require an additional SortExec on max_c1 to satisfy the ORDER BY clause. However, with the new set-monotonicity logic, the planner knows that MAX(...) OVER (...) produces values that are not smaller than the previous row, making the extra sort redundant. This leads to more efficient query execution.&lt;/p&gt;
 &lt;p&gt;PR &lt;a href="https://github.com/apache/datafusion/pull/14271"&gt;#14271&lt;/a&gt; introduced the core monotonicity tracking for aggregates and window functions.
 PR &lt;a href="https://github.com/apache/datafusion/pull/14813"&gt;#14813&lt;/a&gt; improved ordering preservation within various window frame types, and brought an extensive test coverage.
@@ -84,17 +84,17 @@ Huge thanks to &lt;a href="https://github.com/berkaysynnada"&gt;@berkaysynnada&l
 &lt;h3&gt;UNION [ALL | DISTINCT] BY NAME Support&lt;/h3&gt;
 &lt;p&gt;DataFusion now supports UNION BY NAME and UNION ALL BY NAME, which align columns by name instead of position. This matches functionality found in systems like Spark and DuckDB and simplifies combining heterogeneously ordered result sets.&lt;/p&gt;
 &lt;p&gt;You no longer need to rewrite column order manually &amp;mdash; just write:&lt;/p&gt;
-&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="k"&gt;SELECT&lt;/span&gt; &lt;span class="n"&gt;col1&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;col2&lt;/span&gt; &lt;span class="k"&gt;FROM&lt;/span&gt; &lt;span class="n"&gt;t1&lt;/span&gt;
-&lt;span class="k"&gt;UNION&lt;/span&gt; &lt;span class="k"&gt;ALL&lt;/span&gt; &lt;span class="k"&gt;BY&lt;/span&gt; &lt;span class="n"&gt;NAME&lt;/span&gt;
-&lt;span class="k"&gt;SELECT&lt;/span&gt; &lt;span class="n"&gt;col2&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;col1&lt;/span&gt; &lt;span class="k"&gt;FROM&lt;/span&gt; &lt;span class="n"&gt;t2&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT col1, col2 FROM t1
+UNION ALL BY NAME
+SELECT col2, col1 FROM t2;
+&lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;Under the hood, this is supported by the new union_by_name() and union_by_name_distinct() plan builder methods.&lt;/p&gt;
 &lt;p&gt;Thanks to &lt;a href="https://github.com/rkrishn7"&gt;@rkrishn7&lt;/a&gt; for PR &lt;a href="https://github.com/apache/datafusion/pull/14538"&gt;#14538&lt;/a&gt;.&lt;/p&gt;
 &lt;h3&gt;New range() Table Function&lt;/h3&gt;
 &lt;p&gt;A new table-valued function range(start, stop, step) has been added to make it easy to generate integer sequences &amp;mdash; similar to PostgreSQL&amp;rsquo;s generate_series() or Spark&amp;rsquo;s range().&lt;/p&gt;
 &lt;p&gt;Example:&lt;/p&gt;
-&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="k"&gt;SELECT&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="k"&gt;FROM&lt;/span&gt; &lt;span class="n"&gt;range&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="mi"&gt;10&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT * FROM range(1, 10, 2);
+&lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;This returns: 1, 3, 5, 7, 9. It&amp;rsquo;s great for testing, cross joins, surrogate keys, and more.&lt;/p&gt;
 &lt;p&gt;Thanks to &lt;a href="https://github.com/simonvandel"&gt;@simonvandel&lt;/a&gt; for PR &lt;a href="https://github.com/apache/datafusion/pull/14830"&gt;#14830&lt;/a&gt;.&lt;/p&gt;
 &lt;h2&gt;Upgrade Guide and Changelog&lt;/h2&gt;

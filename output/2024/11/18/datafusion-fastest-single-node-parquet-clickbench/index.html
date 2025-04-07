@@ -156,12 +156,12 @@ have large numbers of groups), <a href="https://github.com/apache/datafusion/iss
 DataFusion was inefficient</a>,
 manifesting in relatively slower performance compared to other engines for
 ClickBench queries such as</p>
-<div class="codehilite"><pre><span></span><code><span class="k">SELECT</span> <span class="ss">"WatchID"</span><span class="p">,</span> <span class="ss">"ClientIP"</span><span class="p">,</span> <span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span> <span class="k">AS</span> <span class="k">c</span><span class="p">,</span> <span class="p">...</span> 
-<span class="k">FROM</span> <span class="n">hits</span> 
-<span class="k">GROUP</span> <span class="k">BY</span> <span class="ss">"WatchID"</span><span class="p">,</span> <span class="ss">"ClientIP"</span> <span class="cm">/* &lt;----- 13M Distinct Groups!!! */</span>
-<span class="k">ORDER</span> <span class="k">BY</span> <span class="k">c</span> <span class="k">DESC</span> 
-<span class="k">LIMIT</span> <span class="mi">10</span><span class="p">;</span>
-</code></pre></div>
+<pre><code class="language-sql">SELECT "WatchID", "ClientIP", COUNT(*) AS c, ... 
+FROM hits 
+GROUP BY "WatchID", "ClientIP" /* &lt;----- 13M Distinct Groups!!! */
+ORDER BY c DESC 
+LIMIT 10;
+</code></pre>
 <p>For such queries, the first aggregation phase does not significantly
 reduce the number of rows, which wastes significant effort. <a href="https://github.com/korowa">Eduard
 Karacharov</a> contributed a <a href="https://github.com/apache/datafusion/pull/11627">dynamic strategy</a> to

@@ -48,29 +48,29 @@ limitations under the License.
 &lt;p&gt;There are various use cases where this type of analysis can be useful such as the following examples.&lt;/p&gt;
 &lt;h3&gt;Removing Unnecessary Sorts&lt;/h3&gt;
 &lt;p&gt;Imagine a user wants to execute the following query:&lt;/p&gt;
-&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="k"&gt;SELECT&lt;/span&gt; &lt;span class="n"&gt;hostname&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;log_line&lt;/span&gt; 
-&lt;span class="k"&gt;FROM&lt;/span&gt; &lt;span class="n"&gt;telemetry&lt;/span&gt; &lt;span class="k"&gt;ORDER&lt;/span&gt; &lt;span class="k"&gt;BY&lt;/span&gt; &lt;span class="k"&gt;time&lt;/span&gt; &lt;span class="k"&gt;ASC&lt;/span&gt; &lt;span class="k"&gt;limit&lt;/span&gt; &lt;span class="mi"&gt;10&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;pre&gt;&lt;code class="language-SQL"&gt;SELECT hostname, log_line 
+FROM telemetry ORDER BY time ASC limit 10
+&lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;If we don't know anything about the &lt;code&gt;telemetry&lt;/code&gt; table we need to sort it by &lt;code&gt;time ASC&lt;/code&gt; and then retrieve the first 10 rows to get the correct result. However, if the table is already ordered by &lt;code&gt;time ASC&lt;/code&gt;, we can simply retrieve the first 10 rows. This approach executes much faster and uses less memory compared to resorting the entire table, even when the &lt;a href="https://docs.rs/datafusion/latest/datafusion/physical_plan/struct.TopK.html"&gt;TopK&lt;/a&gt; operator is used. &lt;/p&gt;
 &lt;p&gt;In order to avoid the sort the query optimizer must determine the data is already sorted. For simple queries the analysis is straightforward however it gets complicated fast. For example, what if your data is sorted by &lt;code&gt;[hostname, time ASC]&lt;/code&gt; and your query is&lt;/p&gt;
-&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="k"&gt;SELECT&lt;/span&gt; &lt;span class="n"&gt;hostname&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;log_line&lt;/span&gt; 
-&lt;span class="k"&gt;FROM&lt;/span&gt; &lt;span class="n"&gt;telemetry&lt;/span&gt; &lt;span class="k"&gt;WHERE&lt;/span&gt; &lt;span class="n"&gt;hostname&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="s1"&gt;'app.example.com'&lt;/span&gt; &lt;span class="k"&gt;ORDER&lt;/span&gt; &lt;span class="k"&gt;BY&lt;/span&gt; &lt;span class="k"&gt;time&lt;/span&gt; &lt;span class="k"&gt;ASC&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT hostname, log_line 
+FROM telemetry WHERE hostname = 'app.example.com' ORDER BY time ASC;
+&lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;In this case a sort still isn't needed, but the analysis must reason about the sortedness of the stream when it knows &lt;code&gt;hostname&lt;/code&gt; has a single value.&lt;/p&gt;
 &lt;h3&gt;Optimized Operator Implementations&lt;/h3&gt;
 &lt;p&gt;As another use case, some operators can utilize the ordering information to change its underlying algorithm to execute more efficiently. Consider the following query:&lt;/p&gt;
-&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="k"&gt;SELECT&lt;/span&gt; &lt;span class="k"&gt;COUNT&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;log_line&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; 
-&lt;span class="k"&gt;FROM&lt;/span&gt; &lt;span class="n"&gt;telemetry&lt;/span&gt; &lt;span class="k"&gt;GROUP&lt;/span&gt; &lt;span class="k"&gt;BY&lt;/span&gt; &lt;span class="n"&gt;hostname&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;pre&gt;&lt;code class="language-SQL"&gt;SELECT COUNT(log_line) 
+FROM telemetry GROUP BY hostname;
+&lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;Most analytic systems, including DataFusion, by default implement such a query using a hash table keyed on values of &lt;code&gt;hostname&lt;/code&gt; to store the counts. However, if the &lt;code&gt;telemetry&lt;/code&gt; table is sorted by &lt;code&gt;hostname&lt;/code&gt;,  there are much more efficient algorithms for grouping on &lt;code&gt;hostname&lt;/code&gt; values than hashing every value and storing it in memory. However, the more efficient algorithm can only be used when the input is sorted correctly. To see this in practice, check out the &lt;a href="https://github.com/apache/datafusion/tree/main/datafusion/physical-plan/src/aggregates/order"&gt;source&lt;/a&gt; for ordered variant of the &lt;code&gt;Aggregation&lt;/code&gt; in &lt;code&gt;DataFusion&lt;/code&gt;.&lt;/p&gt;
 &lt;h3&gt;Streaming-Friendly Execution&lt;/h3&gt;
 &lt;p&gt;Stream processing aims to produce results immediately as they become available ensuring minimal latency for real-time workloads. However, some operators need to consume all input data before producing any output. Consider the &lt;code&gt;Sort&lt;/code&gt; operation: before it can start generating output, the algorithm must first process all input data. As a result, data flow halts whenever such an operator is encountered until all input is consumed. When a physical query plan contains such an operator (&lt;code&gt;Sort&lt;/code&gt;, &lt;code&gt;CrossJoin&lt;/code&gt;, ..) we refer to this as pipeline breaking, meaning the query cannot be executed in a streaming fashion.&lt;/p&gt;
 &lt;p&gt;For a query to be executed in a streaming fashion we need to satisfy 2 conditions:&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Logically Streamable&lt;/strong&gt;&lt;br/&gt;
 It should be possible to generate what user wants in streaming fashion. Consider following query:&lt;/p&gt;
-&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="k"&gt;SELECT&lt;/span&gt; &lt;span class="k"&gt;SUM&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;amount&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;  
-&lt;span class="k"&gt;FROM&lt;/span&gt; &lt;span class="n"&gt;orders&lt;/span&gt;  
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;pre&gt;&lt;code class="language-SQL"&gt;SELECT SUM(amount)  
+FROM orders  
+&lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;Here, the user wants to compute the sum of all amounts in the orders table. By the nature of the query this requires scanning the entire table to generate a result making it impossible to execute in a streaming fashion.&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Streaming Aware Planner&lt;/strong&gt;&lt;br/&gt;
 Being logically streamable does not guarantee that a query will execute in a streaming fashion. SQL is a declarative language, meaning it specifies 'WHAT' user wants. It is up to the planner 'HOW' to generate the result. In most cases there are many ways to compute the correct result for a given query. The query planner is responsible for choosing "a way" (ideally the best&lt;sup id="optimal1"&gt;&lt;a href="#optimal"&gt;*&lt;/a&gt;&lt;/sup&gt; one) among the all alternatives to generate what user asks for. If a plan contains a pipeline-breaking operator the execution will not be streaming&amp;mdash;even if the query is logically streamable. To generate truly streaming plans from logically streamable queries the planner must carefully analyze the existing orderings in the source tables to ensure that the final plan does not contain any pipeline-breaking operators.&lt;/p&gt;
@@ -129,10 +129,9 @@ Being logically streamable does not guarantee that a query will execute in a str
 For example consider the following query:
 
 
-&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="k"&gt;SELECT&lt;/span&gt; &lt;span class="k"&gt;time&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;date_bin&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;'1 hour'&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="k"&gt;time&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="s1"&gt;'1970-01-01'&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="k"&gt;as&lt;/span&gt; &lt;span class="n"&gt;time_bin&lt;/span&gt;  
-&lt;span class="k"&gt;FROM&lt;/span&gt; &lt;span class="k"&gt;table&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT time, date_bin('1 hour', time, '1970-01-01') as time_bin  
+FROM table;
+&lt;/code&gt;&lt;/pre&gt;
 
 If we know that the table is ordered by &lt;code&gt;time ASC&lt;/code&gt; we can infer that &lt;code&gt;time_bin ASC&lt;/code&gt; is also a valid ordering. This is because the &lt;code&gt;date_bin&lt;/code&gt; function is monotonic, meaning it preserves the order of its input.
 
@@ -334,9 +333,9 @@ using the orderings of the query intermediates.&lt;br/&gt;
 &lt;p&gt;If, at the end of the procedure above, the ordering requirement is an empty list, we can conclude that the requirement is satisfied by the table.&lt;/p&gt;
 &lt;h3&gt;Example Walkthrough&lt;/h3&gt;
 &lt;p&gt;Let's say the user provided a query such as the following:&lt;/p&gt;
-&lt;div class="codehilite"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;code&gt;&lt;span class="k"&gt;SELECT&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="k"&gt;FROM&lt;/span&gt; &lt;span class="k"&gt;table&lt;/span&gt;
-&lt;span class="k"&gt;ORDER&lt;/span&gt; &lt;span class="k"&gt;BY&lt;/span&gt; &lt;span class="n"&gt;hostname&lt;/span&gt; &lt;span class="k"&gt;DESC&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;amount&lt;/span&gt; &lt;span class="k"&gt;ASC&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;time_bin&lt;/span&gt; &lt;span class="k"&gt;ASC&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;price_cloned&lt;/span&gt; &lt;span class="k"&gt;ASC&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="k"&gt;time&lt;/span&gt; &lt;span class="k"&gt;ASC&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;currency&lt;/span&gt; &lt;span class="k"&gt;ASC&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;price&lt;/span&gt; &lt;span class="k"&gt;DESC&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT * FROM table
+ORDER BY hostname DESC, amount ASC, time_bin ASC, price_cloned ASC, time ASC, currency ASC, price DESC;
+&lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;And the input has the same properties explained above&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;&lt;strong&gt;Constant Expressions&lt;/strong&gt; = &lt;code&gt;hostname, currency&lt;/code&gt;&lt;/li&gt;
