@@ -49,6 +49,24 @@ Picture a business tracking daily sales. They need a running total to understand
 SELECT id, value, SUM(value) OVER (ORDER BY id) AS running_total
 FROM sales;
 ```
+```text
+example:
++------------+--------+-------------------------------+
+|   Date     | Sales  | Rows Considered               |
++------------+--------+-------------------------------+
+| Jan 01     | 100    | [100]                         |
+| Jan 02     | 120    | [100, 120]                    |
+| Jan 03     | 130    | [100, 120, 130]               |
+| Jan 04     | 150    | [100, 120, 130, 150]          |
+| Jan 05     | 160    | [100, 120, 130, 150, 160]     |
+| Jan 06     | 180    | [100, 120, 130, 150, 160, 180]|
+| Jan 07     | 170    | [100, ..., 170] (7 days)      |
+| Jan 08     | 175    | [120, ..., 175]               |
++------------+--------+-------------------------------+
+A row-by-row representation of how a 7-day moving average includes the previous 6 days and the current one.
+```
+
+
 This helps in analytical queries where we need cumulative sums, moving averages, or ranking without losing individual records.
 
 
@@ -61,7 +79,7 @@ Built-in window functions serve many use cases, but sometimes custom logic is ne
 
 - Tracking non-standard cumulative logic
 
-Thus, **User-Defined Window Functions (UDWFs)** allow developers to define their own behavior using a combination of SQL and bit of logic.
+Thus, **User-Defined Window Functions (UDWFs)** allow developers to define their own behavior using a combination of SQL and *bit of logic*.
 
 Writing a user defined window function is slightly more complex than an aggregate function due
 to the variety of ways that window functions are called. I recommend reviewing the
@@ -184,7 +202,7 @@ let smooth_it = create_udwf(
     Arc::new(make_partition_evaluator),
 );
 ```
-The `create_udwf` has five arguments to check:
+The `create_udwf` functions take  five arguments:
 
 - The first argument is the name of the function. This is the name that will be used in SQL queries.
 
@@ -275,6 +293,8 @@ The output will be like:
 | red   | 20.0  | 20.0               | 1996-04-12T12:05:03 |
 | red   | 20.3  | 20.15              | 1996-04-12T12:05:04 |
 ...
+...
++-------+-------+--------------------+---------------------+
 ```
 
 This gives you full flexibility to build **domain-specific logic** that plugs seamlessly into DataFusion’s engine — all without sacrificing performance.
@@ -308,13 +328,9 @@ giving it a try. This post was designed to make it easier for new users to work 
 When it comes to designing UDFs, I strongly recommend seeing if you can write your UDF using
 [Window functions](https://datafusion.apache.org/library-user-guide/adding-udfs.html).
 
-I would like to thank [@alamb], [@andygrove], 
-for their helpful reviews and feedback.
+A heartfelt thank you to [@alamb] and [@andygrove] for their invaluable reviews and thoughtful feedback—they’ve been instrumental in shaping this post.
 
-Lastly, the Apache Arrow and DataFusion community is an active group of very helpful people working
-to make a great tool. If you want to get involved, please take a look at the
-[online documentation](https://datafusion.apache.org/) and jump in to help with one of the
-[open issues](https://github.com/apache/datafusion-python/issues).
+The Apache Arrow and DataFusion communities are vibrant, welcoming, and full of passionate developers building something truly powerful. If you’re excited about high-performance analytics and want to be part of an open-source journey, I highly encourage you to explore the [official documentation]((https://datafusion.apache.org/)) and dive into one of the many [open issues](https://github.com/apache/datafusion/issues). There’s never been a better time to get involved!
 
 
 [@andygrove]: https://github.com/andygrove
