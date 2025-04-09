@@ -77,7 +77,7 @@ This helps in analytical queries where we need cumulative sums, moving averages,
 ## User Defined Window Functions
 DataFusion's Built-in window functions such as `first_value`, `rank` and `row_number` serve many common use cases, but sometimes custom logic is needed—for example:
 
-- Calculating moving averages with complex conditions
+- Calculating moving averages with complex conditions (e.g. exponential averages, integrals, etc)
 
 - Implementing a custom ranking strategy
 
