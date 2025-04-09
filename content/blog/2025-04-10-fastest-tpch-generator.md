@@ -563,8 +563,7 @@ target/release/tpchgen-cli -s $SCALE_FACTOR --format=parquet`
 
 # Conclusion 👊🎤
 
-With a few days, some fellow database nerds, and the power of Rust we made
-something 10x better than currently exists. We hope it inspires more research
+In just a few days, with some fellow database nerds and the power of Rust, we built something 10x better than what currently exists. We hope it inspires more research
 into analytical systems using the TPC-H dataset and that people build awesome
 things with it. For example, Sean has already added [on-demand generation of
 tables to GlareDB]. Please consider joining us and helping out at
