@@ -33,7 +33,7 @@ th, td {
   padding: 3px;
 }
 </style>
-
+**TLDR: TPC-H SF=100 in 1min using tpchgen-rs vs 30min+ with dbgen**
 3 members of the [Apache DataFusion] community used Rust and open source
 development to build [tpchgen-rs], a fully open TPC-H data generator over 20x
 faster than any other implementation we know of.
