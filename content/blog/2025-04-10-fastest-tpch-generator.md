@@ -87,7 +87,7 @@ $ tpchgen-cli -s 10 --format=parquet
 # What is TPC-H / dbgen?
 
 The popular [TPC-H] benchmark (often referred to as TPCH) helps evaluate the
-performance of database systems on [OLAP] queries*, *the kind used to build BI
+performance of database systems on [OLAP] queries, the kind used to build BI
 dashboards.
 
 TPC-H has become a de facto standard for analytic systems. While there are [well
