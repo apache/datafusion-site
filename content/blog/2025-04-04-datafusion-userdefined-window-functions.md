@@ -137,10 +137,13 @@ impl MyPartitionEvaluator {
     }
 }
 
-/// Different evaluation methods are called depending on the various
-/// settings of WindowUDF. This example uses the simplest and most
-/// general, `evaluate`. See `PartitionEvaluator` for the other more
-/// advanced uses.
+```(end text)
+Different evaluation methods are called depending on the various
+settings of WindowUDF. In the first example, we  use the simplest and most
+general, `evaluate`. we will seee how to use `PartitionEvaluator` for the other more
+ advanced uses later in the article.
+ 
+ ```rust
 impl PartitionEvaluator for MyPartitionEvaluator {
     /// Tell DataFusion the window function varies based on the value
     /// of the window frame.
