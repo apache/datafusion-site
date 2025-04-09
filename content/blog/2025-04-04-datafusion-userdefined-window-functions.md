@@ -42,7 +42,11 @@ In this post, we'll explore:
 
 ## Understanding Window Functions in SQL 
 
-Imagine you're analyzing sales data and want insights without losing the finer details. This is where **window functions** come into play. Unlike **GROUP BY**, which condenses data, window functions let you retain each row while performing calculations over a defined **range** —like having a moving lens over your dataset.
+
+Imagine you're analyzing sales data and want insights without losing the finer details. This is where **[window functions]** come into play. Unlike **GROUP BY**, which condenses data, window functions let you retain each row while performing calculations over a defined **range** —like having a moving lens over your dataset.
+
+[window functions]: https://en.wikipedia.org/wiki/Window_function_(SQL)
+
 
 Picture a business tracking daily sales. They need a running total to understand cumulative revenue trends without collapsing individual transactions. SQL makes this easy:
 ```sql
