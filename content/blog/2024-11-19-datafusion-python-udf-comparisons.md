@@ -137,7 +137,7 @@ def is_of_interest_impl(
         partkey = partkey.as_py()
         suppkey = suppkey_arr[idx].as_py()
         returnflag = returnflag_arr[idx].as_py()
-        value = (partkey, suppkey, returnflag)  
+        value = (partkey, suppkey, returnflag)
         result.append(value in values_of_interest)
 
     return pa.array(result)
