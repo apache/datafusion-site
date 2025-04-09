@@ -20,7 +20,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-{% endcomment %}
+{% endcomment %}x
 -->
 
 <style>
@@ -33,7 +33,8 @@ th, td {
   padding: 3px;
 }
 </style>
-**TLDR: TPC-H SF=100 in 1min using tpchgen-rs vs 30min+ with dbgen**
+**TLDR: TPC-H SF=100 in 1min using tpchgen-rs vs 30min+ with dbgen**.
+
 3 members of the [Apache DataFusion] community used Rust and open source
 development to build [tpchgen-rs], a fully open TPC-H data generator over 20x
 faster than any other implementation we know of.
