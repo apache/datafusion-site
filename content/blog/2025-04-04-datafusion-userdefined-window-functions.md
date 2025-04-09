@@ -67,7 +67,7 @@ example:
 | Jan 07     | 170    | [100, ..., 170] (7 days)      |
 | Jan 08     | 175    | [120, ..., 175]               |
 +------------+--------+-------------------------------+
-A row-by-row representation of how a 7-day moving average includes the previous 6 days and the current one.
+**Figure 1**: A row-by-row representation of how a 7-day moving average includes the previous 6 days and the current one.
 ```
 
 
