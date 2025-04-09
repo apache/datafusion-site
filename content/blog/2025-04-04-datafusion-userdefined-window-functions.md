@@ -119,7 +119,7 @@ In the world of big data, every millisecond counts. Imagine you’re analyzing s
 DataFusion now supports [user-defined window aggregates (UDWAs)](https://datafusion.apache.org/library-user-guide/adding-udfs.html), meaning you can bring your own aggregation logic and use it within a window function.
 
 For example, we will declare a user defined window function that computes a moving average.
-```sql
+```rust
 use datafusion::arrow::{array::{ArrayRef, Float64Array, AsArray}, datatypes::Float64Type};
 use datafusion::logical_expr::{PartitionEvaluator};
 use datafusion::common::ScalarValue;
