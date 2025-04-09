@@ -83,7 +83,7 @@ DataFusion's Built-in window functions such as `first_value`, `rank` and `row_nu
 
 - Tracking non-standard cumulative logic
 
-Thus, **User-Defined Window Functions (UDWFs)** allow developers to define their own behavior using a combination of SQL and *bit of logic*.
+Thus, **User-Defined Window Functions (UDWFs)** allow developers to define their own behavior while allowing DataFusion to handle the calculations of the  windows and grouping specified in the `OVER` clause
 
 Writing a user defined window function is slightly more complex than an aggregate function due
 to the variety of ways that window functions are called. I recommend reviewing the
