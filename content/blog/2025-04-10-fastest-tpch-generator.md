@@ -42,7 +42,7 @@ faster than any other implementation we know of.
 It is now possible to create the TPC-H SF=100 dataset in 72.23 seconds (1.4 GB/s
 😎) on a Macbook Air M3 with 16GB of memory, compared to the classic `dbgen`
 which takes 30 minutes<sup>1</sup> (0.05GB/sec). On the same machine, it takes less than
-2 minutes to create all 3.6 GB of SF=100 in [Apache Parquet] format, which takes 44 minutes using [DuckDB].
+2 minutes to create all 36 GB of SF=100 in [Apache Parquet] format, which takes 44 minutes using [DuckDB].
 It is finally convenient and efficient to run TPC-H queries locally when testing
 analytical engines such as DataFusion.
 
