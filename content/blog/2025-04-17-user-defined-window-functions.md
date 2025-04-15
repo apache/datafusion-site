@@ -94,7 +94,7 @@ for a description of which functions need to be implemented.
 
 [Built-in window functions]: https://datafusion.apache.org/user-guide/sql/window_functions.html
 
-## Understaing Sliding Window 
+## Understanding Sliding Window 
 
 Sliding windows define a **moving range** of data over which aggregations are computed. Unlike simple cumulative functions, these windows are dynamically updated as new data arrives.
 
@@ -124,7 +124,73 @@ Many traditional query engines struggle to optimize these computations effective
 ## How DataFusion Evaluates Window Functions Quickly
 In the world of big data, every millisecond counts. Imagine you’re analyzing stock market data, tracking sensor readings from millions of IoT devices, or crunching through massive customer logs—speed matters. This is where [DataFusion](https://datafusion.apache.org/) shines, making window function computations blazing fast. Let’s break down how it achieves this remarkable performance.
 
-DataFusion supports [user-defined window aggregates (UDWAs)](https://datafusion.apache.org/library-user-guide/adding-udfs.html), meaning you can bring your own aggregation logic and use it within a window function.
+DataFusion implements the battle tested sort-based approach described in [this
+paper] which is also used in systems such as Postgresql and Vertica. The input
+is first sorted by both the `PARTITION BY` and `ORDER BY` expressions and
+then the [WindowAggExec] operator efficiently determines the partition boundaries and
+creates appropriate [PartitionEvaluator] instances. 
+
+The sort-based approach is well understood, scales to large data sets, and
+leverages DataFusion's highly optimized sort implementation. DataFusion minimizes
+resorting by leveraging the sort order tracking and optimizations described in
+the [Using Ordering for Better Plans blog]. 
+
+For example, given the query such as the following to compute the starting,
+ending and average price for each stock:
+
+```sql
+SELECT 
+  FIRST_VALUE(price) OVER (PARTITION BY date_bin('1 month', time) ORDER BY time DESC), 
+  FIRST_VALUE(price) OVER (PARTITION BY date_bin('1 month', time) ORDER BY time DESC)
+  AVG(price)         OVER (PARTITION BY date_bin('1 month', time)),
+FROM quotes;
+```
+
+If the input data is not sorted, DataFusion will first sort the data by the
+`date_bin` and `time` and then [WindowAggExec] computes the partition boundaries
+and invokes the appropriate [PartitionEvaluator] API methods depending on the window
+definition in the `OVER` clause and the declared capabilities of the function.
+
+For example, evaluating `window_func(val) OVER (PARTITION BY col)`
+on the following data:
+
+```text
+col | val
+--- + ----
+ A  | 10
+ A  | 10
+ C  | 20
+ D  | 30
+ D  | 30
+```
+
+Will instantiate three [PartitionEvaluator]s, one each for the
+partitions defined by `col=A`, `col=B`, and `col=C`.
+
+```text
+col | val
+--- + ----
+ A  | 10     <--- partition 1
+ A  | 10
+
+col | val
+--- + ----
+ C  | 20     <--- partition 2
+
+col | val
+--- + ----
+ D  | 30     <--- partition 3
+ D  | 30
+```
+
+[this paper]: https://www.vldb.org/pvldb/vol8/p1058-leis.pdf
+[Using Ordering for Better Plans blog]: https://datafusion.apache.org/blog/2025/03/11/ordering-analysis/
+[WindowAggExec]: https://github.com/apache/datafusion/blob/7ff6c7e68540c69b399a171654d00577e6f886bf/datafusion/physical-plan/src/windows/window_agg_exec.rs
+[PartitionEvaluator]: https://docs.rs/datafusion/latest/datafusion/logical_expr/trait.PartitionEvaluator.html#background
+
+### Creating your own Window Function
+
+DataFusion supports [user-defined window aggregates (UDWAs)](https://datafusion.apache.org/library-user-guide/adding-udfs.html), meaning you can bring your own window function logic using the exact same APIs and performance as the built in functions.
 
 For example, we will declare a user defined window function that computes a moving average.
 
@@ -148,7 +214,7 @@ impl MyPartitionEvaluator {
 ```
 
 Different evaluation methods are called depending on the various
-settings of WindowUDF. In the first example, we use the simplest and most
+settings of WindowUDF and the query. In the first example, we use the simplest and most
 general, `evaluate` function. We will see how to use `PartitionEvaluator` for the other more
 advanced uses later in the article.
  
@@ -319,7 +385,7 @@ This gives you full flexibility to build **domain-specific logic** that plugs se
 
 
 <!--
-NOTE: alamb doesn't think this is reproduceable:
+NOTE: alamb doesn't think this section is reproducible:
 1. the referenced blog is comparing min/max normal aggregates (not window functions)
 2. the blog doesn't mention posgresql at all
 
