@@ -25,7 +25,7 @@ limitations under the License.
 {% endcomment %}
 -->
 
-## Introduction
+
 Window functions are a powerful feature in SQL, allowing for complex analytical computations over a subset of data. However, efficiently implementing them, especially sliding windows, can be quite challenging. With [Apache DataFusion]'s user-defined window functions, developers can easily take advantage of all the effort put into DataFusion's implementation.
 
 In this post, we'll explore:
@@ -36,9 +36,10 @@ In this post, we'll explore:
 
 - The challenges of computing window aggregates efficiently
 
-- How DataFusion optimizes these computations
+- How to implement user-defined window functions in DataFusion
 
-- Alternative approaches and their trade-offs
+
+[Apache DataFusion]: https://datafusion.apache.org/
 
 ## Understanding Window Functions in SQL 
 
@@ -53,6 +54,7 @@ Picture a business tracking daily sales. They need a running total to understand
 SELECT id, value, SUM(value) OVER (ORDER BY id) AS running_total
 FROM sales;
 ```
+
 ```text
 example:
 +------------+--------+-------------------------------+
@@ -67,15 +69,15 @@ example:
 | Jan 07     | 170    | [100, ..., 170] (7 days)      |
 | Jan 08     | 175    | [120, ..., 175]               |
 +------------+--------+-------------------------------+
-**Figure 1**: A row-by-row representation of how a 7-day moving average includes the previous 6 days and the current one.
 ```
+**Figure 1**: A row-by-row representation of how a 7-day moving average includes the previous 6 days and the current one.
 
 
 This helps in analytical queries where we need cumulative sums, moving averages, or ranking without losing individual records.
 
 
 ## User Defined Window Functions
-DataFusion's Built-in window functions such as `first_value`, `rank` and `row_number` serve many common use cases, but sometimes custom logic is needed—for example:
+DataFusion's [Built-in window functions] such as `first_value`, `rank` and `row_number` serve many common use cases, but sometimes custom logic is needed—for example:
 
 - Calculating moving averages with complex conditions (e.g. exponential averages, integrals, etc)
 
@@ -89,6 +91,8 @@ Writing a user defined window function is slightly more complex than an aggregat
 to the variety of ways that window functions are called. I recommend reviewing the
 [online documentation](https://datafusion.apache.org/library-user-guide/adding-udfs.html#registering-a-window-udf)
 for a description of which functions need to be implemented. 
+
+[Built-in window functions]: https://datafusion.apache.org/user-guide/sql/window_functions.html
 
 ## Understaing Sliding Window 
 
@@ -120,9 +124,10 @@ Many traditional query engines struggle to optimize these computations effective
 ## How DataFusion Evaluates Window Functions Quickly
 In the world of big data, every millisecond counts. Imagine you’re analyzing stock market data, tracking sensor readings from millions of IoT devices, or crunching through massive customer logs—speed matters. This is where [DataFusion](https://datafusion.apache.org/) shines, making window function computations blazing fast. Let’s break down how it achieves this remarkable performance.
 
-DataFusion now supports [user-defined window aggregates (UDWAs)](https://datafusion.apache.org/library-user-guide/adding-udfs.html), meaning you can bring your own aggregation logic and use it within a window function.
+DataFusion supports [user-defined window aggregates (UDWAs)](https://datafusion.apache.org/library-user-guide/adding-udfs.html), meaning you can bring your own aggregation logic and use it within a window function.
 
 For example, we will declare a user defined window function that computes a moving average.
+
 ```rust
 use datafusion::arrow::{array::{ArrayRef, Float64Array, AsArray}, datatypes::Float64Type};
 use datafusion::logical_expr::{PartitionEvaluator};
@@ -140,14 +145,14 @@ impl MyPartitionEvaluator {
         Self {}
     }
 }
+```
 
-```(end text)
 Different evaluation methods are called depending on the various
-settings of WindowUDF. In the first example, we  use the simplest and most
-general, `evaluate`. we will seee how to use `PartitionEvaluator` for the other more
- advanced uses later in the article.
+settings of WindowUDF. In the first example, we use the simplest and most
+general, `evaluate` function. We will see how to use `PartitionEvaluator` for the other more
+advanced uses later in the article.
  
- ```rust
+```rust
 impl PartitionEvaluator for MyPartitionEvaluator {
     /// Tell DataFusion the window function varies based on the value
     /// of the window frame.
@@ -192,6 +197,7 @@ fn make_partition_evaluator() -> Result<Box<dyn PartitionEvaluator>> {
     Ok(Box::new(MyPartitionEvaluator::new()))
 }
 ```
+
 ### Registering a Window UDF
 To register a Window UDF, you need to wrap the function implementation in a `WindowUDF` struct and then register it with the `SessionContext`. DataFusion provides the `create_udwf` helper functions to make this easier. There is a lower level API with more functionality but is more complex, that is documented in [advanced_udwf.rs](https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/advanced_udwf.rs).
 
@@ -209,29 +215,33 @@ let smooth_it = create_udwf(
     Arc::new(make_partition_evaluator),
 );
 ```
-The `create_udwf` functions take  five arguments:
+The [create_udwf] functions take  five arguments:
 
-- The first argument is the name of the function. This is the name that will be used in SQL queries.
+- The **first argument** is the name of the function. This is the name that will be used in SQL queries.
 
 - The **second argument** is the `DataType of` input array (attention: this is not a list of arrays). I.e. in this case, the function accepts `Float64` as argument.
 
-- The third argument is the return type of the function. I.e. in this case, the function returns an `Float64`.
+- The **third argument** is the return type of the function. I.e. in this case, the function returns an `Float64`.
 
-- The fourth argument is the volatility of the function. In short, this is used to determine if the function’s performance can be optimized in some situations. In this case, the function is `Immutable` because it always returns the same value for the same input. A random number generator would be `Volatile` because it returns a different value for the same input.
+- The **fourth argument** is the volatility of the function. In short, this is used to determine if the function’s performance can be optimized in some situations. In this case, the function is `Immutable` because it always returns the same value for the same input. A random number generator would be `Volatile` because it returns a different value for the same input.
 
 - The **fifth argument** is the function implementation. This is the function that we defined above.
 
+[create_udwf]: https://docs.rs/datafusion/latest/datafusion/logical_expr/fn.create_udwf.html
+
 That gives us a **WindowUDF** that we can register with the `SessionContext`:
-```sql
+
+```rust
 use datafusion::execution::context::SessionContext;
 
 let ctx = SessionContext::new();
 
 ctx.register_udwf(smooth_it);
 ```
+
 For example, if we have a [cars.csv](https://github.com/apache/datafusion/blob/main/datafusion/core/tests/data/cars.csv) whose contents like
 
-```sql
+```text
 car,speed,time
 red,20.0,1996-04-12T12:05:03.000000000
 red,20.3,1996-04-12T12:05:04.000000000
@@ -240,7 +250,8 @@ green,10.3,1996-04-12T12:05:04.000000000
 ...
 ```
 Then, we can query like below:
-```sql
+
+```rust
 use datafusion::datasource::file_format::options::CsvReadOptions;
 
 #[tokio::main]
@@ -307,6 +318,11 @@ The output will be like:
 This gives you full flexibility to build **domain-specific logic** that plugs seamlessly into DataFusion’s engine — all without sacrificing performance.
 
 
+<!--
+NOTE: alamb doesn't think this is reproduceable:
+1. the referenced blog is comparing min/max normal aggregates (not window functions)
+2. the blog doesn't mention posgresql at all
+
 ## Performance Gains
 
 To demonstrate efficiency, we benchmarked a 1-million row dataset with a sliding window aggregate.
@@ -322,18 +338,17 @@ To demonstrate efficiency, we benchmarked a 1-million row dataset with a sliding
 ```
 DataFusion outperforms traditional SQL engines by leveraging [Apache Arrow](https://arrow.apache.org/) optimizations, making it a great choice for analytical workloads .
 Note: The reference has been taken from [@andygrove]'s blog . [see](https://andygrove.io/2019/04/datafusion-0.13.0-benchmarks/)
-
+--> 
 
 ## Final Thoughts and Recommendations 
-Window functions may be common in SQL, but *efficient and extensible* window engines are rare — and now DataFusion is one of them.
-
-while many databases support user defined scalar and user defined aggregate functions, user defined window functions are not as common and Datafusion making it easier for all .
+Window functions may be common in SQL, but *efficient and extensible* window functions in engines are rare. 
+While many databases support user defined scalar and user defined aggregate functions, user defined window functions are not as common and Datafusion making it easier for all .
 
 For anyone who is curious about [DataFusion](https://datafusion.apache.org/) I highly recommend
-giving it a try. This post was designed to make it easier for new users to work with User Defined WIndow Functions by giving a few examples of how one might implement these.
+giving it a try. This post was designed to make it easier for new users to work with User Defined Window Functions by giving a few examples of how one might implement these.
 
-When it comes to designing UDFs, I strongly recommend seeing if you can write your UDF using
-[Window functions](https://datafusion.apache.org/library-user-guide/adding-udfs.html).
+When it comes to designing UDFs, I strongly recommend reviewing the 
+[Window functions](https://datafusion.apache.org/library-user-guide/adding-udfs.html) documentation.
 
 A heartfelt thank you to [@alamb] and [@andygrove] for their invaluable reviews and thoughtful feedback—they’ve been instrumental in shaping this post.
 
