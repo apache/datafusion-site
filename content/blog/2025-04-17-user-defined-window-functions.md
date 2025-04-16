@@ -399,7 +399,7 @@ When it comes to designing UDFs, I strongly recommend reviewing the
 
 A heartfelt thank you to [@alamb] and [@andygrove] for their invaluable reviews and thoughtful feedback—they’ve been instrumental in shaping this post.
 
-The Apache Arrow and DataFusion communities are vibrant, welcoming, and full of passionate developers building something truly powerful. If you’re excited about high-performance analytics and want to be part of an open-source journey, I highly encourage you to explore the [official documentation]((https://datafusion.apache.org/)) and dive into one of the many [open issues](https://github.com/apache/datafusion/issues). There’s never been a better time to get involved!
+The Apache Arrow and Apache DataFusion communities are vibrant, welcoming, and full of passionate developers building something truly powerful. If you’re excited about high-performance analytics and want to be part of an open-source journey, I highly encourage you to explore the [official documentation]((https://datafusion.apache.org/)) and dive into one of the many [open issues](https://github.com/apache/datafusion/issues). There’s never been a better time to get involved!
 
 
 [@andygrove]: https://github.com/andygrove
