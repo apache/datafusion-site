@@ -2,7 +2,7 @@
 layout: post
 title: User defined Window Functions in DataFusion 
 date: 2025-04-17
-author: Aditya Singh Rathore
+author: Aditya Singh Rathore , Andrew Lamb
 categories: [tutorial]
 ---
 
@@ -140,9 +140,9 @@ ending and average price for each stock:
 
 ```sql
 SELECT 
-  FIRST_VALUE(price) OVER (PARTITION BY date_bin('1 month', time) ORDER BY time DESC), 
-  FIRST_VALUE(price) OVER (PARTITION BY date_bin('1 month', time) ORDER BY time DESC)
-  AVG(price)         OVER (PARTITION BY date_bin('1 month', time))
+  FIRST_VALUE(price) OVER (PARTITION BY date_bin('1 month', time) ORDER BY time DESC) AS start_price, 
+  FIRST_VALUE(price) OVER (PARTITION BY date_bin('1 month', time) ORDER BY time DESC) AS end_price,
+  AVG(price)         OVER (PARTITION BY date_bin('1 month', time))                    AS avg_price
 FROM quotes;
 ```
 
@@ -265,7 +265,10 @@ fn make_partition_evaluator() -> Result<Box<dyn PartitionEvaluator>> {
 ```
 
 ### Registering a Window UDF
-To register a Window UDF, you need to wrap the function implementation in a `WindowUDF` struct and then register it with the `SessionContext`. DataFusion provides the `create_udwf` helper functions to make this easier. There is a lower level API with more functionality but is more complex, that is documented in [advanced_udwf.rs](https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/advanced_udwf.rs).
+To register a Window UDF, you need to wrap the function implementation in a [WindowUDF] struct and then register it with the `SessionContext`. DataFusion provides the [create_udwf] helper functions to make this easier. There is a lower level API with more functionality but is more complex, that is documented in [advanced_udwf.rs](https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/advanced_udwf.rs).
+
+[WindowUDF]: https://docs.rs/datafusion/latest/datafusion/logical_expr/struct.WindowUDF.html
+[create_udwf]: https://docs.rs/datafusion/latest/datafusion/logical_expr/fn.create_udwf.html
 
 ```sql
 use datafusion::logical_expr::{Volatility, create_udwf};
@@ -383,28 +386,6 @@ The output will be like:
 
 This gives you full flexibility to build **domain-specific logic** that plugs seamlessly into DataFusion’s engine — all without sacrificing performance.
 
-
-<!--
-NOTE: alamb doesn't think this section is reproducible:
-1. the referenced blog is comparing min/max normal aggregates (not window functions)
-2. the blog doesn't mention posgresql at all
-
-## Performance Gains
-
-To demonstrate efficiency, we benchmarked a 1-million row dataset with a sliding window aggregate.
-
-```
-+--------------------------+----------------------+
-| Engine                   | Query Execution Time |
-+--------------------------+----------------------+
-| PostgeSQL                |   1.2s               |
-| Spark                    |   0.9s               |
-| DataFusion               |   0.45s              |
-+--------------------------+----------------------+
-```
-DataFusion outperforms traditional SQL engines by leveraging [Apache Arrow](https://arrow.apache.org/) optimizations, making it a great choice for analytical workloads .
-Note: The reference has been taken from [@andygrove]'s blog . [see](https://andygrove.io/2019/04/datafusion-0.13.0-benchmarks/)
---> 
 
 ## Final Thoughts and Recommendations 
 Window functions may be common in SQL, but *efficient and extensible* window functions in engines are rare. 
