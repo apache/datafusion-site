@@ -142,7 +142,7 @@ ending and average price for each stock:
 SELECT 
   FIRST_VALUE(price) OVER (PARTITION BY date_bin('1 month', time) ORDER BY time DESC), 
   FIRST_VALUE(price) OVER (PARTITION BY date_bin('1 month', time) ORDER BY time DESC)
-  AVG(price)         OVER (PARTITION BY date_bin('1 month', time)),
+  AVG(price)         OVER (PARTITION BY date_bin('1 month', time))
 FROM quotes;
 ```
 
