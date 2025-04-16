@@ -270,7 +270,7 @@ To register a Window UDF, you need to wrap the function implementation in a [Win
 [WindowUDF]: https://docs.rs/datafusion/latest/datafusion/logical_expr/struct.WindowUDF.html
 [create_udwf]: https://docs.rs/datafusion/latest/datafusion/logical_expr/fn.create_udwf.html
 
-```sql
+```rust
 use datafusion::logical_expr::{Volatility, create_udwf};
 use datafusion::arrow::datatypes::DataType;
 use std::sync::Arc;
