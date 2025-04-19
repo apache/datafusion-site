@@ -1,0 +1,393 @@
+<!doctype html>
+<html class="no-js" lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User defined Window Functions in DataFusion - Apache DataFusion Blog</title>
+<link href="/blog/css/bootstrap.min.css" rel="stylesheet">
+<link href="/blog/css/fontawesome.all.min.css" rel="stylesheet">
+<link href="/blog/css/headerlink.css" rel="stylesheet">
+<link href="/blog/highlight/default.min.css" rel="stylesheet">
+<script src="/blog/highlight/highlight.js"></script>
+<script>hljs.highlightAll();</script>  </head>
+  <body class="d-flex flex-column h-100">
+  <main class="flex-shrink-0">
+<!-- nav bar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark" aria-label="Fifth navbar example">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/blog"><img src="/blog/images/logo_original4x.png" style="height: 32px;"/> Apache DataFusion Blog</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarADP" aria-controls="navbarADP" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarADP">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/about.html">About</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/feed.xml">RSS</a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>    
+
+
+<!-- page contents -->
+<div id="contents">
+    <div class="bg-white p-5 rounded">
+        <div class="col-sm-8 mx-auto">
+          <h1>
+              User defined Window Functions in DataFusion
+          </h1>
+              <p>Posted on: Sat 19 April 2025 by Aditya Singh Rathore, Andrew Lamb</p>
+              <!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+-->
+<p>Window functions are a powerful feature in SQL, allowing for complex analytical computations over a subset of data. However, efficiently implementing them, especially sliding windows, can be quite challenging. With <a href="https://datafusion.apache.org/">Apache DataFusion</a>'s user-defined window functions, developers can easily take advantage of all the effort put into DataFusion's implementation.</p>
+<p>In this post, we'll explore:</p>
+<ul>
+<li>
+<p>What window functions are and why they matter</p>
+</li>
+<li>
+<p>Understanding sliding windows</p>
+</li>
+<li>
+<p>The challenges of computing window aggregates efficiently</p>
+</li>
+<li>
+<p>How to implement user-defined window functions in DataFusion</p>
+</li>
+</ul>
+<h2>Understanding Window Functions in SQL</h2>
+<p>Imagine you're analyzing sales data and want insights without losing the finer details. This is where <strong><a href="https://en.wikipedia.org/wiki/Window_function_(SQL)">window functions</a></strong> come into play. Unlike <strong>GROUP BY</strong>, which condenses data, window functions let you retain each row while performing calculations over a defined <strong>range</strong> &mdash;like having a moving lens over your dataset.</p>
+<p>Picture a business tracking daily sales. They need a running total to understand cumulative revenue trends without collapsing individual transactions. SQL makes this easy:</p>
+<pre><code class="language-sql">SELECT id, value, SUM(value) OVER (ORDER BY id) AS running_total
+FROM sales;
+</code></pre>
+<pre><code class="language-text">example:
++------------+--------+-------------------------------+
+|   Date     | Sales  | Rows Considered               |
++------------+--------+-------------------------------+
+| Jan 01     | 100    | [100]                         |
+| Jan 02     | 120    | [100, 120]                    |
+| Jan 03     | 130    | [100, 120, 130]               |
+| Jan 04     | 150    | [100, 120, 130, 150]          |
+| Jan 05     | 160    | [100, 120, 130, 150, 160]     |
+| Jan 06     | 180    | [100, 120, 130, 150, 160, 180]|
+| Jan 07     | 170    | [100, ..., 170] (7 days)      |
+| Jan 08     | 175    | [120, ..., 175]               |
++------------+--------+-------------------------------+
+</code></pre>
+<p><strong>Figure 1</strong>: A row-by-row representation of how a 7-day moving average includes the previous 6 days and the current one.</p>
+<p>This helps in analytical queries where we need cumulative sums, moving averages, or ranking without losing individual records.</p>
+<h2>User Defined Window Functions</h2>
+<p>DataFusion's <a href="https://datafusion.apache.org/user-guide/sql/window_functions.html">Built-in window functions</a> such as <code>first_value</code>, <code>rank</code> and <code>row_number</code> serve many common use cases, but sometimes custom logic is needed&mdash;for example:</p>
+<ul>
+<li>
+<p>Calculating moving averages with complex conditions (e.g. exponential averages, integrals, etc)</p>
+</li>
+<li>
+<p>Implementing a custom ranking strategy</p>
+</li>
+<li>
+<p>Tracking non-standard cumulative logic</p>
+</li>
+</ul>
+<p>Thus, <strong>User-Defined Window Functions (UDWFs)</strong> allow developers to define their own behavior while allowing DataFusion to handle the calculations of the  windows and grouping specified in the <code>OVER</code> clause</p>
+<p>Writing a user defined window function is slightly more complex than an aggregate function due
+to the variety of ways that window functions are called. I recommend reviewing the
+<a href="https://datafusion.apache.org/library-user-guide/adding-udfs.html#registering-a-window-udf">online documentation</a>
+for a description of which functions need to be implemented. </p>
+<h2>Understanding Sliding Window</h2>
+<p>Sliding windows define a <strong>moving range</strong> of data over which aggregations are computed. Unlike simple cumulative functions, these windows are dynamically updated as new data arrives.</p>
+<p>For instance, if we want a 7-day moving average of sales:</p>
+<pre><code class="language-sql">SELECT date, sales, 
+       AVG(sales) OVER (ORDER BY date ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) AS moving_avg
+FROM sales;
+</code></pre>
+<p>Here, each row&rsquo;s result is computed based on the last 7 days, making it computationally intensive as data grows.</p>
+<h2>Why Computing Sliding Windows Is Hard</h2>
+<p>Imagine you&rsquo;re at a caf&eacute;, and the barista is preparing coffee orders. If they made each cup from scratch without using pre-prepared ingredients, the process would be painfully slow. This is exactly the problem with na&iuml;ve sliding window computations.</p>
+<p>Computing sliding windows efficiently is tricky because:</p>
+<ul>
+<li>
+<p><strong>High Computation Costs:</strong> Just like making coffee from scratch for each customer, recalculating aggregates for every row is expensive.</p>
+</li>
+<li>
+<p><strong>Data Shuffling:</strong> In large distributed systems, data must often be shuffled between nodes, causing delays&mdash;like passing orders between multiple baristas who don&rsquo;t communicate efficiently.</p>
+</li>
+<li>
+<p><strong>State Management:</strong> Keeping track of past computations is like remembering previous orders without writing them down&mdash;error-prone and inefficient.</p>
+</li>
+</ul>
+<p>Many traditional query engines struggle to optimize these computations effectively, leading to sluggish performance.</p>
+<h2>How DataFusion Evaluates Window Functions Quickly</h2>
+<p>In the world of big data, every millisecond counts. Imagine you&rsquo;re analyzing stock market data, tracking sensor readings from millions of IoT devices, or crunching through massive customer logs&mdash;speed matters. This is where <a href="https://datafusion.apache.org/">DataFusion</a> shines, making window function computations blazing fast. Let&rsquo;s break down how it achieves this remarkable performance.</p>
+<p>DataFusion implements the battle tested sort-based approach described in <a href="https://www.vldb.org/pvldb/vol8/p1058-leis.pdf">this
+paper</a> which is also used in systems such as Postgresql and Vertica. The input
+is first sorted by both the <code>PARTITION BY</code> and <code>ORDER BY</code> expressions and
+then the <a href="https://github.com/apache/datafusion/blob/7ff6c7e68540c69b399a171654d00577e6f886bf/datafusion/physical-plan/src/windows/window_agg_exec.rs">WindowAggExec</a> operator efficiently determines the partition boundaries and
+creates appropriate <a href="https://docs.rs/datafusion/latest/datafusion/logical_expr/trait.PartitionEvaluator.html#background">PartitionEvaluator</a> instances. </p>
+<p>The sort-based approach is well understood, scales to large data sets, and
+leverages DataFusion's highly optimized sort implementation. DataFusion minimizes
+resorting by leveraging the sort order tracking and optimizations described in
+the <a href="https://datafusion.apache.org/blog/2025/03/11/ordering-analysis/">Using Ordering for Better Plans blog</a>. </p>
+<p>For example, given the query such as the following to compute the starting,
+ending and average price for each stock:</p>
+<pre><code class="language-sql">SELECT 
+  FIRST_VALUE(price) OVER (PARTITION BY date_bin('1 month', time) ORDER BY time DESC) AS start_price, 
+  FIRST_VALUE(price) OVER (PARTITION BY date_bin('1 month', time) ORDER BY time DESC) AS end_price,
+  AVG(price)         OVER (PARTITION BY date_bin('1 month', time))                    AS avg_price
+FROM quotes;
+</code></pre>
+<p>If the input data is not sorted, DataFusion will first sort the data by the
+<code>date_bin</code> and <code>time</code> and then <a href="https://github.com/apache/datafusion/blob/7ff6c7e68540c69b399a171654d00577e6f886bf/datafusion/physical-plan/src/windows/window_agg_exec.rs">WindowAggExec</a> computes the partition boundaries
+and invokes the appropriate <a href="https://docs.rs/datafusion/latest/datafusion/logical_expr/trait.PartitionEvaluator.html#background">PartitionEvaluator</a> API methods depending on the window
+definition in the <code>OVER</code> clause and the declared capabilities of the function.</p>
+<p>For example, evaluating <code>window_func(val) OVER (PARTITION BY col)</code>
+on the following data:</p>
+<pre><code class="language-text">col | val
+--- + ----
+ A  | 10
+ A  | 10
+ C  | 20
+ D  | 30
+ D  | 30
+</code></pre>
+<p>Will instantiate three <a href="https://docs.rs/datafusion/latest/datafusion/logical_expr/trait.PartitionEvaluator.html#background">PartitionEvaluator</a>s, one each for the
+partitions defined by <code>col=A</code>, <code>col=B</code>, and <code>col=C</code>.</p>
+<pre><code class="language-text">col | val
+--- + ----
+ A  | 10     &lt;--- partition 1
+ A  | 10
+
+col | val
+--- + ----
+ C  | 20     &lt;--- partition 2
+
+col | val
+--- + ----
+ D  | 30     &lt;--- partition 3
+ D  | 30
+</code></pre>
+<h3>Creating your own Window Function</h3>
+<p>DataFusion supports <a href="https://datafusion.apache.org/library-user-guide/adding-udfs.html">user-defined window aggregates (UDWAs)</a>, meaning you can bring your own window function logic using the exact same APIs and performance as the built in functions.</p>
+<p>For example, we will declare a user defined window function that computes a moving average.</p>
+<pre><code class="language-rust">use datafusion::arrow::{array::{ArrayRef, Float64Array, AsArray}, datatypes::Float64Type};
+use datafusion::logical_expr::{PartitionEvaluator};
+use datafusion::common::ScalarValue;
+use datafusion::error::Result;
+/// This implements the lowest level evaluation for a window function
+///
+/// It handles calculating the value of the window function for each
+/// distinct values of `PARTITION BY`
+#[derive(Clone, Debug)]
+struct MyPartitionEvaluator {}
+
+impl MyPartitionEvaluator {
+    fn new() -&gt; Self {
+        Self {}
+    }
+}
+</code></pre>
+<p>Different evaluation methods are called depending on the various
+settings of WindowUDF and the query. In the first example, we use the simplest and most
+general, <code>evaluate</code> function. We will see how to use <code>PartitionEvaluator</code> for the other more
+advanced uses later in the article.</p>
+<pre><code class="language-rust">impl PartitionEvaluator for MyPartitionEvaluator {
+    /// Tell DataFusion the window function varies based on the value
+    /// of the window frame.
+    fn uses_window_frame(&amp;self) -&gt; bool {
+        true
+    }
+
+    /// This function is called once per input row.
+    ///
+    /// `range`specifies which indexes of `values` should be
+    /// considered for the calculation.
+    ///
+    /// Note this is the SLOWEST, but simplest, way to evaluate a
+    /// window function. It is much faster to implement
+    /// evaluate_all or evaluate_all_with_rank, if possible
+    fn evaluate(
+        &amp;mut self,
+        values: &amp;[ArrayRef],
+        range: &amp;std::ops::Range&lt;usize&gt;,
+    ) -&gt; Result&lt;ScalarValue&gt; {
+        // Again, the input argument is an array of floating
+        // point numbers to calculate a moving average
+        let arr: &amp;Float64Array = values[0].as_ref().as_primitive::&lt;Float64Type&gt;();
+
+        let range_len = range.end - range.start;
+
+        // our smoothing function will average all the values in the
+        let output = if range_len &gt; 0 {
+            let sum: f64 = arr.values().iter().skip(range.start).take(range_len).sum();
+            Some(sum / range_len as f64)
+        } else {
+            None
+        };
+
+        Ok(ScalarValue::Float64(output))
+    }
+}
+
+/// Create a `PartitionEvaluator` to evaluate this function on a new
+/// partition.
+fn make_partition_evaluator() -&gt; Result&lt;Box&lt;dyn PartitionEvaluator&gt;&gt; {
+    Ok(Box::new(MyPartitionEvaluator::new()))
+}
+</code></pre>
+<h3>Registering a Window UDF</h3>
+<p>To register a Window UDF, you need to wrap the function implementation in a <a href="https://docs.rs/datafusion/latest/datafusion/logical_expr/struct.WindowUDF.html">WindowUDF</a> struct and then register it with the <code>SessionContext</code>. DataFusion provides the <a href="https://docs.rs/datafusion/latest/datafusion/logical_expr/fn.create_udwf.html">create_udwf</a> helper functions to make this easier. There is a lower level API with more functionality but is more complex, that is documented in <a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/advanced_udwf.rs">advanced_udwf.rs</a>.</p>
+<pre><code class="language-rust">use datafusion::logical_expr::{Volatility, create_udwf};
+use datafusion::arrow::datatypes::DataType;
+use std::sync::Arc;
+
+// here is where we define the UDWF. We also declare its signature:
+let smooth_it = create_udwf(
+    "smooth_it",
+    DataType::Float64,
+    Arc::new(DataType::Float64),
+    Volatility::Immutable,
+    Arc::new(make_partition_evaluator),
+);
+</code></pre>
+<p>The <a href="https://docs.rs/datafusion/latest/datafusion/logical_expr/fn.create_udwf.html">create_udwf</a> functions take  five arguments:</p>
+<ul>
+<li>
+<p>The <strong>first argument</strong> is the name of the function. This is the name that will be used in SQL queries.</p>
+</li>
+<li>
+<p>The <strong>second argument</strong> is the <code>DataType of</code> input array (attention: this is not a list of arrays). I.e. in this case, the function accepts <code>Float64</code> as argument.</p>
+</li>
+<li>
+<p>The <strong>third argument</strong> is the return type of the function. I.e. in this case, the function returns an <code>Float64</code>.</p>
+</li>
+<li>
+<p>The <strong>fourth argument</strong> is the volatility of the function. In short, this is used to determine if the function&rsquo;s performance can be optimized in some situations. In this case, the function is <code>Immutable</code> because it always returns the same value for the same input. A random number generator would be <code>Volatile</code> because it returns a different value for the same input.</p>
+</li>
+<li>
+<p>The <strong>fifth argument</strong> is the function implementation. This is the function that we defined above.</p>
+</li>
+</ul>
+<p>That gives us a <strong>WindowUDF</strong> that we can register with the <code>SessionContext</code>:</p>
+<pre><code class="language-rust">use datafusion::execution::context::SessionContext;
+
+let ctx = SessionContext::new();
+
+ctx.register_udwf(smooth_it);
+</code></pre>
+<p>For example, if we have a <a href="https://github.com/apache/datafusion/blob/main/datafusion/core/tests/data/cars.csv">cars.csv</a> whose contents like</p>
+<pre><code class="language-text">car,speed,time
+red,20.0,1996-04-12T12:05:03.000000000
+red,20.3,1996-04-12T12:05:04.000000000
+green,10.0,1996-04-12T12:05:03.000000000
+green,10.3,1996-04-12T12:05:04.000000000
+...
+</code></pre>
+<p>Then, we can query like below:</p>
+<pre><code class="language-rust">use datafusion::datasource::file_format::options::CsvReadOptions;
+
+#[tokio::main]
+async fn main() -&gt; Result&lt;()&gt; {
+
+    let ctx = SessionContext::new();
+
+    let smooth_it = create_udwf(
+        "smooth_it",
+        DataType::Float64,
+        Arc::new(DataType::Float64),
+        Volatility::Immutable,
+        Arc::new(make_partition_evaluator),
+    );
+    ctx.register_udwf(smooth_it);
+
+    // register csv table first
+    let csv_path = "../../datafusion/core/tests/data/cars.csv".to_string();
+    ctx.register_csv("cars", &amp;csv_path, CsvReadOptions::default().has_header(true)).await?;
+
+    // do query with smooth_it
+    let df = ctx
+        .sql(r#"
+            SELECT
+                car,
+                speed,
+                smooth_it(speed) OVER (PARTITION BY car ORDER BY time) as smooth_speed,
+                time
+            FROM cars
+            ORDER BY car
+        "#)
+        .await?;
+
+    // print the results
+    df.show().await?;
+    Ok(())
+}
+</code></pre>
+<p>The output will be like:</p>
+<pre><code class="language-sql">+-------+-------+--------------------+---------------------+
+| car   | speed | smooth_speed       | time                |
++-------+-------+--------------------+---------------------+
+| green | 10.0  | 10.0               | 1996-04-12T12:05:03 |
+| green | 10.3  | 10.15              | 1996-04-12T12:05:04 |
+| green | 10.4  | 10.233333333333334 | 1996-04-12T12:05:05 |
+| green | 10.5  | 10.3               | 1996-04-12T12:05:06 |
+| green | 11.0  | 10.440000000000001 | 1996-04-12T12:05:07 |
+| green | 12.0  | 10.700000000000001 | 1996-04-12T12:05:08 |
+| green | 14.0  | 11.171428571428573 | 1996-04-12T12:05:09 |
+| green | 15.0  | 11.65              | 1996-04-12T12:05:10 |
+| green | 15.1  | 12.033333333333333 | 1996-04-12T12:05:11 |
+| green | 15.2  | 12.35              | 1996-04-12T12:05:12 |
+| green | 8.0   | 11.954545454545455 | 1996-04-12T12:05:13 |
+| green | 2.0   | 11.125             | 1996-04-12T12:05:14 |
+| red   | 20.0  | 20.0               | 1996-04-12T12:05:03 |
+| red   | 20.3  | 20.15              | 1996-04-12T12:05:04 |
+...
+...
++-------+-------+--------------------+---------------------+
+</code></pre>
+<p>This gives you full flexibility to build <strong>domain-specific logic</strong> that plugs seamlessly into DataFusion&rsquo;s engine &mdash; all without sacrificing performance.</p>
+<h2>Final Thoughts and Recommendations</h2>
+<p>Window functions may be common in SQL, but <em>efficient and extensible</em> window functions in engines are rare. 
+While many databases support user defined scalar and user defined aggregate functions, user defined window functions are not as common and Datafusion making it easier for all .</p>
+<p>For anyone who is curious about <a href="https://datafusion.apache.org/">DataFusion</a> I highly recommend
+giving it a try. This post was designed to make it easier for new users to work with User Defined Window Functions by giving a few examples of how one might implement these.</p>
+<p>When it comes to designing UDFs, I strongly recommend reviewing the 
+<a href="https://datafusion.apache.org/library-user-guide/adding-udfs.html">Window functions</a> documentation.</p>
+<p>A heartfelt thank you to <a href="https://github.com/alamb">@alamb</a> and <a href="https://github.com/andygrove">@andygrove</a> for their invaluable reviews and thoughtful feedback&mdash;they&rsquo;ve been instrumental in shaping this post.</p>
+<p>The Apache Arrow and Apache DataFusion communities are vibrant, welcoming, and full of passionate developers building something truly powerful. If you&rsquo;re excited about high-performance analytics and want to be part of an open-source journey, I highly encourage you to explore the <a href="(https://datafusion.apache.org/)">official documentation</a> and dive into one of the many <a href="https://github.com/apache/datafusion/issues">open issues</a>. There&rsquo;s never been a better time to get involved!</p>
+        </div>
+      </div>
+    </div>    
+    <!-- footer -->
+    <div class="row">
+      <div class="large-12 medium-12 columns">
+        <p style="font-style: italic; font-size: 0.8rem; text-align: center;">
+          Copyright 2025, <a href="https://www.apache.org/">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a>.<br/>
+          Apache&reg; and the Apache feather logo are trademarks of The Apache Software Foundation.
+        </p>
+      </div>
+    </div>
+    <script src="/blog/js/bootstrap.bundle.min.js"></script>  </main>
+  </body>
+</html>
