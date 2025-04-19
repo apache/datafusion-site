@@ -1,8 +1,8 @@
 ---
 layout: post
 title: User defined Window Functions in DataFusion 
-date: 2025-04-17
-author: Aditya Singh Rathore , Andrew Lamb
+date: 2025-04-19
+author: Aditya Singh Rathore, Andrew Lamb
 categories: [tutorial]
 ---
 
