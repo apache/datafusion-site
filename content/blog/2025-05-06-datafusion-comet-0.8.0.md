@@ -30,7 +30,7 @@ The Apache DataFusion PMC is pleased to announce version 0.8.0 of the [Comet](ht
 Comet is an accelerator for Apache Spark that translates Spark physical plans to DataFusion physical plans for
 improved performance and efficiency without requiring any code changes.
 
-This release covers approximately SIX weeks of development work and is the result of merging 81 PRs from 11
+This release covers approximately six weeks of development work and is the result of merging 81 PRs from 11
 contributors. See the [change log] for more information.
 
 [change log]: https://github.com/apache/datafusion-comet/blob/main/dev/changelog/0.8.0.md
