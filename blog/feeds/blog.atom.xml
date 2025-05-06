@@ -1,5 +1,441 @@
 <?xml version="1.0" encoding="utf-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - blog</title><link href="https://datafusion.apache.org/blog/" rel="alternate"></link><link href="https://datafusion.apache.org/blog/feeds/blog.atom.xml" rel="self"></link><id>https://datafusion.apache.org/blog/</id><updated>2025-04-10T00:00:00+00:00</updated><subtitle></subtitle><entry><title>tpchgen-rs World’s fastest open source TPC-H data generator, written in Rust</title><link href="https://datafusion.apache.org/blog/2025/04/10/fastest-tpch-generator" rel="alternate"></link><published>2025-04-10T00:00:00+00:00</published><updated>2025-04-10T00:00:00+00:00</updated><author><name>Andrew Lamb, Achraf B, and Sean Smith</name></author><id>tag:datafusion.apache.org,2025-04-10:/blog/2025/04/10/fastest-tpch-generator</id><summary type="html">&lt;!--
+<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - blog</title><link href="https://datafusion.apache.org/blog/" rel="alternate"></link><link href="https://datafusion.apache.org/blog/feeds/blog.atom.xml" rel="self"></link><id>https://datafusion.apache.org/blog/</id><updated>2025-05-06T00:00:00+00:00</updated><subtitle></subtitle><entry><title>Apache DataFusion Comet 0.8.0 Release</title><link href="https://datafusion.apache.org/blog/2025/05/06/datafusion-comet-0.8.0" rel="alternate"></link><published>2025-05-06T00:00:00+00:00</published><updated>2025-05-06T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2025-05-06:/blog/2025/05/06/datafusion-comet-0.8.0</id><summary type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+&lt;p&gt;The Apache DataFusion PMC is pleased to announce version 0.8.0 of the &lt;a href="https://datafusion.apache.org/comet/"&gt;Comet&lt;/a&gt; subproject.&lt;/p&gt;
+&lt;p&gt;Comet is an accelerator for Apache Spark that translates Spark physical plans to DataFusion physical plans for
+improved performance and efficiency without requiring any code changes.&lt;/p&gt;
+&lt;p&gt;This release covers approximately SIX weeks of development …&lt;/p&gt;</summary><content type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+&lt;p&gt;The Apache DataFusion PMC is pleased to announce version 0.8.0 of the &lt;a href="https://datafusion.apache.org/comet/"&gt;Comet&lt;/a&gt; subproject.&lt;/p&gt;
+&lt;p&gt;Comet is an accelerator for Apache Spark that translates Spark physical plans to DataFusion physical plans for
+improved performance and efficiency without requiring any code changes.&lt;/p&gt;
+&lt;p&gt;This release covers approximately SIX weeks of development work and is the result of merging 81 PRs from 11
+contributors. See the &lt;a href="https://github.com/apache/datafusion-comet/blob/main/dev/changelog/0.8.0.md"&gt;change log&lt;/a&gt; for more information.&lt;/p&gt;
+&lt;h2&gt;Release Highlights&lt;/h2&gt;
+&lt;h3&gt;Performance &amp;amp; Stability&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Up to 4x speedup in jobs using &lt;code&gt;dropDuplicates&lt;/code&gt;, thanks to optimizations in the &lt;code&gt;first_value&lt;/code&gt; and &lt;code&gt;last_value&lt;/code&gt;
+  aggregate functions in DataFusion 47.0.0.&lt;/li&gt;
+&lt;li&gt;Introduction of a global Tokio runtime, which resolves potential deadlocks in certain multi-task scenarios.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;Native Shuffle Improvements&lt;/h2&gt;
+&lt;p&gt;Significant enhancements to the native shuffle mechanism include:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Lower memory usage through using &lt;code&gt;interleave_record_batches&lt;/code&gt; instead of using array builders.&lt;/li&gt;
+&lt;li&gt;Support for complex types in shuffle data (note: hash partition expressions still require primitive types).&lt;/li&gt;
+&lt;li&gt;Reclaimable shuffle files, reducing disk pressure.&lt;/li&gt;
+&lt;li&gt;Respects &lt;code&gt;spark.local.dir&lt;/code&gt; for temporary storage.&lt;/li&gt;
+&lt;li&gt;Per-task shuffle metrics are now available, providing better visibility into execution behavior.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;Experimental Support for DataFusion&amp;rsquo;s Parquet Scan&lt;/h2&gt;
+&lt;p&gt;It is now possible to configure Comet to use DataFusion&amp;rsquo;s Parquet reader instead of Comet&amp;rsquo;s current Parquet reader. This
+has the advantage of supporting complex types, and also has performance optimizations that are not present in Comet's
+existing reader.&lt;/p&gt;
+&lt;p&gt;This release continues with the ongoing improvements and bug fixes and supports more use cases, but there are still
+some known issues:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;There are schema coercion bugs for nested types containing INT96 columns, which can cause incorrect results.&lt;/li&gt;
+&lt;li&gt;There are compatibility issues when reading integer values that are larger than their type annotation, such as the
+  value 1024 being stored in a field annotated as int(8).&lt;/li&gt;
+&lt;li&gt;A small number of Spark SQL tests remain unsupported (&lt;a href="https://github.com/apache/datafusion-comet/issues/1545"&gt;#1545&lt;/a&gt;).&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;To enable DataFusion&amp;rsquo;s Parquet reader, either set &lt;code&gt;spark.comet.scan.impl=native_datafusion&lt;/code&gt; or set the environment
+variable &lt;code&gt;COMET_PARQUET_SCAN_IMPL=native_datafusion&lt;/code&gt;.&lt;/p&gt;
+&lt;h2&gt;Updates to Supported Spark Versions&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;Added support for Spark 3.5.5&lt;/li&gt;
+&lt;li&gt;Dropped support for Spark 3.3.x&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;Getting Involved&lt;/h2&gt;
+&lt;p&gt;The Comet project welcomes new contributors. We use the same &lt;a href="https://datafusion.apache.org/contributor-guide/communication.html#slack-and-discord"&gt;Slack and Discord&lt;/a&gt; channels as the main DataFusion
+project and have a weekly &lt;a href="https://docs.google.com/document/d/1NBpkIAuU7O9h8Br5CbFksDhX-L9TyO9wmGLPMe0Plc8/edit?usp=sharing"&gt;DataFusion video call&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;The easiest way to get involved is to test Comet with your current Spark jobs and file issues for any bugs or
+performance regressions that you find. See the &lt;a href="https://datafusion.apache.org/comet/user-guide/installation.html"&gt;Getting Started&lt;/a&gt; guide for instructions on downloading and installing
+Comet.&lt;/p&gt;
+&lt;p&gt;There are also many &lt;a href="https://github.com/apache/datafusion-comet/contribute"&gt;good first issues&lt;/a&gt; waiting for contributions.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>User defined Window Functions in DataFusion</title><link href="https://datafusion.apache.org/blog/2025/04/19/user-defined-window-functions" rel="alternate"></link><published>2025-04-19T00:00:00+00:00</published><updated>2025-04-19T00:00:00+00:00</updated><author><name>Aditya Singh Rathore, Andrew Lamb</name></author><id>tag:datafusion.apache.org,2025-04-19:/blog/2025/04/19/user-defined-window-functions</id><summary type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+&lt;p&gt;Window functions are a powerful feature in SQL, allowing for complex analytical computations over a subset of data. However, efficiently implementing them, especially sliding windows, can be quite challenging. With &lt;a href="https://datafusion.apache.org/"&gt;Apache DataFusion&lt;/a&gt;'s user-defined window functions, developers can easily take advantage of all the effort put into DataFusion's implementation.&lt;/p&gt;
+&lt;p&gt;In …&lt;/p&gt;</summary><content type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+&lt;p&gt;Window functions are a powerful feature in SQL, allowing for complex analytical computations over a subset of data. However, efficiently implementing them, especially sliding windows, can be quite challenging. With &lt;a href="https://datafusion.apache.org/"&gt;Apache DataFusion&lt;/a&gt;'s user-defined window functions, developers can easily take advantage of all the effort put into DataFusion's implementation.&lt;/p&gt;
+&lt;p&gt;In this post, we'll explore:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;What window functions are and why they matter&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Understanding sliding windows&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;The challenges of computing window aggregates efficiently&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;How to implement user-defined window functions in DataFusion&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;Understanding Window Functions in SQL&lt;/h2&gt;
+&lt;p&gt;Imagine you're analyzing sales data and want insights without losing the finer details. This is where &lt;strong&gt;&lt;a href="https://en.wikipedia.org/wiki/Window_function_(SQL)"&gt;window functions&lt;/a&gt;&lt;/strong&gt; come into play. Unlike &lt;strong&gt;GROUP BY&lt;/strong&gt;, which condenses data, window functions let you retain each row while performing calculations over a defined &lt;strong&gt;range&lt;/strong&gt; &amp;mdash;like having a moving lens over your dataset.&lt;/p&gt;
+&lt;p&gt;Picture a business tracking daily sales. They need a running total to understand cumulative revenue trends without collapsing individual transactions. SQL makes this easy:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT id, value, SUM(value) OVER (ORDER BY id) AS running_total
+FROM sales;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;pre&gt;&lt;code class="language-text"&gt;example:
++------------+--------+-------------------------------+
+|   Date     | Sales  | Rows Considered               |
++------------+--------+-------------------------------+
+| Jan 01     | 100    | [100]                         |
+| Jan 02     | 120    | [100, 120]                    |
+| Jan 03     | 130    | [100, 120, 130]               |
+| Jan 04     | 150    | [100, 120, 130, 150]          |
+| Jan 05     | 160    | [100, 120, 130, 150, 160]     |
+| Jan 06     | 180    | [100, 120, 130, 150, 160, 180]|
+| Jan 07     | 170    | [100, ..., 170] (7 days)      |
+| Jan 08     | 175    | [120, ..., 175]               |
++------------+--------+-------------------------------+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;strong&gt;Figure 1&lt;/strong&gt;: A row-by-row representation of how a 7-day moving average includes the previous 6 days and the current one.&lt;/p&gt;
+&lt;p&gt;This helps in analytical queries where we need cumulative sums, moving averages, or ranking without losing individual records.&lt;/p&gt;
+&lt;h2&gt;User Defined Window Functions&lt;/h2&gt;
+&lt;p&gt;DataFusion's &lt;a href="https://datafusion.apache.org/user-guide/sql/window_functions.html"&gt;Built-in window functions&lt;/a&gt; such as &lt;code&gt;first_value&lt;/code&gt;, &lt;code&gt;rank&lt;/code&gt; and &lt;code&gt;row_number&lt;/code&gt; serve many common use cases, but sometimes custom logic is needed&amp;mdash;for example:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Calculating moving averages with complex conditions (e.g. exponential averages, integrals, etc)&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Implementing a custom ranking strategy&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Tracking non-standard cumulative logic&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Thus, &lt;strong&gt;User-Defined Window Functions (UDWFs)&lt;/strong&gt; allow developers to define their own behavior while allowing DataFusion to handle the calculations of the  windows and grouping specified in the &lt;code&gt;OVER&lt;/code&gt; clause&lt;/p&gt;
+&lt;p&gt;Writing a user defined window function is slightly more complex than an aggregate function due
+to the variety of ways that window functions are called. I recommend reviewing the
+&lt;a href="https://datafusion.apache.org/library-user-guide/adding-udfs.html#registering-a-window-udf"&gt;online documentation&lt;/a&gt;
+for a description of which functions need to be implemented. &lt;/p&gt;
+&lt;h2&gt;Understanding Sliding Window&lt;/h2&gt;
+&lt;p&gt;Sliding windows define a &lt;strong&gt;moving range&lt;/strong&gt; of data over which aggregations are computed. Unlike simple cumulative functions, these windows are dynamically updated as new data arrives.&lt;/p&gt;
+&lt;p&gt;For instance, if we want a 7-day moving average of sales:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT date, sales, 
+       AVG(sales) OVER (ORDER BY date ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) AS moving_avg
+FROM sales;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Here, each row&amp;rsquo;s result is computed based on the last 7 days, making it computationally intensive as data grows.&lt;/p&gt;
+&lt;h2&gt;Why Computing Sliding Windows Is Hard&lt;/h2&gt;
+&lt;p&gt;Imagine you&amp;rsquo;re at a caf&amp;eacute;, and the barista is preparing coffee orders. If they made each cup from scratch without using pre-prepared ingredients, the process would be painfully slow. This is exactly the problem with na&amp;iuml;ve sliding window computations.&lt;/p&gt;
+&lt;p&gt;Computing sliding windows efficiently is tricky because:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;High Computation Costs:&lt;/strong&gt; Just like making coffee from scratch for each customer, recalculating aggregates for every row is expensive.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Data Shuffling:&lt;/strong&gt; In large distributed systems, data must often be shuffled between nodes, causing delays&amp;mdash;like passing orders between multiple baristas who don&amp;rsquo;t communicate efficiently.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;State Management:&lt;/strong&gt; Keeping track of past computations is like remembering previous orders without writing them down&amp;mdash;error-prone and inefficient.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Many traditional query engines struggle to optimize these computations effectively, leading to sluggish performance.&lt;/p&gt;
+&lt;h2&gt;How DataFusion Evaluates Window Functions Quickly&lt;/h2&gt;
+&lt;p&gt;In the world of big data, every millisecond counts. Imagine you&amp;rsquo;re analyzing stock market data, tracking sensor readings from millions of IoT devices, or crunching through massive customer logs&amp;mdash;speed matters. This is where &lt;a href="https://datafusion.apache.org/"&gt;DataFusion&lt;/a&gt; shines, making window function computations blazing fast. Let&amp;rsquo;s break down how it achieves this remarkable performance.&lt;/p&gt;
+&lt;p&gt;DataFusion implements the battle tested sort-based approach described in &lt;a href="https://www.vldb.org/pvldb/vol8/p1058-leis.pdf"&gt;this
+paper&lt;/a&gt; which is also used in systems such as Postgresql and Vertica. The input
+is first sorted by both the &lt;code&gt;PARTITION BY&lt;/code&gt; and &lt;code&gt;ORDER BY&lt;/code&gt; expressions and
+then the &lt;a href="https://github.com/apache/datafusion/blob/7ff6c7e68540c69b399a171654d00577e6f886bf/datafusion/physical-plan/src/windows/window_agg_exec.rs"&gt;WindowAggExec&lt;/a&gt; operator efficiently determines the partition boundaries and
+creates appropriate &lt;a href="https://docs.rs/datafusion/latest/datafusion/logical_expr/trait.PartitionEvaluator.html#background"&gt;PartitionEvaluator&lt;/a&gt; instances. &lt;/p&gt;
+&lt;p&gt;The sort-based approach is well understood, scales to large data sets, and
+leverages DataFusion's highly optimized sort implementation. DataFusion minimizes
+resorting by leveraging the sort order tracking and optimizations described in
+the &lt;a href="https://datafusion.apache.org/blog/2025/03/11/ordering-analysis/"&gt;Using Ordering for Better Plans blog&lt;/a&gt;. &lt;/p&gt;
+&lt;p&gt;For example, given the query such as the following to compute the starting,
+ending and average price for each stock:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT 
+  FIRST_VALUE(price) OVER (PARTITION BY date_bin('1 month', time) ORDER BY time DESC) AS start_price, 
+  FIRST_VALUE(price) OVER (PARTITION BY date_bin('1 month', time) ORDER BY time DESC) AS end_price,
+  AVG(price)         OVER (PARTITION BY date_bin('1 month', time))                    AS avg_price
+FROM quotes;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;If the input data is not sorted, DataFusion will first sort the data by the
+&lt;code&gt;date_bin&lt;/code&gt; and &lt;code&gt;time&lt;/code&gt; and then &lt;a href="https://github.com/apache/datafusion/blob/7ff6c7e68540c69b399a171654d00577e6f886bf/datafusion/physical-plan/src/windows/window_agg_exec.rs"&gt;WindowAggExec&lt;/a&gt; computes the partition boundaries
+and invokes the appropriate &lt;a href="https://docs.rs/datafusion/latest/datafusion/logical_expr/trait.PartitionEvaluator.html#background"&gt;PartitionEvaluator&lt;/a&gt; API methods depending on the window
+definition in the &lt;code&gt;OVER&lt;/code&gt; clause and the declared capabilities of the function.&lt;/p&gt;
+&lt;p&gt;For example, evaluating &lt;code&gt;window_func(val) OVER (PARTITION BY col)&lt;/code&gt;
+on the following data:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-text"&gt;col | val
+--- + ----
+ A  | 10
+ A  | 10
+ C  | 20
+ D  | 30
+ D  | 30
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Will instantiate three &lt;a href="https://docs.rs/datafusion/latest/datafusion/logical_expr/trait.PartitionEvaluator.html#background"&gt;PartitionEvaluator&lt;/a&gt;s, one each for the
+partitions defined by &lt;code&gt;col=A&lt;/code&gt;, &lt;code&gt;col=B&lt;/code&gt;, and &lt;code&gt;col=C&lt;/code&gt;.&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-text"&gt;col | val
+--- + ----
+ A  | 10     &amp;lt;--- partition 1
+ A  | 10
+
+col | val
+--- + ----
+ C  | 20     &amp;lt;--- partition 2
+
+col | val
+--- + ----
+ D  | 30     &amp;lt;--- partition 3
+ D  | 30
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;Creating your own Window Function&lt;/h3&gt;
+&lt;p&gt;DataFusion supports &lt;a href="https://datafusion.apache.org/library-user-guide/adding-udfs.html"&gt;user-defined window aggregates (UDWAs)&lt;/a&gt;, meaning you can bring your own window function logic using the exact same APIs and performance as the built in functions.&lt;/p&gt;
+&lt;p&gt;For example, we will declare a user defined window function that computes a moving average.&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;use datafusion::arrow::{array::{ArrayRef, Float64Array, AsArray}, datatypes::Float64Type};
+use datafusion::logical_expr::{PartitionEvaluator};
+use datafusion::common::ScalarValue;
+use datafusion::error::Result;
+/// This implements the lowest level evaluation for a window function
+///
+/// It handles calculating the value of the window function for each
+/// distinct values of `PARTITION BY`
+#[derive(Clone, Debug)]
+struct MyPartitionEvaluator {}
+
+impl MyPartitionEvaluator {
+    fn new() -&amp;gt; Self {
+        Self {}
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Different evaluation methods are called depending on the various
+settings of WindowUDF and the query. In the first example, we use the simplest and most
+general, &lt;code&gt;evaluate&lt;/code&gt; function. We will see how to use &lt;code&gt;PartitionEvaluator&lt;/code&gt; for the other more
+advanced uses later in the article.&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;impl PartitionEvaluator for MyPartitionEvaluator {
+    /// Tell DataFusion the window function varies based on the value
+    /// of the window frame.
+    fn uses_window_frame(&amp;amp;self) -&amp;gt; bool {
+        true
+    }
+
+    /// This function is called once per input row.
+    ///
+    /// `range`specifies which indexes of `values` should be
+    /// considered for the calculation.
+    ///
+    /// Note this is the SLOWEST, but simplest, way to evaluate a
+    /// window function. It is much faster to implement
+    /// evaluate_all or evaluate_all_with_rank, if possible
+    fn evaluate(
+        &amp;amp;mut self,
+        values: &amp;amp;[ArrayRef],
+        range: &amp;amp;std::ops::Range&amp;lt;usize&amp;gt;,
+    ) -&amp;gt; Result&amp;lt;ScalarValue&amp;gt; {
+        // Again, the input argument is an array of floating
+        // point numbers to calculate a moving average
+        let arr: &amp;amp;Float64Array = values[0].as_ref().as_primitive::&amp;lt;Float64Type&amp;gt;();
+
+        let range_len = range.end - range.start;
+
+        // our smoothing function will average all the values in the
+        let output = if range_len &amp;gt; 0 {
+            let sum: f64 = arr.values().iter().skip(range.start).take(range_len).sum();
+            Some(sum / range_len as f64)
+        } else {
+            None
+        };
+
+        Ok(ScalarValue::Float64(output))
+    }
+}
+
+/// Create a `PartitionEvaluator` to evaluate this function on a new
+/// partition.
+fn make_partition_evaluator() -&amp;gt; Result&amp;lt;Box&amp;lt;dyn PartitionEvaluator&amp;gt;&amp;gt; {
+    Ok(Box::new(MyPartitionEvaluator::new()))
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;Registering a Window UDF&lt;/h3&gt;
+&lt;p&gt;To register a Window UDF, you need to wrap the function implementation in a &lt;a href="https://docs.rs/datafusion/latest/datafusion/logical_expr/struct.WindowUDF.html"&gt;WindowUDF&lt;/a&gt; struct and then register it with the &lt;code&gt;SessionContext&lt;/code&gt;. DataFusion provides the &lt;a href="https://docs.rs/datafusion/latest/datafusion/logical_expr/fn.create_udwf.html"&gt;create_udwf&lt;/a&gt; helper functions to make this easier. There is a lower level API with more functionality but is more complex, that is documented in &lt;a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/advanced_udwf.rs"&gt;advanced_udwf.rs&lt;/a&gt;.&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;use datafusion::logical_expr::{Volatility, create_udwf};
+use datafusion::arrow::datatypes::DataType;
+use std::sync::Arc;
+
+// here is where we define the UDWF. We also declare its signature:
+let smooth_it = create_udwf(
+    "smooth_it",
+    DataType::Float64,
+    Arc::new(DataType::Float64),
+    Volatility::Immutable,
+    Arc::new(make_partition_evaluator),
+);
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;The &lt;a href="https://docs.rs/datafusion/latest/datafusion/logical_expr/fn.create_udwf.html"&gt;create_udwf&lt;/a&gt; functions take  five arguments:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;The &lt;strong&gt;first argument&lt;/strong&gt; is the name of the function. This is the name that will be used in SQL queries.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;The &lt;strong&gt;second argument&lt;/strong&gt; is the &lt;code&gt;DataType of&lt;/code&gt; input array (attention: this is not a list of arrays). I.e. in this case, the function accepts &lt;code&gt;Float64&lt;/code&gt; as argument.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;The &lt;strong&gt;third argument&lt;/strong&gt; is the return type of the function. I.e. in this case, the function returns an &lt;code&gt;Float64&lt;/code&gt;.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;The &lt;strong&gt;fourth argument&lt;/strong&gt; is the volatility of the function. In short, this is used to determine if the function&amp;rsquo;s performance can be optimized in some situations. In this case, the function is &lt;code&gt;Immutable&lt;/code&gt; because it always returns the same value for the same input. A random number generator would be &lt;code&gt;Volatile&lt;/code&gt; because it returns a different value for the same input.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;The &lt;strong&gt;fifth argument&lt;/strong&gt; is the function implementation. This is the function that we defined above.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;That gives us a &lt;strong&gt;WindowUDF&lt;/strong&gt; that we can register with the &lt;code&gt;SessionContext&lt;/code&gt;:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;use datafusion::execution::context::SessionContext;
+
+let ctx = SessionContext::new();
+
+ctx.register_udwf(smooth_it);
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;For example, if we have a &lt;a href="https://github.com/apache/datafusion/blob/main/datafusion/core/tests/data/cars.csv"&gt;cars.csv&lt;/a&gt; whose contents like&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-text"&gt;car,speed,time
+red,20.0,1996-04-12T12:05:03.000000000
+red,20.3,1996-04-12T12:05:04.000000000
+green,10.0,1996-04-12T12:05:03.000000000
+green,10.3,1996-04-12T12:05:04.000000000
+...
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Then, we can query like below:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;use datafusion::datasource::file_format::options::CsvReadOptions;
+
+#[tokio::main]
+async fn main() -&amp;gt; Result&amp;lt;()&amp;gt; {
+
+    let ctx = SessionContext::new();
+
+    let smooth_it = create_udwf(
+        "smooth_it",
+        DataType::Float64,
+        Arc::new(DataType::Float64),
+        Volatility::Immutable,
+        Arc::new(make_partition_evaluator),
+    );
+    ctx.register_udwf(smooth_it);
+
+    // register csv table first
+    let csv_path = "../../datafusion/core/tests/data/cars.csv".to_string();
+    ctx.register_csv("cars", &amp;amp;csv_path, CsvReadOptions::default().has_header(true)).await?;
+
+    // do query with smooth_it
+    let df = ctx
+        .sql(r#"
+            SELECT
+                car,
+                speed,
+                smooth_it(speed) OVER (PARTITION BY car ORDER BY time) as smooth_speed,
+                time
+            FROM cars
+            ORDER BY car
+        "#)
+        .await?;
+
+    // print the results
+    df.show().await?;
+    Ok(())
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;The output will be like:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;+-------+-------+--------------------+---------------------+
+| car   | speed | smooth_speed       | time                |
++-------+-------+--------------------+---------------------+
+| green | 10.0  | 10.0               | 1996-04-12T12:05:03 |
+| green | 10.3  | 10.15              | 1996-04-12T12:05:04 |
+| green | 10.4  | 10.233333333333334 | 1996-04-12T12:05:05 |
+| green | 10.5  | 10.3               | 1996-04-12T12:05:06 |
+| green | 11.0  | 10.440000000000001 | 1996-04-12T12:05:07 |
+| green | 12.0  | 10.700000000000001 | 1996-04-12T12:05:08 |
+| green | 14.0  | 11.171428571428573 | 1996-04-12T12:05:09 |
+| green | 15.0  | 11.65              | 1996-04-12T12:05:10 |
+| green | 15.1  | 12.033333333333333 | 1996-04-12T12:05:11 |
+| green | 15.2  | 12.35              | 1996-04-12T12:05:12 |
+| green | 8.0   | 11.954545454545455 | 1996-04-12T12:05:13 |
+| green | 2.0   | 11.125             | 1996-04-12T12:05:14 |
+| red   | 20.0  | 20.0               | 1996-04-12T12:05:03 |
+| red   | 20.3  | 20.15              | 1996-04-12T12:05:04 |
+...
+...
++-------+-------+--------------------+---------------------+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;This gives you full flexibility to build &lt;strong&gt;domain-specific logic&lt;/strong&gt; that plugs seamlessly into DataFusion&amp;rsquo;s engine &amp;mdash; all without sacrificing performance.&lt;/p&gt;
+&lt;h2&gt;Final Thoughts and Recommendations&lt;/h2&gt;
+&lt;p&gt;Window functions may be common in SQL, but &lt;em&gt;efficient and extensible&lt;/em&gt; window functions in engines are rare. 
+While many databases support user defined scalar and user defined aggregate functions, user defined window functions are not as common and Datafusion making it easier for all .&lt;/p&gt;
+&lt;p&gt;For anyone who is curious about &lt;a href="https://datafusion.apache.org/"&gt;DataFusion&lt;/a&gt; I highly recommend
+giving it a try. This post was designed to make it easier for new users to work with User Defined Window Functions by giving a few examples of how one might implement these.&lt;/p&gt;
+&lt;p&gt;When it comes to designing UDFs, I strongly recommend reviewing the 
+&lt;a href="https://datafusion.apache.org/library-user-guide/adding-udfs.html"&gt;Window functions&lt;/a&gt; documentation.&lt;/p&gt;
+&lt;p&gt;A heartfelt thank you to &lt;a href="https://github.com/alamb"&gt;@alamb&lt;/a&gt; and &lt;a href="https://github.com/andygrove"&gt;@andygrove&lt;/a&gt; for their invaluable reviews and thoughtful feedback&amp;mdash;they&amp;rsquo;ve been instrumental in shaping this post.&lt;/p&gt;
+&lt;p&gt;The Apache Arrow and Apache DataFusion communities are vibrant, welcoming, and full of passionate developers building something truly powerful. If you&amp;rsquo;re excited about high-performance analytics and want to be part of an open-source journey, I highly encourage you to explore the &lt;a href="(https://datafusion.apache.org/)"&gt;official documentation&lt;/a&gt; and dive into one of the many &lt;a href="https://github.com/apache/datafusion/issues"&gt;open issues&lt;/a&gt;. There&amp;rsquo;s never been a better time to get involved!&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>tpchgen-rs World’s fastest open source TPC-H data generator, written in Rust</title><link href="https://datafusion.apache.org/blog/2025/04/10/fastest-tpch-generator" rel="alternate"></link><published>2025-04-10T00:00:00+00:00</published><updated>2025-04-10T00:00:00+00:00</updated><author><name>Andrew Lamb, Achraf B, and Sean Smith</name></author><id>tag:datafusion.apache.org,2025-04-10:/blog/2025/04/10/fastest-tpch-generator</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -60,7 +496,7 @@ faster than any other implementation we know of.&lt;/p&gt;
 &lt;p&gt;It is now possible to create the TPC-H SF=100 dataset in 72.23 seconds (1.4 GB/s
 😎) on a Macbook Air M3 with 16GB of memory, compared to the classic &lt;code&gt;dbgen&lt;/code&gt;
 which takes 30 minutes&lt;sup&gt;1&lt;/sup&gt; (0.05GB/sec). On the same machine, it takes less than
-2 minutes to create all 3.6 GB of SF=100 in &lt;a href="https://parquet.apache.org/"&gt;Apache Parquet&lt;/a&gt; format, which takes 44 minutes using &lt;a href="https://duckdb.org"&gt;DuckDB&lt;/a&gt;.
+2 minutes to create all 36 GB of SF=100 in &lt;a href="https://parquet.apache.org/"&gt;Apache Parquet&lt;/a&gt; format, which takes 44 minutes using &lt;a href="https://duckdb.org"&gt;DuckDB&lt;/a&gt;.
 It is finally convenient and efficient to run TPC-H queries locally when testing
 analytical engines such as DataFusion.&lt;/p&gt;
 &lt;p&gt;&lt;img alt="Time to create TPC-H parquet dataset for Scale Factor  1, 10, 100 and 1000" class="img-responsive" src="/blog/images/fastest-tpch-generator/parquet-performance.png" width="80%"/&gt;&lt;/p&gt;
