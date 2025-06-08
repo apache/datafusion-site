@@ -1,5 +1,88 @@
 <?xml version="1.0" encoding="utf-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - blog</title><link href="https://datafusion.apache.org/blog/" rel="alternate"></link><link href="https://datafusion.apache.org/blog/feeds/blog.atom.xml" rel="self"></link><id>https://datafusion.apache.org/blog/</id><updated>2025-05-06T00:00:00+00:00</updated><subtitle></subtitle><entry><title>Apache DataFusion Comet 0.8.0 Release</title><link href="https://datafusion.apache.org/blog/2025/05/06/datafusion-comet-0.8.0" rel="alternate"></link><published>2025-05-06T00:00:00+00:00</published><updated>2025-05-06T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2025-05-06:/blog/2025/05/06/datafusion-comet-0.8.0</id><summary type="html">&lt;!--
+<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - blog</title><link href="https://datafusion.apache.org/blog/" rel="alternate"></link><link href="https://datafusion.apache.org/blog/feeds/blog.atom.xml" rel="self"></link><id>https://datafusion.apache.org/blog/</id><updated>2025-06-09T00:00:00+00:00</updated><subtitle></subtitle><entry><title>Metadata handling in user defined functions</title><link href="https://datafusion.apache.org/blog/2025/06/09/metadata-handling" rel="alternate"></link><published>2025-06-09T00:00:00+00:00</published><updated>2025-06-09T00:00:00+00:00</updated><author><name>Tim Saucer</name></author><id>tag:datafusion.apache.org,2025-06-09:/blog/2025/06/09/metadata-handling</id><summary type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}x
+--&gt;
+&lt;p&gt;&lt;a href="https://github.com/apache/datafusion/tree/48.0.0-rc3"&gt;DataFusion 48.0.0&lt;/a&gt; introduced a change in the interface for writing custom functions
+which enables a variety of interesting improvements. Now users can access additional
+data about the input columns to functions, such as their nullability and metadata. This
+enables processing of extension types as well as a wide …&lt;/p&gt;</summary><content type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}x
+--&gt;
+&lt;p&gt;&lt;a href="https://github.com/apache/datafusion/tree/48.0.0-rc3"&gt;DataFusion 48.0.0&lt;/a&gt; introduced a change in the interface for writing custom functions
+which enables a variety of interesting improvements. Now users can access additional
+data about the input columns to functions, such as their nullability and metadata. This
+enables processing of extension types as well as a wide variety of other use cases.&lt;/p&gt;
+&lt;p&gt;TODO: UPDATE LINKS&lt;/p&gt;
+&lt;h1&gt;Why metadata handling is important&lt;/h1&gt;
+&lt;p&gt;Data in Arrow record batches carry a &lt;code&gt;Schema&lt;/code&gt; in addition to the Arrow arrays. Each
+&lt;a href="https://arrow.apache.org/docs/format/Glossary.html#term-field"&gt;Field&lt;/a&gt; in this &lt;code&gt;Schema&lt;/code&gt; contains a name, data type, nullability, and metadata. The
+metadata is specified as a map of key-value pairs of strings.  In the new
+implementation, during processing of all user defined functions we pass the input
+field information.&lt;/p&gt;
+&lt;p&gt;It is often desirable to write a generic function for reuse. With the prior version of
+user defined functions, we only had access to the &lt;code&gt;DataType&lt;/code&gt; of the input columns. This
+works well for some features that only rely on the types of data. Other use cases may
+need additional information that describes the data.&lt;/p&gt;
+&lt;p&gt;For example, suppose I write a function that computes the force of gravity on an object
+based on it's mass. The general equation is &lt;code&gt;F = m * g&lt;/code&gt; where &lt;code&gt;g = 9.8 m/s&lt;/code&gt;. Suppose
+our documentation for the function specifies the output will be in Newtons. This is only
+valid if the input unit is in kilograms. With our metadata enhancement, we could update
+this function to now evaluate the input units, perform any kind of required
+transformation, and give consistent output every time. We could also have the function
+return an error if an invalid input was given, such as providing an input where the
+metadata says the units are in &lt;code&gt;meters&lt;/code&gt; instead of a unit of mass.&lt;/p&gt;
+&lt;p&gt;One common application of metadata handling is understanding encoding of a blob of data.
+Suppose you have a column that contains image data. You could use metadata to specify
+the encoding of the image data so you could use the appropriate decoder.&lt;/p&gt;
+&lt;h1&gt;How to use metadata in user defined functions&lt;/h1&gt;
+&lt;p&gt;Using input metadata occurs in two different phases of a user defined function. Both during
+the planning phase and execution, we have access to these field information. This allows
+the user to determine the appropriate output fields during planning and to validate the
+input. For other use cases, it may only be necessary to access these fields during execution.
+We leave this open to the user.&lt;/p&gt;
+&lt;p&gt;For all types of user defined functions we now evaluate the output &lt;a href="https://arrow.apache.org/docs/format/Glossary.html#term-field"&gt;Field&lt;/a&gt; as well. You can
+specify this to create your own metadata from your functions or to pass through metadata from
+one or more of your inputs.&lt;/p&gt;
+&lt;p&gt;In addition to metadata the input field information carries nullability. With these you can
+create more expressive nullability of your output data instead of having a single output.
+For example, you could write a function to convert a string to uppercase. If we know the
+input field is non-nullable, then we can set the output field to non-nullable as well.&lt;/p&gt;
+&lt;h1&gt;Extension types&lt;/h1&gt;
+&lt;p&gt;TODO&lt;/p&gt;
+&lt;h1&gt;Working with literals&lt;/h1&gt;
+&lt;p&gt;TODO&lt;/p&gt;
+&lt;h1&gt;Thanks to our sponsor&lt;/h1&gt;
+&lt;p&gt;We would like to thank &lt;a href="https://rerun.io"&gt;Rerun.io&lt;/a&gt; for sponsoring the development of this work. &lt;a href="https://rerun.io"&gt;Rerun.io&lt;/a&gt;
+is building a data visualization system for Physical AI and uses metadata to specify 
+context about columns in Arrow record batches.&lt;/p&gt;
+&lt;h1&gt;Conclusion&lt;/h1&gt;
+&lt;p&gt;TODO&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Apache DataFusion Comet 0.8.0 Release</title><link href="https://datafusion.apache.org/blog/2025/05/06/datafusion-comet-0.8.0" rel="alternate"></link><published>2025-05-06T00:00:00+00:00</published><updated>2025-05-06T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2025-05-06:/blog/2025/05/06/datafusion-comet-0.8.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -20,7 +103,7 @@ limitations under the License.
 &lt;p&gt;The Apache DataFusion PMC is pleased to announce version 0.8.0 of the &lt;a href="https://datafusion.apache.org/comet/"&gt;Comet&lt;/a&gt; subproject.&lt;/p&gt;
 &lt;p&gt;Comet is an accelerator for Apache Spark that translates Spark physical plans to DataFusion physical plans for
 improved performance and efficiency without requiring any code changes.&lt;/p&gt;
-&lt;p&gt;This release covers approximately SIX weeks of development …&lt;/p&gt;</summary><content type="html">&lt;!--
+&lt;p&gt;This release covers approximately six weeks of development …&lt;/p&gt;</summary><content type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -41,7 +124,7 @@ limitations under the License.
 &lt;p&gt;The Apache DataFusion PMC is pleased to announce version 0.8.0 of the &lt;a href="https://datafusion.apache.org/comet/"&gt;Comet&lt;/a&gt; subproject.&lt;/p&gt;
 &lt;p&gt;Comet is an accelerator for Apache Spark that translates Spark physical plans to DataFusion physical plans for
 improved performance and efficiency without requiring any code changes.&lt;/p&gt;
-&lt;p&gt;This release covers approximately SIX weeks of development work and is the result of merging 81 PRs from 11
+&lt;p&gt;This release covers approximately six weeks of development work and is the result of merging 81 PRs from 11
 contributors. See the &lt;a href="https://github.com/apache/datafusion-comet/blob/main/dev/changelog/0.8.0.md"&gt;change log&lt;/a&gt; for more information.&lt;/p&gt;
 &lt;h2&gt;Release Highlights&lt;/h2&gt;
 &lt;h3&gt;Performance &amp;amp; Stability&lt;/h3&gt;
