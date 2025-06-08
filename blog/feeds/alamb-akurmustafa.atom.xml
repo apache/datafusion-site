@@ -1,0 +1,596 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - alamb, akurmustafa</title><link href="https://datafusion.apache.org/blog/" rel="alternate"></link><link href="https://datafusion.apache.org/blog/feeds/alamb-akurmustafa.atom.xml" rel="self"></link><id>https://datafusion.apache.org/blog/</id><updated>2025-06-15T00:00:00+00:00</updated><subtitle></subtitle><entry><title>Optimizing SQL (and DataFrames) in DataFusion, Part 1: Query Optimization Overview</title><link href="https://datafusion.apache.org/blog/2025/06/15/optimizing-sql-dataframes-part-one" rel="alternate"></link><published>2025-06-15T00:00:00+00:00</published><updated>2025-06-15T00:00:00+00:00</updated><author><name>alamb, akurmustafa</name></author><id>tag:datafusion.apache.org,2025-06-15:/blog/2025/06/15/optimizing-sql-dataframes-part-one</id><summary type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+&lt;p&gt;&lt;em&gt;Note: this blog was originally published &lt;a href="https://www.influxdata.com/blog/optimizing-sql-dataframes-part-one/"&gt;on the InfluxData blog&lt;/a&gt;&lt;/em&gt;&lt;/p&gt;
+&lt;h2&gt;Introduction&lt;/h2&gt;
+&lt;p&gt;Sometimes Query Optimizers are seen as a sort of black magic, &lt;a href="https://15799.courses.cs.cmu.edu/spring2025/"&gt;&amp;ldquo;the most
+challenging problem in computer
+science,&amp;rdquo;&lt;/a&gt; according to Father
+Pavlo, or some behind-the-scenes player. We believe this perception is because:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;One must implement the rest of a …&lt;/p&gt;&lt;/li&gt;&lt;/ol&gt;</summary><content type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+&lt;p&gt;&lt;em&gt;Note: this blog was originally published &lt;a href="https://www.influxdata.com/blog/optimizing-sql-dataframes-part-one/"&gt;on the InfluxData blog&lt;/a&gt;&lt;/em&gt;&lt;/p&gt;
+&lt;h2&gt;Introduction&lt;/h2&gt;
+&lt;p&gt;Sometimes Query Optimizers are seen as a sort of black magic, &lt;a href="https://15799.courses.cs.cmu.edu/spring2025/"&gt;&amp;ldquo;the most
+challenging problem in computer
+science,&amp;rdquo;&lt;/a&gt; according to Father
+Pavlo, or some behind-the-scenes player. We believe this perception is because:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;One must implement the rest of a database system (data storage, transactions,
+   SQL parser, expression evaluation, plan execution, etc.) &lt;strong&gt;before&lt;/strong&gt; the
+   optimizer becomes critical[^5].&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Some parts of the optimizer are tightly tied to the rest of the system (e.g.,
+   storage or indexes), so many classic optimizers are described with
+   system-specific terminology.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Some optimizer tasks, such as access path selection and join order are known
+   challenges and not yet solved (practically)&amp;mdash;maybe they really do require
+   black magic 🤔.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;However, Query Optimizers are no more complicated in theory or practice than other parts of a database system, as we will argue in a series of posts:&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Part 1: (this post)&lt;/strong&gt;:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Review what a Query Optimizer is, what it does, and why you need one for SQL and DataFrames.&lt;/li&gt;
+&lt;li&gt;Describe how industrial Query Optimizers are structured and standard optimization classes.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;strong&gt;Part 2:&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Describe the optimization categories with examples and pointers to implementations.&lt;/li&gt;
+&lt;li&gt;Describe &lt;a href="https://datafusion.apache.org/"&gt;Apache DataFusion&lt;/a&gt;&amp;rsquo;s rationale and approach to query optimization, specifically for access path and join ordering.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;After reading these blogs, we hope people will use DataFusion to:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Build their own system specific optimizers.&lt;/li&gt;
+&lt;li&gt;Perform practical academic research on optimization (especially researchers
+   working on new optimizations / join ordering&amp;mdash;looking at you &lt;a href="https://15799.courses.cs.cmu.edu/spring2025/"&gt;CMU
+   15-799&lt;/a&gt;, next year).&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2&gt;Query Optimizer Background&lt;/h2&gt;
+&lt;p&gt;The key pitch for querying databases, and likely the key to the longevity of SQL
+(despite people&amp;rsquo;s love/hate relationship&amp;mdash;see &lt;a href="https://db.cs.cmu.edu/seminar2025/"&gt;SQL or Death? Seminar Series &amp;ndash;
+Spring 2025&lt;/a&gt;), is that it disconnects the
+&lt;code&gt;WHAT&lt;/code&gt; you want to compute from the &lt;code&gt;HOW&lt;/code&gt; to do it. SQL is a &lt;em&gt;declarative&lt;/em&gt;
+language&amp;mdash;it describes what answers are desired rather than an &lt;em&gt;imperative&lt;/em&gt;
+language such as Python, where you describe how to do the computation as shown
+in Figure 1.&lt;/p&gt;
+&lt;p&gt;&lt;img alt="Fig 1: Query Execution." class="img-responsive" src="/blog/images/optimizing-sql-dataframes/query-execution.png" width="80%"/&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Figure 1&lt;/strong&gt;: Query Execution: Users describe the answer they want using either
+a DataFrame or SQL. The query planner or DataFrame API translates that
+description into an &lt;em&gt;Initial Plan&lt;/em&gt;, which is correct but slow. The Query
+Optimizer then rewrites the initial plan to an &lt;em&gt;Optimized Plan&lt;/em&gt;, which computes
+the same results but faster and more efficiently. Finally, the Execution Engine
+executes the optimized plan producing results.&lt;/p&gt;
+&lt;h2&gt;SQL, DataFrames, LogicalPlan Equivalence&lt;/h2&gt;
+&lt;p&gt;Given their name, it is not surprising that Query Optimizers can improve the
+performance of SQL queries. However, it is under-appreciated that this also
+applies to DataFrame style APIs.&lt;/p&gt;
+&lt;p&gt;Classic DataFrame systems such as &lt;a href="https://pandas.pydata.org/"&gt;pandas&lt;/a&gt; and &lt;a href="https://pola.rs/)"&gt;Polars&lt;/a&gt; (by default) execute
+eagerly and thus have limited opportunities for optimization. However, more
+modern APIs such as [Polar's lazy API], &lt;a href="https://spark.apache.org/docs/latest/sql-programming-guide.html#datasets-and-dataframes),"&gt;Apache Spark's DataFrame&lt;/a&gt;. and
+&lt;a href="https://datafusion.apache.org/user-guide/dataframe.html"&gt;DataFusion's DataFrame&lt;/a&gt; are much faster as they use the design shown in Figure
+1 and apply many query optimization techniques.&lt;/p&gt;
+&lt;h2&gt;Example of Query Optimizer&lt;/h2&gt;
+&lt;p&gt;This section motivates the value of a Query Optimizer with an example. Let&amp;rsquo;s say
+you have some observations of animal behavior, as illustrated in Table 1.&lt;/p&gt;
+&lt;p&gt;&lt;img alt="Table 1: Observational Data." class="img-responsive" src="/blog/images/optimizing-sql-dataframes/table1.png" width="75%"/&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Table 1&lt;/strong&gt;: Example observational data.&lt;/p&gt;
+&lt;p&gt;If the user wants to know the average population for some species in the last
+month, a user can write a SQL query or a DataFrame such as the following:&lt;/p&gt;
+&lt;p&gt;SQL:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT location, AVG(population)
+FROM observations
+WHERE species = &amp;lsquo;contrarian spider&amp;rsquo; AND 
+  observation_time &amp;gt;= now() - interval '1 month'
+GROUP BY location
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;DataFrame:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;df.scan("observations")
+  .filter(col("species").eq("contrarian spider"))
+  .filter(col("observation_time").ge(now()).sub(interval('1 month')))
+  .agg(vec![col(location)], vec![avg(col("population")])
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Within DataFusion, both the SQL and DataFrame are translated into the same
+[&lt;code&gt;LogicalPlan&lt;/code&gt;] , a &amp;ldquo;tree of relational operators.&amp;rdquo; This is a fancy way of
+saying data flow graphs where the edges represent tabular data (rows + columns)
+and the nodes represent a transformation (see &lt;a href="https://youtu.be/EzZTLiSJnhY"&gt;this DataFusion overview video&lt;/a&gt;
+for more details). The initial &lt;code&gt;LogicalPlan&lt;/code&gt; for the queries above is shown in
+Figure 2.&lt;/p&gt;
+&lt;p&gt;&lt;img alt="Fig 2: Initial Logical Plan." class="img-responsive" src="/blog/images/optimizing-sql-dataframes/initial-logical-plan.png" width="72%"/&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Figure 2&lt;/strong&gt;: Example initial &lt;code&gt;LogicalPlan&lt;/code&gt; for SQL and DataFrame query. The
+plan is read from bottom to top, computing the results in each step.&lt;/p&gt;
+&lt;p&gt;The optimizer's job is to take this query plan and rewrite it into an alternate
+plan that computes the same results but faster, such as the one shown in Figure
+3.&lt;/p&gt;
+&lt;p&gt;&lt;img alt="Fig 3: Optimized Logical Plan." class="img-responsive" src="/blog/images/optimizing-sql-dataframes/optimized-logical-plan.png" width="80%"/&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Figure 3&lt;/strong&gt;: An example optimized plan that computes the same result as the
+plan in Figure 2 more efficiently. The diagram highlights where the optimizer
+has applied &lt;em&gt;Projection Pushdown&lt;/em&gt;, &lt;em&gt;Filter Pushdown&lt;/em&gt;, and &lt;em&gt;Constant Evaluation&lt;/em&gt;.
+Note that this is a simplified example for explanatory purposes, and actual
+optimizers such as the one in DataFusion perform additional tasks such as
+choosing specific aggregation algorithms.&lt;/p&gt;
+&lt;h2&gt;Query Optimizer Implementation&lt;/h2&gt;
+&lt;p&gt;Industrial optimizers, such as 
+DataFusion&amp;rsquo;s (&lt;a href="https://github.com/apache/datafusion/tree/334d6ec50f36659403c96e1bffef4228be7c458e/datafusion/optimizer/src"&gt;source&lt;/a&gt;),
+ClickHouse (&lt;a href="https://github.com/ClickHouse/ClickHouse/tree/master/src/Analyzer/Passes"&gt;source&lt;/a&gt;,&lt;a href="https://github.com/ClickHouse/ClickHouse/tree/master/src/Processors/QueryPlan/Optimizations"&gt;source&lt;/a&gt;),
+DuckDB (&lt;a href="https://github.com/duckdb/duckdb/tree/4afa85c6a4dacc39524d1649fd8eb8c19c28ad14/src/optimizer"&gt;source&lt;/a&gt;),
+and Apache Spark (&lt;a href="https://github.com/apache/spark/tree/7bc8e99cde424c59b98fe915e3fdaaa30beadb76/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/optimizer"&gt;source&lt;/a&gt;),
+are implemented as a series of passes or rules that rewrite a query plan. The
+overall optimizer is composed of a sequence of these rules,[^6] as shown in
+Figure 4. The specific order of the rules also often matters, but we will not
+discuss this detail in this post.&lt;/p&gt;
+&lt;p&gt;A multi-pass design is standard because it helps:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Understand, implement, and test each pass in isolation&lt;/li&gt;
+&lt;li&gt;Easily extend the optimizer by adding new passes&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img alt="Fig 4: Query Optimizer Passes." class="img-responsive" src="/blog/images/optimizing-sql-dataframes/optimizer-passes.png" width="80%"/&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Figure 4&lt;/strong&gt;: Query Optimizers are implemented as a series of rules that each
+rewrite the query plan. Each rule&amp;rsquo;s algorithm is expressed as a transformation
+of a previous plan.&lt;/p&gt;
+&lt;p&gt;There are three major classes of optimizations in industrial optimizers:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Always Optimizations&lt;/strong&gt;: These are always good to do and thus are always
+   applied. This class of optimization includes expression simplification,
+   predicate pushdown, and limit pushdown. These optimizations are typically
+   simple in theory, though they require nontrivial amounts of code and tests to
+   implement in practice.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Engine Specific Optimizations: &lt;/strong&gt;These optimizations take advantage of
+   specific engine features, such as how expressions are evaluated or what
+   particular hash or join implementations are available.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Access Path and Join Order Selection&lt;/strong&gt;: These passes choose one access
+   method per table and a join order for execution, typically using heuristics
+   and a cost model to make tradeoffs between the options. Databases often have
+   multiple ways to access the data (e.g., index scan or full-table scan), as
+   well as many potential orders to combine (join) multiple tables. These
+   methods compute the same result but can vary drastically in performance.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;This brings us to the end of Part 1. In Part 2, we will explain these classes of
+optimizations in more detail and provide examples of how they are implemented in
+DataFusion and other systems.&lt;/p&gt;
+&lt;h1&gt;About the Authors&lt;/h1&gt;
+&lt;p&gt;&lt;a href="https://www.linkedin.com/in/andrewalamb/"&gt;Andrew Lamb&lt;/a&gt; is a Staff Engineer at
+&lt;a href="https://www.influxdata.com/"&gt;InfluxData&lt;/a&gt; and an &lt;a href="https://datafusion.apache.org/"&gt;Apache
+DataFusion&lt;/a&gt; PMC member. A Database Optimizer
+connoisseur, he worked on the &lt;a href="https://vldb.org/pvldb/vol5/p1790_andrewlamb_vldb2012.pdf"&gt;Vertica Analytic
+Database&lt;/a&gt; Query
+Optimizer for six years, has several granted US patents related to query
+optimization[^1], co-authored several papers[^2]  about the topic (including in
+VLDB 2024&lt;a href="[https://www.vldb.org/pvldb/vol17/p1350-justen.pdf](https://www.vldb.org/pvldb/vol17/p1350-justen.pdf)"&gt;^3&lt;/a&gt;), and spent several weeks&lt;a href="[https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/24101]" title="https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/24101) , [https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/22111](https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/22111) [https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/12321](https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/12321"&gt;^4&lt;/a&gt; deeply geeking out about this topic
+with other experts (thank you Dagstuhl).&lt;/p&gt;
+&lt;p&gt;&lt;a href="https://www.linkedin.com/in/akurmustafa/"&gt;Mustafa Akur&lt;/a&gt; is a PhD Student at
+&lt;a href="https://www.ohsu.edu/"&gt;OHSU&lt;/a&gt; Knight Cancer Institute and an &lt;a href="https://datafusion.apache.org/"&gt;Apache
+DataFusion&lt;/a&gt; PMC member. He was previously a
+Software Developer at &lt;a href="https://www.synnada.ai/"&gt;Synnada&lt;/a&gt; where he contributed
+significant features to the DataFusion optimizer, including many &lt;a href="https://datafusion.apache.org/blog/2025/03/11/ordering-analysis/"&gt;sort-based
+optimizations&lt;/a&gt;.&lt;/p&gt;
+&lt;h2&gt;Notes&lt;/h2&gt;
+&lt;p&gt;[^1]: &lt;em&gt;Modular Query Optimizer, US 8,312,027 &amp;middot; Issued Nov 13, 2012&lt;/em&gt;, Query Optimizer with schema conversion US 8,086,598 &amp;middot; Issued Dec 27, 2011&lt;/p&gt;
+&lt;p&gt;[^2]: &lt;a href="https://www.researchgate.net/publication/269306314_The_Vertica_Query_Optimizer_The_case_for_specialized_query_optimizers"&gt;The Vertica Query Optimizer: The case for specialized Query Optimizers&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;[^5]: And thus in academic classes, by the time you get around to an optimizer the semester is over and everyone is ready for the semester to be done. Once industrial systems mature to the point where the optimizer is a bottleneck, the shiny new-ness of the&lt;a href="https://en.wikipedia.org/wiki/Gartner_hype_cycle"&gt; hype cycle&lt;/a&gt; has worn off and it is likely in the trough of disappointment.  &lt;/p&gt;
+&lt;p&gt;[^6]: Often systems will classify these passes into different categories, but I am simplifying here&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Optimizing SQL (and DataFrames) in DataFusion, Part 2: Optimizers in Apache DataFusion</title><link href="https://datafusion.apache.org/blog/2025/06/15/optimizing-sql-dataframes-part-two" rel="alternate"></link><published>2025-06-15T00:00:00+00:00</published><updated>2025-06-15T00:00:00+00:00</updated><author><name>alamb, akurmustafa</name></author><id>tag:datafusion.apache.org,2025-06-15:/blog/2025/06/15/optimizing-sql-dataframes-part-two</id><summary type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+&lt;p&gt;&lt;em&gt;Note, this blog was originally published &lt;a href="https://www.influxdata.com/blog/optimizing-sql-dataframes-part-two/"&gt;on the InfluxData blog&lt;/a&gt;.&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;In the &lt;a href="https://datafusion.apache.org/blog/2025/06/15/optimizing-sql-dataframes-part-one"&gt;first part of this post&lt;/a&gt;, we discussed what a Query Optimizer is, what
+role it plays, and described how industrial optimizers are organized. In this
+second post, we describe various optimizations that are found in &lt;a href="https://datafusion.apache.org/"&gt;Apache
+DataFusion&lt;/a&gt; and …&lt;/p&gt;</summary><content type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+&lt;p&gt;&lt;em&gt;Note, this blog was originally published &lt;a href="https://www.influxdata.com/blog/optimizing-sql-dataframes-part-two/"&gt;on the InfluxData blog&lt;/a&gt;.&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;In the &lt;a href="https://datafusion.apache.org/blog/2025/06/15/optimizing-sql-dataframes-part-one"&gt;first part of this post&lt;/a&gt;, we discussed what a Query Optimizer is, what
+role it plays, and described how industrial optimizers are organized. In this
+second post, we describe various optimizations that are found in &lt;a href="https://datafusion.apache.org/"&gt;Apache
+DataFusion&lt;/a&gt; and other industrial systems in more
+detail.&lt;/p&gt;
+&lt;p&gt;DataFusion contains high quality, full-featured implementations for &lt;em&gt;Always
+Optimizations&lt;/em&gt; and &lt;em&gt;Engine Specific Optimizations&lt;/em&gt; (defined in Part 1).
+Optimizers are implemented as rewrites of &lt;code&gt;LogicalPlan&lt;/code&gt; in the &lt;a href="https://github.com/apache/datafusion/tree/main/datafusion/optimizer"&gt;logical
+optimizer&lt;/a&gt;
+or rewrites of &lt;code&gt;ExecutionPlan&lt;/code&gt; in the &lt;a href="https://github.com/apache/datafusion/tree/main/datafusion/physical-optimizer"&gt;physical
+optimizer&lt;/a&gt;.
+This design means the same optimizer passes are applied for SQL queries,
+DataFrame queries, as well as plans for other query language frontends such as
+&lt;a href="https://github.com/influxdata/influxdb3_core/tree/26a30bf8d6e2b6b3f1dd905c4ec27e3db6e20d5f/iox_query_influxql"&gt;InfluxQL&lt;/a&gt;
+in InfluxDB 3.0,
+&lt;a href="https://github.com/GreptimeTeam/greptimedb/blob/0bd322a078cae4f128b791475ec91149499de33a/src/query/src/promql/planner.rs#L1"&gt;PromQL&lt;/a&gt;
+in &lt;a href="https://greptime.com/"&gt;Greptime&lt;/a&gt;, and
+&lt;a href="https://github.com/vega/vegafusion/tree/dc15c1b9fc7d297f12bea919795d58cda1c88fcf/vegafusion-core/src/planning"&gt;vega&lt;/a&gt;
+in &lt;a href="https://vegafusion.io/"&gt;VegaFusion&lt;/a&gt;.&lt;/p&gt;
+&lt;h2&gt;Always Optimizations&lt;/h2&gt;
+&lt;p&gt;Some optimizations are so important they are found in almost all query engines
+and are typically the first implemented as they provide the largest cost /
+benefit ratio (and performance is terrible without them).&lt;/p&gt;
+&lt;h3&gt;Predicate/Filter Pushdown&lt;/h3&gt;
+&lt;p&gt;&lt;strong&gt;Why&lt;/strong&gt;: Avoid carrying unneeded &lt;em&gt;rows &lt;/em&gt;as soon as possible&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;What&lt;/strong&gt;: Moves filters &amp;ldquo;down&amp;rdquo; in the plan so they run earlier during execution, as shown in Figure 1.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Example Implementations&lt;/strong&gt;: &lt;a href="https://github.com/apache/datafusion/blob/main/datafusion/optimizer/src/push_down_filter.rs"&gt;DataFusion&lt;/a&gt;, &lt;a href="https://github.com/duckdb/duckdb/blob/main/src/optimizer/filter_pushdown.cpp"&gt;DuckDB&lt;/a&gt;, &lt;a href="https://github.com/ClickHouse/ClickHouse/blob/master/src/Processors/QueryPlan/Optimizations/filterPushDown.cpp"&gt;ClickHouse&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;The earlier data is filtered out in the plan, the less work the rest of the plan
+has to do. Most mature databases aggressively use filter pushdown / early
+filtering combined with techniques such as partition and storage pruning (e.g.
+&lt;a href="https://blog.xiangpeng.systems/posts/parquet-to-arrow/"&gt;Parquet Row Group pruning&lt;/a&gt;) for performance.&lt;/p&gt;
+&lt;p&gt;An extreme, and somewhat contrived, is the query&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT city, COUNT(*) FROM population GROUP BY city HAVING city = 'BOSTON';
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Semantically, &lt;code&gt;HAVING&lt;/code&gt; is &lt;a href="https://www.datacamp.com/tutorial/sql-order-of-execution"&gt;evaluated after&lt;/a&gt; &lt;code&gt;GROUP BY&lt;/code&gt; in SQL. However, computing
+the population of all cities and discarding everything except Boston is much
+slower than only computing the population for Boston and so most Query
+Optimizers will evaluate the filter before the aggregation.&lt;/p&gt;
+&lt;p&gt;&lt;img alt="Fig 1: Filter Pushdown." class="img-responsive" src="/blog/images/optimizing-sql-dataframes/filter-pushdown.png" width="80%"/&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Figure 1&lt;/strong&gt;: Filter Pushdown.  In (&lt;strong&gt;A&lt;/strong&gt;) without filter pushdown, the operator
+processes more rows, reducing efficiency. In (&lt;strong&gt;B&lt;/strong&gt;) with filter pushdown, the
+operator receives fewer rows, resulting in less overall work and leading to a
+faster and more efficient query.&lt;/p&gt;
+&lt;h3&gt;Projection Pushdown&lt;/h3&gt;
+&lt;p&gt;&lt;strong&gt;Why&lt;/strong&gt;: Avoid carrying unneeded &lt;em&gt;columns &lt;/em&gt;as soon as possible&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;What: &lt;/strong&gt;Pushes &amp;ldquo;projection&amp;rdquo; (keeping only certain columns) earlier in the plan, as shown in Figure 2.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Example Implementations: &lt;/strong&gt;Implementations: &lt;a href="https://github.com/apache/datafusion/blob/main/datafusion/physical-optimizer/src/projection_pushdown.rs"&gt;DataFusion&lt;/a&gt;, &lt;a href="https://github.com/duckdb/duckdb/blob/a8a6a080c8809d5d4b3c955e9f113574f6f0bfe0/src/optimizer/pushdown/pushdown_projection.cpp"&gt;DuckDB&lt;/a&gt;, &lt;a href="https://github.com/ClickHouse/ClickHouse/blob/master/src/Processors/QueryPlan/Optimizations/optimizeUseNormalProjection.cpp"&gt;ClickHouse&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;Similarly to the motivation for &lt;em&gt;Filter Pushdown&lt;/em&gt;, the earlier the plan stops
+doing something, the less work it does overall and thus the faster it runs. For
+Projection Pushdown, if columns are not needed later in a plan, copying the data
+to the output of other operators is unnecessary and the costs of copying can add
+up. For example, in Figure 3 of Part 1, the &lt;code&gt;species&lt;/code&gt; column is only needed to
+evaluate the Filter within the scan and &lt;code&gt;notes&lt;/code&gt; are never used, so it is
+unnecessary to copy them through the rest of the plan.&lt;/p&gt;
+&lt;p&gt;Projection Pushdown is especially effective and important for column store
+databases, where the storage format itself (such as &lt;a href="https://parquet.apache.org/"&gt;Apache Parquet&lt;/a&gt;) supports
+efficiently reading only a subset of required columns, and is &lt;a href="https://blog.xiangpeng.systems/posts/parquet-pushdown/"&gt;especially
+powerful in combination with filter pushdown&lt;/a&gt;. Projection Pushdown is still
+important, but less effective for row oriented formats such as JSON or CSV where
+each column in each row must be parsed even if it is not used in the plan.&lt;/p&gt;
+&lt;p&gt;&lt;img alt="Fig 2: Projection Pushdown." class="img-responsive" src="/blog/images/optimizing-sql-dataframes/projection-pushdown.png" width="80%"/&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Figure 2:&lt;/strong&gt; In (&lt;strong&gt;A&lt;/strong&gt;) without projection pushdown, the operator receives more
+columns, reducing efficiency. In (&lt;strong&gt;B&lt;/strong&gt;) with projection pushdown, the operator
+receives fewer columns, leading to optimized execution.&lt;/p&gt;
+&lt;h3&gt;Limit Pushdown&lt;/h3&gt;
+&lt;p&gt;&lt;strong&gt;Why&lt;/strong&gt;: The earlier the plan stops generating data, the less overall work it
+does, and some operators have more efficient limited implementations.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;What: &lt;/strong&gt;Pushes limits (maximum row counts) down in a plan as early as possible.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Example Implementations:&lt;/strong&gt; &lt;a href="https://github.com/apache/datafusion/blob/main/datafusion/optimizer/src/push_down_limit.rs"&gt;DataFusion&lt;/a&gt;, &lt;a href="https://github.com/duckdb/duckdb/blob/main/src/optimizer/limit_pushdown.cpp"&gt;DuckDB&lt;/a&gt;, &lt;a href="https://github.com/ClickHouse/ClickHouse/blob/master/src/Processors/QueryPlan/Optimizations/limitPushDown.cpp"&gt;ClickHouse&lt;/a&gt;, Spark (&lt;a href="https://github.com/apache/spark/blob/7bc8e99cde424c59b98fe915e3fdaaa30beadb76/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/optimizer/LimitPushDownThroughWindow.scala"&gt;Window&lt;/a&gt; and &lt;a href="https://github.com/apache/spark/blob/7bc8e99cde424c59b98fe915e3fdaaa30beadb76/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/optimizer/PushProjectionThroughLimit.scala"&gt;Projection&lt;/a&gt;)&lt;/p&gt;
+&lt;p&gt;Often queries have a &lt;code&gt;LIMIT&lt;/code&gt; or other clause that allows them to stop generating
+results early so the sooner they can stop execution, the more efficiently they
+will execute.&lt;/p&gt;
+&lt;p&gt;In addition, DataFusion and other systems have more efficient implementations of
+some operators that can be used if there is a limit. The classic example is
+replacing a full sort + limit with a &lt;a href="https://docs.rs/datafusion/latest/datafusion/physical_plan/struct.TopK.html"&gt;TopK&lt;/a&gt; operator that only tracks the top
+values using a heap. Similarly,  DataFusion&amp;rsquo;s Parquet reader stops fetching and
+opening additional files once the limit has been hit.&lt;/p&gt;
+&lt;p&gt;&lt;img alt="Fig 3: Limit Pushdown." class="img-responsive" src="/blog/images/optimizing-sql-dataframes/limit-pushdown.png" width="80%"/&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Figure 3&lt;/strong&gt;: In (&lt;strong&gt;A&lt;/strong&gt;), without limit pushdown all data is sorted and
+everything except the first few rows are discarded. In (&lt;strong&gt;B&lt;/strong&gt;), with limit
+pushdown, Sort is replaced with TopK operator which does much less work.&lt;/p&gt;
+&lt;h3&gt;Expression Simplification / Constant Folding&lt;/h3&gt;
+&lt;p&gt;&lt;strong&gt;Why&lt;/strong&gt;: Evaluating the same expression for each row when the value doesn&amp;rsquo;t change is wasteful.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;What&lt;/strong&gt;: Partially evaluates and/or algebraically simplify expressions.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Example Implementations:&lt;/strong&gt; &lt;a href="https://github.com/apache/datafusion/tree/main/datafusion/optimizer/src/simplify_expressions"&gt;DataFusion&lt;/a&gt;, DuckDB (has several &lt;a href="https://github.com/duckdb/duckdb/tree/7b18f0f3691c1b6367cf68ed2598d7034e14f41b/src/optimizer/rule"&gt;rules&lt;/a&gt; such as &lt;a href="https://github.com/duckdb/duckdb/blob/7b18f0f3691c1b6367cf68ed2598d7034e14f41b/src/optimizer/rule/constant_folding.cpp"&gt;constant folding&lt;/a&gt;, and &lt;a href="https://github.com/duckdb/duckdb/blob/7b18f0f3691c1b6367cf68ed2598d7034e14f41b/src/optimizer/rule/comparison_simplification.cpp"&gt;comparison simplification&lt;/a&gt;), &lt;a href="https://github.com/apache/spark/blob/7bc8e99cde424c59b98fe915e3fdaaa30beadb76/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/optimizer/expressions.scala"&gt;Spark&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;If an expression doesn&amp;rsquo;t change from row to row, it is better to evaluate the
+expression &lt;strong&gt;once&lt;/strong&gt; during planning. This is a classic compiler technique and is
+also used in database systems&lt;/p&gt;
+&lt;p&gt;For example, given a query that finds all values from the current year&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT &amp;hellip; WHERE extract(year from time_column) = extract(year from now())
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Evaluating &lt;code&gt;extract(year from now())&lt;/code&gt; on every row is much more expensive than
+evaluating it once during planning time so that the query becomes comparison to
+a constant&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT &amp;hellip; WHERE extract(year from time_column) = 2025
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Furthermore, it is often possible to push such predicates &lt;strong&gt;into&lt;/strong&gt; scans.&lt;/p&gt;
+&lt;h3&gt;Rewriting &lt;code&gt;OUTER JOIN&lt;/code&gt; &amp;rarr; &lt;code&gt;INNER JOIN&lt;/code&gt;&lt;/h3&gt;
+&lt;p&gt;&lt;strong&gt;Why:&lt;/strong&gt; &lt;code&gt;INNER JOIN&lt;/code&gt;  implementations are almost always faster (as they are
+simpler) than &lt;code&gt;OUTER JOIN&lt;/code&gt; implementations, and &lt;code&gt;INNER JOIN&lt;/code&gt; s impose fewer
+restrictions on other optimizer passes (such as join reordering and additional
+filter pushdown).&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;What&lt;/strong&gt;: In cases where it is known that NULL rows introduced by an &lt;code&gt;OUTER
+JOIN&lt;/code&gt; will not appear in the results, it can be rewritten to an &lt;code&gt;INNER
+JOIN&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Example Implementations:&lt;/strong&gt; &lt;a href="https://github.com/apache/datafusion/blob/6028474969f0bfead96eb7f413791470afb6bf82/datafusion/optimizer/src/eliminate_outer_join.rs"&gt;DataFusion&lt;/a&gt;, &lt;a href="https://github.com/apache/spark/blob/7bc8e99cde424c59b98fe915e3fdaaa30beadb76/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/optimizer/joins.scala#L124-L158"&gt;Spark&lt;/a&gt;, &lt;a href="https://github.com/ClickHouse/ClickHouse/blob/master/src/Processors/QueryPlan/Optimizations/convertOuterJoinToInnerJoin.cpp"&gt;ClickHouse&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;For example, given a query such as the following&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-SQL"&gt;SELECT &amp;hellip;
+FROM orders LEFT OUTER JOIN customer ON (orders.cid = customer.id)
+WHERE customer.last_name = 'Lamb'
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;The &lt;code&gt;LEFT OUTER JOIN&lt;/code&gt; keeps all rows in &lt;code&gt;orders&lt;/code&gt;  that don&amp;rsquo;t have a matching
+customer, but fills in the fields with &lt;code&gt;null&lt;/code&gt;. All such rows will be filtered
+out by &lt;code&gt;customer.last_name = 'Lamb'&lt;/code&gt;, and thus an INNER JOIN produces the same
+answer. This is illustrated in Figure 4.&lt;/p&gt;
+&lt;p&gt;&lt;img alt="Fig 4: Join Rewrite." class="img-responsive" src="/blog/images/optimizing-sql-dataframes/join-rewrite.png" width="80%"/&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Figure 4&lt;/strong&gt;: Rewriting &lt;code&gt;OUTER JOIN&lt;/code&gt; to &lt;code&gt;INNER JOIN&lt;/code&gt;. In (A) the original query
+contains an &lt;code&gt;OUTER JOIN&lt;/code&gt; but also a filter on &lt;code&gt;customer.last_name&lt;/code&gt;, which
+filters out all rows that might be introduced by the &lt;code&gt;OUTER JOIN&lt;/code&gt;. In (B) the
+&lt;code&gt;OUTER JOIN&lt;/code&gt; is converted to inner join, a more efficient implementation can be
+used.&lt;/p&gt;
+&lt;h2&gt;Engine Specific Optimizations&lt;/h2&gt;
+&lt;p&gt;As discussed in Part 1 of this blog, optimizers also contain a set of passes
+that are still always good to do, but are closely tied to the specifics of the
+query engine. This section describes some common types&lt;/p&gt;
+&lt;h3&gt;Subquery Rewrites&lt;/h3&gt;
+&lt;p&gt;&lt;strong&gt;Why&lt;/strong&gt;: Actually implementing subqueries by running a query for each row of the outer query is very expensive.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;What&lt;/strong&gt;: It is possible to rewrite subqueries as joins which often perform much better.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Example Implementations:&lt;/strong&gt; DataFusion (&lt;a href="https://github.com/apache/datafusion/blob/main/datafusion/optimizer/src/decorrelate.rs"&gt;one&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/blob/main/datafusion/optimizer/src/decorrelate_predicate_subquery.rs"&gt;two&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/blob/main/datafusion/optimizer/src/scalar_subquery_to_join.rs"&gt;three&lt;/a&gt;), &lt;a href="https://github.com/apache/spark/blob/7bc8e99cde424c59b98fe915e3fdaaa30beadb76/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/optimizer/subquery.scala"&gt;Spark&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;Evaluating subqueries a row at a time is so expensive that execution engines in
+high performance analytic systems such as DataFusion and &lt;a href="https://vertica.com/"&gt;Vertica&lt;/a&gt; may not even
+support row-at-a-time evaluation given how terrible the performance would be. 
+Instead, analytic systems rewrite such queries into joins which can perform 100s
+or 1000s of times faster for large datasets. However, transforming subqueries to
+joins requires &amp;ldquo;exotic&amp;rdquo; join semantics such as &lt;code&gt;SEMI JOIN&lt;/code&gt;, &lt;code&gt;ANTI JOIN&lt;/code&gt;  and
+variations on how to treat equality with null[^7].&lt;/p&gt;
+&lt;p&gt;For a simple example, consider that a query like this:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT customer.name 
+FROM customer 
+WHERE (SELECT sum(value) 
+       FROM orders WHERE
+       orders.cid = customer.id) &amp;gt; 10;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Can be rewritten like this:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT customer.name 
+FROM customer 
+JOIN (
+  SELECT customer.id as cid_inner, sum(value) s 
+  FROM orders 
+  GROUP BY customer.id
+ ) ON (customer.id = cid_inner AND s &amp;gt; 10);
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;We don&amp;rsquo;t have space to detail this transformation or why it is so much faster to
+run, but using this and many other transformations allow efficient subquery
+evaluation.&lt;/p&gt;
+&lt;h3&gt;Optimized Expression Evaluation&lt;/h3&gt;
+&lt;p&gt;&lt;strong&gt;Why&lt;/strong&gt;: The capabilities of expression evaluation vary from system to system.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;What&lt;/strong&gt;: Optimize expression evaluation for the particular execution environment.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Example Implementations&lt;/strong&gt;: There are many examples of this type of
+optimization, including DataFusion&amp;rsquo;s &lt;a href="https://github.com/apache/datafusion/blob/main/datafusion/optimizer/src/common_subexpr_eliminate.rs"&gt;Common Subexpression
+Elimination&lt;/a&gt;,
+&lt;a href="https://github.com/apache/datafusion/blob/8f3f70877febaa79be3349875e979d3a6e65c30e/datafusion/optimizer/src/simplify_expressions/unwrap_cast.rs#L70"&gt;unwrap_cast&lt;/a&gt;,
+and &lt;a href="https://github.com/apache/datafusion/blob/main/datafusion/optimizer/src/extract_equijoin_predicate.rs"&gt;identifying equality join
+predicates&lt;/a&gt;.
+DuckDB &lt;a href="https://github.com/duckdb/duckdb/blob/main/src/optimizer/in_clause_rewriter.cpp"&gt;rewrites IN
+clauses&lt;/a&gt;,
+and &lt;a href="https://github.com/duckdb/duckdb/blob/main/src/optimizer/sum_rewriter.cpp"&gt;SUM
+expressions&lt;/a&gt;.
+Spark also &lt;a href="https://github.com/apache/spark/blob/7bc8e99cde424c59b98fe915e3fdaaa30beadb76/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/optimizer/UnwrapCastInBinaryComparison.scala"&gt;unwraps casts in binary
+comparisons&lt;/a&gt;,
+and &lt;a href="https://github.com/apache/spark/blob/7bc8e99cde424c59b98fe915e3fdaaa30beadb76/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/optimizer/InjectRuntimeFilter.scala"&gt;adds special runtime
+filters&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;To give a specific example of what DataFusion&amp;rsquo;s common subexpression elimination
+does, consider this query that refers to a complex expression multiple times:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT date_bin('1 hour', time, '1970-01-01') 
+FROM table 
+WHERE date_bin('1 hour', time, '1970-01-01') &amp;gt;= '2025-01-01 00:00:00'
+ORDER BY date_bin('1 hour', time, '1970-01-01')
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Evaluating &lt;code&gt;date_bin('1 hour', time, '1970-01-01')&lt;/code&gt;each time it is encountered
+is inefficient compared to calculating its result once, and reusing that result
+in when it is encountered again (similar to caching). This reuse is called
+&lt;em&gt;Common Subexpression Elimination&lt;/em&gt;.&lt;/p&gt;
+&lt;p&gt;Some execution engines implement this optimization internally to their
+expression evaluation engine, but DataFusion represents it explicitly using a
+separate Projection plan node, as illustrated in Figure 5.  Effectively, the
+query above is rewritten to the following&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT time_chunk 
+FROM(SELECT date_bin('1 hour', time, '1970-01-01') as time_chunk 
+     FROM table)
+WHERE time_chunk &amp;gt;= '2025-01-01 00:00:00'
+ORDER BY time_chunk
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;img alt="Fig 5: Common Subquery Elimination." class="img-responsive" src="/blog/images/optimizing-sql-dataframes/common-subexpression-elimination.png" width="80%"/&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Figure 5:&lt;/strong&gt; Adding a Projection to evaluate common complex sub expression
+decreases complexity for later stages.&lt;/p&gt;
+&lt;h3&gt;Algorithm Selection&lt;/h3&gt;
+&lt;p&gt;&lt;strong&gt;Why&lt;/strong&gt;: Different engines have different specialized operators for certain
+operations.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;What: &lt;/strong&gt;Selects specific implementations from the available operators, based
+on properties of the query.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Example Implementations:&lt;/strong&gt; DataFusion&amp;rsquo;s &lt;a href="https://github.com/apache/datafusion/blob/8f3f70877febaa79be3349875e979d3a6e65c30e/datafusion/physical-optimizer/src/enforce_sorting/mod.rs"&gt;EnforceSorting&lt;/a&gt; pass uses sort optimized implementations, Spark&amp;rsquo;s &lt;a href="https://github.com/apache/spark/blob/7bc8e99cde424c59b98fe915e3fdaaa30beadb76/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/optimizer/RewriteAsOfJoin.scala"&gt;rewrite to use a special operator for ASOF joins&lt;/a&gt;, and ClickHouse&amp;rsquo;s&lt;a href="https://github.com/ClickHouse/ClickHouse/blob/7d15deda4b33282f356bb3e40a190d005acf72f2/src/Interpreters/ExpressionAnalyzer.cpp#L1066-L1080"&gt; join algorithm selection &lt;/a&gt; such as &lt;a href="https://github.com/ClickHouse/ClickHouse/blob/7d15deda4b33282f356bb3e40a190d005acf72f2/src/Interpreters/ExpressionAnalyzer.cpp#L1022"&gt;when to use MergeJoin&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;For example, DataFusion uses a &lt;code&gt;TopK&lt;/code&gt; (&lt;a href="https://docs.rs/datafusion/latest/datafusion/physical_plan/struct.TopK.html"&gt;source&lt;/a&gt;) operator rather than a full
+&lt;code&gt;Sort&lt;/code&gt; if there is also a limit on the query. Similarly, it may choose to use the
+more efficient &lt;code&gt;PartialOrdered&lt;/code&gt; grouping operation when the data is sorted on
+group keys or a &lt;code&gt;MergeJoin&lt;/code&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img alt="Fig 6: Specialized Grouping." class="img-responsive" src="/blog/images/optimizing-sql-dataframes/specialized-grouping.png" width="80%"/&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Figure 6: &lt;/strong&gt;An example of specialized operation for grouping. In (&lt;strong&gt;A&lt;/strong&gt;), input data has no specified ordering and DataFusion uses a hashing-based grouping operator (&lt;a href="https://github.com/apache/datafusion/blob/main/datafusion/physical-plan/src/aggregates/row_hash.rs"&gt;source&lt;/a&gt;) to determine distinct groups. In (&lt;strong&gt;B&lt;/strong&gt;), when the input data is ordered by the group keys, DataFusion uses a specialized grouping operator (&lt;a href="https://github.com/apache/datafusion/tree/main/datafusion/physical-plan/src/aggregates/order"&gt;source&lt;/a&gt;) to find boundaries that separate groups.&lt;/p&gt;
+&lt;h3&gt;Using Statistics Directly&lt;/h3&gt;
+&lt;p&gt;&lt;strong&gt;Why&lt;/strong&gt;: Using pre-computed statistics from a table, without actually reading or
+opening files, is much faster than processing data.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;What&lt;/strong&gt;: Replace calculations on data with the value from statistics.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Example Implementations:&lt;/strong&gt; &lt;a href="https://github.com/apache/datafusion/blob/8f3f70877febaa79be3349875e979d3a6e65c30e/datafusion/physical-optimizer/src/aggregate_statistics.rs"&gt;DataFusion&lt;/a&gt;, &lt;a href="https://github.com/duckdb/duckdb/blob/main/src/optimizer/statistics_propagator.cpp"&gt;DuckDB&lt;/a&gt;,&lt;/p&gt;
+&lt;p&gt;Some queries, such as the classic &lt;code&gt;COUNT(*) from my_table&lt;/code&gt; used for data
+exploration can be answered using only statistics. Optimizers often have access
+to statistics for other reasons (such as Access Path and Join Order Selection)
+and statistics are commonly stored in analytic file formats. For example, the
+&lt;a href="https://docs.rs/parquet/latest/parquet/file/metadata/index.html"&gt;Metadata&lt;/a&gt; of Apache Parquet files stores &lt;code&gt;MIN&lt;/code&gt;, &lt;code&gt;MAX&lt;/code&gt;, and &lt;code&gt;COUNT&lt;/code&gt; information.&lt;/p&gt;
+&lt;p&gt;&lt;img alt="Fig 7: Using Statistics." class="img-responsive" src="/blog/images/optimizing-sql-dataframes/using-statistics.png" width="80%"/&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Figure 7: &lt;/strong&gt;When the aggregation result is already stored in the statistics,
+the query can be evaluated using the values from statistics without looking at
+any compressed data. The optimizer replaces the Aggregation operation with
+values from statistics.&lt;/p&gt;
+&lt;h2&gt;Access Path and Join Order Selection&lt;/h2&gt;
+&lt;h3&gt;Overview&lt;/h3&gt;
+&lt;p&gt;Last, but certainly not least, are optimizations that choose between plans with
+potentially (very) different performance. The major options in this category are&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Join Order:&lt;/strong&gt; In what order to combine tables using JOINs?&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Access Paths:&lt;/strong&gt; Which copy of the data or index should be read to find matching tuples?&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;&lt;a href="https://en.wikipedia.org/wiki/Materialized_view"&gt;Materialized View&lt;/a&gt;&lt;/strong&gt;: Can the query can be rewritten to use a materialized view (partially computed query results)? This topic deserves its own blog (or book) and we don&amp;rsquo;t discuss further here.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img alt="Fig 8: Access Path and Join Order." class="img-responsive" src="/blog/images/optimizing-sql-dataframes/access-path-and-join-order.png" width="80%"/&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Figure 8:&lt;/strong&gt; Access Path and Join Order Selection in Query Optimizers. Optimizers use heuristics to enumerate some subset of potential join orders (shape) and access paths (color). The plan with the smallest estimated cost according to some cost model is chosen. In this case, Plan 2 with a cost of 180,000 is chosen for execution as it has the lowest estimated cost.&lt;/p&gt;
+&lt;p&gt;This class of optimizations is a hard problem for at least the following reasons:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Exponential Search Space&lt;/strong&gt;: the number of potential plans increases
+   exponentially as the number of joins and indexes increases.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Performance Sensitivity&lt;/strong&gt;: Often different plans that are very similar in
+   structure perform very differently. For example, swapping the input order to
+   a hash join can result in 1000x or more (yes, a thousand-fold!) run time
+   differences.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Cardinality Estimation Errors&lt;/strong&gt;: Determining the optimal plan relies on
+   cardinality estimates (e.g., how many rows will come out of each join). It is a
+   &lt;a href="https://www.vldb.org/pvldb/vol9/p204-leis.pdf"&gt;known hard problem&lt;/a&gt; to estimate this cardinality, and in practice queries with
+   as few as 3 joins often have large cardinality estimation errors.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3&gt;Heuristics and Cost-Based Optimization&lt;/h3&gt;
+&lt;p&gt;Industrial optimizers handle these problems using a combination of&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Heuristics:&lt;/strong&gt; to prune the search space and avoid considering plans that
+   are (almost) never good. Examples include considering left-deep trees, or
+   using &lt;code&gt;Foreign Key&lt;/code&gt; / &lt;code&gt;Primary Key&lt;/code&gt; relationships to pick the build size of a
+   hash join.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Cost Model&lt;/strong&gt;: Given the smaller set of candidate plans, the Optimizer then
+   estimates their cost and picks the one using the lowest cost.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;For some examples, you can read about [Spark&amp;rsquo;s cost-based optimizer] or look at
+the code for &lt;a href="https://github.com/apache/datafusion/blob/main/datafusion/physical-optimizer/src/join_selection.rs"&gt;DataFusion&amp;rsquo;s join selection&lt;/a&gt; and &lt;a href="https://github.com/duckdb/duckdb/blob/main/src/optimizer/join_order/cost_model.cpp"&gt;DuckDB&amp;rsquo;s cost model&lt;/a&gt; and &lt;a href="https://github.com/duckdb/duckdb/blob/84c87b12fa9554a8775dc243b4d0afd5b407321a/src/optimizer/join_order/plan_enumerator.cpp#L469-L472"&gt;join
+order enumeration&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;However, the use of heuristics and (imprecise) cost models means optimizers must&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Make deep assumptions about the execution environment: &lt;/strong&gt;For example the
+   heuristics often include assumptions that joins implement &lt;a href="(https://www.alibabacloud.com/blog/alibaba-cloud-analyticdb-for-mysql-create-ultimate-runtimefilter-capability_600228"&gt;sideways information
+   passing (RuntimeFilters)&lt;/a&gt;, or that Join operators always preserve a particular
+   input's order.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Use one particular objective function: &lt;/strong&gt;There are almost always trade-offs
+   between desirable plan properties, such as execution speed, memory use, and
+   robustness in the face of cardinality estimation. Industrial optimizers
+   typically have one cost function which attempts to balance between the
+   properties or a series of hard to use indirect tuning knobs to control the
+   behavior.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Require statistics&lt;/strong&gt;: Typically cost models require up-to-date statistics,
+   which can be expensive to compute, must be kept up to date as new data
+   arrives, and often have trouble capturing the non-uniformity of real world
+   datasets&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3&gt;Join Ordering in DataFusion&lt;/h3&gt;
+&lt;p&gt;DataFusion purposely does not include a sophisticated cost based optimizer.
+Instead, keeping with its &lt;a href="https://docs.rs/datafusion/latest/datafusion/#design-goals"&gt;design goals&lt;/a&gt; it provides a reasonable default
+implementation along with extension points to customize behavior.&lt;/p&gt;
+&lt;p&gt;Specifically, DataFusion includes&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&amp;ldquo;Syntactic Optimizer&amp;rdquo; (joins in the order they are listed in the query[^8]) with basic join re-ordering (&lt;a href="https://github.com/apache/datafusion/blob/main/datafusion/physical-optimizer/src/join_selection.rs"&gt;source&lt;/a&gt;) to prevent join disasters.&lt;/li&gt;
+&lt;li&gt;Support for &lt;a href="https://docs.rs/datafusion/latest/datafusion/common/struct.ColumnStatistics.html"&gt;ColumnStatistics&lt;/a&gt; and &lt;a href="https://docs.rs/datafusion/latest/datafusion/common/struct.Statistics.html"&gt;Table Statistics&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;The framework for &lt;a href="https://docs.rs/datafusion/latest/datafusion/physical_expr/struct.AnalysisContext.html#structfield.selectivity"&gt;filter selectivity&lt;/a&gt; + join cardinality estimation.&lt;/li&gt;
+&lt;li&gt;APIs for easily rewriting plans, such as the &lt;a href="https://docs.rs/datafusion/latest/datafusion/common/tree_node/trait.TreeNode.html#overview"&gt;TreeNode API&lt;/a&gt; and &lt;a href="https://docs.rs/datafusion/latest/datafusion/physical_plan/joins/struct.HashJoinExec.html#method.swap_inputs"&gt;reordering joins&lt;/a&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;This combination of features along with &lt;a href="https://docs.rs/datafusion/latest/datafusion/execution/session_state/struct.SessionStateBuilder.html#method.with_physical_optimizer_rule"&gt;custom optimizer passes&lt;/a&gt; lets users
+customize the behavior to their use case, such as custom indexes like &lt;a href="https://uwheel.rs/post/datafusion_uwheel/"&gt;uWheel&lt;/a&gt;
+and &lt;a href="https://github.com/datafusion-contrib/datafusion-materialized-views"&gt;materialized views&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;The rationale for including only a basic optimizer is that any one particular
+set of heuristics and cost model is unlikely to work well for the wide variety
+of DataFusion users because of the tradeoffs involved. &lt;/p&gt;
+&lt;p&gt;For example, some users may always have access to adequate resources, and want
+the fastest query execution, and are willing to tolerate runtime errors or a
+performance cliff when there is insufficient memory. Other users, however, may
+be willing to accept a slower maximum performance in return for more predictable
+performance when running in a resource constrained environment. This approach is
+not universally agreed. One of us has &lt;a href="https://www.researchgate.net/publication/269306314_The_Vertica_Query_Optimizer_The_case_for_specialized_query_optimizers"&gt;previously argued the case for
+specialized optimizers&lt;/a&gt; in a more academic paper, and the topic comes up
+regularly in the DataFusion community, (e.g. &lt;a href="https://github.com/apache/datafusion/issues/9846#issuecomment-2566568654"&gt;this recent comment&lt;/a&gt;).&lt;/p&gt;
+&lt;p&gt;Note: We are &lt;a href="https://github.com/apache/datafusion/issues/3929"&gt;actively improving&lt;/a&gt; this part of the code to help people write
+their own optimizers (🎣 come help us define and implement it!)&lt;/p&gt;
+&lt;h1&gt;Conclusion&lt;/h1&gt;
+&lt;p&gt;Optimizers are awesome, and we hope these two posts have demystified what they
+are and how they are implemented in industrial systems. Like many modern query
+engine designs, the common techniques are well known, though require substantial
+effort to get right.  DataFusion&amp;rsquo;s industrial strength optimizers can and do
+serve many real world systems well and we expect that number to grow over time.&lt;/p&gt;
+&lt;p&gt;We also think DataFusion provides interesting opportunities for optimizer
+research. As we discussed, there are still unsolved problems such as optimal
+join ordering. Experiments in papers often use academic systems or modify
+optimizers in tightly integrated open source systems (for example, the recent
+&lt;a href="https://www.vldb.org/pvldb/vol17/p1350-justen.pdf"&gt;POLARs paper&lt;/a&gt; uses DuckDB). However, using a tightly integrated system
+constrains the research to the set of heuristics and structure provided by that
+system. Hopefully DataFusion&amp;rsquo;s documentation, &lt;a href="https://dl.acm.org/doi/10.1145/3626246.3653368"&gt;newly citeable SIGMOD paper&lt;/a&gt;, and
+modular design will encourage more broadly applicable research in this area.&lt;/p&gt;
+&lt;p&gt;And finally, as always, if you are interested in working on query engines and
+learning more about how they are designed and implemented, please &lt;a href="https://datafusion.apache.org/contributor-guide/communication.html"&gt;join our
+community&lt;/a&gt;. We welcome first time contributors as well as long time participants
+to the fun of building a database together.&lt;/p&gt;
+&lt;h2&gt;Notes&lt;/h2&gt;
+&lt;p&gt;[^7]: See &lt;a href="https://btw-2015.informatik.uni-hamburg.de/res/proceedings/Hauptband/Wiss/Neumann-Unnesting_Arbitrary_Querie.pdf"&gt;Unnesting Arbitrary Queries&lt;/a&gt; from Neumann and Kemper for a more academic treatment.&lt;/p&gt;
+&lt;p&gt;[^8]: One of my favorite terms I learned from Andy Pavlo&amp;rsquo;s CMU online lectures&lt;/p&gt;</content><category term="blog"></category></entry></feed>
