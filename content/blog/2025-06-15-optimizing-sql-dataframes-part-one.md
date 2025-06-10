@@ -235,15 +235,15 @@ optimizations](https://datafusion.apache.org/blog/2025/03/11/ordering-analysis/)
 
 ## Notes
 
-<p id="footnote1"><sup>[1]</sup> *Modular Query Optimizer, US 8,312,027 · Issued Nov 13, 2012*, Query Optimizer with schema conversion US 8,086,598 · Issued Dec 27, 2011</p>
+<a id="footnote1"></a><sup>[1]</sup> *Modular Query Optimizer, US 8,312,027 · Issued Nov 13, 2012*, Query Optimizer with schema conversion US 8,086,598 · Issued Dec 27, 2011
 
-<p id="footnote2"><sup>[2]</sup> [The Vertica Query Optimizer: The case for specialized Query Optimizers](https://www.researchgate.net/publication/269306314_The_Vertica_Query_Optimizer_The_case_for_specialized_query_optimizers)</p>
+<a id="footnote2"></a><sup>[2]</sup> [The Vertica Query Optimizer: The case for specialized Query Optimizers](https://www.researchgate.net/publication/269306314_The_Vertica_Query_Optimizer_The_case_for_specialized_query_optimizers)
 
-<p id="footnote3"><sup>[3]</sup> [https://www.vldb.org/pvldb/vol17/p1350-justen.pdf](https://www.vldb.org/pvldb/vol17/p1350-justen.pdf)</p>
+<a id="footnote3"></a><sup>[3]</sup> [https://www.vldb.org/pvldb/vol17/p1350-justen.pdf](https://www.vldb.org/pvldb/vol17/p1350-justen.pdf)
 
-<p id="footnote4"><sup>[4]</sup> [https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/24101](https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/24101) , [https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/22111](https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/22111) [https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/12321](https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/12321)</p>
+<a id="footnote4"></a><sup>[4]</sup> [https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/24101](https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/24101) , [https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/22111](https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/22111) [https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/12321](https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/12321)
 
-<p id="footnote5"><sup>[5]</sup>  And thus in academic classes, by the time you get around to an optimizer the semester is over and everyone is ready for the semester to be done. Once industrial systems mature to the point where the optimizer is a bottleneck, the shiny new-ness of the[ hype cycle](https://en.wikipedia.org/wiki/Gartner_hype_cycle) has worn off and it is likely in the trough of disappointment.</p>
+<a id="footnote5"></a><sup>[5]</sup>  And thus in academic classes, by the time you get around to an optimizer the semester is over and everyone is ready for the semester to be done. Once industrial systems mature to the point where the optimizer is a bottleneck, the shiny new-ness of the[ hype cycle](https://en.wikipedia.org/wiki/Gartner_hype_cycle) has worn off and it is likely in the trough of disappointment.
 
-<p id="footnote6"><sup>[6]</sup> Often systems will classify these passes into different categories, but I am simplifying here</p>
+<a id="footnote6"></a><sup>[6]</sup> Often systems will classify these passes into different categories, but I am simplifying here
 

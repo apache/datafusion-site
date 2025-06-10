@@ -528,6 +528,6 @@ to the fun of building a database together.
 
 ## Notes
 
-<p id="footnote7"><sup>[7]</sup> See [Unnesting Arbitrary Queries](https://btw-2015.informatik.uni-hamburg.de/res/proceedings/Hauptband/Wiss/Neumann-Unnesting_Arbitrary_Querie.pdf) from Neumann and Kemper for a more academic treatment.</p>
+<a id="footnote7"></a><sup>[7]</sup> See [Unnesting Arbitrary Queries](https://btw-2015.informatik.uni-hamburg.de/res/proceedings/Hauptband/Wiss/Neumann-Unnesting_Arbitrary_Querie.pdf) from Neumann and Kemper for a more academic treatment.
 
-<p id="footnote8"><sup>[8]</sup> One of my favorite terms I learned from Andy Pavlo’s CMU online lectures</p>
+<a id="footnote8"></a><sup>[8]</sup> One of my favorite terms I learned from Andy Pavlo’s CMU online lectures
