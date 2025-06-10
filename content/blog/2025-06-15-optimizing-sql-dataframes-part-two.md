@@ -244,7 +244,7 @@ support row-at-a-time evaluation given how terrible the performance would be.
 Instead, analytic systems rewrite such queries into joins which can perform 100s
 or 1000s of times faster for large datasets. However, transforming subqueries to
 joins requires “exotic” join semantics such as `SEMI JOIN`, `ANTI JOIN`  and
-variations on how to treat equality with null[^7].
+variations on how to treat equality with null<sup id="fn7">[7](#footnote7).
 
 [Vertica]: https://vertica.com/
 
@@ -427,7 +427,7 @@ For some examples, you can read about [Spark’s cost-based optimizer] or look a
 the code for [DataFusion’s join selection] and [DuckDB’s cost model] and [join
 order enumeration].
 
-[Spark’s cost based optimizer]: https://docs.databricks.com/aws/en/optimizations/cbo
+[Spark’s cost-based optimizer]: https://docs.databricks.com/aws/en/optimizations/cbo
 [DataFusion’s join selection]: https://github.com/apache/datafusion/blob/main/datafusion/physical-optimizer/src/join_selection.rs
 [DuckDB’s cost model]: https://github.com/duckdb/duckdb/blob/main/src/optimizer/join_order/cost_model.cpp
 [join order enumeration]: https://github.com/duckdb/duckdb/blob/84c87b12fa9554a8775dc243b4d0afd5b407321a/src/optimizer/join_order/plan_enumerator.cpp#L469-L472
@@ -465,7 +465,7 @@ implementation along with extension points to customize behavior.
 
 Specifically, DataFusion includes
 
-1. “Syntactic Optimizer” (joins in the order they are listed in the query[^8]) with basic join re-ordering ([source](https://github.com/apache/datafusion/blob/main/datafusion/physical-optimizer/src/join_selection.rs)) to prevent join disasters.
+1. “Syntactic Optimizer” (joins in the order they are listed in the query<sup id="fn8">[8](#footnote8)) with basic join re-ordering ([source](https://github.com/apache/datafusion/blob/main/datafusion/physical-optimizer/src/join_selection.rs)) to prevent join disasters.
 2. Support for [ColumnStatistics](https://docs.rs/datafusion/latest/datafusion/common/struct.ColumnStatistics.html) and [Table Statistics](https://docs.rs/datafusion/latest/datafusion/common/struct.Statistics.html)
 3. The framework for [filter selectivity](https://docs.rs/datafusion/latest/datafusion/physical_expr/struct.AnalysisContext.html#structfield.selectivity) + join cardinality estimation.
 4. APIs for easily rewriting plans, such as the [TreeNode API](https://docs.rs/datafusion/latest/datafusion/common/tree_node/trait.TreeNode.html#overview) and [reordering joins](https://docs.rs/datafusion/latest/datafusion/physical_plan/joins/struct.HashJoinExec.html#method.swap_inputs)
@@ -528,6 +528,6 @@ to the fun of building a database together.
 
 ## Notes
 
-[^7]: See [Unnesting Arbitrary Queries](https://btw-2015.informatik.uni-hamburg.de/res/proceedings/Hauptband/Wiss/Neumann-Unnesting_Arbitrary_Querie.pdf) from Neumann and Kemper for a more academic treatment.
+<p id="footnote7"><sup>[7]</sup> See [Unnesting Arbitrary Queries](https://btw-2015.informatik.uni-hamburg.de/res/proceedings/Hauptband/Wiss/Neumann-Unnesting_Arbitrary_Querie.pdf) from Neumann and Kemper for a more academic treatment.</p>
 
-[^8]: One of my favorite terms I learned from Andy Pavlo’s CMU online lectures
+<p id="footnote8"><sup>[8]</sup> One of my favorite terms I learned from Andy Pavlo’s CMU online lectures</p>

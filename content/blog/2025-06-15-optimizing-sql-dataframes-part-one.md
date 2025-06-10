@@ -40,7 +40,7 @@ Pavlo, or some behind-the-scenes player. We believe this perception is because:
 
 1. One must implement the rest of a database system (data storage, transactions,
    SQL parser, expression evaluation, plan execution, etc.) **before** the
-   optimizer becomes critical[^5].
+   optimizer becomes critical<sup id="fn5">[5](#footnote5)</sup>.
 
 2. Some parts of the optimizer are tightly tied to the rest of the system (e.g.,
    storage or indexes), so many classic optimizers are described with
@@ -171,11 +171,11 @@ choosing specific aggregation algorithms.
 
 Industrial optimizers, such as 
 DataFusion’s ([source](https://github.com/apache/datafusion/tree/334d6ec50f36659403c96e1bffef4228be7c458e/datafusion/optimizer/src)),
-ClickHouse ([source](https://github.com/ClickHouse/ClickHouse/tree/master/src/Analyzer/Passes),[source](https://github.com/ClickHouse/ClickHouse/tree/master/src/Processors/QueryPlan/Optimizations)),
+ClickHouse ([source](https://github.com/ClickHouse/ClickHouse/tree/master/src/Analyzer/Passes), [source](https://github.com/ClickHouse/ClickHouse/tree/master/src/Processors/QueryPlan/Optimizations)),
 DuckDB ([source](https://github.com/duckdb/duckdb/tree/4afa85c6a4dacc39524d1649fd8eb8c19c28ad14/src/optimizer)),
 and Apache Spark ([source](https://github.com/apache/spark/tree/7bc8e99cde424c59b98fe915e3fdaaa30beadb76/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/optimizer)),
 are implemented as a series of passes or rules that rewrite a query plan. The
-overall optimizer is composed of a sequence of these rules,[^6] as shown in
+overall optimizer is composed of a sequence of these rules,<sup id="fn6">[6](#footnote6)</sup> as shown in
 Figure 4. The specific order of the rules also often matters, but we will not
 discuss this detail in this post.
 
@@ -221,8 +221,8 @@ DataFusion](https://datafusion.apache.org/) PMC member. A Database Optimizer
 connoisseur, he worked on the [Vertica Analytic
 Database](https://vldb.org/pvldb/vol5/p1790_andrewlamb_vldb2012.pdf) Query
 Optimizer for six years, has several granted US patents related to query
-optimization[^1], co-authored several papers[^2]  about the topic (including in
-VLDB 2024[^3]), and spent several weeks[^4] deeply geeking out about this topic
+optimization<sup id="fn1">[1](#footnote1)</sup>, co-authored several papers<sup id="fn2">[2](#footnote2)</sup>  about the topic (including in
+VLDB 2024<sup id="fn3">[3](#footnote3)</sup>), and spent several weeks<sup id="fn4">[4](#footnote4)</sup> deeply geeking out about this topic
 with other experts (thank you Dagstuhl).
 
 [Mustafa Akur](https://www.linkedin.com/in/akurmustafa/) is a PhD Student at
@@ -235,15 +235,15 @@ optimizations](https://datafusion.apache.org/blog/2025/03/11/ordering-analysis/)
 
 ## Notes
 
-[^1]: *Modular Query Optimizer, US 8,312,027 · Issued Nov 13, 2012*, Query Optimizer with schema conversion US 8,086,598 · Issued Dec 27, 2011
+<p id="footnote1"><sup>[1]</sup> *Modular Query Optimizer, US 8,312,027 · Issued Nov 13, 2012*, Query Optimizer with schema conversion US 8,086,598 · Issued Dec 27, 2011</p>
 
-[^2]: [The Vertica Query Optimizer: The case for specialized Query Optimizers](https://www.researchgate.net/publication/269306314_The_Vertica_Query_Optimizer_The_case_for_specialized_query_optimizers)
+<p id="footnote2"><sup>[2]</sup> [The Vertica Query Optimizer: The case for specialized Query Optimizers](https://www.researchgate.net/publication/269306314_The_Vertica_Query_Optimizer_The_case_for_specialized_query_optimizers)</p>
 
-[^3]: [https://www.vldb.org/pvldb/vol17/p1350-justen.pdf](https://www.vldb.org/pvldb/vol17/p1350-justen.pdf)
+<p id="footnote3"><sup>[3]</sup> [https://www.vldb.org/pvldb/vol17/p1350-justen.pdf](https://www.vldb.org/pvldb/vol17/p1350-justen.pdf)</p>
 
-[^4]: [https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/24101](https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/24101) , [https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/22111](https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/22111) [https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/12321](https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/12321)
+<p id="footnote4"><sup>[4]</sup> [https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/24101](https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/24101) , [https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/22111](https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/22111) [https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/12321](https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/12321)</p>
 
-[^5]: And thus in academic classes, by the time you get around to an optimizer the semester is over and everyone is ready for the semester to be done. Once industrial systems mature to the point where the optimizer is a bottleneck, the shiny new-ness of the[ hype cycle](https://en.wikipedia.org/wiki/Gartner_hype_cycle) has worn off and it is likely in the trough of disappointment.  
+<p id="footnote5"><sup>[5]</sup>  And thus in academic classes, by the time you get around to an optimizer the semester is over and everyone is ready for the semester to be done. Once industrial systems mature to the point where the optimizer is a bottleneck, the shiny new-ness of the[ hype cycle](https://en.wikipedia.org/wiki/Gartner_hype_cycle) has worn off and it is likely in the trough of disappointment.</p>
 
-[^6]: Often systems will classify these passes into different categories, but I am simplifying here
+<p id="footnote6"><sup>[6]</sup> Often systems will classify these passes into different categories, but I am simplifying here</p>
 
