@@ -83,9 +83,10 @@ in Figure 1.
 <img src="/blog/images/optimizing-sql-dataframes/query-execution.png" width="80%" class="img-responsive" alt="Fig 1: Query Execution."/>
 
 **Figure 1**: Query Execution: Users describe the answer they want using either
-a DataFrame or SQL. The query planner or DataFrame API translates that
-description into an *Initial Plan*, which is correct but slow. The Query
-Optimizer then rewrites the initial plan to an *Optimized Plan*, which computes
+SQL or a DataFrame. For SQL, a Query Planner translates the parsed query 
+into an *initial plan*. The DataFrame API creates an initial plan directly.
+The initial plan is correct, but slow. Then, the Query
+Optimizer rewrites the initial plan into an *optimized plan*, which computes
 the same results but faster and more efficiently. Finally, the Execution Engine
 executes the optimized plan producing results.
 
