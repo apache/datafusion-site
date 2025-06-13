@@ -104,9 +104,9 @@ executes the optimized plan producing results.&lt;/p&gt;
 &lt;p&gt;Given their name, it is not surprising that Query Optimizers can improve the
 performance of SQL queries. However, it is under-appreciated that this also
 applies to DataFrame style APIs.&lt;/p&gt;
-&lt;p&gt;Classic DataFrame systems such as &lt;a href="https://pandas.pydata.org/"&gt;pandas&lt;/a&gt; and &lt;a href="https://pola.rs/)"&gt;Polars&lt;/a&gt; (by default) execute
+&lt;p&gt;Classic DataFrame systems such as &lt;a href="https://pandas.pydata.org/"&gt;pandas&lt;/a&gt; and &lt;a href="https://pola.rs/"&gt;Polars&lt;/a&gt; (by default) execute
 eagerly and thus have limited opportunities for optimization. However, more
-modern APIs such as [Polar's lazy API], &lt;a href="https://spark.apache.org/docs/latest/sql-programming-guide.html#datasets-and-dataframes),"&gt;Apache Spark's DataFrame&lt;/a&gt;. and
+modern APIs such as &lt;a href="https://docs.pola.rs/user-guide/lazy/using/"&gt;Polars' lazy API&lt;/a&gt;, &lt;a href="https://spark.apache.org/docs/latest/sql-programming-guide.html#datasets-and-dataframes),"&gt;Apache Spark's DataFrame&lt;/a&gt;. and
 &lt;a href="https://datafusion.apache.org/user-guide/dataframe.html"&gt;DataFusion's DataFrame&lt;/a&gt; are much faster as they use the design shown in Figure
 1 and apply many query optimization techniques.&lt;/p&gt;
 &lt;h2&gt;Example of Query Optimizer&lt;/h2&gt;
@@ -130,7 +130,7 @@ GROUP BY location
   .agg(vec![col(location)], vec![avg(col("population")])
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;Within DataFusion, both the SQL and DataFrame are translated into the same
-[&lt;code&gt;LogicalPlan&lt;/code&gt;] , a &amp;ldquo;tree of relational operators.&amp;rdquo; This is a fancy way of
+&lt;a href="https://docs.rs/datafusion/latest/datafusion/logical_expr/enum.LogicalPlan.html"&gt;LogicalPlan&lt;/a&gt;, a &amp;ldquo;tree of relational operators.&amp;rdquo; This is a fancy way of
 saying data flow graphs where the edges represent tabular data (rows + columns)
 and the nodes represent a transformation (see &lt;a href="https://youtu.be/EzZTLiSJnhY"&gt;this DataFusion overview video&lt;/a&gt;
 for more details). The initial &lt;code&gt;LogicalPlan&lt;/code&gt; for the queries above is shown in
@@ -213,7 +213,7 @@ optimizations&lt;/a&gt;.&lt;/p&gt;
 &lt;p&gt;&lt;a id="footnote1"&gt;&lt;/a&gt;&lt;sup&gt;[1]&lt;/sup&gt; &lt;em&gt;Modular Query Optimizer, US 8,312,027 &amp;middot; Issued Nov 13, 2012&lt;/em&gt;, Query Optimizer with schema conversion US 8,086,598 &amp;middot; Issued Dec 27, 2011&lt;/p&gt;
 &lt;p&gt;&lt;a id="footnote2"&gt;&lt;/a&gt;&lt;sup&gt;[2]&lt;/sup&gt; &lt;a href="https://www.researchgate.net/publication/269306314_The_Vertica_Query_Optimizer_The_case_for_specialized_query_optimizers"&gt;The Vertica Query Optimizer: The case for specialized Query Optimizers&lt;/a&gt;&lt;/p&gt;
 &lt;p&gt;&lt;a id="footnote3"&gt;&lt;/a&gt;&lt;sup&gt;[3]&lt;/sup&gt; &lt;a href="https://www.vldb.org/pvldb/vol17/p1350-justen.pdf"&gt;https://www.vldb.org/pvldb/vol17/p1350-justen.pdf&lt;/a&gt;&lt;/p&gt;
-&lt;p&gt;&lt;a id="footnote4"&gt;&lt;/a&gt;&lt;sup&gt;[4]&lt;/sup&gt; &lt;a href="https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/24101"&gt;https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/24101&lt;/a&gt; , &lt;a href="https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/22111"&gt;https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/22111&lt;/a&gt; &lt;a href="https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/12321"&gt;https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/12321&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;a id="footnote4"&gt;&lt;/a&gt;&lt;sup&gt;[4]&lt;/sup&gt; &lt;a href="https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/24101"&gt;https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/24101&lt;/a&gt;, &lt;a href="https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/22111"&gt;https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/22111&lt;/a&gt;, &lt;a href="https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/12321"&gt;https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/12321&lt;/a&gt;&lt;/p&gt;
 &lt;p&gt;&lt;a id="footnote5"&gt;&lt;/a&gt;&lt;sup&gt;[5]&lt;/sup&gt;  And thus in academic classes, by the time you get around to an optimizer the semester is over and everyone is ready for the semester to be done. Once industrial systems mature to the point where the optimizer is a bottleneck, the shiny new-ness of the&lt;a href="https://en.wikipedia.org/wiki/Gartner_hype_cycle"&gt; hype cycle&lt;/a&gt; has worn off and it is likely in the trough of disappointment.&lt;/p&gt;
 &lt;p&gt;&lt;a id="footnote6"&gt;&lt;/a&gt;&lt;sup&gt;[6]&lt;/sup&gt; Often systems will classify these passes into different categories, but I am simplifying here&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Optimizing SQL (and DataFrames) in DataFusion, Part 2: Optimizers in Apache DataFusion</title><link href="https://datafusion.apache.org/blog/2025/06/15/optimizing-sql-dataframes-part-two" rel="alternate"></link><published>2025-06-15T00:00:00+00:00</published><updated>2025-06-15T00:00:00+00:00</updated><author><name>alamb, akurmustafa</name></author><id>tag:datafusion.apache.org,2025-06-15:/blog/2025/06/15/optimizing-sql-dataframes-part-two</id><summary type="html">&lt;!--
 {% comment %}
@@ -530,7 +530,7 @@ order enumeration&lt;/a&gt;.&lt;/p&gt;
 &lt;ol&gt;
 &lt;li&gt;
 &lt;p&gt;&lt;strong&gt;Make deep assumptions about the execution environment: &lt;/strong&gt;For example the
-   heuristics often include assumptions that joins implement &lt;a href="(https://www.alibabacloud.com/blog/alibaba-cloud-analyticdb-for-mysql-create-ultimate-runtimefilter-capability_600228"&gt;sideways information
+   heuristics often include assumptions that joins implement &lt;a href="https://www.alibabacloud.com/blog/alibaba-cloud-analyticdb-for-mysql-create-ultimate-runtimefilter-capability_600228"&gt;sideways information
    passing (RuntimeFilters)&lt;/a&gt;, or that Join operators always preserve a particular
    input's order.&lt;/p&gt;
 &lt;/li&gt;
