@@ -98,13 +98,13 @@ applies to DataFrame style APIs.
 
 Classic DataFrame systems such as [pandas] and [Polars] (by default) execute
 eagerly and thus have limited opportunities for optimization. However, more
-modern APIs such as [Polar's lazy API], [Apache Spark's DataFrame]. and
+modern APIs such as [Polars' lazy API], [Apache Spark's DataFrame]. and
 [DataFusion's DataFrame] are much faster as they use the design shown in Figure
 1 and apply many query optimization techniques.
 
 [pandas]: https://pandas.pydata.org/
-[Polars]: https://pola.rs/) 
-[Polar'’'s lazy API]: https://docs.pola.rs/user-guide/lazy/using/
+[Polars]: https://pola.rs/ 
+[Polars' lazy API]: https://docs.pola.rs/user-guide/lazy/using/
 [Apache Spark's DataFrame]: https://spark.apache.org/docs/latest/sql-programming-guide.html#datasets-and-dataframes),
 [DataFusion's DataFrame]: https://datafusion.apache.org/user-guide/dataframe.html
 
@@ -140,13 +140,13 @@ df.scan("observations")
 ```
 
 Within DataFusion, both the SQL and DataFrame are translated into the same
-[`LogicalPlan`] , a “tree of relational operators.” This is a fancy way of
+[LogicalPlan], a “tree of relational operators.” This is a fancy way of
 saying data flow graphs where the edges represent tabular data (rows + columns)
 and the nodes represent a transformation (see [this DataFusion overview video]
 for more details). The initial `LogicalPlan` for the queries above is shown in
 Figure 2.
 
-[`LogicalPlan`]: https://docs.rs/datafusion/latest/datafusion/logical_expr/enum.LogicalPlan.html
+[LogicalPlan]: https://docs.rs/datafusion/latest/datafusion/logical_expr/enum.LogicalPlan.html
 [this DataFusion overview video]: https://youtu.be/EzZTLiSJnhY
 
 <img src="/blog/images/optimizing-sql-dataframes/initial-logical-plan.png" width="72%" class="img-responsive" alt="Fig 2: Initial Logical Plan."/>
@@ -242,7 +242,7 @@ optimizations](https://datafusion.apache.org/blog/2025/03/11/ordering-analysis/)
 
 <a id="footnote3"></a><sup>[3]</sup> [https://www.vldb.org/pvldb/vol17/p1350-justen.pdf](https://www.vldb.org/pvldb/vol17/p1350-justen.pdf)
 
-<a id="footnote4"></a><sup>[4]</sup> [https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/24101](https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/24101) , [https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/22111](https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/22111) [https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/12321](https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/12321)
+<a id="footnote4"></a><sup>[4]</sup> [https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/24101](https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/24101), [https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/22111](https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/22111), [https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/12321](https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/12321)
 
 <a id="footnote5"></a><sup>[5]</sup>  And thus in academic classes, by the time you get around to an optimizer the semester is over and everyone is ready for the semester to be done. Once industrial systems mature to the point where the optimizer is a bottleneck, the shiny new-ness of the[ hype cycle](https://en.wikipedia.org/wiki/Gartner_hype_cycle) has worn off and it is likely in the trough of disappointment.
 

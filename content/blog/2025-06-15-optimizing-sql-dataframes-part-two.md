@@ -452,7 +452,7 @@ However, the use of heuristics and (imprecise) cost models means optimizers must
    arrives, and often have trouble capturing the non-uniformity of real world
    datasets
 
-[sideways information passing (RuntimeFilters)]: (https://www.alibabacloud.com/blog/alibaba-cloud-analyticdb-for-mysql-create-ultimate-runtimefilter-capability_600228
+[sideways information passing (RuntimeFilters)]: https://www.alibabacloud.com/blog/alibaba-cloud-analyticdb-for-mysql-create-ultimate-runtimefilter-capability_600228
 
 
 ### Join Ordering in DataFusion
