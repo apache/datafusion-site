@@ -1,0 +1,251 @@
+<!doctype html>
+<html class="no-js" lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Optimizing SQL (and DataFrames) in DataFusion, Part 1: Query Optimization Overview - Apache DataFusion Blog</title>
+<link href="/blog/css/bootstrap.min.css" rel="stylesheet">
+<link href="/blog/css/fontawesome.all.min.css" rel="stylesheet">
+<link href="/blog/css/headerlink.css" rel="stylesheet">
+<link href="/blog/highlight/default.min.css" rel="stylesheet">
+<script src="/blog/highlight/highlight.js"></script>
+<script>hljs.highlightAll();</script>  </head>
+  <body class="d-flex flex-column h-100">
+  <main class="flex-shrink-0">
+<!-- nav bar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark" aria-label="Fifth navbar example">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/blog"><img src="/blog/images/logo_original4x.png" style="height: 32px;"/> Apache DataFusion Blog</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarADP" aria-controls="navbarADP" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarADP">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/about.html">About</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/feed.xml">RSS</a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>    
+
+
+<!-- page contents -->
+<div id="contents">
+    <div class="bg-white p-5 rounded">
+        <div class="col-sm-8 mx-auto">
+          <h1>
+              Optimizing SQL (and DataFrames) in DataFusion, Part 1: Query Optimization Overview
+          </h1>
+              <p>Posted on: Sun 15 June 2025 by alamb, akurmustafa</p>
+              <!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+-->
+<p><em>Note: this blog was originally published <a href="https://www.influxdata.com/blog/optimizing-sql-dataframes-part-one/">on the InfluxData blog</a></em></p>
+<h2>Introduction</h2>
+<p>Sometimes Query Optimizers are seen as a sort of black magic, <a href="https://15799.courses.cs.cmu.edu/spring2025/">&ldquo;the most
+challenging problem in computer
+science,&rdquo;</a> according to Father
+Pavlo, or some behind-the-scenes player. We believe this perception is because:</p>
+<ol>
+<li>
+<p>One must implement the rest of a database system (data storage, transactions,
+   SQL parser, expression evaluation, plan execution, etc.) <strong>before</strong> the
+   optimizer becomes critical<sup id="fn5"><a href="#footnote5">5</a></sup>.</p>
+</li>
+<li>
+<p>Some parts of the optimizer are tightly tied to the rest of the system (e.g.,
+   storage or indexes), so many classic optimizers are described with
+   system-specific terminology.</p>
+</li>
+<li>
+<p>Some optimizer tasks, such as access path selection and join order are known
+   challenges and not yet solved (practically)&mdash;maybe they really do require
+   black magic 🤔.</p>
+</li>
+</ol>
+<p>However, Query Optimizers are no more complicated in theory or practice than other parts of a database system, as we will argue in a series of posts:</p>
+<p><strong>Part 1: (this post)</strong>:</p>
+<ul>
+<li>Review what a Query Optimizer is, what it does, and why you need one for SQL and DataFrames.</li>
+<li>Describe how industrial Query Optimizers are structured and standard optimization classes.</li>
+</ul>
+<p><strong>Part 2:</strong></p>
+<ul>
+<li>Describe the optimization categories with examples and pointers to implementations.</li>
+<li>Describe <a href="https://datafusion.apache.org/">Apache DataFusion</a>&rsquo;s rationale and approach to query optimization, specifically for access path and join ordering.</li>
+</ul>
+<p>After reading these blogs, we hope people will use DataFusion to:</p>
+<ol>
+<li>Build their own system specific optimizers.</li>
+<li>Perform practical academic research on optimization (especially researchers
+   working on new optimizations / join ordering&mdash;looking at you <a href="https://15799.courses.cs.cmu.edu/spring2025/">CMU
+   15-799</a>, next year).</li>
+</ol>
+<h2>Query Optimizer Background</h2>
+<p>The key pitch for querying databases, and likely the key to the longevity of SQL
+(despite people&rsquo;s love/hate relationship&mdash;see <a href="https://db.cs.cmu.edu/seminar2025/">SQL or Death? Seminar Series &ndash;
+Spring 2025</a>), is that it disconnects the
+<code>WHAT</code> you want to compute from the <code>HOW</code> to do it. SQL is a <em>declarative</em>
+language&mdash;it describes what answers are desired rather than an <em>imperative</em>
+language such as Python, where you describe how to do the computation as shown
+in Figure 1.</p>
+<p><img alt="Fig 1: Query Execution." class="img-responsive" src="/blog/images/optimizing-sql-dataframes/query-execution.png" width="80%"/></p>
+<p><strong>Figure 1</strong>: Query Execution: Users describe the answer they want using either
+SQL or a DataFrame. For SQL, a Query Planner translates the parsed query 
+into an <em>initial plan</em>. The DataFrame API creates an initial plan directly.
+The initial plan is correct, but slow. Then, the Query
+Optimizer rewrites the initial plan into an <em>optimized plan</em>, which computes
+the same results but faster and more efficiently. Finally, the Execution Engine
+executes the optimized plan producing results.</p>
+<h2>SQL, DataFrames, LogicalPlan Equivalence</h2>
+<p>Given their name, it is not surprising that Query Optimizers can improve the
+performance of SQL queries. However, it is under-appreciated that this also
+applies to DataFrame style APIs.</p>
+<p>Classic DataFrame systems such as <a href="https://pandas.pydata.org/">pandas</a> and <a href="https://pola.rs/">Polars</a> (by default) execute
+eagerly and thus have limited opportunities for optimization. However, more
+modern APIs such as <a href="https://docs.pola.rs/user-guide/lazy/using/">Polars' lazy API</a>, <a href="https://spark.apache.org/docs/latest/sql-programming-guide.html#datasets-and-dataframes),">Apache Spark's DataFrame</a>. and
+<a href="https://datafusion.apache.org/user-guide/dataframe.html">DataFusion's DataFrame</a> are much faster as they use the design shown in Figure
+1 and apply many query optimization techniques.</p>
+<h2>Example of Query Optimizer</h2>
+<p>This section motivates the value of a Query Optimizer with an example. Let&rsquo;s say
+you have some observations of animal behavior, as illustrated in Table 1.</p>
+<p><img alt="Table 1: Observational Data." class="img-responsive" src="/blog/images/optimizing-sql-dataframes/table1.png" width="75%"/></p>
+<p><strong>Table 1</strong>: Example observational data.</p>
+<p>If the user wants to know the average population for some species in the last
+month, a user can write a SQL query or a DataFrame such as the following:</p>
+<p>SQL:</p>
+<pre><code class="language-sql">SELECT location, AVG(population)
+FROM observations
+WHERE species = &lsquo;contrarian spider&rsquo; AND 
+  observation_time &gt;= now() - interval '1 month'
+GROUP BY location
+</code></pre>
+<p>DataFrame:</p>
+<pre><code class="language-rust">df.scan("observations")
+  .filter(col("species").eq("contrarian spider"))
+  .filter(col("observation_time").ge(now()).sub(interval('1 month')))
+  .agg(vec![col(location)], vec![avg(col("population")])
+</code></pre>
+<p>Within DataFusion, both the SQL and DataFrame are translated into the same
+<a href="https://docs.rs/datafusion/latest/datafusion/logical_expr/enum.LogicalPlan.html">LogicalPlan</a>, a &ldquo;tree of relational operators.&rdquo; This is a fancy way of
+saying data flow graphs where the edges represent tabular data (rows + columns)
+and the nodes represent a transformation (see <a href="https://youtu.be/EzZTLiSJnhY">this DataFusion overview video</a>
+for more details). The initial <code>LogicalPlan</code> for the queries above is shown in
+Figure 2.</p>
+<p><img alt="Fig 2: Initial Logical Plan." class="img-responsive" src="/blog/images/optimizing-sql-dataframes/initial-logical-plan.png" width="72%"/></p>
+<p><strong>Figure 2</strong>: Example initial <code>LogicalPlan</code> for SQL and DataFrame query. The
+plan is read from bottom to top, computing the results in each step.</p>
+<p>The optimizer's job is to take this query plan and rewrite it into an alternate
+plan that computes the same results but faster, such as the one shown in Figure
+3.</p>
+<p><img alt="Fig 3: Optimized Logical Plan." class="img-responsive" src="/blog/images/optimizing-sql-dataframes/optimized-logical-plan.png" width="80%"/></p>
+<p><strong>Figure 3</strong>: An example optimized plan that computes the same result as the
+plan in Figure 2 more efficiently. The diagram highlights where the optimizer
+has applied <em>Projection Pushdown</em>, <em>Filter Pushdown</em>, and <em>Constant Evaluation</em>.
+Note that this is a simplified example for explanatory purposes, and actual
+optimizers such as the one in DataFusion perform additional tasks such as
+choosing specific aggregation algorithms.</p>
+<h2>Query Optimizer Implementation</h2>
+<p>Industrial optimizers, such as 
+DataFusion&rsquo;s (<a href="https://github.com/apache/datafusion/tree/334d6ec50f36659403c96e1bffef4228be7c458e/datafusion/optimizer/src">source</a>),
+ClickHouse (<a href="https://github.com/ClickHouse/ClickHouse/tree/master/src/Analyzer/Passes">source</a>, <a href="https://github.com/ClickHouse/ClickHouse/tree/master/src/Processors/QueryPlan/Optimizations">source</a>),
+DuckDB (<a href="https://github.com/duckdb/duckdb/tree/4afa85c6a4dacc39524d1649fd8eb8c19c28ad14/src/optimizer">source</a>),
+and Apache Spark (<a href="https://github.com/apache/spark/tree/7bc8e99cde424c59b98fe915e3fdaaa30beadb76/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/optimizer">source</a>),
+are implemented as a series of passes or rules that rewrite a query plan. The
+overall optimizer is composed of a sequence of these rules,<sup id="fn6"><a href="#footnote6">6</a></sup> as shown in
+Figure 4. The specific order of the rules also often matters, but we will not
+discuss this detail in this post.</p>
+<p>A multi-pass design is standard because it helps:</p>
+<ol>
+<li>Understand, implement, and test each pass in isolation</li>
+<li>Easily extend the optimizer by adding new passes</li>
+</ol>
+<p><img alt="Fig 4: Query Optimizer Passes." class="img-responsive" src="/blog/images/optimizing-sql-dataframes/optimizer-passes.png" width="80%"/></p>
+<p><strong>Figure 4</strong>: Query Optimizers are implemented as a series of rules that each
+rewrite the query plan. Each rule&rsquo;s algorithm is expressed as a transformation
+of a previous plan.</p>
+<p>There are three major classes of optimizations in industrial optimizers:</p>
+<ol>
+<li>
+<p><strong>Always Optimizations</strong>: These are always good to do and thus are always
+   applied. This class of optimization includes expression simplification,
+   predicate pushdown, and limit pushdown. These optimizations are typically
+   simple in theory, though they require nontrivial amounts of code and tests to
+   implement in practice.</p>
+</li>
+<li>
+<p><strong>Engine Specific Optimizations: </strong>These optimizations take advantage of
+   specific engine features, such as how expressions are evaluated or what
+   particular hash or join implementations are available.</p>
+</li>
+<li>
+<p><strong>Access Path and Join Order Selection</strong>: These passes choose one access
+   method per table and a join order for execution, typically using heuristics
+   and a cost model to make tradeoffs between the options. Databases often have
+   multiple ways to access the data (e.g., index scan or full-table scan), as
+   well as many potential orders to combine (join) multiple tables. These
+   methods compute the same result but can vary drastically in performance.</p>
+</li>
+</ol>
+<p>This brings us to the end of Part 1. In Part 2, we will explain these classes of
+optimizations in more detail and provide examples of how they are implemented in
+DataFusion and other systems.</p>
+<h1>About the Authors</h1>
+<p><a href="https://www.linkedin.com/in/andrewalamb/">Andrew Lamb</a> is a Staff Engineer at
+<a href="https://www.influxdata.com/">InfluxData</a> and an <a href="https://datafusion.apache.org/">Apache
+DataFusion</a> PMC member. A Database Optimizer
+connoisseur, he worked on the <a href="https://vldb.org/pvldb/vol5/p1790_andrewlamb_vldb2012.pdf">Vertica Analytic
+Database</a> Query
+Optimizer for six years, has several granted US patents related to query
+optimization<sup id="fn1"><a href="#footnote1">1</a></sup>, co-authored several papers<sup id="fn2"><a href="#footnote2">2</a></sup>  about the topic (including in
+VLDB 2024<sup id="fn3"><a href="#footnote3">3</a></sup>), and spent several weeks<sup id="fn4"><a href="#footnote4">4</a></sup> deeply geeking out about this topic
+with other experts (thank you Dagstuhl).</p>
+<p><a href="https://www.linkedin.com/in/akurmustafa/">Mustafa Akur</a> is a PhD Student at
+<a href="https://www.ohsu.edu/">OHSU</a> Knight Cancer Institute and an <a href="https://datafusion.apache.org/">Apache
+DataFusion</a> PMC member. He was previously a
+Software Developer at <a href="https://www.synnada.ai/">Synnada</a> where he contributed
+significant features to the DataFusion optimizer, including many <a href="https://datafusion.apache.org/blog/2025/03/11/ordering-analysis/">sort-based
+optimizations</a>.</p>
+<h2>Notes</h2>
+<p><a id="footnote1"></a><sup>[1]</sup> <em>Modular Query Optimizer, US 8,312,027 &middot; Issued Nov 13, 2012</em>, Query Optimizer with schema conversion US 8,086,598 &middot; Issued Dec 27, 2011</p>
+<p><a id="footnote2"></a><sup>[2]</sup> <a href="https://www.researchgate.net/publication/269306314_The_Vertica_Query_Optimizer_The_case_for_specialized_query_optimizers">The Vertica Query Optimizer: The case for specialized Query Optimizers</a></p>
+<p><a id="footnote3"></a><sup>[3]</sup> <a href="https://www.vldb.org/pvldb/vol17/p1350-justen.pdf">https://www.vldb.org/pvldb/vol17/p1350-justen.pdf</a></p>
+<p><a id="footnote4"></a><sup>[4]</sup> <a href="https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/24101">https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/24101</a>, <a href="https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/22111">https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/22111</a>, <a href="https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/12321">https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/12321</a></p>
+<p><a id="footnote5"></a><sup>[5]</sup>  And thus in academic classes, by the time you get around to an optimizer the semester is over and everyone is ready for the semester to be done. Once industrial systems mature to the point where the optimizer is a bottleneck, the shiny new-ness of the<a href="https://en.wikipedia.org/wiki/Gartner_hype_cycle"> hype cycle</a> has worn off and it is likely in the trough of disappointment.</p>
+<p><a id="footnote6"></a><sup>[6]</sup> Often systems will classify these passes into different categories, but I am simplifying here</p>
+        </div>
+      </div>
+    </div>    
+    <!-- footer -->
+    <div class="row">
+      <div class="large-12 medium-12 columns">
+        <p style="font-style: italic; font-size: 0.8rem; text-align: center;">
+          Copyright 2025, <a href="https://www.apache.org/">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a>.<br/>
+          Apache&reg; and the Apache feather logo are trademarks of The Apache Software Foundation.
+        </p>
+      </div>
+    </div>
+    <script src="/blog/js/bootstrap.bundle.min.js"></script>  </main>
+  </body>
+</html>
