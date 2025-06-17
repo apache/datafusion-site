@@ -28,19 +28,20 @@ limitations under the License.
 ## The Challenge of Cancelling Long-Running Queries
 
 Have you ever tried to cancel a query that just wouldn't stop?
-In this post, we'll take a look at why that can happen in DataFusion and what the community did to resolve the problem in depth.
+In this post, we'll review how Rust's `async` model works, how DataFusion uses that model for CPU intensive tasks, and how this is used to cancel queries.
+Then we'll review some cases where queries could not be cancelled in DataFusion and what the community did to resolve the problem.
 
 ### Understanding Rust's Async Model
 
-To really understand the cancellation problem you need to be somewhat familiar with Rust's asynchronous programming model.
-This is a bit different than what you might be used to from other ecosystems.
+DataFusion, somewhat unconventionally, [uses the Rust async system and the Tokio task scheduler](https://docs.rs/datafusion/latest/datafusion/#thread-scheduling-cpu--io-thread-pools-and-tokio-runtimes) for CPU intensive processing.
+To really understand the cancellation problem you first need to be somewhat familiar with Rust's asynchronous programming model which is a bit different from what you might be used to from other ecosystems.
 Let's go over the basics again as a refresher.
 If you're familiar with the ins and outs of `Future` and `async` you can skip this section.
 
 #### Futures Are Inert
 
-Rust's asynchronous programming model is built around the `Future<T>` trait.
-In contrast to, for instance, Javascript's `Promise` or Java's `Future` a Rust `Future` does not necessarily represent an actively running asynchronous job.
+Rust's asynchronous programming model is built around the [`Future<T>`](https://doc.rust-lang.org/std/future/trait.Future.html) trait.
+In contrast to, for instance, Javascript's [`Promise`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise) or Java's [`Future`](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/concurrent/Future.html) a Rust `Future` does not necessarily represent an actively running asynchronous job.
 Instead, a `Future<T>` represents a lazy calculation that only makes progress when explicitly polled.
 If nothing tells a `Future` to try and make progress explicitly, it is [an inert object](https://doc.rust-lang.org/std/future/trait.Future.html#runtime-characteristics).
 
@@ -56,15 +57,20 @@ This avoids having to call `poll` in a busy-waiting loop.
 
 Rust's `async` keyword provides syntactic sugar over this model.
 When you write an `async` function or block, the compiler transforms it into an implementation of the `Future` trait for you.
-Since all the state management is compiler generated and hidden from sight, async code tends to be more readable while maintaining the same underlying mechanics.
+Since all the state management is compiler generated and hidden from sight, async code tends to be easier to write initially, more readable afterward, and all the while maintains the same underlying mechanics.
 
 The `await` keyword complements this by letting you pause execution until a `Future` completes.
-When you `.await` a `Future`, you're essentially telling the compiler to poll that `Future` until it's ready before program execution continues with the statement after the await.
+When you `.await` a `Future`, you're essentially telling the compiler to generate code that:
+1. Polls the `Future` with the current (implicit) asynchronous context
+2. If `poll` returns `Poll::Pending`, save the state of the `Future` so that it can resume at this point and return `Poll::Pending`
+3. If it returns `Poll::Ready(value)`, continue execution with that value
 
 #### From Futures to Streams
 
-The ``Future`s` crate extends the `Future` model with the `Stream` trait.
-Streams represent a sequence of values produced asynchronously rather than just a single value.
+The [`futures`](https://docs.rs/futures/latest/futures/) crate extends the `Future` model with a trait named [`Stream`](https://docs.rs/futures/latest/futures/prelude/trait.Stream.html).
+`Stream<Item = T>` represents a sequence of values that are each produced asynchronously rather than just a single value.
+It's the asynchronous equivalent of `Iterator<Item = T>`.
+
 The `Stream` trait has one method named `poll_next` that returns:
 - `Poll::Pending` when the next value isn't ready yet, just like a `Future` would
 - `Poll::Ready(Some(value))` when a new value is available
@@ -72,7 +78,7 @@ The `Stream` trait has one method named `poll_next` that returns:
 
 ### How DataFusion Executes Queries
 
-In DataFusion, queries are executed as follows:
+In DataFusion, the short version of how queries are executed is as follows (you can find more in-depth coverage of this in the [DataFusion documentation](https://docs.rs/datafusion/latest/datafusion/#streaming-execution):
 
 1. First the query is compiled into a tree of `ExecutionPlan` nodes
 2. `ExecutionPlan::execute` is called on the root of the tree. This method returns a `SendableRecordBatchStream` (a pinned `Box<dyn Stream<RecordBatch>>`)
@@ -100,7 +106,7 @@ This is fundamentally different from preemptive scheduling that you might be use
 This distinction is crucial for understanding our cancellation problem.
 When a Tokio task is running, it can't be forcibly interrupted - it must cooperate by periodically yielding control.
 
-Similarly, when you try to abort a task by calling `JoinHandle::abort()`, the Tokio runtime can't immediately force it to stop.
+Similarly, when you try to abort a task by calling [`JoinHandle::abort()`](https://docs.rs/tokio/latest/tokio/task/struct.JoinHandle.html#method.abort), the Tokio runtime can't immediately force it to stop.
 You're just telling Tokio: "When this task next yields control, don't resume it."
 If the task never yields, it can't be aborted.
 
@@ -129,13 +135,14 @@ Then it calls `next` on stream which is an `async` wrapper for `poll_next`.
 It passes this to the `select!` macro along with a ctrl-C handler.
 
 The `select!` macro is supposed to race these two `Future`s and complete when either one finishes.
-When you press Ctrl+C, the `signal::ctrl_c()` `Future` should complete, allowing the query to be cancelled.
+When you press Ctrl+C, the `signal::ctrl_c()` `Future` should complete.
+Given that DataFusion uses the Rust async machinery, the [stream is cancelled ](https://docs.rs/datafusion/latest/datafusion/physical_plan/trait.ExecutionPlan.html#cancellation--aborting-execution) when it is dropped as it is inert by itself and nothing will be able to call `poll_next` again.
 
 But there's a catch: `select!` still follows cooperative scheduling rules.
 It polls each `Future` in sequence, and if the first one (our query) gets stuck in a long computation, it never gets around to polling the cancellation signal.
 
 Imagine a query that needs to calculate something intensive, like sorting billions of rows.
-The `poll_next` call a couple of minutes or even longer without returning.
+Unless the sorting Stream is written with care (which the one in DataFusion is now), the `poll_next` call may take a couple of minutes or even longer without returning.
 During this time, Tokio can't check if you've pressed Ctrl+C, and the query continues running despite your cancellation request.
 
 ## A Closer Look at Blocking Operators
@@ -145,6 +152,7 @@ Here's a drastically simplified version of a `COUNT(*)` aggregation - something 
 
 ```rust
 struct BlockingStream {
+   // the inner stream that is wrapped
     stream: SendableRecordBatchStream,
     count: usize,
     finished: bool,
@@ -211,7 +219,7 @@ How does this code work? Let's break it down step by step:
 This code looks perfectly reasonable at first glance.
 But there's a subtle issue lurking here: what happens if the input stream consistently returns `Ready` and never returns `Pending`?
 
-In that case, the processing loop will keep running without ever yielding control back to Tokio's scheduler.
+In that case, the processing loop will keep running without returning `Poll::Pending` and thus without ever yielding control back to Tokio's scheduler.
 This means we could be stuck in a single `poll_next` call for quite some time - exactly the scenario that prevents query cancellation from working!
 
 ## Unblocking Operators
@@ -247,7 +255,7 @@ impl Stream for CountingSourceStream {
 }
 ```
 
-This would be a simple solution for this source operator.
+This would be a simple solution for this example operator.
 If our simple aggregation operator consumes this stream it will receive a `Pending` periodically causing it to yield.
 Could it be that simple?
 
@@ -280,7 +288,7 @@ When one of them determines that it's time to yield, all the other operators agr
 That way our task would be coaxed towards yielding even if it tried to poll many different operators.
 
 Luckily the [developers of Tokio ran into the exact same problem](https://tokio.rs/blog/2020-04-preemption) described above when network servers were under heavy load and came up with a solution.
-Back in 2020 already, Tokio 0.2.14 introduced a per-task operation budget.
+Back in 2020, Tokio 0.2.14 introduced a per-task operation budget.
 Rather than having individual counters littered throughout the code, the runtime manages a per task counter which is decremented by Tokio resources.
 When the counter hits zero, all resources start returning `Pending`.
 The task will then yield, after which the Tokio runtime resets the counter.
@@ -288,7 +296,7 @@ The task will then yield, after which the Tokio runtime resets the counter.
 As it turns out DataFusion was already using this mechanism implicitly.
 Every exchange-like operator internally makes use of a Tokio multiple producer, single consumer `Channel`.
 When calling `Receiver::recv` for one of these channels, a unit of Tokio task budget is consumed.
-As a consequence, query plans that made use of exchange-like operators were already mostly cancelable.
+As a consequence, query plans that made use of exchange-like operators were already mostly cancelable and the bug only showed up when running parts of plans without such operators, such as when only a single core was available.
 
 ### Depleting The Budget
 
