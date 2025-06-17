@@ -162,16 +162,21 @@ impl Stream for BlockingStream {
     type Item = Result<RecordBatch>;
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         if self.finished {
+            // return None if we're finished
             return Poll::Ready(None);
         }
 
         loop {
+            // poll the wrapped stream
             match ready!(self.stream.poll_next_unpin(cx)) {
+                // increment the counter if we got a batch
                 Some(Ok(batch)) => self.count += batch.num_rows(),
+                // on end-of-stream, create a record batch for the counter
                 None => {
                     self.finished = true;
                     return Poll::Ready(Some(Ok(create_record_batch(self.count))));
                 }
+                // pass on any errors verbatim
                 Some(Err(e)) => return Poll::Ready(Some(Err(e))),
             }
         }
