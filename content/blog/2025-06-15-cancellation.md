@@ -17,15 +17,15 @@ If you're familiar with the ins and outs of `Future` and `async` you can skip th
 Rust's asynchronous programming model is built around the `Future<T>` trait.
 In contrast to, for instance, Javascript's `Promise` or Java's `Future` a Rust `Future` does not necessarily represent an actively running asynchronous job.
 Instead, a `Future<T>` represents a lazy calculation that only makes progress when explicitly polled.
-If nothing tells a `Future` to try and make progress explicitly, it is an inert object.
+If nothing tells a `Future` to try and make progress explicitly, it is [an inert object](https://doc.rust-lang.org/std/future/trait.Future.html#runtime-characteristics).
 
 You ask a `Future<T>`to advance its calculation as much as possible by calling the `poll` method.
-The future responds with either:
+The `Future` responds with either:
 - `Poll::Pending` if it needs to wait for something (like I/O) before it can continue
 - `Poll::Ready<T>` when it has completed and produced a value
 
-When a future returns `Pending`, it saves its internal state so it can pick up where it left off the next time you poll it.
-This state management is what makes Rust's futures memory-efficient and composable.
+When a `Future` returns `Pending`, it saves its internal state so it can pick up where it left off the next time you poll it.
+This state management is what makes Rust's `Future`s memory-efficient and composable.
 It also needs to set up the necessary signaling so that the caller gets notified when it should try to call `poll` again.
 This avoids having to call `poll` in a busy-waiting loop.
 
@@ -33,12 +33,12 @@ Rust's `async` keyword provides syntactic sugar over this model.
 When you write an `async` function or block, the compiler transforms it into an implementation of the `Future` trait for you.
 Since all the state management is compiler generated and hidden from sight, async code tends to be more readable while maintaining the same underlying mechanics.
 
-The `await` keyword complements this by letting you pause execution until a future completes.
-When you write `.await` after a future, you're essentially telling the compiler to poll that future until it's ready before program execution continues with the statement after the await.
+The `await` keyword complements this by letting you pause execution until a `Future` completes.
+When you `.await` a `Future`, you're essentially telling the compiler to poll that `Future` until it's ready before program execution continues with the statement after the await.
 
 #### From Futures to Streams
 
-The `futures` crate extends the `Future` model with the `Stream` trait.
+The ``Future`s` crate extends the `Future` model with the `Stream` trait.
 Streams represent a sequence of values produced asynchronously rather than just a single value.
 The `Stream` trait has one method named `poll_next` that returns:
 - `Poll::Pending` when the next value isn't ready yet, just like a `Future` would
@@ -66,7 +66,7 @@ When `poll_next` encounters one of these operations, it might need to perform a 
 ### Tokio and Cooperative Scheduling
 
 We need to make a small detour now via Tokio's scheduler before we can get to the query cancellation problem.
-DataFusion makes use of the Tokio asynchronous runtime, which uses a cooperative scheduling model.
+DataFusion makes use of the [Tokio asynchronous runtime](https://tokio.rs), which uses a [cooperative scheduling model](https://docs.rs/tokio/latest/tokio/task/index.html#what-are-tasks).
 This is fundamentally different from preemptive scheduling that you might be used to:
 
 - In preemptive scheduling, the system can interrupt a task at any time to run something else
@@ -100,17 +100,17 @@ fn exec_query() {
 
 First the CLI sets up a Tokio runtime instance.
 It then reads the query you want to execute from standard input or file and turns it into a stream.
-Then if calls `next` on stream which is an `async` wrapper for `poll_next`.
+Then it calls `next` on stream which is an `async` wrapper for `poll_next`.
 It passes this to the `select!` macro along with a ctrl-C handler.
 
-The `select!` macro is supposed to race these two futures and complete when either one finishes.
-When you press Ctrl+C, the `signal::ctrl_c()` future should complete, allowing the query to be cancelled.
+The `select!` macro is supposed to race these two `Future`s and complete when either one finishes.
+When you press Ctrl+C, the `signal::ctrl_c()` `Future` should complete, allowing the query to be cancelled.
 
 But there's a catch: `select!` still follows cooperative scheduling rules.
-It polls each future in sequence, and if the first one (our query) gets stuck in a long computation, it never gets around to polling the cancellation signal.
+It polls each `Future` in sequence, and if the first one (our query) gets stuck in a long computation, it never gets around to polling the cancellation signal.
 
 Imagine a query that needs to calculate something intensive, like sorting billions of rows.
-The `poll_next` call might run for hours without returning.
+The `poll_next` call a couple of minutes or even longer without returning.
 During this time, Tokio can't check if you've pressed Ctrl+C, and the query continues running despite your cancellation request.
 
 ## A Closer Look at Blocking Operators
@@ -187,7 +187,7 @@ This code looks perfectly reasonable at first glance.
 But there's a subtle issue lurking here: what happens if the input stream consistently returns `Ready` and never returns `Pending`?
 
 In that case, the processing loop will keep running without ever yielding control back to Tokio's scheduler.
-This means we could be stuck in a single `poll_next` call for minutes or even hours - exactly the scenario that prevents query cancellation from working!
+This means we could be stuck in a single `poll_next` call for quite some time - exactly the scenario that prevents query cancellation from working!
 
 ## Unblocking Operators
 
@@ -209,7 +209,7 @@ impl Stream for CountingSourceStream {
     type Item = Result<RecordBatch>;
    
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        if self.counter >= self.128 {
+        if self.counter >= 128 {
             self.counter = 0;
             cx.waker().wake_by_ref();
             return Poll::Pending;
@@ -240,7 +240,7 @@ CountingSource
 
 Each source is producing a pending every 128 batches.
 The filter is the standard DataFusion filter, with a filter expression that drops a batch every 50 record batches.
-Merge is a simple combining operator the uses `futures::stream::select` to combine two stream.
+Merge is a simple combining operator the uses ``Future`s::stream::select` to combine two stream.
 
 When we set this in motion, the merge operator will poll the left and right branch in a round-robin fashion.
 The sources will each emit `Pending` every 128 batches, but the filter dropping batches makes it so that these arrive out-of-phase at the merge operator.
@@ -254,9 +254,9 @@ Wouldn't it be great if we could get all the operators to coordinate amongst eac
 When one of them determines that it's time to yield, all the other operators agree and start returning `Pending` as well.
 That way our task would be coaxed towards yielding even if it tried to poll many different operators.
 
-Luckily the [developers of Tokio ran into the exact same problem](https://tokio.rs/blog/2020-04-preemption) described above when network servers were under heavy load and come up with a solution.
+Luckily the [developers of Tokio ran into the exact same problem](https://tokio.rs/blog/2020-04-preemption) described above when network servers were under heavy load and came up with a solution.
 Back in 2020 already, Tokio 0.2.14 introduced a per-task operation budget.
-Rather than having individual counter littered throughout the code, the runtime manages a per task counter which is decremented by Tokio resources.
+Rather than having individual counters littered throughout the code, the runtime manages a per task counter which is decremented by Tokio resources.
 When the counter hits zero, all resources start returning `Pending`.
 The task will then yield, after which the Tokio runtime resets the counter.
 
