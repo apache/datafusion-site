@@ -364,3 +364,34 @@ A new 'EnsureCooperative' optimizer rule can inspect query plans and insert wrap
 These two changes combined already make it very unlikely you'll encounter another query that refuses to stop.
 For those situations where the automatic mechanisms are still not sufficient though there's a third addition in the form of the `datafusion::physical_plan::coop` module.
 This new module provides utility functions that make it easy to adopt cooperative scheduling in your custom operators as well.  
+
+### Acknowledgments
+
+Thank you to [Datadobi] for sponsoring the development of this feature and to
+the DataFusion community contributors including [Qi Zhu] and [Mehmet Ozan
+Kabak].
+
+
+[Datadobi]: https://datadobi.com/
+[Qi Zhu]: https://github.com/zhuqi-lucas
+[Mehmet Ozan Kabak]: https://github.com/ozankabak
+
+### About DataFusion
+
+[Apache DataFusion] is an extensible query engine and database toolkit, written
+in Rust, that uses [Apache Arrow] as its in-memory format. DataFusion and
+similar technology are part of the next generation “Deconstructed Database”
+architectures, where new systems are built on a foundation of fast, modular
+components, rather than as a single tightly integrated system.
+
+The [DataFusion community] is always looking for new contributors to help
+improve the project. If you are interested in learning more about how query
+execution works, help document or improve the DataFusion codebase, or just try
+it out, we would love for you to join us.
+
+
+[Apache Arrow]: https://arrow.apache.org/
+[Apache DataFusion]: https://datafusion.apache.org/
+[DataFusion community]: https://datafusion.apache.org/contributor-guide/communication.html
+
+
