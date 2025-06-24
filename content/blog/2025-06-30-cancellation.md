@@ -172,7 +172,7 @@ impl Stream for BlockingStream {
         }
 
         loop {
-            // poll the wrapped stream
+            // poll the wrapped stream to get the next batch if ready
             match ready!(self.stream.poll_next_unpin(cx)) {
                 // increment the counter if we got a batch
                 Some(Ok(batch)) => self.count += batch.num_rows(),
@@ -191,45 +191,51 @@ impl Stream for BlockingStream {
 
 How does this code work? Let's break it down step by step:
 
-1. **Initial check**: We first check if we've already finished processing. If so, we return `Ready(None)` to signal the end of our stream:
-   ```rust
-   if self.finished {
-       return Poll::Ready(None);
-   }
-   ```
+**1. Initial check**: We first check if we've already finished processing. If so, we return `Ready(None)` to signal the end of our stream:
 
-2. **Processing loop**: If we're not done yet, we enter a loop to process incoming batches from our input stream:
-   ```rust
-   loop {
-       match ready!(self.stream.poll_next_unpin(cx)) {
-           // Handle different cases...
-       }
-   }
-   ```
-   The `ready!` macro checks if the input stream returned `Pending` and if so, immediately returns `Pending` from our function as well.
+```rust
+if self.finished {
+    return Poll::Ready(None);
+}
+```
 
-3. **Processing data**: For each batch we receive, we simply add its row count to our running total:
-   ```rust
-   Some(Ok(batch)) => self.count += batch.num_rows(),
-   ```
+**2. Processing loop**: If we're not done yet, we enter a loop to process incoming batches from our input stream:
 
-4. **End of input**: When the child stream is exhausted (returns `None`), we calculate our final result and convert it into a record batch (omitted for brevity):
-   ```rust
-   None => {
-       self.finished = true;
-       return Poll::Ready(Some(Ok(create_record_batch(self.count))));
-   }
-   ```
+```rust
+loop {
+    match ready!(self.stream.poll_next_unpin(cx)) {
+        // Handle different cases...
+    }
+}
+```
 
-5. **Error handling**: If we encounter an error, we pass it along immediately:
-   ```rust
-   Some(Err(e)) => return Poll::Ready(Some(Err(e))),
-   ```
+The [`ready!`](https://doc.rust-lang.org/beta/std/task/macro.ready.html) macro checks if the input stream returned `Pending` and if so, immediately returns `Pending` from our function as well.
+
+**3. Processing data**: For each batch we receive, we simply add its row count to our running total:
+
+```rust
+Some(Ok(batch)) => self.count += batch.num_rows(),
+```
+
+**4. End of input**: When the child stream is exhausted (returns `None`), we calculate our final result and convert it into a record batch (omitted for brevity):
+
+```rust
+None => {
+    self.finished = true;
+    return Poll::Ready(Some(Ok(create_record_batch(self.count))));
+}
+```
+
+**5. Error handling**: If we encounter an error, we pass it along immediately:
+
+```rust
+Some(Err(e)) => return Poll::Ready(Some(Err(e))),
+```
 
 This code looks perfectly reasonable at first glance.
-But there's a subtle issue lurking here: what happens if the input stream consistently returns `Ready` and never returns `Pending`?
+But there's a subtle issue lurking here: what happens if the input stream *always* returns `Ready` and never returns `Pending`?
 
-In that case, the processing loop will keep running without returning `Poll::Pending` and thus without ever yielding control back to Tokio's scheduler.
+In that case, the processing loop will keep running without returning `Poll::Pending` and thus never yield control back to Tokio's scheduler.
 This means we could be stuck in a single `poll_next` call for quite some time - exactly the scenario that prevents query cancellation from working!
 
 ## Unblocking Operators
@@ -238,10 +244,10 @@ Now let's look at how we can ensure we return `Pending` every now and then.
 
 ### Independent Cooperative Operators
 
-One simple way to achieve this is using a loop counter.
+One simple way to return `Pending` is using a loop counter.
 We do the exact same thing as before, but on each loop iteration we decrement our counter.
 If the counter hits zero we return `Pending`.
-This ensures we iterate at most 128 times before yielding.
+The following example ensures we iterate at most 128 times before yielding.
 
 ```rust
 struct CountingSourceStream {
@@ -265,12 +271,12 @@ impl Stream for CountingSourceStream {
 }
 ```
 
-This would be a simple solution for this example operator.
-If our simple aggregation operator consumes this stream it will receive a `Pending` periodically causing it to yield.
-Could it be that simple?
+If `CountingSourceStream` was the input for the `BlockingStream` example above, 
+the `BlockingStream` will receive a `Pending` periodically causing it to yield too. 
+Can we really solve the cancel problem simply by periodically yielding in source streams? 
 
 Unfortunately, no.
-Let's look at what happens when we start combining operators in more complex configurations?
+Let's look at what happens when we start combining operators in more complex configurations.
 Suppose we create a plan like this.
 
 ```
@@ -281,14 +287,14 @@ Suppose we create a plan like this.
 CountingSource            
 ```
 
-Each source is producing a pending every 128 batches.
+Each `CountingSource` produces a `Pending` every 128 batches.
 The filter is the standard DataFusion filter, with a filter expression that drops a batch every 50 record batches.
-Merge is a simple combining operator the uses ``Future`s::stream::select` to combine two stream.
+Merge is a simple combining operator the uses `futures::stream::select` to combine two stream.
 
 When we set this in motion, the merge operator will poll the left and right branch in a round-robin fashion.
-The sources will each emit `Pending` every 128 batches, but the filter dropping batches makes it so that these arrive out-of-phase at the merge operator.
+The sources will each emit `Pending` every 128 batches, but since the filter drops batches, they arrive out-of-phase at the merge operator.
 As a consequence the merge operator will always have the opportunity of polling the other stream when one of the two returns `Pending`.
-The output stream of merge is again an always ready stream.
+The `Merge` stream merge thus is an always ready stream, even though the sources are yielding.
 If we pass this to our aggregating operator we're right back where we started.
 
 ### Coordinated Cooperation
@@ -299,7 +305,7 @@ That way our task would be coaxed towards yielding even if it tried to poll many
 
 Luckily the [developers of Tokio ran into the exact same problem](https://tokio.rs/blog/2020-04-preemption) described above when network servers were under heavy load and came up with a solution.
 Back in 2020, Tokio 0.2.14 introduced a per-task operation budget.
-Rather than having individual counters littered throughout the code, the runtime manages a per task counter which is decremented by Tokio resources.
+Rather than having individual counters littered throughout the code, the Tokio runtime itself manages a per task counter which is decremented by Tokio resources.
 When the counter hits zero, all resources start returning `Pending`.
 The task will then yield, after which the Tokio runtime resets the counter. This process is illustrated in Figure 1 and 2 below.
 
@@ -330,15 +336,15 @@ control back to the Tokio runtime. The runtime then resets the budget and calls
 `poll_next` again.
 
 As it turns out DataFusion was already using this mechanism implicitly.
-Every exchange-like operator internally makes use of a Tokio multiple producer, single consumer `Channel`.
+Every exchange-like operator (such as `RepartitionExec`) internally makes use of a Tokio multiple producer, single consumer [`Channel`](https://tokio.rs/tokio/tutorial/channels).
 When calling `Receiver::recv` for one of these channels, a unit of Tokio task budget is consumed.
 As a consequence, query plans that made use of exchange-like operators were
-already mostly cancelable, and the bug only showed up when running parts of plans
-without such operators, such as when only a single core was available.
+already mostly cancelable. The plan can't be canceled bug only showed up when running parts of plans
+without such operators, such as when using a single core.
 
-### Depleting The Budget
+### Depleting The Tokio Budget
 
-Let's revisit our original counting stream and adapt it to use Tokio's budget system.
+Let's revisit our original `CountingStream` and adapt it to use Tokio's budget system.
 
 ```rust
 struct BudgetSourceStream {
@@ -358,26 +364,32 @@ impl Stream for BudgetSourceStream {
 }
 ```
 
-The stream now goes through the following steps:
+The `Stream` now goes through the following steps:
 
-1. **Try to consume budget**: the first thing the operator does is use `poll_proceed` to try to consume a unit of budget.
-   If the budget is depleted, this function will return `Pending`.
-   Otherwise, we consumed one budget unit and we can continue.
-   ```rust
-   let coop = ready!(tokio::task::coop::poll_proceed(cx));
-   ```
-2. **Try to do some work**: next we try to produce a record batch.
-   That might not be possible if we're reading from some asynchronous resource that's not ready.
-   ```rust
-   let batch: Poll<Option<Self::Item>> = ...;
-   ```
-3. **Commit the budget consumption**: finally, if we did produce a batch, we need to tell Tokio that we were able to make progress.
-   That's done by calling the `made_progress` method on the value `poll_proceed` returned.
-   ```rust
-   if batch.is_ready() {
-      coop.made_progress();
-   }
-   ```
+**1. Try to consume budget**: the first thing the operator does is use `poll_proceed` to try to consume a unit of budget.
+If the budget is depleted, this function will return `Pending`.
+Otherwise, we consumed one budget unit and we can continue.
+
+```rust
+let coop = ready!(tokio::task::coop::poll_proceed(cx));
+```
+
+**2. Try to do some work**: next we try to produce a record batch.
+That might not be possible if we're reading from some asynchronous resource that's not ready.
+
+```rust
+let batch: Poll<Option<Self::Item>> = ...;
+```
+
+**3. Commit the budget consumption**: finally, if we did produce a batch, we need to tell Tokio that we were able to make progress.
+
+That's done by calling the `made_progress` method on the value `poll_proceed` returned.
+
+```rust
+if batch.is_ready() {
+   coop.made_progress();
+}
+```
 
 You might be wondering why that `made_progress` construct is necessary.
 This clever constructs actually makes it easier to manage the budget.
@@ -388,14 +400,17 @@ The task that invoked `poll_next` can then use that budget again to try to make 
 
 ### Making It Automatic
 
-The next version of DataFusion integrates the Tokio task budget based fix in all built-in source operators.
-This ensures that going forward, most queries will automatically be cancelable.
+DataFusion 49.0.0  integrates the Tokio task budget based fix in all built-in source operators.
+This ensures that going forward, most queries will automatically be cancelable. 
+See [the PR](https://github.com/apache/datafusion/pull/16398) for more details.
 
-On top of that a new `ExecutionPlan` property was introduced that indicates if an operator participates in cooperative scheduling or not.
-A new 'EnsureCooperative' optimizer rule can inspect query plans and insert wrapper `CooperativeExec` nodes as needed to ensure custom source operators also participate.
+The design includes:
+
+1. A new `ExecutionPlan` property that indicates if an operator participates in cooperative scheduling or not.
+2. A new 'EnsureCooperative' optimizer rule can inspect query plans and insert `CooperativeExec` nodes as needed to ensure custom source operators also participate.
 
 These two changes combined already make it very unlikely you'll encounter another query that refuses to stop.
-For those situations where the automatic mechanisms are still not sufficient though there's a third addition in the form of the `datafusion::physical_plan::coop` module.
+For those situations where the automatic mechanisms are still not sufficient, there's a third addition in the form of the `datafusion::physical_plan::coop` module.
 This new module provides utility functions that make it easy to adopt cooperative scheduling in your custom operators as well.  
 
 ### Acknowledgments
@@ -411,7 +426,7 @@ Kabak].
 
 ### About DataFusion
 
-[Apache DataFusion] is an extensible query engine and database toolkit, written
+[Apache DataFusion] is an extensible query engine toolkit, written
 in Rust, that uses [Apache Arrow] as its in-memory format. DataFusion and
 similar technology are part of the next generation “Deconstructed Database”
 architectures, where new systems are built on a foundation of fast, modular
