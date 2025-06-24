@@ -1,7 +1,7 @@
 ---
 layout: post
 title: Query Cancellation
-date: 2025-06-27
+date: 2025-06-30
 author: Pepijn Van Eeckhoudt
 categories: [features]
 ---
@@ -296,12 +296,40 @@ Luckily the [developers of Tokio ran into the exact same problem](https://tokio.
 Back in 2020, Tokio 0.2.14 introduced a per-task operation budget.
 Rather than having individual counters littered throughout the code, the runtime manages a per task counter which is decremented by Tokio resources.
 When the counter hits zero, all resources start returning `Pending`.
-The task will then yield, after which the Tokio runtime resets the counter.
+The task will then yield, after which the Tokio runtime resets the counter. This process is illustrated in Figure 1 and 2 below.
+
+
+<img
+src="/blog/images/task-cancellation/tokio_budget_plan.png"
+width="300px"
+class="img-responsive"
+alt="Diagram showing a [lan with a task, AggregateExec, MergeStream and Two sources."
+/>
+
+**Figure 1**: Example query plan for aggregating a sorted stream from two
+sources. Each source reads a stream of `RecordBatch`es, which are then merged
+into a single Stream by the `MergeStream` operator which is
+then aggregated by the `AggregateExec` operator.
+
+<img
+src="/blog/images/task-cancellation/tokio_budget.png"
+width="787px"
+class="img-responsive"
+alt="Sequence diagram showing how the tokio task budget is used and reset."
+/>
+
+**Figure 2**: Tokio task budget system, assuming the task budget is set to 1. 
+The first iteration of the loop consumes the budget, and returns `Ready`. The
+second iteration has no budget remaining, so returns `Pending` and yields
+control back to the Tokio runtime. The runtime then resets the budget and calls
+`poll_next` again.
 
 As it turns out DataFusion was already using this mechanism implicitly.
 Every exchange-like operator internally makes use of a Tokio multiple producer, single consumer `Channel`.
 When calling `Receiver::recv` for one of these channels, a unit of Tokio task budget is consumed.
-As a consequence, query plans that made use of exchange-like operators were already mostly cancelable and the bug only showed up when running parts of plans without such operators, such as when only a single core was available.
+As a consequence, query plans that made use of exchange-like operators were
+already mostly cancelable, and the bug only showed up when running parts of plans
+without such operators, such as when only a single core was available.
 
 ### Depleting The Budget
 
