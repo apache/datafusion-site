@@ -28,8 +28,9 @@ limitations under the License.
 ## The Challenge of Cancelling Long-Running Queries
 
 Have you ever tried to cancel a query that just wouldn't stop?
-In this post, we'll review how Rust's `async` model works, how DataFusion uses that model for CPU intensive tasks, and how this is used to cancel queries.
-Then we'll review some cases where queries could not be cancelled in DataFusion and what the community did to resolve the problem.
+In this post, we'll review how Rust's [`async`](https://doc.rust-lang.org/book/ch17-00-async-await.html) model works, how [DataFusion](https://datafusion.apache.org/) uses that model for CPU intensive tasks, and how this is used to cancel queries.
+Then we'll review some cases where queries could not be canceled in DataFusion and what the community did to resolve the problem.
+
 
 ### Understanding Rust's Async Model
 
@@ -37,6 +38,7 @@ DataFusion, somewhat unconventionally, [uses the Rust async system and the Tokio
 To really understand the cancellation problem you first need to be somewhat familiar with Rust's asynchronous programming model which is a bit different from what you might be used to from other ecosystems.
 Let's go over the basics again as a refresher.
 If you're familiar with the ins and outs of `Future` and `async` you can skip this section.
+
 
 #### Futures Are Inert
 
@@ -47,20 +49,21 @@ If nothing tells a `Future` to try and make progress explicitly, it is [an inert
 
 You ask a `Future<T>`to advance its calculation as much as possible by calling the `poll` method.
 The `Future` responds with either:
-- `Poll::Pending` if it needs to wait for something (like I/O) before it can continue
-- `Poll::Ready<T>` when it has completed and produced a value
+
+- [`Poll::Pending`](https://doc.rust-lang.org/std/task/enum.Poll.html#variant.Pending) if it needs to wait for something (like I/O) before it can continue
+- [`Poll::Ready<T>`](https://doc.rust-lang.org/std/task/enum.Poll.html#variant.Ready) when it has completed and produced a value
 
 When a `Future` returns `Pending`, it saves its internal state so it can pick up where it left off the next time you poll it.
 This state management is what makes Rust's `Future`s memory-efficient and composable.
-It also needs to set up the necessary signaling so that the caller gets notified when it should try to call `poll` again.
-This avoids having to call `poll` in a busy-waiting loop.
+It also needs the necessary signaling to notify the caller when it should call `poll` again, to avoid a busy-waiting loop.
 
 Rust's `async` keyword provides syntactic sugar over this model.
 When you write an `async` function or block, the compiler transforms it into an implementation of the `Future` trait for you.
 Since all the state management is compiler generated and hidden from sight, async code tends to be easier to write initially, more readable afterward, and all the while maintains the same underlying mechanics.
 
-The `await` keyword complements this by letting you pause execution until a `Future` completes.
+The `await` keyword complements `async` by letting you pause execution until a `Future` completes.
 When you `.await` a `Future`, you're essentially telling the compiler to generate code that:
+
 1. Polls the `Future` with the current (implicit) asynchronous context
 2. If `poll` returns `Poll::Pending`, save the state of the `Future` so that it can resume at this point and return `Poll::Pending`
 3. If it returns `Poll::Ready(value)`, continue execution with that value
@@ -72,19 +75,21 @@ The [`futures`](https://docs.rs/futures/latest/futures/) crate extends the `Futu
 It's the asynchronous equivalent of `Iterator<Item = T>`.
 
 The `Stream` trait has one method named `poll_next` that returns:
+
 - `Poll::Pending` when the next value isn't ready yet, just like a `Future` would
 - `Poll::Ready(Some(value))` when a new value is available
 - `Poll::Ready(None)` when the stream is exhausted
 
 ### How DataFusion Executes Queries
 
-In DataFusion, the short version of how queries are executed is as follows (you can find more in-depth coverage of this in the [DataFusion documentation](https://docs.rs/datafusion/latest/datafusion/#streaming-execution):
+In DataFusion, the short version of how queries are executed is as follows (you can find more in-depth coverage of this in the [DataFusion documentation](https://docs.rs/datafusion/latest/datafusion/#streaming-execution)):
 
-1. First the query is compiled into a tree of `ExecutionPlan` nodes
-2. `ExecutionPlan::execute` is called on the root of the tree. This method returns a `SendableRecordBatchStream` (a pinned `Box<dyn Stream<RecordBatch>>`)
+1. First the query is compiled into a tree of [`ExecutionPlan`](https://docs.rs/datafusion/latest/datafusion/physical_plan/trait.ExecutionPlan.html) nodes
+2. [`ExecutionPlan::execute`](https://docs.rs/datafusion/latest/datafusion/physical_plan/trait.ExecutionPlan.html#tymethod.execute) is called on the root of the tree. 
+3. This method returns a `SendableRecordBatchStream` (a pinned `Box<dyn Stream<RecordBatch>>`)
 3. `Stream::poll_next` is called in a loop to get the results
 
-The stream we get in step 2 is actually the root of a tree of streams that mostly mirrors the execution plan tree.
+The `Stream` we get in step 2 is actually the root of a tree of `Streams` that mostly mirrors the execution plan tree.
 Each stream tree node processes the record batches it gets from its children.
 The leaves of the tree produce record batches themselves.
 
@@ -113,7 +118,7 @@ If the task never yields, it can't be aborted.
 ### The Cancellation Problem
 
 With all the necessary background in place, now let's look at how the DataFusion CLI tries to run and cancel a query.
-The code below paraphrases what the CLI actually does:
+The code below is a simplified version of what the CLI actually does:
 
 ```rust
 fn exec_query() {
@@ -130,19 +135,19 @@ fn exec_query() {
 ```
 
 First the CLI sets up a Tokio runtime instance.
-It then reads the query you want to execute from standard input or file and turns it into a stream.
+It then reads the query to execute from standard input or file and turns it into a `Stream`.
 Then it calls `next` on stream which is an `async` wrapper for `poll_next`.
-It passes this to the `select!` macro along with a ctrl-C handler.
+It passes this to the [`select!`](https://docs.rs/tokio/latest/tokio/macro.select.html) macro along with a ctrl-C handler.
 
-The `select!` macro is supposed to race these two `Future`s and complete when either one finishes.
-When you press Ctrl+C, the `signal::ctrl_c()` `Future` should complete.
-Given that DataFusion uses the Rust async machinery, the [stream is cancelled ](https://docs.rs/datafusion/latest/datafusion/physical_plan/trait.ExecutionPlan.html#cancellation--aborting-execution) when it is dropped as it is inert by itself and nothing will be able to call `poll_next` again.
+The `select!` macro races these two `Future`s and completes when either one finishes.
+The intent is that when you press Ctrl+C, the `signal::ctrl_c()` `Future` should complete.
+The [stream is cancelled](https://docs.rs/datafusion/latest/datafusion/physical_plan/trait.ExecutionPlan.html#cancellation--aborting-execution) when it is dropped as it is inert by itself and nothing will be able to call `poll_next` again.
 
 But there's a catch: `select!` still follows cooperative scheduling rules.
 It polls each `Future` in sequence, and if the first one (our query) gets stuck in a long computation, it never gets around to polling the cancellation signal.
 
 Imagine a query that needs to calculate something intensive, like sorting billions of rows.
-Unless the sorting Stream is written with care (which the one in DataFusion is now), the `poll_next` call may take a couple of minutes or even longer without returning.
+Unless the sorting Stream is written with care (which the one in DataFusion is), the `poll_next` call may take a couple of minutes or even longer without returning.
 During this time, Tokio can't check if you've pressed Ctrl+C, and the query continues running despite your cancellation request.
 
 ## A Closer Look at Blocking Operators
@@ -303,10 +308,10 @@ The task will then yield, after which the Tokio runtime resets the counter. This
 src="/blog/images/task-cancellation/tokio_budget_plan.png"
 width="300px"
 class="img-responsive"
-alt="Diagram showing a [lan with a task, AggregateExec, MergeStream and Two sources."
+alt="Diagram showing a plan with a task, AggregateExec, MergeStream and Two sources."
 />
 
-**Figure 1**: Example query plan for aggregating a sorted stream from two
+**Figure 1**: Query plan for aggregating a sorted stream from two
 sources. Each source reads a stream of `RecordBatch`es, which are then merged
 into a single Stream by the `MergeStream` operator which is
 then aggregated by the `AggregateExec` operator.
@@ -318,7 +323,7 @@ class="img-responsive"
 alt="Sequence diagram showing how the tokio task budget is used and reset."
 />
 
-**Figure 2**: Tokio task budget system, assuming the task budget is set to 1. 
+**Figure 2**: Tokio task budget system, assuming the task budget is set to 1, for the plan in Figure 1. 
 The first iteration of the loop consumes the budget, and returns `Ready`. The
 second iteration has no budget remaining, so returns `Pending` and yields
 control back to the Tokio runtime. The runtime then resets the budget and calls
