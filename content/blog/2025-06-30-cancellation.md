@@ -110,6 +110,8 @@ Under the hood, an implementation of `Stream` is very similar to a `Future`.
 Typically, they're also implemented as state machines, the main difference being that they produce multiple values rather than just one.
 Just like `Future`, a `Stream` is inert unless explicitly polled.
 
+Now that we understand the basics of Rust's async model, let's see how DataFusion leverages these concepts to execute queries.
+
 ## How DataFusion Executes Queries
 
 In DataFusion, the short version of how queries are executed is as follows (you can find more in-depth coverage of this in the [DataFusion documentation](https://docs.rs/datafusion/latest/datafusion/#streaming-execution)):
@@ -143,7 +145,7 @@ This is fundamentally different from preemptive scheduling that you might be use
 
 This distinction is crucial for understanding our cancellation problem.
 
-A task in Tokio is modeled as a `Future` which is passed to on of the task initiation functions like [`spawn`](https://docs.rs/tokio/latest/tokio/task/fn.spawn.html).
+A task in Tokio is modeled as a `Future` which is passed to one of the task initiation functions like [`spawn`](https://docs.rs/tokio/latest/tokio/task/fn.spawn.html).
 Tokio runs the task by calling `Future::poll` in a loop until it returns `Poll::Ready`.
 While that `Future::poll` call is running, Tokio has no way to forcibly interrupt it.
 It must cooperate by periodically yielding control, either by returning `Poll::Pending` or `Poll::Ready`.
@@ -275,6 +277,8 @@ But there's a subtle issue lurking here: what happens if the input stream *alway
 In that case, the processing loop will keep running without returning `Poll::Pending` and thus never yield control back to Tokio's scheduler.
 This means we could be stuck in a single `poll_next` call for quite some time - exactly the scenario that prevents query cancellation from working!
 
+So how do we solve this problem? Let's explore some strategies to ensure our operators yield control periodically.
+
 ## Unblocking Operators
 
 Now let's look at how we can ensure we return `Pending` every now and then.
@@ -375,8 +379,10 @@ As it turns out DataFusion was already using this mechanism implicitly.
 Every exchange-like operator (such as `RepartitionExec`) internally makes use of a Tokio multiple producer, single consumer [`Channel`](https://tokio.rs/tokio/tutorial/channels).
 When calling `Receiver::recv` for one of these channels, a unit of Tokio task budget is consumed.
 As a consequence, query plans that made use of exchange-like operators were
-already mostly cancelable. The plan can't be canceled bug only showed up when running parts of plans
-without such operators, such as when using a single core.
+already mostly cancelable.
+The plan cancellation bug only showed up when running parts of plans without such operators, such as when using a single core.
+
+Now let's see how we can explicitly implement this budget-based approach in our own operators.
 
 ### Depleting The Tokio Budget
 
@@ -432,7 +438,7 @@ if batch.is_ready() {
 ```
 
 You might be wondering why that `made_progress` construct is necessary.
-This clever constructs actually makes it easier to manage the budget.
+This clever construct actually makes it easier to manage the budget.
 The value returned by `poll_proceed` will actually restore the budget to its original value when it is dropped.
 It does so unless `made_progress` is called.
 This ensures that if we exit early from our `poll_next` implementation by returning `Pending`, that the budget we had consumed becomes available again.
