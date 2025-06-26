@@ -52,7 +52,7 @@ Then we'll review some cases where queries could not be canceled in DataFusion a
 ## Understanding Rust's Async Model
 
 DataFusion, somewhat unconventionally, [uses the Rust async system and the Tokio task scheduler](https://docs.rs/datafusion/latest/datafusion/#thread-scheduling-cpu--io-thread-pools-and-tokio-runtimes) for CPU intensive processing.
-To really understand the cancellation problem you first need to be somewhat familiar with Rust's asynchronous programming model which is a bit different from what you might be used to from other ecosystems.
+To really understand the cancellation problem you first need to be familiar with Rust's asynchronous programming model which is a bit different from what you might be used to from other ecosystems.
 Let's go over the basics again as a refresher.
 If you're familiar with the ins and outs of `Future` and `async` you can skip this section.
 
@@ -62,8 +62,8 @@ If you're familiar with the ins and outs of `Future` and `async` you can skip th
 Rust's asynchronous programming model is built around the [`Future<T>`](https://doc.rust-lang.org/std/future/trait.Future.html) trait.
 In contrast to, for instance, Javascript's [`Promise`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise) or Java's [`Future`](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/concurrent/Future.html) a Rust `Future` does not necessarily represent an actively running asynchronous job.
 Instead, a `Future<T>` represents a lazy calculation that only makes progress when explicitly asked to do so.
-This is done by calling the `poll` method of a `Future`.
-If nobody polls a `Future` to try and make progress explicitly, it is [an inert object](https://doc.rust-lang.org/std/future/trait.Future.html#runtime-characteristics).
+This is done by calling the [`poll`](https://doc.rust-lang.org/std/future/trait.Future.html#tymethod.poll) method of a `Future`.
+If nobody polls a `Future` explicitly, it is [an inert object](https://doc.rust-lang.org/std/future/trait.Future.html#runtime-characteristics).
 
 Calling `Future::poll` results in one of two options:
 
@@ -71,23 +71,23 @@ Calling `Future::poll` results in one of two options:
 - [`Poll::Ready<T>`](https://doc.rust-lang.org/std/task/enum.Poll.html#variant.Ready) when it has completed and produced a value
 
 When a `Future` returns `Pending`, it saves its internal state so it can pick up where it left off the next time you poll it.
-This internal state management is what makes Rust's `Future`s memory-efficient and composable.
-Rather than having to freeze the full call stack that led to a certain point, only the relevant state to resume the future needs to be retained.
+This internal state management makes Rust's `Future`s memory-efficient and composable.
+Rather than freezing the full call stack leading to a certain point, only the relevant state to resume the future needs to be retained.
 
-Additionally, a `Future` is required to set up the necessary signaling to notify the caller when it should call `poll` again, to avoid a busy-waiting loop.
+Additionally, a `Future` must set up the necessary signaling to notify the caller when it should call `poll` again, to avoid a busy-waiting loop.
 This is done using a [`Waker`](https://doc.rust-lang.org/std/task/struct.Waker.html) which the `Future` receives via the `Context` parameter of the `poll` function. 
 
 Manual implementations of `Future` are most often little finite state machines.
-Each step in the process of completing the calculation is modeled as a variant of an enumeration.
-When a `Future` is going to return `Pending`, it bundles up the data required to resume in an enum variant, stores that enum variant in itself, and then returns.
+Each state in the process of completing the calculation is modeled as a variant of an `enum`.
+Before a `Future` returns `Pending`, it bundles the data required to resume in an enum variant, stores that enum variant in itself, and then returns.
 While compact and efficient, the resulting code is often quite verbose.
 
 The `async` keyword was introduced to make life easier on Rust programmers.
 It provides elegant syntactic sugar for the manual state machine `Future` approach.
-When you write an `async` function or block, the compiler transforms that nice linear code into a state machine based `Future` similar to the one described above for you.
-Since all the state management is compiler generated and hidden from sight, async code tends to be easier to write initially, more readable afterward, and all the while maintains the same underlying mechanics.
+When you write an `async` function or block, the compiler transforms linear code into a state machine based `Future` similar to the one described above for you.
+Since all the state management is compiler generated and hidden from sight, async code tends to be easier to write initially, more readable afterward, while maintaining the same underlying mechanics.
 
-The `await` keyword complements `async` by letting you pause execution until a `Future` completes.
+The `await` keyword complements `async` pausing execution until a `Future` completes.   
 When you `.await` a `Future`, you're essentially telling the compiler to generate code that:
 
 1. Polls the `Future` with the current (implicit) asynchronous context
@@ -100,7 +100,7 @@ The [`futures`](https://docs.rs/futures/latest/futures/) crate extends the `Futu
 `Stream<Item = T>` represents a sequence of values that are each produced asynchronously rather than just a single value.
 It's the asynchronous equivalent of `Iterator<Item = T>`.
 
-The `Stream` trait has one method named `poll_next` that returns:
+The `Stream` trait has one method named [`poll_next`](https://docs.rs/futures/latest/futures/prelude/trait.Stream.html#tymethod.poll_next) that returns:
 
 - `Poll::Pending` when the next value isn't ready yet, just like a `Future` would
 - `Poll::Ready(Some(value))` when a new value is available
@@ -118,11 +118,11 @@ In DataFusion, the short version of how queries are executed is as follows (you 
 
 1. First the query is compiled into a tree of [`ExecutionPlan`](https://docs.rs/datafusion/latest/datafusion/physical_plan/trait.ExecutionPlan.html) nodes
 2. [`ExecutionPlan::execute`](https://docs.rs/datafusion/latest/datafusion/physical_plan/trait.ExecutionPlan.html#tymethod.execute) is called on the root of the tree. 
-3. This method returns a `SendableRecordBatchStream` (a pinned `Box<dyn Stream<RecordBatch>>`)
+3. This method returns a [`SendableRecordBatchStream`](https://docs.rs/datafusion/latest/datafusion/execution/type.SendableRecordBatchStream.html) (a pinned `Box<dyn Stream<RecordBatch>>`)
 4. `Stream::poll_next` is called in a loop to get the results
 
 In other words, the execution of a DataFusion query boils down to polling an asynchronous stream.
-Like all `Stream` implementations, we need to explicitly poll the stream in order to get the query to make progress. 
+Like all `Stream` implementations, we need to explicitly poll the stream for the query to make progress. 
 
 The `Stream` we get in step 2 is actually the root of a tree of `Streams` that mostly mirrors the execution plan tree.
 Each stream tree node processes the record batches it gets from its children.
@@ -132,7 +132,7 @@ Query execution progresses each time you call `poll_next` on the root stream.
 This call typically cascades down the tree, with each node calling `poll_next` on its children to get the data it needs to process.
 
 Here's where the first signs of problems start to show up: some operations (like aggregations, sorts, or certain join phases) need to process a lot of data before producing any output.
-When `poll_next` encounters one of these operations, it might need to perform a substantial amount of work before it can return a record batch.
+When `poll_next` encounters one of these operations, it might require substantial work before it can return a record batch.
 
 ### Tokio and Cooperative Scheduling
 
@@ -140,8 +140,8 @@ We need to make a small detour now via Tokio's scheduler before we can get to th
 DataFusion makes use of the [Tokio asynchronous runtime](https://tokio.rs), which uses a [cooperative scheduling model](https://docs.rs/tokio/latest/tokio/task/index.html#what-are-tasks).
 This is fundamentally different from preemptive scheduling that you might be used to:
 
-- In preemptive scheduling, the system can interrupt a task at any time to run something else
-- In cooperative scheduling, tasks must voluntarily yield control back to the scheduler
+- In **preemptive scheduling**, the system can interrupt a task at any time to run something else
+- In **cooperative scheduling**, tasks must voluntarily yield control back to the scheduler
 
 This distinction is crucial for understanding our cancellation problem.
 
@@ -157,7 +157,7 @@ If the task never yields, it can't be aborted.
 ### The Cancellation Problem
 
 With all the necessary background in place, now let's look at how the DataFusion CLI tries to run and cancel a query.
-The code below is a simplified version of what the CLI actually does:
+The code below is a simplified version of [what the CLI actually does](https://github.com/apache/datafusion/blob/db13dd93579945628cd81d534c032f5e6cc77967/datafusion-cli/src/exec.rs#L179-L186):
 
 ```rust
 fn exec_query() {
@@ -186,7 +186,7 @@ But there's a catch: `select!` still follows cooperative scheduling rules.
 It polls each `Future` in sequence, and if the first one (our query) gets stuck in a long computation, it never gets around to polling the cancellation signal.
 
 Imagine a query that needs to calculate something intensive, like sorting billions of rows.
-Unless the sorting Stream is written with care (which the one in DataFusion is), the `poll_next` call may take a couple of minutes or even longer without returning.
+Unless the sorting Stream is written with care (which the one in DataFusion is), the `poll_next` call may take several minutes or even longer without returning.
 During this time, Tokio can't check if you've pressed Ctrl+C, and the query continues running despite your cancellation request.
 
 ## A Closer Look at Blocking Operators
@@ -196,7 +196,7 @@ Here's a drastically simplified version of a `COUNT(*)` aggregation - something 
 
 ```rust
 struct BlockingStream {
-   // the inner stream that is wrapped
+    // the input: an inner stream that is wrapped
     stream: SendableRecordBatchStream,
     count: usize,
     finished: bool,
@@ -211,7 +211,7 @@ impl Stream for BlockingStream {
         }
 
         loop {
-            // poll the wrapped stream to get the next batch if ready
+            // poll the input stream to get the next batch if ready
             match ready!(self.stream.poll_next_unpin(cx)) {
                 // increment the counter if we got a batch
                 Some(Ok(batch)) => self.count += batch.num_rows(),
@@ -326,14 +326,14 @@ Suppose we create a plan like this.
 </figure>
 
 Each `CountingSource` produces a `Pending` every 128 batches.
-The filter is the standard DataFusion filter, with a filter expression that drops a batch every 50 record batches.
+The `Filter` is a stream that drops a batch every 50 record batches.
 Merge is a simple combining operator the uses `futures::stream::select` to combine two stream.
 
-When we set this in motion, the merge operator will poll the left and right branch in a round-robin fashion.
-The sources will each emit `Pending` every 128 batches, but since the filter drops batches, they arrive out-of-phase at the merge operator.
-As a consequence the merge operator will always have the opportunity of polling the other stream when one of the two returns `Pending`.
-The `Merge` stream merge thus is an always ready stream, even though the sources are yielding.
-If we pass this to our aggregating operator we're right back where we started.
+When we set this stream in motion, the merge operator will poll the left and right branch in a round-robin fashion.
+The sources will each emit `Pending` every 128 batches, but since the `Filter` drops batches, they arrive out-of-phase at the merge operator.
+As a consequence the merge operator will always have the opportunity of polling the other stream when one returns `Pending`.
+The `Merge` stream thus is an always ready stream, even though the sources are yielding.
+If we use `Merge` as the input to our aggregating operator we're right back where we started.
 
 ### Coordinated Cooperation
 
@@ -341,7 +341,7 @@ Wouldn't it be great if we could get all the operators to coordinate amongst eac
 When one of them determines that it's time to yield, all the other operators agree and start returning `Pending` as well.
 That way our task would be coaxed towards yielding even if it tried to poll many different operators.
 
-Luckily the [developers of Tokio ran into the exact same problem](https://tokio.rs/blog/2020-04-preemption) described above when network servers were under heavy load and came up with a solution.
+Luckily(?), the [developers of Tokio ran into the exact same problem](https://tokio.rs/blog/2020-04-preemption) described above when network servers were under heavy load and came up with a solution.
 Back in 2020, Tokio 0.2.14 introduced a per-task operation budget.
 Rather than having individual counters littered throughout the code, the Tokio runtime itself manages a per task counter which is decremented by Tokio resources.
 When the counter hits zero, all resources start returning `Pending`.
@@ -372,7 +372,7 @@ The `Pending` result bubbles all the way up to the Tokio runtime, at which point
 When the runtime reschedules the task, it resets the budget and calls `poll` on the task `Future` again for another round of progress.
 
 The key mechanism that makes this work well is the single task budget that's shared amongst all the scan streams.
-Once the budget is depleted, no streams can make any further progress.
+Once the budget is depleted, no streams can make any further progress without first returning control to tokio.
 This causes all possible avenues the task has to make progress to return `Pending` which results in the task being nudged towards yielding control.
 
 As it turns out DataFusion was already using this mechanism implicitly.
@@ -386,7 +386,7 @@ Now let's see how we can explicitly implement this budget-based approach in our 
 
 ### Depleting The Tokio Budget
 
-Let's revisit our original `CountingStream` and adapt it to use Tokio's budget system.
+Let's revisit our original `BlockingStream` and adapt it to use Tokio's budget system.
 
 The examples given here make use of functions from the Tokio `coop` module that are still internal at the time of writing.
 [PR #7405](https://github.com/tokio-rs/tokio/pull/7405) on the Tokio project will make these accessible for external use.
@@ -437,10 +437,9 @@ if batch.is_ready() {
 }
 ```
 
-You might be wondering why that `made_progress` construct is necessary.
-This clever construct actually makes it easier to manage the budget.
-The value returned by `poll_proceed` will actually restore the budget to its original value when it is dropped.
-It does so unless `made_progress` is called.
+You might be wondering why the call to `made_progress` is necessary.
+This clever construct makes it easier to manage the budget.
+The value returned by `poll_proceed` will actually restore the budget to its original value when it is dropped unless `made_progress` is called.
 This ensures that if we exit early from our `poll_next` implementation by returning `Pending`, that the budget we had consumed becomes available again.
 The task that invoked `poll_next` can then use that budget again to try to make some other `Stream` (or any resource for that matter) make progress.
 
@@ -453,11 +452,11 @@ See [the PR](https://github.com/apache/datafusion/pull/16398) for more details.
 The design includes:
 
 1. A new `ExecutionPlan` property that indicates if an operator participates in cooperative scheduling or not.
-2. A new 'EnsureCooperative' optimizer rule can inspect query plans and insert `CooperativeExec` nodes as needed to ensure custom source operators also participate.
+2. A new `EnsureCooperative` optimizer rule to inspect query plans and insert `CooperativeExec` nodes as needed to ensure custom source operators also participate.
 
-These two changes combined already make it very unlikely you'll encounter another query that refuses to stop.
-For those situations where the automatic mechanisms are still not sufficient, there's a third addition in the form of the `datafusion::physical_plan::coop` module.
-This new module provides utility functions that make it easy to adopt cooperative scheduling in your custom operators as well.  
+These two changes combined already make it very unlikely you'll encounter any query that refuses to stop, even with custom operators.
+For those situations where the automatic mechanisms are still not sufficient, there's a new `datafusion::physical_plan::coop` module
+with utility functions that make it easy to adopt cooperative scheduling in your custom operators as well.  
 
 ## Acknowledgments
 
