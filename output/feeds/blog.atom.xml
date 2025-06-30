@@ -1,5 +1,410 @@
 <?xml version="1.0" encoding="utf-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - blog</title><link href="https://datafusion.apache.org/blog/" rel="alternate"></link><link href="https://datafusion.apache.org/blog/feeds/blog.atom.xml" rel="self"></link><id>https://datafusion.apache.org/blog/</id><updated>2025-06-15T00:00:00+00:00</updated><subtitle></subtitle><entry><title>Optimizing SQL (and DataFrames) in DataFusion, Part 1: Query Optimization Overview</title><link href="https://datafusion.apache.org/blog/2025/06/15/optimizing-sql-dataframes-part-one" rel="alternate"></link><published>2025-06-15T00:00:00+00:00</published><updated>2025-06-15T00:00:00+00:00</updated><author><name>alamb, akurmustafa</name></author><id>tag:datafusion.apache.org,2025-06-15:/blog/2025/06/15/optimizing-sql-dataframes-part-one</id><summary type="html">&lt;!--
+<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - blog</title><link href="https://datafusion.apache.org/blog/" rel="alternate"></link><link href="https://datafusion.apache.org/blog/feeds/blog.atom.xml" rel="self"></link><id>https://datafusion.apache.org/blog/</id><updated>2025-06-30T00:00:00+00:00</updated><subtitle></subtitle><entry><title>Using Rust async for Query Execution and Cancelling Long-Running Queries</title><link href="https://datafusion.apache.org/blog/2025/06/30/cancellation" rel="alternate"></link><published>2025-06-30T00:00:00+00:00</published><updated>2025-06-30T00:00:00+00:00</updated><author><name>Pepijn Van Eeckhoudt</name></author><id>tag:datafusion.apache.org,2025-06-30:/blog/2025/06/30/cancellation</id><summary type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+&lt;style&gt;
+figure {
+  margin: 20px 0;
+}
+
+figure img {
+  display: block;
+  max-width: 80%;
+  margin: auto;
+}
+
+figcaption {
+  font-style: italic;
+  color: #555;
+  font-size: 0.9em;
+  max-width: 80%;
+  margin: auto;
+  text-align: center;
+}
+&lt;/style&gt;
+&lt;p&gt;Have you ever tried to cancel a query that just wouldn't stop?
+In this post, we'll review how Rust's &lt;a href="https://doc.rust-lang.org/book/ch17-00-async-await.html"&gt;&lt;code&gt;async&lt;/code&gt; programming model&lt;/a&gt; works, how …&lt;/p&gt;</summary><content type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+&lt;style&gt;
+figure {
+  margin: 20px 0;
+}
+
+figure img {
+  display: block;
+  max-width: 80%;
+  margin: auto;
+}
+
+figcaption {
+  font-style: italic;
+  color: #555;
+  font-size: 0.9em;
+  max-width: 80%;
+  margin: auto;
+  text-align: center;
+}
+&lt;/style&gt;
+&lt;p&gt;Have you ever tried to cancel a query that just wouldn't stop?
+In this post, we'll review how Rust's &lt;a href="https://doc.rust-lang.org/book/ch17-00-async-await.html"&gt;&lt;code&gt;async&lt;/code&gt; programming model&lt;/a&gt; works, how &lt;a href="https://datafusion.apache.org/"&gt;DataFusion&lt;/a&gt; uses that model for CPU intensive tasks, and how this is used to cancel queries.
+Then we'll review some cases where queries could not be canceled in DataFusion and what the community did to resolve the problem.&lt;/p&gt;
+&lt;h2&gt;Understanding Rust's Async Model&lt;/h2&gt;
+&lt;p&gt;DataFusion, somewhat unconventionally, &lt;a href="https://docs.rs/datafusion/latest/datafusion/#thread-scheduling-cpu--io-thread-pools-and-tokio-runtimes"&gt;uses the Rust async system and the Tokio task scheduler&lt;/a&gt; for CPU intensive processing.
+To really understand the cancellation problem you first need to be familiar with Rust's asynchronous programming model which is a bit different from what you might be used to from other ecosystems.
+Let's go over the basics again as a refresher.
+If you're familiar with the ins and outs of &lt;code&gt;Future&lt;/code&gt; and &lt;code&gt;async&lt;/code&gt; you can skip this section.&lt;/p&gt;
+&lt;h3&gt;Futures Are Inert&lt;/h3&gt;
+&lt;p&gt;Rust's asynchronous programming model is built around the &lt;a href="https://doc.rust-lang.org/std/future/trait.Future.html"&gt;&lt;code&gt;Future&amp;lt;T&amp;gt;&lt;/code&gt;&lt;/a&gt; trait.
+In contrast to, for instance, Javascript's &lt;a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise"&gt;&lt;code&gt;Promise&lt;/code&gt;&lt;/a&gt; or Java's &lt;a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/concurrent/Future.html"&gt;&lt;code&gt;Future&lt;/code&gt;&lt;/a&gt; a Rust &lt;code&gt;Future&lt;/code&gt; does not necessarily represent an actively running asynchronous job.
+Instead, a &lt;code&gt;Future&amp;lt;T&amp;gt;&lt;/code&gt; represents a lazy calculation that only makes progress when explicitly asked to do so.
+This is done by calling the &lt;a href="https://doc.rust-lang.org/std/future/trait.Future.html#tymethod.poll"&gt;&lt;code&gt;poll&lt;/code&gt;&lt;/a&gt; method of a &lt;code&gt;Future&lt;/code&gt;.
+If nobody polls a &lt;code&gt;Future&lt;/code&gt; explicitly, it is &lt;a href="https://doc.rust-lang.org/std/future/trait.Future.html#runtime-characteristics"&gt;an inert object&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Calling &lt;code&gt;Future::poll&lt;/code&gt; results in one of two options:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href="https://doc.rust-lang.org/std/task/enum.Poll.html#variant.Pending"&gt;&lt;code&gt;Poll::Pending&lt;/code&gt;&lt;/a&gt; if the evaluation is not yet complete, most often because it needs to wait for something like I/O before it can continue&lt;/li&gt;
+&lt;li&gt;&lt;a href="https://doc.rust-lang.org/std/task/enum.Poll.html#variant.Ready"&gt;&lt;code&gt;Poll::Ready&amp;lt;T&amp;gt;&lt;/code&gt;&lt;/a&gt; when it has completed and produced a value&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;When a &lt;code&gt;Future&lt;/code&gt; returns &lt;code&gt;Pending&lt;/code&gt;, it saves its internal state so it can pick up where it left off the next time you poll it.
+This internal state management makes Rust's &lt;code&gt;Future&lt;/code&gt;s memory-efficient and composable.
+Rather than freezing the full call stack leading to a certain point, only the relevant state to resume the future needs to be retained.&lt;/p&gt;
+&lt;p&gt;Additionally, a &lt;code&gt;Future&lt;/code&gt; must set up the necessary signaling to notify the caller when it should call &lt;code&gt;poll&lt;/code&gt; again, to avoid a busy-waiting loop.
+This is done using a &lt;a href="https://doc.rust-lang.org/std/task/struct.Waker.html"&gt;&lt;code&gt;Waker&lt;/code&gt;&lt;/a&gt; which the &lt;code&gt;Future&lt;/code&gt; receives via the &lt;code&gt;Context&lt;/code&gt; parameter of the &lt;code&gt;poll&lt;/code&gt; function. &lt;/p&gt;
+&lt;p&gt;Manual implementations of &lt;code&gt;Future&lt;/code&gt; are most often little finite state machines.
+Each state in the process of completing the calculation is modeled as a variant of an &lt;code&gt;enum&lt;/code&gt;.
+Before a &lt;code&gt;Future&lt;/code&gt; returns &lt;code&gt;Pending&lt;/code&gt;, it bundles the data required to resume in an enum variant, stores that enum variant in itself, and then returns.
+While compact and efficient, the resulting code is often quite verbose.&lt;/p&gt;
+&lt;p&gt;The &lt;code&gt;async&lt;/code&gt; keyword was introduced to make life easier on Rust programmers.
+It provides elegant syntactic sugar for the manual state machine &lt;code&gt;Future&lt;/code&gt; approach.
+When you write an &lt;code&gt;async&lt;/code&gt; function or block, the compiler transforms linear code into a state machine based &lt;code&gt;Future&lt;/code&gt; similar to the one described above for you.
+Since all the state management is compiler generated and hidden from sight, async code tends to be easier to write initially, more readable afterward, while maintaining the same underlying mechanics.&lt;/p&gt;
+&lt;p&gt;The &lt;code&gt;await&lt;/code&gt; keyword complements &lt;code&gt;async&lt;/code&gt; pausing execution until a &lt;code&gt;Future&lt;/code&gt; completes. &lt;br/&gt;
+When you &lt;code&gt;.await&lt;/code&gt; a &lt;code&gt;Future&lt;/code&gt;, you're essentially telling the compiler to generate code that:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Polls the &lt;code&gt;Future&lt;/code&gt; with the current (implicit) asynchronous context&lt;/li&gt;
+&lt;li&gt;If &lt;code&gt;poll&lt;/code&gt; returns &lt;code&gt;Poll::Pending&lt;/code&gt;, save the state of the &lt;code&gt;Future&lt;/code&gt; so that it can resume at this point and return &lt;code&gt;Poll::Pending&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;If it returns &lt;code&gt;Poll::Ready(value)&lt;/code&gt;, continue execution with that value&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3&gt;From Futures to Streams&lt;/h3&gt;
+&lt;p&gt;The &lt;a href="https://docs.rs/futures/latest/futures/"&gt;&lt;code&gt;futures&lt;/code&gt;&lt;/a&gt; crate extends the &lt;code&gt;Future&lt;/code&gt; model with a trait named &lt;a href="https://docs.rs/futures/latest/futures/prelude/trait.Stream.html"&gt;&lt;code&gt;Stream&lt;/code&gt;&lt;/a&gt;.
+&lt;code&gt;Stream&amp;lt;Item = T&amp;gt;&lt;/code&gt; represents a sequence of values that are each produced asynchronously rather than just a single value.
+It's the asynchronous equivalent of &lt;code&gt;Iterator&amp;lt;Item = T&amp;gt;&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;The &lt;code&gt;Stream&lt;/code&gt; trait has one method named &lt;a href="https://docs.rs/futures/latest/futures/prelude/trait.Stream.html#tymethod.poll_next"&gt;&lt;code&gt;poll_next&lt;/code&gt;&lt;/a&gt; that returns:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;Poll::Pending&lt;/code&gt; when the next value isn't ready yet, just like a &lt;code&gt;Future&lt;/code&gt; would&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;Poll::Ready(Some(value))&lt;/code&gt; when a new value is available&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;Poll::Ready(None)&lt;/code&gt; when the stream is exhausted&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Under the hood, an implementation of &lt;code&gt;Stream&lt;/code&gt; is very similar to a &lt;code&gt;Future&lt;/code&gt;.
+Typically, they're also implemented as state machines, the main difference being that they produce multiple values rather than just one.
+Just like &lt;code&gt;Future&lt;/code&gt;, a &lt;code&gt;Stream&lt;/code&gt; is inert unless explicitly polled.&lt;/p&gt;
+&lt;p&gt;Now that we understand the basics of Rust's async model, let's see how DataFusion leverages these concepts to execute queries.&lt;/p&gt;
+&lt;h2&gt;How DataFusion Executes Queries&lt;/h2&gt;
+&lt;p&gt;In DataFusion, the short version of how queries are executed is as follows (you can find more in-depth coverage of this in the &lt;a href="https://docs.rs/datafusion/latest/datafusion/#streaming-execution"&gt;DataFusion documentation&lt;/a&gt;):&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;First the query is compiled into a tree of &lt;a href="https://docs.rs/datafusion/latest/datafusion/physical_plan/trait.ExecutionPlan.html"&gt;&lt;code&gt;ExecutionPlan&lt;/code&gt;&lt;/a&gt; nodes&lt;/li&gt;
+&lt;li&gt;&lt;a href="https://docs.rs/datafusion/latest/datafusion/physical_plan/trait.ExecutionPlan.html#tymethod.execute"&gt;&lt;code&gt;ExecutionPlan::execute&lt;/code&gt;&lt;/a&gt; is called on the root of the tree. &lt;/li&gt;
+&lt;li&gt;This method returns a &lt;a href="https://docs.rs/datafusion/latest/datafusion/execution/type.SendableRecordBatchStream.html"&gt;&lt;code&gt;SendableRecordBatchStream&lt;/code&gt;&lt;/a&gt; (a pinned &lt;code&gt;Box&amp;lt;dyn Stream&amp;lt;RecordBatch&amp;gt;&amp;gt;&lt;/code&gt;)&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;Stream::poll_next&lt;/code&gt; is called in a loop to get the results&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;In other words, the execution of a DataFusion query boils down to polling an asynchronous stream.
+Like all &lt;code&gt;Stream&lt;/code&gt; implementations, we need to explicitly poll the stream for the query to make progress. &lt;/p&gt;
+&lt;p&gt;The &lt;code&gt;Stream&lt;/code&gt; we get in step 2 is actually the root of a tree of &lt;code&gt;Streams&lt;/code&gt; that mostly mirrors the execution plan tree.
+Each stream tree node processes the record batches it gets from its children.
+The leaves of the tree produce record batches themselves.&lt;/p&gt;
+&lt;p&gt;Query execution progresses each time you call &lt;code&gt;poll_next&lt;/code&gt; on the root stream.
+This call typically cascades down the tree, with each node calling &lt;code&gt;poll_next&lt;/code&gt; on its children to get the data it needs to process.&lt;/p&gt;
+&lt;p&gt;Here's where the first signs of problems start to show up: some operations (like aggregations, sorts, or certain join phases) need to process a lot of data before producing any output.
+When &lt;code&gt;poll_next&lt;/code&gt; encounters one of these operations, it might require substantial work before it can return a record batch.&lt;/p&gt;
+&lt;h3&gt;Tokio and Cooperative Scheduling&lt;/h3&gt;
+&lt;p&gt;We need to make a small detour now via Tokio's scheduler before we can get to the query cancellation problem.
+DataFusion makes use of the &lt;a href="https://tokio.rs"&gt;Tokio asynchronous runtime&lt;/a&gt;, which uses a &lt;a href="https://docs.rs/tokio/latest/tokio/task/index.html#what-are-tasks"&gt;cooperative scheduling model&lt;/a&gt;.
+This is fundamentally different from preemptive scheduling that you might be used to:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;In &lt;strong&gt;preemptive scheduling&lt;/strong&gt;, the system can interrupt a task at any time to run something else&lt;/li&gt;
+&lt;li&gt;In &lt;strong&gt;cooperative scheduling&lt;/strong&gt;, tasks must voluntarily yield control back to the scheduler&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;This distinction is crucial for understanding our cancellation problem.&lt;/p&gt;
+&lt;p&gt;A task in Tokio is modeled as a &lt;code&gt;Future&lt;/code&gt; which is passed to one of the task initiation functions like &lt;a href="https://docs.rs/tokio/latest/tokio/task/fn.spawn.html"&gt;&lt;code&gt;spawn&lt;/code&gt;&lt;/a&gt;.
+Tokio runs the task by calling &lt;code&gt;Future::poll&lt;/code&gt; in a loop until it returns &lt;code&gt;Poll::Ready&lt;/code&gt;.
+While that &lt;code&gt;Future::poll&lt;/code&gt; call is running, Tokio has no way to forcibly interrupt it.
+It must cooperate by periodically yielding control, either by returning &lt;code&gt;Poll::Pending&lt;/code&gt; or &lt;code&gt;Poll::Ready&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;Similarly, when you try to abort a task by calling &lt;a href="https://docs.rs/tokio/latest/tokio/task/struct.JoinHandle.html#method.abort"&gt;&lt;code&gt;JoinHandle::abort()&lt;/code&gt;&lt;/a&gt;, the Tokio runtime can't immediately force it to stop.
+You're just telling Tokio: "When this task next yields control, don't call &lt;code&gt;Future::poll&lt;/code&gt; anymore."
+If the task never yields, it can't be aborted.&lt;/p&gt;
+&lt;h3&gt;The Cancellation Problem&lt;/h3&gt;
+&lt;p&gt;With all the necessary background in place, now let's look at how the DataFusion CLI tries to run and cancel a query.
+The code below is a simplified version of &lt;a href="https://github.com/apache/datafusion/blob/db13dd93579945628cd81d534c032f5e6cc77967/datafusion-cli/src/exec.rs#L179-L186"&gt;what the CLI actually does&lt;/a&gt;:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;fn exec_query() {
+    let runtime: tokio::runtime::Runtime = ...;
+    let stream: SendableRecordBatchStream = ...;
+
+    runtime.block_on(async {
+        tokio::select! {
+            next_batch = stream.next() =&amp;gt; ...
+            _ = signal::ctrl_c() =&amp;gt; ...,
+        }
+    })
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;First the CLI sets up a Tokio runtime instance.
+It then reads the query to execute from standard input or file and turns it into a &lt;code&gt;Stream&lt;/code&gt;.
+Then it calls &lt;code&gt;next&lt;/code&gt; on stream which is an &lt;code&gt;async&lt;/code&gt; wrapper for &lt;code&gt;poll_next&lt;/code&gt;.
+It passes this to the &lt;a href="https://docs.rs/tokio/latest/tokio/macro.select.html"&gt;&lt;code&gt;select!&lt;/code&gt;&lt;/a&gt; macro along with a ctrl-C handler.&lt;/p&gt;
+&lt;p&gt;The &lt;code&gt;select!&lt;/code&gt; macro races these two &lt;code&gt;Future&lt;/code&gt;s and completes when either one finishes.
+The intent is that when you press Ctrl+C, the &lt;code&gt;signal::ctrl_c()&lt;/code&gt; &lt;code&gt;Future&lt;/code&gt; should complete.
+The &lt;a href="https://docs.rs/datafusion/latest/datafusion/physical_plan/trait.ExecutionPlan.html#cancellation--aborting-execution"&gt;stream is cancelled&lt;/a&gt; when it is dropped as it is inert by itself and nothing will be able to call &lt;code&gt;poll_next&lt;/code&gt; again.&lt;/p&gt;
+&lt;p&gt;But there's a catch: &lt;code&gt;select!&lt;/code&gt; still follows cooperative scheduling rules.
+It polls each &lt;code&gt;Future&lt;/code&gt; in sequence, and if the first one (our query) gets stuck in a long computation, it never gets around to polling the cancellation signal.&lt;/p&gt;
+&lt;p&gt;Imagine a query that needs to calculate something intensive, like sorting billions of rows.
+Unless the sorting Stream is written with care (which the one in DataFusion is), the &lt;code&gt;poll_next&lt;/code&gt; call may take several minutes or even longer without returning.
+During this time, Tokio can't check if you've pressed Ctrl+C, and the query continues running despite your cancellation request.&lt;/p&gt;
+&lt;h2&gt;A Closer Look at Blocking Operators&lt;/h2&gt;
+&lt;p&gt;Let's peel back a layer of the onion and look at what's happening in a blocking &lt;code&gt;poll_next&lt;/code&gt; implementation.
+Here's a drastically simplified version of a &lt;code&gt;COUNT(*)&lt;/code&gt; aggregation - something you might use in a query like &lt;code&gt;SELECT COUNT(*) FROM table&lt;/code&gt;:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;struct BlockingStream {
+    // the input: an inner stream that is wrapped
+    stream: SendableRecordBatchStream,
+    count: usize,
+    finished: bool,
+}
+
+impl Stream for BlockingStream {
+    type Item = Result&amp;lt;RecordBatch&amp;gt;;
+    fn poll_next(mut self: Pin&amp;lt;&amp;amp;mut Self&amp;gt;, cx: &amp;amp;mut Context&amp;lt;'_&amp;gt;) -&amp;gt; Poll&amp;lt;Option&amp;lt;Self::Item&amp;gt;&amp;gt; {
+        if self.finished {
+            // return None if we're finished
+            return Poll::Ready(None);
+        }
+
+        loop {
+            // poll the input stream to get the next batch if ready
+            match ready!(self.stream.poll_next_unpin(cx)) {
+                // increment the counter if we got a batch
+                Some(Ok(batch)) =&amp;gt; self.count += batch.num_rows(),
+                // on end-of-stream, create a record batch for the counter
+                None =&amp;gt; {
+                    self.finished = true;
+                    return Poll::Ready(Some(Ok(create_record_batch(self.count))));
+                }
+                // pass on any errors verbatim
+                Some(Err(e)) =&amp;gt; return Poll::Ready(Some(Err(e))),
+            }
+        }
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;How does this code work? Let's break it down step by step:&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;1. Initial check&lt;/strong&gt;: We first check if we've already finished processing. If so, we return &lt;code&gt;Ready(None)&lt;/code&gt; to signal the end of our stream:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;if self.finished {
+    return Poll::Ready(None);
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;strong&gt;2. Processing loop&lt;/strong&gt;: If we're not done yet, we enter a loop to process incoming batches from our input stream:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;loop {
+    match ready!(self.stream.poll_next_unpin(cx)) {
+        // Handle different cases...
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;The &lt;a href="https://doc.rust-lang.org/beta/std/task/macro.ready.html"&gt;&lt;code&gt;ready!&lt;/code&gt;&lt;/a&gt; macro checks if the input stream returned &lt;code&gt;Pending&lt;/code&gt; and if so, immediately returns &lt;code&gt;Pending&lt;/code&gt; from our function as well.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;3. Processing data&lt;/strong&gt;: For each batch we receive, we simply add its row count to our running total:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;Some(Ok(batch)) =&amp;gt; self.count += batch.num_rows(),
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;strong&gt;4. End of input&lt;/strong&gt;: When the child stream is exhausted (returns &lt;code&gt;None&lt;/code&gt;), we calculate our final result and convert it into a record batch (omitted for brevity):&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;None =&amp;gt; {
+    self.finished = true;
+    return Poll::Ready(Some(Ok(create_record_batch(self.count))));
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;strong&gt;5. Error handling&lt;/strong&gt;: If we encounter an error, we pass it along immediately:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;Some(Err(e)) =&amp;gt; return Poll::Ready(Some(Err(e))),
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;This code looks perfectly reasonable at first glance.
+But there's a subtle issue lurking here: what happens if the input stream &lt;em&gt;always&lt;/em&gt; returns &lt;code&gt;Ready&lt;/code&gt; and never returns &lt;code&gt;Pending&lt;/code&gt;?&lt;/p&gt;
+&lt;p&gt;In that case, the processing loop will keep running without returning &lt;code&gt;Poll::Pending&lt;/code&gt; and thus never yield control back to Tokio's scheduler.
+This means we could be stuck in a single &lt;code&gt;poll_next&lt;/code&gt; call for quite some time - exactly the scenario that prevents query cancellation from working!&lt;/p&gt;
+&lt;p&gt;So how do we solve this problem? Let's explore some strategies to ensure our operators yield control periodically.&lt;/p&gt;
+&lt;h2&gt;Unblocking Operators&lt;/h2&gt;
+&lt;p&gt;Now let's look at how we can ensure we return &lt;code&gt;Pending&lt;/code&gt; every now and then.&lt;/p&gt;
+&lt;h3&gt;Independent Cooperative Operators&lt;/h3&gt;
+&lt;p&gt;One simple way to return &lt;code&gt;Pending&lt;/code&gt; is using a loop counter.
+We do the exact same thing as before, but on each loop iteration we decrement our counter.
+If the counter hits zero we return &lt;code&gt;Pending&lt;/code&gt;.
+The following example ensures we iterate at most 128 times before yielding.&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;struct CountingSourceStream {
+   counter: usize
+}
+
+impl Stream for CountingSourceStream {
+    type Item = Result&amp;lt;RecordBatch&amp;gt;;
+
+    fn poll_next(mut self: Pin&amp;lt;&amp;amp;mut Self&amp;gt;, cx: &amp;amp;mut Context&amp;lt;'_&amp;gt;) -&amp;gt; Poll&amp;lt;Option&amp;lt;Self::Item&amp;gt;&amp;gt; {
+        if self.counter &amp;gt;= 128 {
+            self.counter = 0;
+            cx.waker().wake_by_ref();
+            return Poll::Pending;
+        }
+
+        self.counter += 1;
+        let batch = ...;
+        Ready(Some(Ok(batch)))
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;If &lt;code&gt;CountingSourceStream&lt;/code&gt; was the input for the &lt;code&gt;BlockingStream&lt;/code&gt; example above, 
+the &lt;code&gt;BlockingStream&lt;/code&gt; will receive a &lt;code&gt;Pending&lt;/code&gt; periodically causing it to yield too. 
+Can we really solve the cancel problem simply by periodically yielding in source streams? &lt;/p&gt;
+&lt;p&gt;Unfortunately, no.
+Let's look at what happens when we start combining operators in more complex configurations.
+Suppose we create a plan like this.&lt;/p&gt;
+&lt;figure&gt;
+&lt;img alt="Diagram showing a plan that merges two branches that return Pending at different intervals." src="/blog/images/task-cancellation/merge_plan.png"/&gt;
+&lt;figcaption&gt;A plan that merges two branches by alternating between them.&lt;/figcaption&gt;
+&lt;/figure&gt;
+&lt;p&gt;Each &lt;code&gt;CountingSource&lt;/code&gt; produces a &lt;code&gt;Pending&lt;/code&gt; every 128 batches.
+The &lt;code&gt;Filter&lt;/code&gt; is a stream that drops a batch every 50 record batches.
+Merge is a simple combining operator the uses &lt;code&gt;futures::stream::select&lt;/code&gt; to combine two stream.&lt;/p&gt;
+&lt;p&gt;When we set this stream in motion, the merge operator will poll the left and right branch in a round-robin fashion.
+The sources will each emit &lt;code&gt;Pending&lt;/code&gt; every 128 batches, but since the &lt;code&gt;Filter&lt;/code&gt; drops batches, they arrive out-of-phase at the merge operator.
+As a consequence the merge operator will always have the opportunity of polling the other stream when one returns &lt;code&gt;Pending&lt;/code&gt;.
+The &lt;code&gt;Merge&lt;/code&gt; stream thus is an always ready stream, even though the sources are yielding.
+If we use &lt;code&gt;Merge&lt;/code&gt; as the input to our aggregating operator we're right back where we started.&lt;/p&gt;
+&lt;h3&gt;Coordinated Cooperation&lt;/h3&gt;
+&lt;p&gt;Wouldn't it be great if we could get all the operators to coordinate amongst each other?
+When one of them determines that it's time to yield, all the other operators agree and start returning &lt;code&gt;Pending&lt;/code&gt; as well.
+That way our task would be coaxed towards yielding even if it tried to poll many different operators.&lt;/p&gt;
+&lt;p&gt;Luckily(?), the &lt;a href="https://tokio.rs/blog/2020-04-preemption"&gt;developers of Tokio ran into the exact same problem&lt;/a&gt; described above when network servers were under heavy load and came up with a solution.
+Back in 2020, Tokio 0.2.14 introduced a per-task operation budget.
+Rather than having individual counters littered throughout the code, the Tokio runtime itself manages a per task counter which is decremented by Tokio resources.
+When the counter hits zero, all resources start returning &lt;code&gt;Pending&lt;/code&gt;.
+The task will then yield, after which the Tokio runtime resets the counter.&lt;/p&gt;
+&lt;p&gt;To illustrate what this process looks like, let's have a look at the execution of the following query &lt;code&gt;Stream&lt;/code&gt; tree when polled in a Tokio task.&lt;/p&gt;
+&lt;figure&gt;
+&lt;img alt="Diagram showing a plan with a task, AggregateExec, MergeStream and Two sources." src="/blog/images/task-cancellation/tokio_budget_plan.png"&gt;
+&lt;figcaption&gt;Query plan for aggregating a sorted stream from two sources. Each source reads a stream of `RecordBatch`es, which are then merged into a single Stream by the `MergeStream` operator which is then aggregated by the `AggregateExec` operator. Arrows represent the data flow direction&lt;/figcaption&gt;
+&lt;/img&gt;&lt;/figure&gt;
+&lt;p&gt;If we assume a task budget of 1 unit, each time Tokio schedules the task would result in the following sequence of function calls.&lt;/p&gt;
+&lt;figure&gt;
+&lt;img alt="Sequence diagram showing how the tokio task budget is used and reset." class="img-responsive" src="/blog/images/task-cancellation/tokio_budget.png" style="width: 100%; max-width: 100%"/&gt;
+&lt;figcaption&gt;Tokio task budget system, assuming the task budget is set to 1, for the plan above.&lt;/figcaption&gt;
+&lt;/figure&gt;
+&lt;p&gt;The aggregation stream would try to poll the merge stream in a loop.
+The first iteration of the loop consumes the single unit of budget, and returns &lt;code&gt;Ready&lt;/code&gt;.
+The second iteration polls the merge stream again which now tries to poll the second scan stream.
+Since there is no budget remaining &lt;code&gt;Pending&lt;/code&gt; is returned.
+The merge stream may now try to poll the first source stream again, but since the budget is still depleted &lt;code&gt;Pending&lt;/code&gt; is returned as well.
+The merge stream now has no other option than to return &lt;code&gt;Pending&lt;/code&gt; itself as well, causing the aggregation to break out of its loop.
+The &lt;code&gt;Pending&lt;/code&gt; result bubbles all the way up to the Tokio runtime, at which point the runtime regains control.
+When the runtime reschedules the task, it resets the budget and calls &lt;code&gt;poll&lt;/code&gt; on the task &lt;code&gt;Future&lt;/code&gt; again for another round of progress.&lt;/p&gt;
+&lt;p&gt;The key mechanism that makes this work well is the single task budget that's shared amongst all the scan streams.
+Once the budget is depleted, no streams can make any further progress without first returning control to tokio.
+This causes all possible avenues the task has to make progress to return &lt;code&gt;Pending&lt;/code&gt; which results in the task being nudged towards yielding control.&lt;/p&gt;
+&lt;p&gt;As it turns out DataFusion was already using this mechanism implicitly.
+Every exchange-like operator (such as &lt;code&gt;RepartitionExec&lt;/code&gt;) internally makes use of a Tokio multiple producer, single consumer &lt;a href="https://tokio.rs/tokio/tutorial/channels"&gt;&lt;code&gt;Channel&lt;/code&gt;&lt;/a&gt;.
+When calling &lt;code&gt;Receiver::recv&lt;/code&gt; for one of these channels, a unit of Tokio task budget is consumed.
+As a consequence, query plans that made use of exchange-like operators were
+already mostly cancelable.
+The plan cancellation bug only showed up when running parts of plans without such operators, such as when using a single core.&lt;/p&gt;
+&lt;p&gt;Now let's see how we can explicitly implement this budget-based approach in our own operators.&lt;/p&gt;
+&lt;h3&gt;Depleting The Tokio Budget&lt;/h3&gt;
+&lt;p&gt;Let's revisit our original &lt;code&gt;BlockingStream&lt;/code&gt; and adapt it to use Tokio's budget system.&lt;/p&gt;
+&lt;p&gt;The examples given here make use of functions from the Tokio &lt;code&gt;coop&lt;/code&gt; module that are still internal at the time of writing.
+&lt;a href="https://github.com/tokio-rs/tokio/pull/7405"&gt;PR #7405&lt;/a&gt; on the Tokio project will make these accessible for external use.
+The current DataFusion code emulates these functions as well as possible using &lt;a href="https://docs.rs/tokio/latest/tokio/task/coop/fn.has_budget_remaining.html"&gt;&lt;code&gt;has_budget_remaining&lt;/code&gt;&lt;/a&gt; and &lt;a href="https://docs.rs/tokio/latest/tokio/task/coop/fn.consume_budget.html"&gt;&lt;code&gt;consume_budget&lt;/code&gt;&lt;/a&gt;.&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;struct BudgetSourceStream {
+}
+
+impl Stream for BudgetSourceStream {
+    type Item = Result&amp;lt;RecordBatch&amp;gt;;
+
+    fn poll_next(mut self: Pin&amp;lt;&amp;amp;mut Self&amp;gt;, cx: &amp;amp;mut Context&amp;lt;'_&amp;gt;) -&amp;gt; Poll&amp;lt;Option&amp;lt;Self::Item&amp;gt;&amp;gt; {
+        let coop = ready!(tokio::task::coop::poll_proceed(cx));
+        let batch: Poll&amp;lt;Option&amp;lt;Self::Item&amp;gt;&amp;gt; = ...;
+        if batch.is_ready() {
+            coop.made_progress();
+        }
+        batch
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;The &lt;code&gt;Stream&lt;/code&gt; now goes through the following steps:&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;1. Try to consume budget&lt;/strong&gt;: the first thing the operator does is use &lt;code&gt;poll_proceed&lt;/code&gt; to try to consume a unit of budget.
+If the budget is depleted, this function will return &lt;code&gt;Pending&lt;/code&gt;.
+Otherwise, we consumed one budget unit and we can continue.&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;let coop = ready!(tokio::task::coop::poll_proceed(cx));
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;strong&gt;2. Try to do some work&lt;/strong&gt;: next we try to produce a record batch.
+That might not be possible if we're reading from some asynchronous resource that's not ready.&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;let batch: Poll&amp;lt;Option&amp;lt;Self::Item&amp;gt;&amp;gt; = ...;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;strong&gt;3. Commit the budget consumption&lt;/strong&gt;: finally, if we did produce a batch, we need to tell Tokio that we were able to make progress.&lt;/p&gt;
+&lt;p&gt;That's done by calling the &lt;code&gt;made_progress&lt;/code&gt; method on the value &lt;code&gt;poll_proceed&lt;/code&gt; returned.&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;if batch.is_ready() {
+   coop.made_progress();
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;You might be wondering why the call to &lt;code&gt;made_progress&lt;/code&gt; is necessary.
+This clever construct makes it easier to manage the budget.
+The value returned by &lt;code&gt;poll_proceed&lt;/code&gt; will actually restore the budget to its original value when it is dropped unless &lt;code&gt;made_progress&lt;/code&gt; is called.
+This ensures that if we exit early from our &lt;code&gt;poll_next&lt;/code&gt; implementation by returning &lt;code&gt;Pending&lt;/code&gt;, that the budget we had consumed becomes available again.
+The task that invoked &lt;code&gt;poll_next&lt;/code&gt; can then use that budget again to try to make some other &lt;code&gt;Stream&lt;/code&gt; (or any resource for that matter) make progress.&lt;/p&gt;
+&lt;h2&gt;Automatic Cooperation For All Operators&lt;/h2&gt;
+&lt;p&gt;DataFusion 49.0.0  integrates the Tokio task budget based fix in all built-in source operators.
+This ensures that going forward, most queries will automatically be cancelable. 
+See &lt;a href="https://github.com/apache/datafusion/pull/16398"&gt;the PR&lt;/a&gt; for more details.&lt;/p&gt;
+&lt;p&gt;The design includes:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;A new &lt;code&gt;ExecutionPlan&lt;/code&gt; property that indicates if an operator participates in cooperative scheduling or not.&lt;/li&gt;
+&lt;li&gt;A new &lt;code&gt;EnsureCooperative&lt;/code&gt; optimizer rule to inspect query plans and insert &lt;code&gt;CooperativeExec&lt;/code&gt; nodes as needed to ensure custom source operators also participate.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;These two changes combined already make it very unlikely you'll encounter any query that refuses to stop, even with custom operators.
+For those situations where the automatic mechanisms are still not sufficient, there's a new &lt;code&gt;datafusion::physical_plan::coop&lt;/code&gt; module
+with utility functions that make it easy to adopt cooperative scheduling in your custom operators as well.  &lt;/p&gt;
+&lt;h2&gt;Acknowledgments&lt;/h2&gt;
+&lt;p&gt;Thank you to &lt;a href="https://datadobi.com/"&gt;Datadobi&lt;/a&gt; for sponsoring the development of this feature and to
+the DataFusion community contributors including &lt;a href="https://github.com/zhuqi-lucas"&gt;Qi Zhu&lt;/a&gt; and &lt;a href="https://github.com/ozankabak"&gt;Mehmet Ozan
+Kabak&lt;/a&gt;.&lt;/p&gt;
+&lt;h2&gt;About DataFusion&lt;/h2&gt;
+&lt;p&gt;&lt;a href="https://datafusion.apache.org/"&gt;Apache DataFusion&lt;/a&gt; is an extensible query engine toolkit, written
+in Rust, that uses &lt;a href="https://arrow.apache.org/"&gt;Apache Arrow&lt;/a&gt; as its in-memory format. DataFusion and
+similar technology are part of the next generation &amp;ldquo;Deconstructed Database&amp;rdquo;
+architectures, where new systems are built on a foundation of fast, modular
+components, rather than as a single tightly integrated system.&lt;/p&gt;
+&lt;p&gt;The &lt;a href="https://datafusion.apache.org/contributor-guide/communication.html"&gt;DataFusion community&lt;/a&gt; is always looking for new contributors to help
+improve the project. If you are interested in learning more about how query
+execution works, help document or improve the DataFusion codebase, or just try
+it out, we would love for you to join us.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Optimizing SQL (and DataFrames) in DataFusion, Part 1: Query Optimization Overview</title><link href="https://datafusion.apache.org/blog/2025/06/15/optimizing-sql-dataframes-part-one" rel="alternate"></link><published>2025-06-15T00:00:00+00:00</published><updated>2025-06-15T00:00:00+00:00</updated><author><name>alamb, akurmustafa</name></author><id>tag:datafusion.apache.org,2025-06-15:/blog/2025/06/15/optimizing-sql-dataframes-part-one</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
