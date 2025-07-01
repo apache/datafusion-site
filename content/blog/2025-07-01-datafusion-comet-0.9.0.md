@@ -96,7 +96,16 @@ Comet, such as tests for whole-stage code generation.
 ### Memory & Performance Tracing
 
 Comet now provides a tracing feature for analyzing performance and off-heap versus on-heap memory usage. See the
-Comet Tracing Guide for more information.
+[Comet Tracing Guide] for more information.
+
+[Comet Tracing Guide]: https://datafusion.apache.org/comet/contributor-guide/tracing.html
+
+<img
+src="/blog/images/comet-0.9.0/tracing.png"
+width="100%"
+class="img-responsive"
+alt="Comet Tracing"
+/>
 
 ### Spark Compatibility
 
