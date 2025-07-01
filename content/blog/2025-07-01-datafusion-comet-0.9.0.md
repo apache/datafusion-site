@@ -82,6 +82,33 @@ This release contains numerous bug fixes to achieve this coverage, including imp
 when AQE is enabled. The remaining ignored tests are mostly related to metric differences or tests irrelevant to
 Comet, such as tests for whole-stage code generation.
 
+<style>
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-family: sans-serif;
+  }
+
+  th, td {
+    text-align: left;
+    padding: 8px 12px;
+  }
+
+  th {
+    background-color: #f2f2f2;
+    font-weight: bold;
+  }
+
+  td {
+    border-bottom: 1px solid #ddd;
+  }
+
+  tbody tr:last-child td {
+    font-weight: bold;
+    border-top: 2px solid #000;
+  }
+</style>
+
 <table>
   <thead>
     <tr>
