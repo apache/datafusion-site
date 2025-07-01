@@ -1,7 +1,7 @@
 ---
 layout: post
-title: Apache DataFusion Comet 0.8.0 Release
-date: 2025-05-06
+title: Apache DataFusion Comet 0.9.0 Release
+date: 2025-07-01
 author: pmc
 categories: [subprojects]
 ---
