@@ -151,8 +151,9 @@ alt="Comet Tracing"
 - Spark 3.5.4 through 3.5.6 with JDK 11 & 17, Scala 2.12 & 2.13
 - Experimental support for Spark 4.0.0 with JDK 17, Scala 2.13
 
-We are looking for help from the community to fully support Spark 4.0.0. See 
-https://github.com/apache/datafusion-comet/issues/1637 for more information. 
+We are looking for help from the community to fully support Spark 4.0.0. See [EPIC: Support 4.0.0] for more information.
+
+[EPIC: Support 4.0.0]: https://github.com/apache/datafusion-comet/issues/1637
 
 Note that Java 8 support was removed from this release because Apache Arrow no longer supports it.
 
