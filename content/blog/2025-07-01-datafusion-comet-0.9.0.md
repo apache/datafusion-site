@@ -76,11 +76,12 @@ Comet 0.9.0 adds support for the following Spark expressions:
 ### Improved Spark SQL Test Coverage
 
 Comet now passes 97% of the Spark SQL test suite, with more than 24,000 tests passing (based on testing against
-Spark 3.5.6).
+Spark 3.5.6). The remaining 3% of tests are ignored for various reasons, such as being too specific to Spark 
+internals, or testing for features that are not relevant to Comet, such as whole-stage code generation, which
+is not needed when using a vectorized execution engine.
 
 This release contains numerous bug fixes to achieve this coverage, including improved support for exchange reuse
-when AQE is enabled. The remaining ignored tests are mostly related to metric differences or tests irrelevant to
-Comet, such as tests for whole-stage code generation.
+when AQE is enabled.
 
 <style>
   table {
