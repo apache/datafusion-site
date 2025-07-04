@@ -3,6 +3,16 @@
 Recent work in the DataFusion community has explored the use of **specialized indexes** to improve query performance, as introduced in this [talk on indexing Parquet](https://www.youtube.com/watch?v=74YsJT1-Rdk). In that presentation, several techniques were discussed for reducing scan overhead by enabling file-level or row-group-level pruning.
 
 Building on those ideas, this blog post demonstrates a concrete implementation of one such technique: **embedding a compact distinct-value index directly inside Parquet files**—preserving format compatibility while enabling fast query pruning during execution.
+The example implementation is available in the [parquet_embedded_index.rs](https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/parquet_embedded_index.rs) which is the using distinct values index to speed up query processing in DataFusion. This blog will based on the example implementation and will walk through the design and implementation of this technique.
+
+> **Prerequisite:** this example requires the new “buffered write” API in  
+> [apache/arrow‑rs#7714](https://github.com/apache/arrow-rs/pull/7714),  
+> which adds a public `write_all`‑style method on `SerializedFileWriter`  
+> so its internal byte‑count stays in sync with appended data.  
+> That alignment is crucial: it lets us append our custom index bytes  
+> immediately after the data pages (alongside Parquet’s page‑index)  
+> without breaking any offsets when writing the footer.
+
 
 ## Introduction
 
@@ -110,7 +120,7 @@ D select * from read_parquet('/tmp/parquet_index_data/*');
 │ quux     │
 └──────────┘
 ```
-It works well without any conflicts.
+It works well without any conflicts. Because we only add an unrecognized footer key (and embed bytes in an unused region), all standard readers—including DuckDB—continue to work seamlessly.
 
 ## Example Implementation Walkthrough
 
