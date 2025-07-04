@@ -1,130 +1,123 @@
-# Accelerating Query Processing in DataFusion with Embedded Parquet Indexes
+## Accelerating Query Processing in DataFusion with Embedded Parquet Indexes
 
-Recent work in the DataFusion community has explored the use of **specialized indexes** to improve query performance, as introduced in this [talk on indexing Parquet](https://www.youtube.com/watch?v=74YsJT1-Rdk). In that presentation, several techniques were discussed for reducing scan overhead by enabling file-level or row-group-level pruning.
+It’s a common misconception that Parquet can only deliver basic Min/Max pruning and Bloom filters—and that adding anything “smarter” requires inventing a whole new file format. In fact, Parquet’s design already lets you embed custom indexing data *inside* the file (via unused footer metadata and byte regions) without breaking compatibility. In this post, we’ll show how DataFusion can leverage a **compact distinct‑value index** written directly into Parquet files—preserving complete interchangeability with other tools—while enabling ultra‑fast file‑level pruning.
 
-Building on those ideas, this blog post demonstrates a concrete implementation of one such technique: **embedding a compact distinct-value index directly inside Parquet files**—preserving format compatibility while enabling fast query pruning during execution.
-The example implementation is available in the [parquet_embedded_index.rs](https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/parquet_embedded_index.rs) which is the using distinct values index to speed up query processing in DataFusion. This blog will based on the example implementation and will walk through the design and implementation of this technique.
+Building on the ideas from Andrew Lamb’s talk on [indexing Parquet with DataFusion](https://www.youtube.com/watch?v=74YsJT1-Rdk), we’ll:
 
-> **Prerequisite:** this example requires the new “buffered write” API in  
-> [apache/arrow‑rs#7714](https://github.com/apache/arrow-rs/pull/7714),  
-> which adds a public `write_all`‑style method on `SerializedFileWriter`  
-> so its internal byte‑count stays in sync with appended data.  
-> That alignment is crucial: it lets us append our custom index bytes  
-> immediately after the data pages (alongside Parquet’s page‑index)  
-> without breaking any offsets when writing the footer.
+1. Review Parquet’s built‑in metadata hooks (Min/Max, page index, Bloom filters).
+2. Introduce a simple on‑page binary format for a distinct‑value index.
+3. Show how to append that index inline, record its offset in the footer, and have DataFusion consume it at query time.
+4. Demonstrate end‑to‑end examples (including DuckDB compatibility) using code from
+   [`parquet_embedded_index.rs`](https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/parquet_embedded_index.rs).
 
+> **Prerequisite:** this example requires the new “buffered write” API in
+> [apache/arrow‑rs#7714](https://github.com/apache/arrow-rs/pull/7714),
+> which keeps the internal byte count in sync so you can append index bytes immediately after data pages.
+
+---
 
 ## Introduction
 
-Parquet is a popular columnar storage format that balances storage efficiency with fast analytical reads. However, even with column pruning and predicate pushdown, queries over highly selective predicates may still scan unnecessary row groups or even entire files.
+Parquet is a popular columnar format tuned for high‑performance analytics: column pruning, predicate pushdown, page indices and Bloom filters all help reduce I/O. Yet when predicates are highly selective (e.g. `category = 'foo'`), engines often still scan entire row groups or files that contain zero matches.
 
-To address this, query engines like [DataFusion](https://github.com/apache/datafusion) have explored **indexing techniques** to support file-level pruning. For example, DataFusion includes demos that build **external indexes** alongside Parquet files to accelerate filtering.
+Many systems solve this by producing *external* index files—Bloom filters, inverted lists, or custom sketches—alongside Parquet. But juggling separate index files adds operational overhead and risks out‑of‑sync data. Worse, some have used that pain point to justify brand‑new formats (see Microsoft’s [Amudai spec](https://github.com/microsoft/amudai/blob/main/docs/spec/src/what_about_parquet.md)).
 
-However, these solutions require managing a separate index file for every data file, which introduces operational complexity and potential consistency issues. In this post, we show how to embed an application-specific “distinct value” index **directly** inside the Parquet file itself—preserving format compatibility while enabling efficient pruning during query execution.
+**But Parquet itself is extensible**: it tolerates unknown bytes after data pages and arbitrary key/value pairs in its footer. We can exploit those hooks to **embed** a small, per‑file distinct‑value index directly in the file—no extra files, no format forks, and no compatibility breakage.
+
+In the rest of this post, we’ll:
+
+1. Walk through the simple binary layout for a distinct‑value list.
+2. Show how to write it inline after the normal Parquet pages.
+3. Record its offset in the footer’s metadata map.
+4. Extend DataFusion’s `TableProvider` to discover and use that index for file‑level pruning.
+5. Verify everything still works in DuckDB via `read_parquet()`.
+
+---
 
 ## Background
 
-Several examples in the DataFusion repository illustrate the benefits of using indexes for pruning:
+Several examples in the DataFusion repository illustrate the benefits of using external indexes for pruning:
 
 * [`parquet_index.rs`](https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/parquet_index.rs)
 * [`advanced_parquet_index.rs`](https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/advanced_parquet_index.rs)
 
-These examples work by building a separate index file (e.g., a Bloom filter or a map of distinct values) and associating it with a Parquet file on the filesystem. While this allows for faster filtering, it introduces some downsides:
+Those demos work by building separate index files (Bloom filters, maps of distinct values) and associating them with Parquet files. While effective, this approach:
 
-* **Operational complexity:** You now need to track two files per dataset (data + index).
-* **Synchronization issues:** Deletion, renaming, or movement of one file without the other causes silent failures.
-* **Reduced portability:** It's harder to move or share Parquet data when the index is not self-contained.
+* **Increases operational complexity:** Two files per dataset to track.
+* **Risks synchronization issues:** Removing or renaming one file breaks the index.
+* **Reduces portability:** Harder to share or move Parquet data when the index is external.
 
-This problem has even been cited as a reason for building new formats entirely. For instance, [Amudai’s spec](https://github.com/microsoft/amudai/blob/main/docs/spec/src/what_about_parquet.md) critiques Parquet’s lack of a standardized way to embed auxiliary data like inverted indexes or sketches.
+Meanwhile, critics of Parquet’s extensibility point to the lack of a *standard* way to embed auxiliary data (see Amudai). But in practice, Parquet tolerates unknown content gracefully:
 
-However, **Parquet’s format is extensible by design**: it allows arbitrary key-value metadata in the footer and tolerates unknown content beyond the data pages. This means we *can* safely embed an index inside a Parquet file—*without* breaking compatibility with existing tools.
+* **Arbitrary metadata:** Key/value pairs in the footer are opaque to readers.
+* **Unused regions:** Bytes after data pages (before the Thrift footer) are ignored by standard readers.
 
-That’s what we do in this post: embed a compact index of distinct values inline with the data pages, record its offset in the footer, and let DataFusion use it during query planning.
+We’ll exploit both to embed our index inline.
 
+---
 
 ## Motivation
 
-When scanning Parquet files, DataFusion (like other engines) reads row group metadata and data pages sequentially. If you filter on a highly selective predicate (e.g., `category = 'foo'`), you may still incur I/O for row groups that contain no matching values. Embedding a lightweight, per‑file distinct‑value index enables DataFusion to skip entire files that cannot satisfy the filter.
+When scanning Parquet files, DataFusion (like other engines) reads row group metadata and then data pages sequentially. If you filter on a highly selective predicate (e.g., `category = 'foo'`), you may still incur I/O for files or row groups containing no matches.
 
-**Key requirements:**
+Embedding a lightweight, per‑file distinct‑value index enables DataFusion to skip entire files that cannot satisfy the filter:
 
-* **Format‑preserving:** Other Parquet readers ignore unknown footer metadata keys, so our custom data does not break compatibility.
-* **Efficient lookup:** Checking the index must be cheaper than scanning row groups.
-* **Compact storage:** We avoid bloating the Thrift footer by embedding the index inline and recording only its offset in the footer metadata.
+* **Format‑preserving:** Unknown footer keys are ignored by other readers.
+* **Efficient lookup:** Checking a small in‑memory set of values is far cheaper than disk I/O.
+* **Compact storage:** Store only the offset and payload, not a full duplicate of the data.
+
+---
 
 ## High‑Level Design
 
 1. **Serialize distinct values** for the target column into a simple binary layout:
 
-    * 4‑byte magic header (`IDX1`)
-    * 8‑byte little‑endian length
-    * newline‑separated UTF‑8 distinct values
+   * 4‑byte magic header (`IDX1`)
+   * 8‑byte little‑endian length
+   * newline‑separated UTF‑8 distinct values
 2. **Append index bytes inline** immediately after the Parquet data pages, before writing the footer.
 3. **Record index location** by adding a key/value entry (`"distinct_index_offset" -> <offset>`) in the Parquet footer metadata.
 
 Other readers will parse the footer, see an unknown key, and ignore it. Only our DataFusion extension will use this index to prune files.
 
-### The Custom Binary Index location in parquet file
+### Binary Layout in the Parquet File
 
-
-```rust
-//!                   ┌──────────────────────┐                           
-//!                   │┌───────────────────┐ │                           
-//!                   ││     DataPage      │ │                           
-//!                   │└───────────────────┘ │                           
-//!  Standard Parquet │┌───────────────────┐ │                           
-//!  Data Pages       ││     DataPage      │ │                           
-//!                   │└───────────────────┘ │                           
-//!                   │        ...           │                           
-//!                   │┌───────────────────┐ │                           
-//!                   ││     DataPage      │ │                           
-//!                   │└───────────────────┘ │                           
-//!                   │┏━━━━━━━━━━━━━━━━━━━┓ │                           
-//! Non standard      │┃                   ┃ │                           
-//! index (ignored by │┃Custom Binary Index┃ │                           
-//! other Parquet     │┃ (Distinct Values) ┃◀│─ ─ ─                      
-//! readers)          │┃                   ┃ │     │                     
-//!                   │┗━━━━━━━━━━━━━━━━━━━┛ │                           
-//! Standard Parquet  │┏━━━━━━━━━━━━━━━━━━━┓ │     │  key/value metadata
-//! Page Index        │┃    Page Index     ┃ │        contains location  
-//!                   │┗───────────────────┛ │     │  of special index   
-//!                   │╔═══════════════════╗ │                           
-//!                   │║ Parquet Footer w/ ║ │     │                     
-//!                   │║     Metadata      ║ ┼ ─ ─                       
-//!                   │║ (Thrift Encoded)  ║ │                           
-//!                   │╚═══════════════════╝ │                           
-//!                   └──────────────────────┘                           
-//!                                                                     
-//!                         Parquet File                                 
+```text
+                   ┌──────────────────────┐
+                   │┌───────────────────┐ │
+                   ││     DataPage      │ │
+                   │└───────────────────┘ │
+  Standard Parquet │┌───────────────────┐ │
+  Data Pages       ││     DataPage      │ │
+                   │└───────────────────┘ │
+                   │        ...           │
+                   │┌───────────────────┐ │
+                   ││     DataPage      │ │
+                   │└───────────────────┘ │
+                   │┏━━━━━━━━━━━━━━━━━━━┓ │
+ Non‑standard      │┃                   ┃ │
+ index (ignored by │┃ Custom Binary     ┃ │
+ other Parquet     │┃ Index (Distinct)  ┃◀┼─ ─ ─
+ readers)          │┃                   ┃ │   │  Inline after
+                   │┗━━━━━━━━━━━━━━━━━━━┛ │   │  data pages
+                   │┏━━━━━━━━━━━━━━━━━━━┓ │   │
+ Standard Parquet  │┃    Page Index     ┃ │   │
+ Page Index        │┗───────────────────┛ │   │  Footer
+                   │╔═══════════════════╗ │   │  metadata
+                   │║ Parquet Footer w/ ║ │◀──┼─ ─ ─ key/value
+                   │║     Metadata      ║ │      map contains
+                   │║ (Thrift Encoded)  ║ │      offset
+                   │╚═══════════════════╝ │
+                   └──────────────────────┘
 ```
 
-### Crossing checking for DuckDB with our custom distinct‑value index Parquet file:
+Embedding a custom distinct‑value index inside Parquet files empowers DataFusion to skip non‑matching files with zero additional files to manage.
 
-Embedding a custom distinct‑value index in Parquet files empowers DataFusion to perform file‑level pruning with minimal I/O overhead, while maintaining full compatibility with standard Parquet readers.
-
-To verify this, we tested the output files with [DuckDB](https://duckdb.org/) using its built-in `read_parquet()` function:
-
-```sql
-D select * from read_parquet('/tmp/parquet_index_data/*');
-┌──────────┐
-│ category │
-│ varchar  │
-├──────────┤
-│ foo      │
-│ bar      │
-│ foo      │
-│ baz      │
-│ qux      │
-│ foo      │
-│ quux     │
-│ quux     │
-└──────────┘
-```
-It works well without any conflicts. Because we only add an unrecognized footer key (and embed bytes in an unused region), all standard readers—including DuckDB—continue to work seamlessly.
+---
 
 ## Example Implementation Walkthrough
 
-### Serializing the Index
+### Serializing the Index in Rust
 
 ```rust
 /// Magic bytes to identify our custom index format
@@ -170,19 +163,19 @@ On the read path, we:
 4. Read the 8‑byte length and then the payload.
 5. Reconstruct `DistinctIndex` from newline‑delimited strings.
 
-### DataFusion `TableProvider`
+### Extending DataFusion’s `TableProvider`
 
-We implement `DistinctIndexTable` that:
+We implement a `DistinctIndexTable` that:
 
 * During `try_new`, scans a directory of Parquet files and reads each file’s `DistinctIndex`.
 * In `scan()`, inspects pushed‑down filters on the indexed column (e.g., `category = 'foo'`).
 * Uses `distinct_index.contains(value)` to pick only matching files.
 * Delegates actual row‑group reads to `ParquetSource` for the selected files.
 
-### Usage overview
+### Usage Overview
 
 ```rust
-// Write sample files with indexes
+// Write sample files with embedded indexes
 tmp_dir.iter().for_each(|(name, vals)| {
     write_file_with_index(&dir.join(name), vals).unwrap();
 });
@@ -196,6 +189,39 @@ let df = ctx.sql("SELECT * FROM t WHERE category = 'foo'").await?;
 df.show().await?;
 ```
 
+---
+
+## Verifying Compatibility with DuckDB
+
+Even with the extra bytes and unknown footer key, standard readers ignore our index. For example:
+
+```sql
+SELECT * FROM read_parquet('/tmp/parquet_index_data/*');
+┌──────────┐
+│ category │
+│ varchar  │
+├──────────┤
+│ foo      │
+│ bar      │
+│ foo      │
+│ baz      │
+│ qux      │
+│ foo      │
+│ quux     │
+│ quux     │
+└──────────┘
+```
+
+DuckDB’s `read_parquet()` sees only the data pages and footer it understands—our embedded index is simply ignored, demonstrating seamless compatibility.
+
+---
+
 ## Conclusion
 
-Embedding a custom distinct‑value index in Parquet files empowers DataFusion to perform file‑level pruning with minimal I/O overhead, while maintaining full compatibility with standard Parquet readers.
+By embedding a custom distinct‑value index directly into Parquet files, we achieve:
+
+* **File‑level pruning** with zero external index files.
+* **Full format compatibility** with standard tools.
+* **Minimal operational overhead**—no special catalog or sidecar management.
+
+This technique illustrates how Parquet’s extensibility can be harnessed for powerful, lightweight indexing, all within the existing format. Give it a try in your next DataFusion project!
