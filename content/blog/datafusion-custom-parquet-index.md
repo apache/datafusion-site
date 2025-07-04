@@ -2,6 +2,11 @@
 
 It’s a common misconception that Parquet can only deliver basic Min/Max pruning and Bloom filters—and that adding anything “smarter” requires inventing a whole new file format. In fact, Parquet’s design already lets you embed custom indexing data *inside* the file (via unused footer metadata and byte regions) without breaking compatibility. In this post, we’ll show how DataFusion can leverage a **compact distinct‑value index** written directly into Parquet files—preserving complete interchangeability with other tools—while enabling ultra‑fast file‑level pruning.
 
+And besides the custom index, a straightforward rewritten parquet file can have good improvement also. For example, rewriting ClickBench partitioned dataset with better settings* (not resorting) improves
+performance by more than 2x for many queries. So with a custom index, we can expect even more improvement.
+More details: [Blog post about parquet vs custom file formats #16149
+](https://github.com/apache/datafusion/issues/16149)
+
 Building on the ideas from Andrew Lamb’s talk on [indexing Parquet with DataFusion](https://www.youtube.com/watch?v=74YsJT1-Rdk), we’ll:
 
 1. Review Parquet’s built‑in metadata hooks (Min/Max, page index, Bloom filters).
