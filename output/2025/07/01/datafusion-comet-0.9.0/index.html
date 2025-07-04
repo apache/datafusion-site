@@ -1,0 +1,185 @@
+<!doctype html>
+<html class="no-js" lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apache DataFusion Comet 0.9.0 Release - Apache DataFusion Blog</title>
+<link href="/blog/css/bootstrap.min.css" rel="stylesheet">
+<link href="/blog/css/fontawesome.all.min.css" rel="stylesheet">
+<link href="/blog/css/headerlink.css" rel="stylesheet">
+<link href="/blog/highlight/default.min.css" rel="stylesheet">
+<script src="/blog/highlight/highlight.js"></script>
+<script>hljs.highlightAll();</script>  </head>
+  <body class="d-flex flex-column h-100">
+  <main class="flex-shrink-0">
+<!-- nav bar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark" aria-label="Fifth navbar example">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/blog"><img src="/blog/images/logo_original4x.png" style="height: 32px;"/> Apache DataFusion Blog</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarADP" aria-controls="navbarADP" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarADP">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/about.html">About</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/feed.xml">RSS</a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>    
+
+
+<!-- page contents -->
+<div id="contents">
+    <div class="bg-white p-5 rounded">
+        <div class="col-sm-8 mx-auto">
+          <h1>
+              Apache DataFusion Comet 0.9.0 Release
+          </h1>
+              <p>Posted on: Tue 01 July 2025 by pmc</p>
+              <!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+-->
+<p>The Apache DataFusion PMC is pleased to announce version 0.9.0 of the <a href="https://datafusion.apache.org/comet/">Comet</a> subproject.</p>
+<p>Comet is an accelerator for Apache Spark that translates Spark physical plans to DataFusion physical plans for
+improved performance and efficiency without requiring any code changes.</p>
+<p>This release covers approximately ten weeks of development work and is the result of merging 139 PRs from 24
+contributors. See the <a href="https://github.com/apache/datafusion-comet/blob/main/dev/changelog/0.9.0.md">change log</a> for more information.</p>
+<h2>Release Highlights</h2>
+<h3>Complex Type Support in Parquet Scans</h3>
+<p>Comet now supports complex types (Structs, Maps, and Arrays) when reading Parquet files. This functionality is not
+yet available when reading Parquet files from Apache Iceberg.</p>
+<p>This functionality was only available in previous releases when manually specifying one of the new experimental
+scan implementations. Comet now automatically chooses the best scan implementation based on the input schema, and no
+longer requires manual configuration.</p>
+<h3>Complex Type Processing Improvements</h3>
+<p>Numerous improvements have been made to complex type support to ensure Spark-compatible behavior when casting between
+structs and accessing fields within deeply nested types.</p>
+<h3>Shuffle Improvements</h3>
+<p>Comet now accelerates a broader range of shuffle operations, leading to more queries running fully natively. In
+previous releases, some shuffle operations fell back to Spark to avoid some known bugs in Comet, and these bugs have
+now been fixed.</p>
+<h3>New Features</h3>
+<p>Comet 0.9.0 adds support for the following Spark expressions:</p>
+<ul>
+<li>ArrayDistinct</li>
+<li>ArrayMax</li>
+<li>ArrayRepeat</li>
+<li>ArrayUnion</li>
+<li>BitCount</li>
+<li>BitNot</li>
+<li>Expm1</li>
+<li>MapValues</li>
+<li>Signum</li>
+<li>ToPrettyString</li>
+<li>map[]</li>
+</ul>
+<h3>Improved Spark SQL Test Coverage</h3>
+<p>Comet now passes 97% of the Spark SQL test suite, with more than 24,000 tests passing (based on testing against
+Spark 3.5.6). The remaining 3% of tests are ignored for various reasons, such as being too specific to Spark 
+internals, or testing for features that are not relevant to Comet, such as whole-stage code generation, which
+is not needed when using a vectorized execution engine.</p>
+<p>This release contains numerous bug fixes to achieve this coverage, including improved support for exchange reuse
+when AQE is enabled.</p>
+<style>
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-family: sans-serif;
+  }
+
+  th, td {
+    text-align: left;
+    padding: 8px 12px;
+  }
+
+  th {
+    background-color: #f2f2f2;
+    font-weight: bold;
+  }
+
+  td {
+    border-bottom: 1px solid #ddd;
+  }
+
+  tbody tr:last-child td {
+    font-weight: bold;
+    border-top: 2px solid #000;
+  }
+</style>
+<table>
+<thead>
+<tr>
+<th>Module</th>
+<th>Passed</th>
+<th>Ignored</th>
+<th>Canceled</th>
+<th>Total</th>
+</tr>
+</thead>
+<tbody>
+<tr><td>catalyst</td><td>7,232</td><td>5</td><td>1</td><td>7,238</td></tr>
+<tr><td>core-1</td><td>9,186</td><td>246</td><td>6</td><td>9,438</td></tr>
+<tr><td>core-2</td><td>2,649</td><td>393</td><td>0</td><td>3,042</td></tr>
+<tr><td>core-3</td><td>1,757</td><td>136</td><td>16</td><td>1,909</td></tr>
+<tr><td>hive-1</td><td>2,174</td><td>14</td><td>4</td><td>2,192</td></tr>
+<tr><td>hive-2</td><td>19</td><td>1</td><td>4</td><td>24</td></tr>
+<tr><td>hive-3</td><td>1,058</td><td>11</td><td>4</td><td>1,073</td></tr>
+<tr><td><strong>Total</strong></td><td><strong>24,075</strong></td><td><strong>806</strong></td><td><strong>31</strong></td><td><strong>24,912</strong></td></tr>
+</tbody>
+</table>
+<h3>Memory &amp; Performance Tracing</h3>
+<p>Comet now provides a tracing feature for analyzing performance and off-heap versus on-heap memory usage. See the
+<a href="https://datafusion.apache.org/comet/contributor-guide/tracing.html">Comet Tracing Guide</a> for more information.</p>
+<p><img alt="Comet Tracing" class="img-responsive" src="/blog/images/comet-0.9.0/tracing.png" width="100%"/></p>
+<h3>Spark Compatibility</h3>
+<ul>
+<li>Spark 3.4.3 with JDK 11 &amp; 17, Scala 2.12 &amp; 2.13</li>
+<li>Spark 3.5.4 through 3.5.6 with JDK 11 &amp; 17, Scala 2.12 &amp; 2.13</li>
+<li>Experimental support for Spark 4.0.0 with JDK 17, Scala 2.13</li>
+</ul>
+<p>We are looking for help from the community to fully support Spark 4.0.0. See <a href="https://github.com/apache/datafusion-comet/issues/1637">EPIC: Support 4.0.0</a> for more information.</p>
+<p>Note that Java 8 support was removed from this release because Apache Arrow no longer supports it.</p>
+<h2>Getting Involved</h2>
+<p>The Comet project welcomes new contributors. We use the same <a href="https://datafusion.apache.org/contributor-guide/communication.html#slack-and-discord">Slack and Discord</a> channels as the main DataFusion
+project and have a weekly <a href="https://docs.google.com/document/d/1NBpkIAuU7O9h8Br5CbFksDhX-L9TyO9wmGLPMe0Plc8/edit?usp=sharing">DataFusion video call</a>.</p>
+<p>The easiest way to get involved is to test Comet with your current Spark jobs and file issues for any bugs or
+performance regressions that you find. See the <a href="https://datafusion.apache.org/comet/user-guide/installation.html">Getting Started</a> guide for instructions on downloading and installing
+Comet.</p>
+<p>There are also many <a href="https://github.com/apache/datafusion-comet/contribute">good first issues</a> waiting for contributions.</p>
+        </div>
+      </div>
+    </div>    
+    <!-- footer -->
+    <div class="row">
+      <div class="large-12 medium-12 columns">
+        <p style="font-style: italic; font-size: 0.8rem; text-align: center;">
+          Copyright 2025, <a href="https://www.apache.org/">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a>.<br/>
+          Apache&reg; and the Apache feather logo are trademarks of The Apache Software Foundation.
+        </p>
+      </div>
+    </div>
+    <script src="/blog/js/bootstrap.bundle.min.js"></script>  </main>
+  </body>
+</html>
