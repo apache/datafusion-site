@@ -1,4 +1,4 @@
-## Accelerating Query Processing in DataFusion with Embedded Parquet Indexes
+## Extending Parquet with Embedded Indexes and Accelerating Query Processing with DataFusion
 
 It’s a common misconception that Parquet can only deliver basic Min/Max pruning and Bloom filters—and that adding anything “smarter” requires inventing a whole new file format. In fact, Parquet’s design already lets you embed custom indexing data *inside* the file (via unused footer metadata and byte regions) without breaking compatibility. In this post, we’ll show how DataFusion can leverage a **compact distinct‑value index** written directly into Parquet files—preserving complete interchangeability with other tools—while enabling ultra‑fast file‑level pruning.
 
