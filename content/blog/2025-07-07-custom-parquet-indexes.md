@@ -62,8 +62,11 @@ Many systems improve query performance using *external* indexes with various met
 Logically a Parquet files consist of a sequence of row groups, each containing column chunks, which in turn contain data pages. Physically, a Parquet file is a sequence of bytes with a Thrift-encoded footer containing metadata about the file structure. The footer includes information about the file such as schema, row groups, column chunks and other information required to read the file. 
 
 The parquet format includes three types of structures, all of which are optional, and may or may not be present. 
+
 1. **Min/Max/Null Count statistics** for each column chunk in each row group. If present, statistics are typically present for all row groups and a subset of columns. 
+
 2. **Page Index**: A page index is a structure that contains information about the data pages in a row group, such as their offsets and sizes. It is used to quickly locate data pages without scanning the entire row group.
+
 3. **Bloom Filters**: A Bloom filter is a probabilistic data structure that is used to test whether an element is a member of a set. It is used to quickly determine if a value is present in a column chunk without scanning the entire column chunk.
 
 Only the Min/Max/Null Count statistics are stored inline in the Parquet footer metadata. The Page Index and Bloom Filters are stored in the file body before the Thrift footer and their their locations are recorded in the footer metadata, as shown in Figure 1. Readers which do not understand these structures will simply ignore them.
