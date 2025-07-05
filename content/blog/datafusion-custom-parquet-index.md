@@ -18,9 +18,8 @@ Building on the ideas from Andrew Lamb’s talk on [indexing Parquet with DataFu
 4. Demonstrate end‑to‑end examples (including DuckDB compatibility) using code from
    [`parquet_embedded_index.rs`](https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/parquet_embedded_index.rs).
 
-> **Prerequisite:** this example requires the new “buffered write” API in
-> [apache/arrow‑rs#7714](https://github.com/apache/arrow-rs/pull/7714),
-> which keeps the internal byte count in sync so you can append index bytes immediately after data pages.
+> **Prerequisite:** Requires **arrow‑rs v55.2.0** or later, which includes the new “buffered write” API ([apache/arrow-rs#7714](https://github.com/apache/arrow-rs/pull/7714)).  
+> This API keeps the internal byte count in sync so you can append index bytes immediately after data pages.
 
 ---
 
@@ -55,7 +54,7 @@ Those demos work by building separate index files (Bloom filters, maps of distin
 * **Risks synchronization issues:** Removing or renaming one file breaks the index.
 * **Reduces portability:** Harder to share or move Parquet data when the index is external.
 
-Meanwhile, critics of Parquet’s extensibility point to the lack of a *standard* way to embed auxiliary data (see Amudai). But in practice, Parquet tolerates unknown content gracefully:
+Meanwhile, critics of Parquet’s extensibility point to the lack of a *standard* way to embed auxiliary data (see [Amudai](https://github.com/microsoft/amudai/blob/main/docs/spec/src/what_about_parquet.md)). But in practice, Parquet tolerates unknown content gracefully:
 
 * **Arbitrary metadata:** Key/value pairs in the footer are opaque to readers.
 * **Unused regions:** Bytes after data pages (before the Thrift footer) are ignored by standard readers.
