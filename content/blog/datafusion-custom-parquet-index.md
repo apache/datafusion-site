@@ -1,11 +1,14 @@
 ## Accelerating Query Processing in DataFusion with Embedded Parquet Indexes
 
-It’s a common misconception that Parquet can only deliver basic Min/Max pruning and Bloom filters—and that adding anything “smarter” requires inventing a whole new file format. In fact, Parquet’s design already lets you embed custom indexing data *inside* the file (via unused footer metadata and byte regions) without breaking compatibility. In this post, we’ll show how DataFusion can leverage a **compact distinct‑value index** written directly into Parquet files—preserving complete interchangeability with other tools—while enabling ultra‑fast file‑level pruning.
+It’s a common misconception that Parquet can only deliver basic Min/Max pruning and Bloom filters—and that adding anything "smarter" requires inventing a whole new file format. In fact, Parquet's column‑oriented design, with its well‑defined footer metadata and reserved byte regions, already provides the flexibility to embed arbitrary indexing structures without breaking compatibility. 
 
-And besides the custom index, a straightforward rewritten parquet file can have good improvement also. For example, rewriting ClickBench partitioned dataset with better settings* (not resorting) improves
+In this post, we'll first review the core concepts of the Apache Parquet file format. Then explain how to store custom indexes inside Parquet files, and finally show how Apache DataFusion can leverage a **compact distinct‑value index** to achieve ultra‑fast file‑level pruning—all while preserving complete interchangeability with other tools.
+
+And besides the custom index, a straightforward rewritten parquet file can have good improvement also. 
+For example, rewriting ClickBench partitioned dataset with better settings* (not resorting) improves
 performance by more than 2x for many queries. So with a custom index, we can expect even more improvement.
 More details: [Blog post about parquet vs custom file formats #16149
-](https://github.com/apache/datafusion/issues/16149)
+](https://github.com/apache/datafusion/issues/16149). [JigaoLuo](https://github.com/JigaoLuo) and [XiangpengHao](https://github.com/XiangpengHao) have been exploring these Parquet‑rewriting techniques over in the liquid‑cache which is using DataFusion, repo—check out [XiangpengHao/liquid‑cache#227](https://github.com/XiangpengHao/liquid-cache/issues/227) for more insights.
 
 Building on the ideas from Andrew Lamb’s talk on [indexing Parquet with DataFusion](https://www.youtube.com/watch?v=74YsJT1-Rdk), we’ll:
 
