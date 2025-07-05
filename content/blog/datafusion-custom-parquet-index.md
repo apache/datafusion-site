@@ -181,10 +181,7 @@ fn serialize_index<W: Write + Send>(
 On the read path, we:
 
 1. Open the Parquet footer and extract `distinct_index_offset`.
-2. Seek to that offset in the file.
-3. Read and validate `IDX1` magic.
-4. Read the 8‑byte length and then the payload.
-5. Reconstruct `DistinctIndex` from newline‑delimited strings.
+2. Read the `DistinctIndex` payload at that offset.
 
 ### Extending DataFusion’s `TableProvider`
 
@@ -239,12 +236,13 @@ DuckDB’s `read_parquet()` sees only the data pages and footer it understands�
 
 ---
 
-## Conclusion
+### 7. Summary and Next Steps
 
-By embedding a custom distinct‑value index directly into Parquet files, we achieve:
+* **No sidecar files:** Index is embedded, simplifying operations.
+* **File-level pruning:** Dramatically reduces I/O for highly selective queries.
+* **Full format compatibility:** Works with existing Parquet tools.
+* **Additional Parquet optimizations:** Parquet itself supports many more performance tweaks—such as physical sort order, row group sizing, compression codecs, and encoding choices—that you can apply alongside embedded indexes for even better results.
 
-* **File‑level pruning** with zero external index files.
-* **Full format compatibility** with standard tools.
-* **Minimal operational overhead**—no special catalog or sidecar management.
+**Next steps:** Explore embedding more advanced structures (e.g., bitmaps or Bloom filters) for larger datasets and multi-column indexing.
 
-This technique illustrates how Parquet’s extensibility can be harnessed for powerful, lightweight indexing, all within the existing format. Give it a try in your next DataFusion project!
+> Try embedding custom indexes in your next DataFusion project to achieve faster query performance!
