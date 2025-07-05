@@ -77,15 +77,20 @@ Embedding a lightweight, per‑file distinct‑value index enables DataFusion to
 
 ## High‑Level Design
 
-1. **Serialize distinct values** for the target column into a simple binary layout:
+Rather than diving into the specifics of our distinct‑value index format, we’ll keep this at a higher level so you can adapt the same approach to your own custom indexes:
 
-   * 4‑byte magic header (`IDX1`)
-   * 8‑byte little‑endian length
-   * newline‑separated UTF‑8 distinct values
-2. **Append index bytes inline** immediately after the Parquet data pages, before writing the footer.
-3. **Record index location** by adding a key/value entry (`"distinct_index_offset" -> <offset>`) in the Parquet footer metadata.
+1. **Choose or define your index payload** (e.g. bitmap, Bloom filter, sketch, distinct values list, etc.).
+2. **Serialize your index bytes** and append them inline immediately after the Parquet data pages, before writing the footer.
+3. **Record the index location** by adding a key/value entry (for example `"my_index_offset" -> "<byte‑offset>"`) in the Parquet footer metadata.
+4. **Extend DataFusion** with a custom `TableProvider` (or wrap the existing Parquet provider) that:
+   - Reads the footer metadata to discover your index offset.
+   - Seeks to that offset and deserializes your index.
+   - Applies file‑level pruning based on pushed‑down filters and your index’s lookup logic.
+5. **Verify compatibility** with other tools (DuckDB, Spark, etc.)—they will ignore your unknown footer key and extra bytes, so your data remains fully interoperable.
 
-Other readers will parse the footer, see an unknown key, and ignore it. Only our DataFusion extension will use this index to prune files.
+For a concrete Rust example (including our distinct‑value index implementation), see the [`parquet_embedded_index.rs`](https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/parquet_embedded_index.rs) demo in the DataFusion repository.
+
+---
 
 ### Binary Layout in the Parquet File
 
@@ -123,6 +128,17 @@ Embedding a custom distinct‑value index inside Parquet files empowers DataFusi
 ---
 
 ## Example Implementation Walkthrough
+
+#### Serializing the Distinct‑Value Index
+
+1. **Serialize distinct values** for the target column into a simple binary layout:
+   * 4‑byte magic header (`IDX1`)
+   * 8‑byte little‑endian length
+   * newline‑separated UTF‑8 distinct values
+2. **Append index bytes inline** immediately after the Parquet data pages, before writing the footer.
+3. **Record index location** by adding a key/value entry (`"distinct_index_offset" -> <offset>`) in the Parquet footer metadata.
+
+Other readers will parse the footer, see an unknown key, and ignore it. Only our DataFusion extension will use this index to prune files.
 
 ### Serializing the Index in Rust
 
