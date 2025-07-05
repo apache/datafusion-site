@@ -41,7 +41,10 @@ In the rest of this post, we’ll:
 
 ---
 
-## Background
+## 1. Parquet 101: File Anatomy & Native Pruning Hooks
+TODO add image here?
+
+## 2. Why Parquet Still Scans Too Much
 
 Several examples in the DataFusion repository illustrate the benefits of using external indexes for pruning:
 
