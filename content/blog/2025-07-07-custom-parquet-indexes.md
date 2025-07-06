@@ -31,56 +31,54 @@ It’s a common misconception that [Apache Parquet] files can only store basic M
 In this post, we review indexing available in the Apache Parquet file format, explain the mechanism for storing user defined indexes inside Parquet files, and finally show how to read and write a user defined index  [Apache DataFusion] for file‑level pruning—all while preserving complete interoperability.
 
 
-This post is part of a forthcoming series explaining techniques for building high performance analytic systems with Parquet. In addition to custom indexes in Parquet files, it is possible to
-
-1Use external indexes (see [this talk](https://www.youtube.com/watch?v=74YsJT1-Rdk) and the
-[parquet_index.rs] and [advanced_parquet_index.rs] examples in the DataFusion repository. 
-
-2. Rewrite files optimized for specific queries, by resorting, repartitioning and tuning datapage and row group sizes. See [XiangpengHao/liquid‑cache#227](https://github.com/XiangpengHao/liquid-cache/issues/227) and the conversation between [JigaoLuo](https://github.com/JigaoLuo) and [XiangpengHao](https://github.com/XiangpengHao) for more information or or to help with this work.
-
 [Apache DataFusion]: https://datafusion.apache.org/
 [Apache Parquet]: https://parquet.apache.org/
-[parquet_index.rs]: https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/parquet_index.rs
-[advanced_parquet_index.rs]: https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/advanced_parquet_index.rs
 
 ## Introduction
 
-Parquet is a popular columnar format with well understood and [production grade libraries for high‑performance analytics]. Features such as column pruning, predicate pushdown, the [PageIndex] and [Bloom Filters] all help improve performance for common query patterns. DataFusion includes a [highly optimized Parquet implementation] and has excellent performance in general.  However, given the wide variety of query patterns seen in production use cases, there are times when the statistics included in the Parquet format itself may not be sufficient. [^1] 
+Apache Parquet is a popular columnar file format with well understood and [production grade libraries for high‑performance analytics]. Features such good encodings, column pruning, and predicate pushdown work well for many common query patterns. DataFusion includes a [highly optimized Parquet implementation] and has excellent performance in general. However, given the wide variety of production query patterns, there are some cases when the statistics included in the Parquet format itself may not be sufficient<sup>[1](#footnote1)</sup>. 
 
 [production grade libraries for high‑performance analytics]: https://arrow.apache.org/blog/2022/12/26/querying-parquet-with-millisecond-latency/
-[PageIndex]: https://parquet.apache.org/docs/file-format/pageindex/
-[Bloom Filters]: https://parquet.apache.org/docs/file-format/bloomfilter/
 [highly optimized Parquet implementation]: https://datafusion.apache.org/blog/2025/03/20/parquet-pruning/
 
-Many systems improve query performance using *external* indexes with various metadata alongside Parquet, either in separate files or in a catalog. However, juggling separate index files adds operational overhead and risks out‑of‑sync data, both of which have been used to justify new formats (see Microsoft’s [Amudai spec](https://github.com/microsoft/amudai/blob/main/docs/spec/src/what_about_parquet.md) for example).
+Many systems improve query performance using *external* indexes or other metadata in addition to Parquet. For example, see Apache Iceberg's [Scan Planning] uses metadata stored in separate files or an in memory cache. However, managing separate files or a service adds operational overhead and risks out‑of‑sync data. Both of these drawbacks have been cited by new formats (see Microsoft’s [Amudai spec](https://github.com/microsoft/amudai/blob/main/docs/spec/src/what_about_parquet.md) for example).
 
-**But Parquet itself is extensible**: it tolerates unknown bytes within the file body data and permits arbitrary key/value pairs in its footer. We can exploit those hooks to **embed** special **arbitrary** indexes directly in the file—no extra files, no format forks, and no compatibility breakage. 
+**However, Parquet itself is extensible with User Defined Indexes**: it tolerates unknown bytes within the file body data and permits arbitrary key/value pairs in its footer. These two  to **embed** special **arbitrary** indexes directly in the file—no extra files, no format forks, and no compatibility breakage. 
 
+[Scan Planning]: https://iceberg.apache.org/docs/latest/performance/#scan-planning
 
 ## 1. Parquet 101: File Anatomy & Standard Index Structures
 
-Logically a Parquet files consist of a sequence of row groups, each containing column chunks, which in turn contain data pages. Physically, a Parquet file is a sequence of bytes with a Thrift-encoded footer containing metadata about the file structure. The footer includes information about the file such as schema, row groups, column chunks and other information required to read the file. 
+Logically, Parquet files contain row groups, each containing column chunks, which in turn contain data pages. Physically, a Parquet file is a sequence of bytes with a Thrift-encoded footer containing metadata about the file structure. The footer includes information such as the schema, row groups, column chunks and other information required to read the file. 
 
-The parquet format includes three types of structures, all of which are optional, and may or may not be present. 
+The Parquet format includes three main types<sup>[2](#footnote2)</sup>. of index structures, all of which are optional, and may or may not be present. 
 
-1. **Min/Max/Null Count statistics** for each column chunk in each row group. If present, statistics are typically present for all row groups and a subset of columns. 
+1. **[Min/Max/Null Count Statistics]** for each chunks in a row group. 
 
-2. **Page Index**: A page index is a structure that contains information about the data pages in a row group, such as their offsets and sizes. It is used to quickly locate data pages without scanning the entire row group.
+2. **[Page Index]**: THe page index contains information about the data pages in a row group, such as their offsets, sizes and statistics. Similarly to the row grow level statistics,  is used to quickly locate data pages without scanning the entire row group.
 
-3. **Bloom Filters**: A Bloom filter is a probabilistic data structure that is used to test whether an element is a member of a set. It is used to quickly determine if a value is present in a column chunk without scanning the entire column chunk.
+3. **[Bloom Filters]**: A Bloom filter is a probabilistic data structure that is used to test whether an element is a member of a set. It is used to quickly determine if a value is present in a column chunk without scanning the entire column chunk.
 
-Only the Min/Max/Null Count statistics are stored inline in the Parquet footer metadata. The Page Index and Bloom Filters are stored in the file body before the Thrift footer and their their locations are recorded in the footer metadata, as shown in Figure 1. Readers which do not understand these structures will simply ignore them.
+
+[Page Index]: https://parquet.apache.org/docs/file-format/pageindex/
+[Bloom Filters]: https://parquet.apache.org/docs/file-format/bloomfilter/
+[Min/Max/Null Count Statistics]: https://github.com/apache/parquet-format/blob/819adce0ec6aa848e56c56f20b9347f4ab50857f/src/main/thrift/parquet.thrift#L263-L266
 
 <!-- Source: https://docs.google.com/presentation/d/1aFjTLEDJyDqzFZHgcmRxecCvLKKXV2OvyEpTQFCNZPw -->
 
 <img src="/blog/images/custom-parquet-indexes/standard_index_structures.png" width="80%" class="img-responsive" alt="Parquet File layout with standard index structures."/>
 
-
 **Figure 1**: Parquet File layout with standard index structures (as written by arrow-rs)
 
-Bloom filters can be written after the row group or at the end of the file, controlled by https://docs.rs/parquet/latest/parquet/file/properties/enum.BloomFilterPosition.html
+Only the Min/Max/Null Count Statistics are stored inline in the Parquet footer metadata. The Page Index and Bloom Filters are stored in the file body before the Thrift footer. The locations of the index structures are recorded in the footer metadata, as shown in Figure 1. Readers which do not understand these structures will simply ignore them.
 
-Writing PageIndex and RowGroup statistics is controlled by https://docs.rs/parquet/latest/parquet/file/properties/enum.EnabledStatistics.html
+Modern Parquet writers create these indexes automatically when writing Parquet files, and provide APIs for their generation and placement. For example, the [Apache Arrow Rust library] provides [Parquet WriterProperties], [EnabledStatistics], and [BloomFilterPosition].
+
+[Apache Arrow Rust library]: https://docs.rs/parquet/latest/parquet/file/index/
+[Parquet WriterProperties]: https://docs.rs/parquet/latest/parquet/file/properties/struct.WriterProperties.html
+[EnabledStatistics]: https://docs.rs/parquet/latest/parquet/file/properties/enum.EnabledStatistics.html
+[BloomFilterPosition]: https://docs.rs/parquet/latest/parquet/file/properties/enum.BloomFilterPosition.html
+
 
 ## 2. Why Parquet Still Scans Too Much
 
@@ -309,10 +307,27 @@ DuckDB’s `read_parquet()` sees only the data pages and footer it understands�
 
 > Try embedding custom indexes in your next DataFusion project to achieve faster query performance!
 
+This post is part of a series describing techniques for building high performance analytic systems with Parquet. In addition to custom indexes in Parquet files, it is possible to
+
+1. **Use external indexes**: See [this talk](https://www.youtube.com/watch?v=74YsJT1-Rdk) and the
+   [parquet_index.rs] and [advanced_parquet_index.rs] examples in the DataFusion repository for more details.
+
+2. **Rewrite files to optimize for specific queries**: Resorting, repartitioning and tuning datapage and row group sizes can lead to significiant performance gains. See [XiangpengHao/liquid‑cache#227](https://github.com/XiangpengHao/liquid-cache/issues/227) and the conversation between [JigaoLuo](https://github.com/JigaoLuo) and [XiangpengHao](https://github.com/XiangpengHao) for details.
+
+
+[parquet_index.rs]: https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/parquet_index.rs
+[advanced_parquet_index.rs]: https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/advanced_parquet_index.rs
+
+
 ### Acknowledgements
 
 We thank [JigaoLuo](https://github.com/JigaoLuo) for feedback on early drafts of this post. 
 
 ### Footnotes
 
-<a id="footnote1"></a><sup>[1]</sup>A commonly cited example is highly selective predicates (e.g. `category = 'foo'`) but for which the built in BloomFilters are not sufficient, a
+<a id="footnote1"></a>`[1]` A commonly cited example is highly selective predicates (e.g. `category = 'foo'`) but for which the built in BloomFilters are not sufficient.
+
+<a id="footnote2"></a>`[2]` There are other index structures such, but they are either 1) not widely supported (such as statistics in the page headers) or 2) not yet widely used in practice at the time of this writing (such as [GeospatialStatistics] and [SizeStatistics]).
+
+[GeospatialStatistics]: https://github.com/apache/parquet-format/blob/819adce0ec6aa848e56c56f20b9347f4ab50857f/src/main/thrift/parquet.thrift#L256
+[SizeStatistics]: https://github.com/apache/parquet-format/blob/819adce0ec6aa848e56c56f20b9347f4ab50857f/src/main/thrift/parquet.thrift#L194-L202
