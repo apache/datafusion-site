@@ -33,7 +33,7 @@ In this post, we review the core concepts of the Apache Parquet file format, exp
 
 This post is part of a forthcoming series explaining techniques for building high performance analytic systems with Parquet. In addition to custom indexes in Parquet files, it is possible to
 
-1Use external indexes (see [this talk](https://www.youtube.com/watch?v=74YsJT1-Rdk) and the
+1. Use external indexes (see [this talk](https://www.youtube.com/watch?v=74YsJT1-Rdk) and the
 [parquet_index.rs] and [advanced_parquet_index.rs] examples in the DataFusion repository. 
 
 2. Rewrite files optimized for specific queries, by resorting, repartitioning and tuning datapage and row group sizes. See [XiangpengHao/liquid‑cache#227](https://github.com/XiangpengHao/liquid-cache/issues/227) and the conversation between [JigaoLuo](https://github.com/JigaoLuo) and [XiangpengHao](https://github.com/XiangpengHao) for more information or or to help with this work.
