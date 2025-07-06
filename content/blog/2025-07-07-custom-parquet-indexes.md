@@ -30,10 +30,9 @@ It’s a common misconception that [Apache Parquet] files can only store basic M
 
 In this post, we review the core concepts of the Apache Parquet file format, explain the mechanism for storing custom indexes inside Parquet files, and finally show how to read and write a custom index using [Apache DataFusion] for ultra‑fast file‑level pruning—all while preserving complete interchangeability with other Parquet tools.
 
-
 This post is part of a forthcoming series explaining techniques for building high performance analytic systems with Parquet. In addition to custom indexes in Parquet files, it is possible to
 
-1Use external indexes (see [this talk](https://www.youtube.com/watch?v=74YsJT1-Rdk) and the
+1. Use external indexes (see [this talk](https://www.youtube.com/watch?v=74YsJT1-Rdk) and the
 [parquet_index.rs] and [advanced_parquet_index.rs] examples in the DataFusion repository. 
 
 2. Rewrite files optimized for specific queries, by resorting, repartitioning and tuning datapage and row group sizes. See [XiangpengHao/liquid‑cache#227](https://github.com/XiangpengHao/liquid-cache/issues/227) and the conversation between [JigaoLuo](https://github.com/JigaoLuo) and [XiangpengHao](https://github.com/XiangpengHao) for more information or or to help with this work.
@@ -69,7 +68,7 @@ The parquet format includes three types of structures, all of which are optional
 
 3. **Bloom Filters**: A Bloom filter is a probabilistic data structure that is used to test whether an element is a member of a set. It is used to quickly determine if a value is present in a column chunk without scanning the entire column chunk.
 
-Only the Min/Max/Null Count statistics are stored inline in the Parquet footer metadata. The Page Index and Bloom Filters are stored in the file body before the Thrift footer and their their locations are recorded in the footer metadata, as shown in Figure 1. Readers which do not understand these structures will simply ignore them.
+Only the Min/Max/Null Count statistics are stored inline in the Parquet footer metadata. The Page Index and Bloom Filters are stored in the file body before the Thrift footer and their their locations are recorded in the footer metadata, as shown in Figure 1. Parquet readers which do not understand these structures will simply ignore them.
 
 <!-- Source: https://docs.google.com/presentation/d/1aFjTLEDJyDqzFZHgcmRxecCvLKKXV2OvyEpTQFCNZPw -->
 
@@ -82,7 +81,14 @@ Bloom filters can be written after the row group or at the end of the file, cont
 
 Writing PageIndex and RowGroup statistics is controlled by https://docs.rs/parquet/latest/parquet/file/properties/enum.EnabledStatistics.html
 
-## 2. Why Parquet Still Scans Too Much
+## 2. Extending Parquet with Special Indexes
+
+As mentioned, Parquet is inherently extensible and allows embedding arbitrary indexes directly in the footer. In this section, we aim to highlight the broader potential of these embedded indexes for query processing and query optimization. Notably, there is no limit to the number of such user-defined indexes, and also no restriction on their granularity as they can operate at the file, row group, or even page level. With this flexibility, the possibilities are wide open. We can envision several potential use cases for embedded user-defined indexes in Parquet:
+- Row group– or page-level distinct sets: A finer-grained version of the file-level example in the rest of this blog.
+- HyperLogLog sketches. Addresses a common criticism of Parquet’s lack of cardinality estimation [^2].
+- Enhanced ZoneMaps or Small Materialized Aggregates. Goes beyond basic min/max statistics by embedding precomputed aggregates (e.g., sum), enabling faster query execution through reusing precomputed results.
+
+## 3. Why Parquet Still Scans Too Much
 
 Several examples in the DataFusion repository illustrate the benefits of using external indexes for pruning:
 
@@ -97,8 +103,8 @@ Those demos work by building separate index files (Bloom filters, maps of distin
 
 Meanwhile, critics of Parquet’s extensibility point to the lack of a *standard* way to embed auxiliary data (see [Amudai](https://github.com/microsoft/amudai/blob/main/docs/spec/src/what_about_parquet.md)). But in practice, Parquet tolerates unknown content gracefully:
 
-* **Arbitrary metadata:** Key/value pairs in the footer are opaque to readers.
-* **Unused regions:** Bytes after data pages (before the Thrift footer) are ignored by standard readers.
+* **Arbitrary metadata:** Key/value pairs in the footer are opaque to Parquet readers.
+* **Unused regions:** Bytes after data pages (before the Thrift footer) are ignored by standard Parquet readers.
 
 We’ll exploit both to embed our index inline.
 
@@ -131,7 +137,7 @@ When scanning Parquet files, DataFusion (like other engines) reads row group met
 
 Embedding a lightweight, per‑file distinct‑value index enables DataFusion to skip entire files that cannot satisfy the filter:
 
-* **Format‑preserving:** Unknown footer keys are ignored by other readers.
+* **Format‑preserving:** Unknown footer keys are ignored by other Parquet readers.
 * **Efficient lookup:** Checking a small in‑memory set of values is far cheaper than disk I/O.
 * **Compact storage:** Store only the offset and payload, not a full duplicate of the data.
 
@@ -200,7 +206,7 @@ Embedding a custom distinct‑value index inside Parquet files empowers DataFusi
 2. **Append index bytes inline** immediately after the Parquet data pages, before writing the footer.
 3. **Record index location** by adding a key/value entry (`"distinct_index_offset" -> <offset>`) in the Parquet footer metadata.
 
-Other readers will parse the footer, see an unknown key, and ignore it. Only our DataFusion extension will use this index to prune files.
+Other Parquet readers will parse the footer, see an unknown key, and ignore it. Only our DataFusion extension will use this index to prune files.
 
 ### Serializing the Index in Rust
 
@@ -310,3 +316,5 @@ DuckDB’s `read_parquet()` sees only the data pages and footer it understands�
 > Try embedding custom indexes in your next DataFusion project to achieve faster query performance!
 
 <a id="footnote1"></a><sup>[1]</sup>A commonly cited example is highly selective predicates (e.g. `category = 'foo'`) but for which the built in BloomFilters are not sufficient, a
+
+<a id="footnote2"></a><sup>[2]</sup>Seamless Integration of Parquet Files into Data Processing. / Rey, Alice; Freitag, Michael; Neumann, Thomas. / BTW 2023 / https://dl.gi.de/items/2a8571f8-0ef2-481c-8ee9-05f82ee258c8
