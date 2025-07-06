@@ -2,7 +2,7 @@
 layout: post
 title: Extending Apache Parquet with User Defined Indexes to Accelerate Query Processing with DataFusion
 date: 2025-07-07
-author: Qi Zhu and Andrew Lamb
+author: Qi Zhu, Jigao Luo, and Andrew Lamb
 categories: [features]
 ---
 <!--
@@ -24,7 +24,7 @@ limitations under the License.
 {% endcomment %}
 -->
 
-It’s a common misconception that [Apache Parquet] files can only store basic Min/Max/Null Count statistics and Bloom filters, and that adding anything "smarter" requires a change to the specification or an entirely new file format. In fact, footer metadata and offset based addressing already provide everything needed to embed user defined index structures within Parquet Files without breaking compatibility with other readers. 
+It’s a common misconception that [Apache Parquet] files can only store basic Min/Max/Null Count statistics and Bloom filters, and that adding anything "smarter" requires a change to the specification or an entirely new file format. In fact, footer metadata and offset based addressing already provide everything needed to embed user defined index structures within Parquet Files without breaking compatibility with other Parquet readers. 
 
 In this post, we review the structure of existing Indexes in the Apache Parquet format, explain the mechanism for storing user defined indexes, and finally show how to read and write a user defined index usnig [Apache DataFusion] for file‑level pruning—all.
 
@@ -81,7 +81,7 @@ The Parquet format includes three main types<sup>[2](#footnote2)</sup>. of index
 
 **Figure 1**: Parquet File layout with standard index structures (as written by arrow-rs)
 
-Only the Min/Max/Null Count Statistics are stored inline in the Parquet footer metadata. The Page Index and Bloom Filters are stored in the file body before the Thrift footer. The locations of the index structures are recorded in the footer metadata, as shown in Figure 1. Readers which do not understand these structures will simply ignore them.
+Only the Min/Max/Null Count Statistics are stored inline in the Parquet footer metadata. The Page Index and Bloom Filters are stored in the file body before the Thrift footer. The locations of the index structures are recorded in the footer metadata, as shown in Figure 1. Parquet readers which do not understand these structures will simply ignore them.
 
 Modern Parquet writers create these indexes automatically when writing Parquet files, and provide APIs for their generation and placement. For example, the [Apache Arrow Rust library] provides [Parquet WriterProperties], [EnabledStatistics], and [BloomFilterPosition].
 
@@ -109,15 +109,15 @@ The resulting file layout is shown in Figure 2.
 
 **Figure 2**: Parquet File layout with user defined indexes. 
 
-Similarly to standard index structures, user defined indexes can be stored anywhere in the file body, such as after row group data, or before the footer. There are no limitations on the number or type of index that can be embedded. Embedding user defined indexes makes the resulting Parquet files larger, and only readers that know how to use the index can take advantage of this increased size. 
+Similarly to standard index structures, user defined indexes can be stored anywhere in the file body, such as after row group data, or before the footer. There is no limit to the number of such user-defined indexes, and also no restriction on their granularity: they can operate at the file, row group, page level or even row level. With this flexibility, the possibilities are wide open. We can envision several potential use cases for embedded user-defined indexes in Parquet:
 
-You can use this technique to embed indexes for any granularity of Parquet data, such as to the entire file, specific row group(s), specific column chunk(s), specific data page(s) or specific row(s). Since the indexes are arbitrary bytes, it is possible to supercharge Parquet with techniques inspired by proprietary file formats such as
+1. Row group or page-level distinct sets: A finer-grained version of the file-level example in the rest of this blog.
 
-1. [HyperLogLog] sketches for distinct value counts
+2. [HyperLogLog] sketches for distinct value estimation, to address a common criticism<sup>3</sup> of Parquet’s lack of cardinality estimation
 
-2. Additional [Small materialized aggregates] such as precomputed `sum`s at the column chunk or data page level
+3. Additional Zone Maps ([Small materialized aggregates]) such as precomputed `sum`s at the column chunk or data page level for faster query execution through reusing precomputed results.
 
-3. Histograms or samples at the row group or column chunk level for predicate selectivity estimates.
+4. Histograms or samples at the row group or column chunk level for predicate selectivity estimates.
 
 [HyperLogLog]: https://en.wikipedia.org/wiki/HyperLogLog
 [Small materialized aggregates]: https://www.vldb.org/conf/1998/p476.pdf
@@ -473,7 +473,7 @@ df.show().await?;
 
 ---
 
-Even with the extra bytes and unknown footer key, standard readers ignore our index. For example, we can use DuckDB to read the Parquet files we created with the embedded index:
+Even with the extra bytes and unknown footer key, standard Parquet readers ignore our index. For example, we can use DuckDB to read the Parquet files we created with the embedded index:
 
 ```sql
 SELECT * FROM read_parquet('/tmp/parquet_index_data/*');
@@ -513,11 +513,6 @@ We hope this inspires you to explore the possibilities of custom indexes in Parq
 [parquet_index.rs]: https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/parquet_index.rs
 [advanced_parquet_index.rs]: https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/advanced_parquet_index.rs
 
-
-## Acknowledgements
-
-Thank you to [JigaoLuo](https://github.com/JigaoLuo) for feedback and helpful advice on early drafts of this post. 
-
 ## About DataFusion
 
 [Apache DataFusion] is an extensible query engine toolkit, written
@@ -540,6 +535,8 @@ it out, we would love for you to join us.
 <a id="footnote1"></a>`[1]` A commonly cited example is highly selective predicates (e.g. `category = 'foo'`) but for which the built in BloomFilters are not sufficient.
 
 <a id="footnote2"></a>`[2]` There are other index structures such, but they are either 1) not widely supported (such as statistics in the page headers) or 2) not yet widely used in practice at the time of this writing (such as [GeospatialStatistics] and [SizeStatistics]).
+
+<a id="footnote3"></a>`[3]` [Seamless Integration of Parquet Files into Data Processing. / Rey, Alice; Freitag, Michael; Neumann, Thomas. / BTW 2023]: https://dl.gi.de/items/2a8571f8-0ef2-481c-8ee9-05f82ee258c8
 
 [GeospatialStatistics]: https://github.com/apache/parquet-format/blob/819adce0ec6aa848e56c56f20b9347f4ab50857f/src/main/thrift/parquet.thrift#L256
 [SizeStatistics]: https://github.com/apache/parquet-format/blob/819adce0ec6aa848e56c56f20b9347f4ab50857f/src/main/thrift/parquet.thrift#L194-L202
