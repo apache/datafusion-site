@@ -34,6 +34,8 @@ In this post, we review the structure of existing Indexes in the Apache Parquet 
 
 ## Introduction
 
+---
+
 Apache Parquet is a popular columnar file format with well understood and [production grade libraries for high‑performance analytics]. Features such good encodings, column pruning, and predicate pushdown work well for many common query patterns. DataFusion includes a [highly optimized Parquet implementation] and has excellent performance in general. However, given the wide variety of production query patterns, there are some cases when the statistics included in the Parquet format itself may not be sufficient<sup>[1](#footnote1)</sup>. 
 
 [production grade libraries for high‑performance analytics]: https://arrow.apache.org/blog/2022/12/26/querying-parquet-with-millisecond-latency/
@@ -57,6 +59,8 @@ These risks have even been cited as justification for new file formats, such as 
 
 ## Parquet File Anatomy & Standard Index Structures
 
+---
+
 Logically, Parquet files contain row groups, each containing column chunks, which in turn contain data pages. Physically, a Parquet file is a sequence of bytes with a Thrift-encoded footer containing metadata about the file structure. The footer includes information such as the schema, row groups, column chunks and other information required to read the file. 
 
 The Parquet format includes three main types<sup>[2](#footnote2)</sup>. of index structures, all of which are optional, and may or may not be present. 
@@ -66,7 +70,6 @@ The Parquet format includes three main types<sup>[2](#footnote2)</sup>. of index
 2. **[Page Index]**: THe page index contains information about the data pages in a row group, such as their offsets, sizes and statistics. Similarly to the row grow level statistics,  is used to quickly locate data pages without scanning the entire row group.
 
 3. **[Bloom Filters]**: A Bloom filter is a probabilistic data structure that is used to test whether an element is a member of a set. It is used to quickly determine if a value is present in a column chunk without scanning the entire column chunk.
-
 
 [Page Index]: https://parquet.apache.org/docs/file-format/pageindex/
 [Bloom Filters]: https://parquet.apache.org/docs/file-format/bloomfilter/
@@ -89,6 +92,8 @@ Modern Parquet writers create these indexes automatically when writing Parquet f
 
 
 ## Embedding User Defined Indexes into Parquet Files
+
+---
 
 Embedding user defined indexes in Parquet files is straightforward, and follows the same principles as the standard index structures:
 
@@ -117,161 +122,333 @@ You can use this technique to embed indexes for any granularity of Parquet data,
 [HyperLogLog]: https://en.wikipedia.org/wiki/HyperLogLog
 [Small materialized aggregates]: https://www.vldb.org/conf/1998/p476.pdf
 
-## Example: Distinct Value Index for File‑Level Pruning
+## Example: Embedding a User Defined Distinct Value Index in Parquet Files
 
 ---
 
-## Motivation
-In the rest of this post, we’ll:
+This section shows how to actually use the ideas above to embed a simple distinct value index in Parquet files and use that index to do file‑level pruning (skipping) in DataFusion.
+The entire example is implemented in Rust and available in the DataFusion repository at
+[parquet_embedded_index.rs].
 
-1. Walk through the simple binary layout for a distinct‑value list.
-2. Show how to write it inline after the normal Parquet pages.
-3. Record its offset in the footer’s metadata map.
-4. Extend DataFusion’s `TableProvider` to discover and use that index for file‑level pruning.
-5. Verify everything still works in DuckDB via `read_parquet()`.
+[parquet_embedded_index.rs]: https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/parquet_embedded_index.rs
 
----
+The example requires **arrow‑rs v55.2.0** or later, which includes the new “buffered write” API ([apache/arrow-rs#7714]) which keeps the internal byte count in sync so you can append index bytes immediately after data pages.
 
-> **Prerequisite:** Requires **arrow‑rs v55.2.0** or later, which includes the new “buffered write” API ([apache/arrow-rs#7714](https://github.com/apache/arrow-rs/pull/7714)).  
-> This API keeps the internal byte count in sync so you can append index bytes immediately after data pages.
+[apache/arrow-rs#7714]: https://github.com/apache/arrow-rs/pull/7714  
 
----
-
-
-1. Review Parquet’s built‑in metadata hooks (Min/Max, page index, Bloom filters).
-2. Introduce a simple on‑page binary format for a distinct‑value index.
-3. Show how to append that index inline, record its offset in the footer, and have DataFusion consume it at query time.
-4. Demonstrate end‑to‑end examples (including DuckDB compatibility) using code from
-   [`parquet_embedded_index.rs`](https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/parquet_embedded_index.rs).
-
-When scanning Parquet files, DataFusion (like other engines) reads row group metadata and then data pages sequentially. If you filter on a highly selective predicate (e.g., `category = 'foo'`), you may still incur I/O for files or row groups containing no matches.
-
-Embedding a lightweight, per‑file distinct‑value index enables DataFusion to skip entire files that cannot satisfy the filter:
-
-* **Format‑preserving:** Unknown footer keys are ignored by other readers.
-* **Efficient lookup:** Checking a small in‑memory set of values is far cheaper than disk I/O.
-* **Compact storage:** Store only the offset and payload, not a full duplicate of the data.
-
----
-
-## High‑Level Design
-
-Rather than diving into the specifics of our distinct‑value index format, we’ll keep this at a higher level so you can adapt the same approach to your own custom indexes:
+This example is simple to make it easier to understand, but you can adapt the same approach for any arbitrary index type or data types. The high‑level design is:
 
 1. **Choose or define your index payload** (e.g. bitmap, Bloom filter, sketch, distinct values list, etc.).
-2. **Serialize your index bytes** and append them inline immediately after the Parquet data pages, before writing the footer.
+2. **Serialize your index to bytes** and append them into the Parquet file body, before writing the footer. 
 3. **Record the index location** by adding a key/value entry (for example `"my_index_offset" -> "<byte‑offset>"`) in the Parquet footer metadata.
 4. **Extend DataFusion** with a custom `TableProvider` (or wrap the existing Parquet provider) that:
    - Reads the footer metadata to discover your index offset.
    - Seeks to that offset and deserializes your index.
-   - Applies file‑level pruning based on pushed‑down filters and your index’s lookup logic.
-5. **Verify compatibility** with other tools (DuckDB, Spark, etc.)—they will ignore your unknown footer key and extra bytes, so your data remains fully interoperable.
+   - Uses the index to speed up processing (for example, skip files, row groups, data pages, etc). 
 
-For a concrete Rust example (including our distinct‑value index implementation), see the [`parquet_embedded_index.rs`](https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/parquet_embedded_index.rs) demo in the DataFusion repository.
+Note that the resulting parquet files are fully compatible with other tools such as DuckDB, Spark, etc. which will simply ignore the unknown index bytes and key/value metadata.
+
+
+### Introduction to Distinct Value Indexes
 
 ---
 
-### Binary Layout in the Parquet File
+A **distinct value index** stores distinct values of a specific column. This type of index is effective for columns that have a relatively small number of distinct values, can be used to quickly skip files which do not match the query. These indexes are popular in several engines, such as the ["set" Skip Index in ClickHouse] and the [Distinct Value Cache] in InfluxDB 3.0.
 
-```text
-                   ┌──────────────────────┐
-                   │┌───────────────────┐ │
-                   ││     DataPage      │ │
-                   │└───────────────────┘ │
-  Standard Parquet │┌───────────────────┐ │
-  Data Pages       ││     DataPage      │ │
-                   │└───────────────────┘ │
-                   │        ...           │
-                   │┌───────────────────┐ │
-                   ││     DataPage      │ │
-                   │└───────────────────┘ │
-                   │┏━━━━━━━━━━━━━━━━━━━┓ │
- Non‑standard      │┃                   ┃ │
- index (ignored by │┃ Custom Binary     ┃ │
- other Parquet     │┃ Index (Distinct)  ┃◀┼─ ─ ─
- readers)          │┃                   ┃ │   │  Inline after
-                   │┗━━━━━━━━━━━━━━━━━━━┛ │   │  data pages
-                   │┏━━━━━━━━━━━━━━━━━━━┓ │   │
- Standard Parquet  │┃    Page Index     ┃ │   │
- Page Index        │┗───────────────────┛ │   │  Footer
-                   │╔═══════════════════╗ │   │  metadata
-                   │║ Parquet Footer w/ ║ │◀──┼─ ─ ─ key/value
-                   │║     Metadata      ║ │      map contains
-                   │║ (Thrift Encoded)  ║ │      offset
-                   │╚═══════════════════╝ │
-                   └──────────────────────┘
+["set" Skip Index in ClickHouse]: https://clickhouse.com/docs/optimize/skipping-indexes#set
+[Distinct Value Cache]: https://docs.influxdata.com/influxdb3/enterprise/admin/distinct-value-cache/
+
+For example, if the files contain a column named `Category` like this
+
+<table style="border-collapse:collapse;">
+  <tr>
+    <td style="border:1px solid #888;padding:2px 6px;"><b><code>Category</code></b></td>
+  </tr>
+  <tr>
+    <td style="border:1px solid #888;padding:2px 6px;"><code>foo</code></td>
+  </tr>
+  <tr>
+    <td style="border:1px solid #888;padding:2px 6px;"><code>bar</code></td>
+  </tr>
+  <tr>
+    <td style="border:1px solid #888;padding:2px 6px;"><code>...</code></td>
+  </tr>
+  <tr>
+    <td style="border:1px solid #888;padding:2px 6px;"><code>baz</code></td>
+  </tr>
+  <tr>
+    <td style="border:1px solid #888;padding:2px 6px;"><code>foo</code></td>
+  </tr>
+</table>
+
+Then the distinct value index will contain the values `foo` and `bar` and `baz`.
+Using a traditional min/max statistics would store the minimum (`bar`) and maximum (`foo`)
+values, which would not allow quickly
+skipping this file for a query like `SELECT * FROM t WHERE Category = 'baq'` as 
+`baq` is between `bar` and `foo`. 
+
+We represent this in Rust as a simple `HashSet<String>`:
+
+```rust
+/// An index of distinct values for a single column
+#[derive(Debug, Clone)]
+struct DistinctIndex {
+   inner: HashSet<String>,
+}
 ```
 
-Embedding a custom distinct‑value index inside Parquet files empowers DataFusion to skip non‑matching files with zero additional files to manage.
+### File Layout with Distinct Value Index
 
 ---
 
-## Example Implementation Walkthrough
+In this example, we will write a distinct value index for the `Category` column into the Parquet file body after all the data pages, and record the index location in the footer metadata. The resulting file layout will look like this:
 
-#### Serializing the Distinct‑Value Index
+```text
+                  ┌──────────────────────┐                           
+                  │┌───────────────────┐ │                           
+                  ││     DataPage      │ │                           
+                  │└───────────────────┘ │                           
+ Standard Parquet │┌───────────────────┐ │                           
+ Data Pages       ││     DataPage      │ │                           
+                  │└───────────────────┘ │                           
+                  │        ...           │                           
+                  │┌───────────────────┐ │                           
+                  ││     DataPage      │ │                           
+                  │└───────────────────┘ │                           
+                  │┏━━━━━━━━━━━━━━━━━━━┓ │                           
+Non standard      │┃                   ┃ │                           
+index (ignored by │┃Custom Binary Index┃ │                           
+other Parquet     │┃ (Distinct Values) ┃◀│─ ─ ─                      
+readers)          │┃                   ┃ │     │                     
+                  │┗━━━━━━━━━━━━━━━━━━━┛ │                           
+Standard Parquet  │┏━━━━━━━━━━━━━━━━━━━┓ │     │  key/value metadata
+Page Index        │┃    Page Index     ┃ │        contains location  
+                  │┗━━━━━━━━━━━━━━━━━━━┛ │     │  of special index   
+                  │╔═══════════════════╗ │                           
+                  │║ Parquet Footer w/ ║ │     │                     
+                  │║     Metadata      ║ ┼ ─ ─                       
+                  │║ (Thrift Encoded)  ║ │                           
+                  │╚═══════════════════╝ │                           
+                  └──────────────────────┘                           
+                                             
+```
 
-1. **Serialize distinct values** for the target column into a simple binary layout:
-   * 4‑byte magic header (`IDX1`)
-   * 8‑byte little‑endian length
-   * newline‑separated UTF‑8 distinct values
-2. **Append index bytes inline** immediately after the Parquet data pages, before writing the footer.
-3. **Record index location** by adding a key/value entry (`"distinct_index_offset" -> <offset>`) in the Parquet footer metadata.
+### Serializing the Distinct‑Value Index
 
-Other readers will parse the footer, see an unknown key, and ignore it. Only our DataFusion extension will use this index to prune files.
+---
 
-### Serializing the Index in Rust
+The example uses a simple newline‑separated UTF‑8 format as the binary format. The code to serialize the distinct index is shown below:
 
 ```rust
 /// Magic bytes to identify our custom index format
 const INDEX_MAGIC: &[u8] = b"IDX1";
 
-/// Serialize the distinct index using ArrowWriter to account for byte offsets
-fn serialize_index<W: Write + Send>(
-    index: &DistinctIndex,
-    writer: &mut ArrowWriter<W>,
+/// Serialize the distinct index to a writer as bytes
+fn serialize<W: Write + Send>(
+   &self,
+   arrow_writer: &mut ArrowWriter<W>,
 ) -> Result<()> {
-    // Get current byte offset (end of data pages)
-    let offset = writer.bytes_written();
+   let serialized = self
+           .inner
+           .iter()
+           .map(|s| s.as_str())
+           .collect::<Vec<_>>()
+           .join("\n");
+   let index_bytes = serialized.into_bytes();
 
-    // Build newline‑separated UTF‑8 payload
-    let serialized = index.inner.iter().cloned().collect::<Vec<_>>().join("\n");
-    let bytes = serialized.into_bytes();
+   // Set the offset for the index
+   let offset = arrow_writer.bytes_written();
+   let index_len = index_bytes.len() as u64;
 
-    // Write magic + length
-    writer.write_all(INDEX_MAGIC)?;
-    writer.write_all(&(bytes.len() as u64).to_le_bytes())?;
+   // Write the index magic and length to the file
+   arrow_writer.write_all(INDEX_MAGIC)?;
+   arrow_writer.write_all(&index_len.to_le_bytes())?;
 
-    // Write index payload
-    writer.write_all(&bytes)?;
+   // Write the index bytes
+   arrow_writer.write_all(&index_bytes)?;
 
-    // Append offset metadata to footer
-    writer.append_key_value_metadata(
-        KeyValue::new(
-            "distinct_index_offset".to_string(),
-            offset.to_string(),
-        ),
-    );
-    Ok(())
+   // Append metadata about the index to the Parquet file footer
+   arrow_writer.append_key_value_metadata(KeyValue::new(
+      "distinct_index_offset".to_string(),
+      offset.to_string(),
+   ));
+   Ok(())
 }
 ```
 
+This code does the following:
+1. Creates a newline‑separated UTF‑8 string from the distinct values.
+2. Writes a magic header (`IDX1`) and the length of the index.
+3. Writes the index bytes to the file using the [`ArrowWriter`] API.
+3. Records index location by adding a key/value entry (`"distinct_index_offset" -> <offset>`) in the Parquet footer metadata.
+
+Note that it is important to use the [`ArrowWriter::write_all`] API to ensure that the offsets in the footer are correctly tracked. 
+
+[ArrowWriter]: https://docs.rs/parquet/latest/parquet/arrow/arrow_writer/struct.ArrowWriter.html
+[ArrowWriter::write_all]: https://docs.rs/parquet/latest/parquet/arrow/arrow_writer/struct.ArrowWriter.html#method.write_all
+
+
 ### Reading the Index
 
-On the read path, we:
+---
 
-1. Open the Parquet footer and extract `distinct_index_offset`.
-2. Read the `DistinctIndex` payload at that offset.
+To read the distinct index from a Parquet file, 
+
+```rust
+/// Read a `DistinctIndex` from a Parquet file
+fn read_distinct_index(path: &Path) -> Result<DistinctIndex> {
+    let file = File::open(path)?;
+
+    let file_size = file.metadata()?.len();
+    println!("Reading index from {} (size: {file_size})", path.display(), );
+
+    let reader = SerializedFileReader::new(file.try_clone()?)?;
+    let meta = reader.metadata().file_metadata();
+
+    let offset = get_key_value(meta, "distinct_index_offset")
+        .ok_or_else(|| ParquetError::General("Missing index offset".into()))?
+        .parse::<u64>()
+        .map_err(|e| ParquetError::General(e.to_string()))?;
+
+    println!("Reading index at offset: {offset}, length");
+    DistinctIndex::new_from_reader(file, offset)
+}
+```
+
+This function:
+1. Opens the Parquet footer and extract `distinct_index_offset` from the metadata.
+2. Calls `DistinctIndex::new_from_reader` to read the index from the file at that offset.
+
+The code to actually read the index is shown below, and corresponds to the `serialize` function above.
+
+```rust
+ /// Read the distinct values index from a reader at the given offset and length
+ pub fn new_from_reader<R: Read + Seek>(mut reader: R, offset: u64) -> Result<DistinctIndex> {
+     reader.seek(SeekFrom::Start(offset))?;
+
+     let mut magic_buf = [0u8; 4];
+     reader.read_exact(&mut magic_buf)?;
+     if magic_buf != INDEX_MAGIC {
+         return exec_err!("Invalid index magic number at offset {offset}");
+     }
+
+     let mut len_buf = [0u8; 8];
+     reader.read_exact(&mut len_buf)?;
+     let stored_len = u64::from_le_bytes(len_buf) as usize;
+
+     let mut index_buf = vec![0u8; stored_len];
+     reader.read_exact(&mut index_buf)?;
+
+     let Ok(s) = String::from_utf8(index_buf) else {
+         return exec_err!("Invalid UTF-8 in index data");
+     };
+
+     Ok(Self {
+         inner: s.lines().map(|s| s.to_string()).collect(),
+     })
+ }
+```
+
+This code:
+1. Seeks to the offset of the index in the file.
+2. Reads the magic bytes and checks they match `IDX1`.
+3. Reads the length of the index and allocates a buffer.
+4. Reads the index bytes into the buffer, converts it to a `String`, and splits it into lines to populate the `HashSet<String>`.
 
 ### Extending DataFusion’s `TableProvider`
 
-We implement a `DistinctIndexTable` that:
+---
 
-* During `try_new`, scans a directory of Parquet files and reads each file’s `DistinctIndex`.
-* In `scan()`, inspects pushed‑down filters on the indexed column (e.g., `category = 'foo'`).
-* Uses `distinct_index.contains(value)` to pick only matching files.
-* Delegates actual row‑group reads to `ParquetSource` for the selected files.
+In order to use the distinct index for file‑level pruning, we need to extend DataFusion's `TableProvider` to read the index and apply it during query execution as shown below:
 
-### Usage Overview
+```rust
+impl TableProvider for DistinctIndexTable {
+    /* ... */
+
+    /// Prune files before reading: only keep files whose distinct set
+    /// contains the filter value
+    async fn scan(
+        &self,
+        _ctx: &dyn Session,
+        _proj: Option<&Vec<usize>>,
+        filters: &[Expr],
+        _limit: Option<usize>,
+    ) -> Result<Arc<dyn ExecutionPlan>> {
+        // This example only handles filters of the form
+        // `category = 'X'` where X is a string literal
+        //
+        // You can use `PruningPredicate` for much more general range and
+        // equality analysis or write your own custom logic.
+        let mut target: Option<&str> = None;
+
+        if filters.len() == 1 {
+            if let Expr::BinaryExpr(expr) = &filters[0] {
+                if expr.op == Operator::Eq {
+                    if let (
+                        Expr::Column(c),
+                        Expr::Literal(ScalarValue::Utf8(Some(v)), _),
+                    ) = (&*expr.left, &*expr.right)
+                    {
+                        if c.name == "category" {
+                            println!("Filtering for category: {v}");
+                            target = Some(v);
+                        }
+                    }
+                }
+            }
+        }
+        // Determine which files to scan
+        let files_to_scan: Vec<_> = self
+            .files_and_index
+            .iter()
+            .filter_map(|(f, distinct_index)| {
+                // keep file if no target or target is in the distinct set
+                if target.is_none() || distinct_index.contains(target?) {
+                    Some(f)
+                } else {
+                    None
+                }
+            })
+            .collect();
+       
+        // Build ParquetSource to actually read the files
+        let url = ObjectStoreUrl::parse("file://")?;
+        let source = Arc::new(ParquetSource::default().with_enable_page_index(true));
+        let mut builder = FileScanConfigBuilder::new(url, self.schema.clone(), source);
+        for file in files_to_scan {
+            let path = self.dir.join(file);
+            let len = std::fs::metadata(&path)?.len();
+           // If the index contained information about row groups or pages,
+           // you could also pass that information here to further prune
+           // the data read from the file.
+           let partitioned_file =
+                   PartitionedFile::new(path.to_str().unwrap().to_string(), len);
+           builder = builder.with_file(partitioned_file);
+        }
+        Ok(DataSourceExec::from_data_source(builder.build()))
+    }
+
+    /// Tell DataFusion that we can handle filters on the "category" column
+    fn supports_filters_pushdown(
+        &self,
+        fs: &[&Expr],
+    ) -> Result<Vec<TableProviderFilterPushDown>> {
+        // Mark as inexact since pruning is file‑granular
+        Ok(vec![TableProviderFilterPushDown::Inexact; fs.len()])
+    }
+}
+
+```
+
+This code does the following:
+1. Implements the `scan` method to filter files based on the distinct index.
+2. Checks if the filter is an equality predicate on the `category` column.
+3. If the target value is specified, it checks if the distinct index contains that value.
+4. Builds a `FileScanConfig` with only the files that match the filter.
+
+### Putting It All Together
+
+To use the distinct index in a DataFusion query, we need to write some sample Parquet files with the embedded index, register the `DistinctIndexTable` provider, and then run a query that uses the index for file‑level pruning:
 
 ```rust
 // Write sample files with embedded indexes
@@ -288,11 +465,12 @@ let df = ctx.sql("SELECT * FROM t WHERE category = 'foo'").await?;
 df.show().await?;
 ```
 
+
+### Verifying Compatibility with DuckDB
+
 ---
 
-## Verifying Compatibility with DuckDB
-
-Even with the extra bytes and unknown footer key, standard readers ignore our index. For example:
+Even with the extra bytes and unknown footer key, standard readers ignore our index. For example, we can use DuckDB to read the Parquet files we created with the embedded index:
 
 ```sql
 SELECT * FROM read_parquet('/tmp/parquet_index_data/*');
