@@ -1,6 +1,6 @@
 ---
 layout: post
-title: Extending Parquet with Embedded Indexes and Accelerating Query Processing with DataFusion
+title: Extending Apache Parquet with User Defined Indexes to Accelerate Query Processing with DataFusion
 date: 2025-07-07
 author: Qi Zhu and Andrew Lamb
 categories: [features]
@@ -26,9 +26,9 @@ limitations under the License.
 
 ## 
 
-It’s a common misconception that [Apache Parquet] files can only store basic Min/Max/Null Count statistics and Bloom filters, and that adding anything "smarter" requires a change to the format or an entirely new file format. In fact, the footer metadata and offset based addressing already provide everything needed to embed arbitrary indexing structures within Parquet Files without breaking compatibility. 
+It’s a common misconception that [Apache Parquet] files can only store basic Min/Max/Null Count statistics and Bloom filters, and that adding anything "smarter" requires a change to the specification or an entirely new file format. In fact, footer metadata and offset based addressing already provide everything needed to embed user defined index structures within Parquet Files without breaking compatibility with other readers. 
 
-In this post, we review the core concepts of the Apache Parquet file format, explain the mechanism for storing custom indexes inside Parquet files, and finally show how to read and write a custom index using [Apache DataFusion] for ultra‑fast file‑level pruning—all while preserving complete interchangeability with other Parquet tools.
+In this post, we review indexing available in the Apache Parquet file format, explain the mechanism for storing user defined indexes inside Parquet files, and finally show how to read and write a user defined index  [Apache DataFusion] for file‑level pruning—all while preserving complete interoperability.
 
 
 This post is part of a forthcoming series explaining techniques for building high performance analytic systems with Parquet. In addition to custom indexes in Parquet files, it is possible to
@@ -308,5 +308,11 @@ DuckDB’s `read_parquet()` sees only the data pages and footer it understands�
 **Next steps:** Explore embedding more advanced structures (e.g., bitmaps or Bloom filters) for larger datasets and multi-column indexing.
 
 > Try embedding custom indexes in your next DataFusion project to achieve faster query performance!
+
+### Acknowledgements
+
+We thank [JigaoLuo](https://github.com/JigaoLuo) for feedback on early drafts of this post. 
+
+### Footnotes
 
 <a id="footnote1"></a><sup>[1]</sup>A commonly cited example is highly selective predicates (e.g. `category = 'foo'`) but for which the built in BloomFilters are not sufficient, a
