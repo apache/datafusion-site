@@ -24,11 +24,9 @@ limitations under the License.
 {% endcomment %}
 -->
 
-## 
-
 It’s a common misconception that [Apache Parquet] files can only store basic Min/Max/Null Count statistics and Bloom filters, and that adding anything "smarter" requires a change to the specification or an entirely new file format. In fact, footer metadata and offset based addressing already provide everything needed to embed user defined index structures within Parquet Files without breaking compatibility with other readers. 
 
-In this post, we review indexing available in the Apache Parquet file format, explain the mechanism for storing user defined indexes inside Parquet files, and finally show how to read and write a user defined index  [Apache DataFusion] for file‑level pruning—all while preserving complete interoperability.
+In this post, we review the structure of existing Indexes in the Apache Parquet format, explain the mechanism for storing user defined indexes, and finally show how to read and write a user defined index usnig [Apache DataFusion] for file‑level pruning—all.
 
 
 [Apache DataFusion]: https://datafusion.apache.org/
@@ -41,13 +39,23 @@ Apache Parquet is a popular columnar file format with well understood and [produ
 [production grade libraries for high‑performance analytics]: https://arrow.apache.org/blog/2022/12/26/querying-parquet-with-millisecond-latency/
 [highly optimized Parquet implementation]: https://datafusion.apache.org/blog/2025/03/20/parquet-pruning/
 
-Many systems improve query performance using *external* indexes or other metadata in addition to Parquet. For example, see Apache Iceberg's [Scan Planning] uses metadata stored in separate files or an in memory cache. However, managing separate files or a service adds operational overhead and risks out‑of‑sync data. Both of these drawbacks have been cited by new formats (see Microsoft’s [Amudai spec](https://github.com/microsoft/amudai/blob/main/docs/spec/src/what_about_parquet.md) for example).
+Many systems improve query performance using *external* indexes or other metadata in addition to Parquet. For example, Apache Iceberg's [Scan Planning] uses metadata stored in separate files or an in memory cache, and the [parquet_index.rs] and [advanced_parquet_index.rs] examples in the DataFusion repository use external files for Parquet pruning (skipping).
 
-**However, Parquet itself is extensible with User Defined Indexes**: it tolerates unknown bytes within the file body data and permits arbitrary key/value pairs in its footer. These two  to **embed** special **arbitrary** indexes directly in the file—no extra files, no format forks, and no compatibility breakage. 
+These approaches are powerful and widespread, but have some drawbacks:
+
+* **Increased Operational Complexity:** Two (or more) files per dataset to track.
+* **Synchronization Risks:** The external index may become out of sync with the Parquet data if not managed carefully.
+* **Reduced Portability:** Harder to share or move Parquet data when the index is external.
+
+These risks have even been cited as justification for new file formats, such as Microsoft’s [Amudai](https://github.com/microsoft/amudai/blob/main/docs/spec/src/what_about_parquet.md).
+
+**However, Parquet is extensible with User Defined Indexes**: Parquet tolerates unknown bytes within the file body data and permits arbitrary key/value pairs in its footer. These two  to **embed** special **arbitrary** indexes directly in the file—no extra files, no format forks, and no compatibility breakage. 
 
 [Scan Planning]: https://iceberg.apache.org/docs/latest/performance/#scan-planning
+[parquet_index.rs]: https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/parquet_index.rs
+[advanced_parquet_index.rs]: https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/advanced_parquet_index.rs
 
-## 1. Parquet 101: File Anatomy & Standard Index Structures
+## Parquet File Anatomy & Standard Index Structures
 
 Logically, Parquet files contain row groups, each containing column chunks, which in turn contain data pages. Physically, a Parquet file is a sequence of bytes with a Thrift-encoded footer containing metadata about the file structure. The footer includes information such as the schema, row groups, column chunks and other information required to read the file. 
 
@@ -66,7 +74,7 @@ The Parquet format includes three main types<sup>[2](#footnote2)</sup>. of index
 
 <!-- Source: https://docs.google.com/presentation/d/1aFjTLEDJyDqzFZHgcmRxecCvLKKXV2OvyEpTQFCNZPw -->
 
-<img src="/blog/images/custom-parquet-indexes/standard_index_structures.png" width="80%" class="img-responsive" alt="Parquet File layout with standard index structures."/>
+<img src="/blog/images/user-defined-parquet-indexes/standard_index_structures.png" width="80%" class="img-responsive" alt="Parquet File layout with standard index structures."/>
 
 **Figure 1**: Parquet File layout with standard index structures (as written by arrow-rs)
 
@@ -80,25 +88,36 @@ Modern Parquet writers create these indexes automatically when writing Parquet f
 [BloomFilterPosition]: https://docs.rs/parquet/latest/parquet/file/properties/enum.BloomFilterPosition.html
 
 
-## 2. Why Parquet Still Scans Too Much
+## Embedding User Defined Indexes into Parquet Files
 
-Several examples in the DataFusion repository illustrate the benefits of using external indexes for pruning:
+Embedding user defined indexes in Parquet files is straightforward, and follows the same principles as the standard index structures:
 
-* [`parquet_index.rs`](https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/parquet_index.rs)
-* [`advanced_parquet_index.rs`](https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/advanced_parquet_index.rs)
+1. The index is serialized into a binary format and written into the file body prior to the Thrift footer.
 
-Those demos work by building separate index files (Bloom filters, maps of distinct values) and associating them with Parquet files. While effective, this approach:
+2. The location of the index is recorded in the footer metadata as a key/value pair, such as `"my_index_offset" -> "<byte-offset>"`.
 
-* **Increases operational complexity:** Two files per dataset to track.
-* **Risks synchronization issues:** Removing or renaming one file breaks the index.
-* **Reduces portability:** Harder to share or move Parquet data when the index is external.
+The resulting file layout is shown in Figure 2. 
 
-Meanwhile, critics of Parquet’s extensibility point to the lack of a *standard* way to embed auxiliary data (see [Amudai](https://github.com/microsoft/amudai/blob/main/docs/spec/src/what_about_parquet.md)). But in practice, Parquet tolerates unknown content gracefully:
+<!-- Source: https://docs.google.com/presentation/d/1aFjTLEDJyDqzFZHgcmRxecCvLKKXV2OvyEpTQFCNZPw -->
 
-* **Arbitrary metadata:** Key/value pairs in the footer are opaque to readers.
-* **Unused regions:** Bytes after data pages (before the Thrift footer) are ignored by standard readers.
+<img src="/blog/images/user-defined-parquet-indexes/custom_index_structures.png" width="80%" class="img-responsive" alt="Parquet File layout with custom index structures."/>
 
-We’ll exploit both to embed our index inline.
+**Figure 2**: Parquet File layout with user defined indexes. 
+
+Similarly to standard index structures, user defined indexes can be stored anywhere in the file body, such as after row group data, or before the footer. There are no limitations on the number or type of index that can be embedded. Embedding user defined indexes makes the resulting Parquet files larger, and only readers that know how to use the index can take advantage of this increased size. 
+
+You can use this technique to embed indexes for any granularity of Parquet data, such as to the entire file, specific row group(s), specific column chunk(s), specific data page(s) or specific row(s). Since the indexes are arbitrary bytes, it is possible to supercharge Parquet with techniques inspired by proprietary file formats such as
+
+1. [HyperLogLog] sketches for distinct value counts
+
+2. Additional [Small materialized aggregates] such as precomputed `sum`s at the column chunk or data page level
+
+3. Histograms or samples at the row group or column chunk level for predicate selectivity estimates.
+
+[HyperLogLog]: https://en.wikipedia.org/wiki/HyperLogLog
+[Small materialized aggregates]: https://www.vldb.org/conf/1998/p476.pdf
+
+## Example: Distinct Value Index for File‑Level Pruning
 
 ---
 
