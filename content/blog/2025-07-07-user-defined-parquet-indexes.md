@@ -91,7 +91,7 @@ Modern Parquet writers create these indexes automatically when writing Parquet f
 [BloomFilterPosition]: https://docs.rs/parquet/latest/parquet/file/properties/enum.BloomFilterPosition.html
 
 
-## Embedding User Defined Indexes into Parquet Files
+## Embedding User Defined Indexes in Parquet Files
 
 ---
 
@@ -442,8 +442,11 @@ impl TableProvider for DistinctIndexTable {
 
 This code does the following:
 1. Implements the `scan` method to filter files based on the distinct index.
+
 2. Checks if the filter is an equality predicate on the `category` column.
+
 3. If the target value is specified, it checks if the distinct index contains that value.
+
 4. Builds a `FileScanConfig` with only the files that match the filter.
 
 ### Putting It All Together
@@ -493,20 +496,15 @@ DuckDB’s `read_parquet()` sees only the data pages and footer it understands�
 
 ---
 
-### 7. Summary and Next Steps
+## Conclusion
 
-* **No sidecar files:** Index is embedded, simplifying operations.
-* **File-level pruning:** Dramatically reduces I/O for highly selective queries.
-* **Full format compatibility:** Works with existing Parquet tools.
-* **Additional Parquet optimizations:** Parquet itself supports many more performance tweaks—such as physical sort order, row group sizing, compression codecs, and encoding choices—that you can apply alongside embedded indexes for even better results.
+In this post, we described how to extend the Apache Parquet format with user defined indexes, and how to use these indexes to accelerate query processing in Apache DataFusion.
 
-**Next steps:** Explore embedding more advanced structures (e.g., bitmaps or Bloom filters) for larger datasets and multi-column indexing.
+We hope this inspires you to explore the possibilities of custom indexes in Parquet files instead of proposing new file formats. By embedding user defined indexes, you can achieve significant performance improvements for specific query patterns without the operational complexity of external indexes.
 
-> Try embedding custom indexes in your next DataFusion project to achieve faster query performance!
+ In addition to user defined indexes, other techniques can also be used to improve Parquet performance, such as:
 
-This post is part of a series describing techniques for building high performance analytic systems with Parquet. In addition to custom indexes in Parquet files, it is possible to
-
-1. **Use external indexes**: See [this talk](https://www.youtube.com/watch?v=74YsJT1-Rdk) and the
+1. **External indexes**: See [this talk](https://www.youtube.com/watch?v=74YsJT1-Rdk) and the
    [parquet_index.rs] and [advanced_parquet_index.rs] examples in the DataFusion repository for more details.
 
 2. **Rewrite files to optimize for specific queries**: Resorting, repartitioning and tuning datapage and row group sizes can lead to significiant performance gains. See [XiangpengHao/liquid‑cache#227](https://github.com/XiangpengHao/liquid-cache/issues/227) and the conversation between [JigaoLuo](https://github.com/JigaoLuo) and [XiangpengHao](https://github.com/XiangpengHao) for details.
@@ -516,9 +514,26 @@ This post is part of a series describing techniques for building high performanc
 [advanced_parquet_index.rs]: https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/advanced_parquet_index.rs
 
 
-### Acknowledgements
+## Acknowledgements
 
-We thank [JigaoLuo](https://github.com/JigaoLuo) for feedback on early drafts of this post. 
+Thank you to [JigaoLuo](https://github.com/JigaoLuo) for feedback and helpful advice on early drafts of this post. 
+
+## About DataFusion
+
+[Apache DataFusion] is an extensible query engine toolkit, written
+in Rust, that uses [Apache Arrow] as its in-memory format. DataFusion and
+similar technology are part of the next generation “Deconstructed Database”
+architectures, where new systems are built on a foundation of fast, modular
+components, rather than as a single tightly integrated system.
+
+The [DataFusion community] is always looking for new contributors to help
+improve the project. If you are interested in learning more about how query
+execution works, help document or improve the DataFusion codebase, or just try
+it out, we would love for you to join us.
+
+[Apache Arrow]: https://arrow.apache.org/
+[Apache DataFusion]: https://datafusion.apache.org/
+[DataFusion community]: https://datafusion.apache.org/contributor-guide/communication.html
 
 ### Footnotes
 
