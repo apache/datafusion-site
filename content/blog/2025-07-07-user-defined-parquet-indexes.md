@@ -1,6 +1,6 @@
 ---
 layout: post
-title: Extending Apache Parquet with User Defined Indexes to Accelerate Query Processing with DataFusion
+title: Add User-Defined Indexes to Apache Parquet for faster Query Processing in DataFusion
 date: 2025-07-07
 author: Qi Zhu, Jigao Luo, and Andrew Lamb
 categories: [features]
@@ -24,9 +24,9 @@ limitations under the License.
 {% endcomment %}
 -->
 
-It’s a common misconception that [Apache Parquet] files can only store basic Min/Max/Null Count statistics and Bloom filters, and that adding anything "smarter" requires a change to the specification or an entirely new file format. In fact, footer metadata and offset based addressing already provide everything needed to embed user defined index structures within Parquet Files without breaking compatibility with other Parquet readers. 
+It’s a common misconception that [Apache Parquet] files are limited to basic Min/Max/Null Count statistics and Bloom filters, and that adding more advanced indexes requires changing the specification or creating a new file format. In fact, footer metadata and offset-based addressing already provide everything needed to embed user-defined index structures within Parquet files without breaking compatibility with other Parquet readers.
 
-In this post, we review the structure of existing Indexes in the Apache Parquet format, explain the mechanism for storing user defined indexes, and finally show how to read and write a user defined index usnig [Apache DataFusion] for file‑level pruning—all.
+In this post, we review how indexes are stored in the Apache Parquet format, explain the mechanism for storing user-defined indexes, and finally show how to read and write a user-defined index using [Apache DataFusion].
 
 
 [Apache DataFusion]: https://datafusion.apache.org/
@@ -36,22 +36,21 @@ In this post, we review the structure of existing Indexes in the Apache Parquet 
 
 ---
 
-Apache Parquet is a popular columnar file format with well understood and [production grade libraries for high‑performance analytics]. Features such good encodings, column pruning, and predicate pushdown work well for many common query patterns. DataFusion includes a [highly optimized Parquet implementation] and has excellent performance in general. However, given the wide variety of production query patterns, there are some cases when the statistics included in the Parquet format itself may not be sufficient<sup>[1](#footnote1)</sup>. 
+Apache Parquet is a popular columnar file format with well understood and [production grade libraries for high‑performance analytics]. Features like efficient encodings, column pruning, and predicate pushdown work well for many common query patterns. DataFusion includes a [highly optimized Parquet implementation] and has excellent performance in general. However, some production query patterns require more than the statistics included in the Parquet format itself<sup>[1](#footnote1)</sup>.
 
 [production grade libraries for high‑performance analytics]: https://arrow.apache.org/blog/2022/12/26/querying-parquet-with-millisecond-latency/
 [highly optimized Parquet implementation]: https://datafusion.apache.org/blog/2025/03/20/parquet-pruning/
 
 Many systems improve query performance using *external* indexes or other metadata in addition to Parquet. For example, Apache Iceberg's [Scan Planning] uses metadata stored in separate files or an in memory cache, and the [parquet_index.rs] and [advanced_parquet_index.rs] examples in the DataFusion repository use external files for Parquet pruning (skipping).
 
-These approaches are powerful and widespread, but have some drawbacks:
+External indexes are powerful and widespread, but have some drawbacks:
 
-* **Increased Operational Complexity:** Two (or more) files per dataset to track.
+* **Increased Cost and Operational Complexity:** Additional files and systems are needed as well as the original Parquet. 
 * **Synchronization Risks:** The external index may become out of sync with the Parquet data if not managed carefully.
-* **Reduced Portability:** Harder to share or move Parquet data when the index is external.
 
-These risks have even been cited as justification for new file formats, such as Microsoft’s [Amudai](https://github.com/microsoft/amudai/blob/main/docs/spec/src/what_about_parquet.md).
+These drawbacks have even been cited as justification for new file formats, such as Microsoft’s [Amudai](https://github.com/microsoft/amudai/blob/main/docs/spec/src/what_about_parquet.md).
 
-**However, Parquet is extensible with User Defined Indexes**: Parquet tolerates unknown bytes within the file body data and permits arbitrary key/value pairs in its footer. These two  to **embed** special **arbitrary** indexes directly in the file—no extra files, no format forks, and no compatibility breakage. 
+**However, Parquet is extensible with user-defined indexes**: Parquet tolerates unknown bytes within the file body and permits arbitrary key/value pairs in its footer. These two features enable **embedding** user-defined indexes directly in the file—no extra files, no format forks, and no compatibility breakage. 
 
 [Scan Planning]: https://iceberg.apache.org/docs/latest/performance/#scan-planning
 [parquet_index.rs]: https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/parquet_index.rs
@@ -61,15 +60,13 @@ These risks have even been cited as justification for new file formats, such as 
 
 ---
 
-Logically, Parquet files contain row groups, each containing column chunks, which in turn contain data pages. Physically, a Parquet file is a sequence of bytes with a Thrift-encoded footer containing metadata about the file structure. The footer includes information such as the schema, row groups, column chunks and other information required to read the file. 
+Logically, Parquet files contain row groups, each with column chunks, which in turn contain data pages. Physically, a Parquet file is a sequence of bytes with a Thrift-encoded footer containing metadata about the file structure. The footer includes the schema, row groups, column chunks, and other metadata required to read the file.
 
-The Parquet format includes three main types<sup>[2](#footnote2)</sup>. of index structures, all of which are optional, and may or may not be present. 
+The Parquet format includes three main types<sup>[2](#footnote2)</sup> of optional index structures:
 
-1. **[Min/Max/Null Count Statistics]** for each chunks in a row group. 
-
-2. **[Page Index]**: THe page index contains information about the data pages in a row group, such as their offsets, sizes and statistics. Similarly to the row grow level statistics,  is used to quickly locate data pages without scanning the entire row group.
-
-3. **[Bloom Filters]**: A Bloom filter is a probabilistic data structure that is used to test whether an element is a member of a set. It is used to quickly determine if a value is present in a column chunk without scanning the entire column chunk.
+1. **[Min/Max/Null Count Statistics]** for each chunk in a row group. Used to quickly skip row groups that do not match a query predicate. 
+2. **[Page Index]**: Offsets, sizes, and statistics for each data page. Used to quickly locate data pages without scanning all pages for a column chunk.
+3. **[Bloom Filters]**: Data structure to quickly determine if a value is present in a column chunk without scanning any data pages. Particularly useful for equality and `IN` predicates.
 
 [Page Index]: https://parquet.apache.org/docs/file-format/pageindex/
 [Bloom Filters]: https://parquet.apache.org/docs/file-format/bloomfilter/
@@ -79,11 +76,11 @@ The Parquet format includes three main types<sup>[2](#footnote2)</sup>. of index
 
 <img src="/blog/images/user-defined-parquet-indexes/standard_index_structures.png" width="80%" class="img-responsive" alt="Parquet File layout with standard index structures."/>
 
-**Figure 1**: Parquet File layout with standard index structures (as written by arrow-rs)
+**Figure 1**: Parquet file layout with standard index structures (as written by arrow-rs).
 
-Only the Min/Max/Null Count Statistics are stored inline in the Parquet footer metadata. The Page Index and Bloom Filters are stored in the file body before the Thrift footer. The locations of the index structures are recorded in the footer metadata, as shown in Figure 1. Parquet readers which do not understand these structures will simply ignore them.
+Only the Min/Max/Null Count Statistics are stored inline in the Parquet footer metadata. The Page Index and Bloom Filters are stored in the file body before the Thrift footer. The locations of these index structures are recorded in the footer metadata, as shown in Figure 1. Parquet readers that do not understand these structures simply ignore them.
 
-Modern Parquet writers create these indexes automatically when writing Parquet files, and provide APIs for their generation and placement. For example, the [Apache Arrow Rust library] provides [Parquet WriterProperties], [EnabledStatistics], and [BloomFilterPosition].
+Modern Parquet writers create these indexes automatically and provide APIs for their generation and placement. For example, the [Apache Arrow Rust library] provides [Parquet WriterProperties], [EnabledStatistics], and [BloomFilterPosition].
 
 [Apache Arrow Rust library]: https://docs.rs/parquet/latest/parquet/file/index/
 [Parquet WriterProperties]: https://docs.rs/parquet/latest/parquet/file/properties/struct.WriterProperties.html
@@ -95,27 +92,27 @@ Modern Parquet writers create these indexes automatically when writing Parquet f
 
 ---
 
-Embedding user defined indexes in Parquet files is straightforward, and follows the same principles as the standard index structures:
+Embedding user-defined indexes in Parquet files is straightforward and follows the same principles as standard index structures:
 
-1. The index is serialized into a binary format and written into the file body prior to the Thrift footer.
+1. Serialize the index into a binary format and write it into the file body before the Thrift footer.
 
-2. The location of the index is recorded in the footer metadata as a key/value pair, such as `"my_index_offset" -> "<byte-offset>"`.
+2. Record the index location in the footer metadata as a key/value pair, such as `"my_index_offset" -> "<byte-offset>"`.
 
-The resulting file layout is shown in Figure 2. 
+Figure 2 shows the resulting file layout.
 
 <!-- Source: https://docs.google.com/presentation/d/1aFjTLEDJyDqzFZHgcmRxecCvLKKXV2OvyEpTQFCNZPw -->
 
 <img src="/blog/images/user-defined-parquet-indexes/custom_index_structures.png" width="80%" class="img-responsive" alt="Parquet File layout with custom index structures."/>
 
-**Figure 2**: Parquet File layout with user defined indexes. 
+**Figure 2**: Parquet file layout with user-defined indexes.
 
-Similarly to standard index structures, user defined indexes can be stored anywhere in the file body, such as after row group data, or before the footer. There is no limit to the number of such user-defined indexes, and also no restriction on their granularity: they can operate at the file, row group, page level or even row level. With this flexibility, the possibilities are wide open. We can envision several potential use cases for embedded user-defined indexes in Parquet:
+Like standard index structures, user-defined indexes can be stored anywhere in the file body, such as after row group data or before the footer. There is no limit to the number of user-defined indexes, nor any restriction on their granularity: they can operate at the file, row group, page, or even row level. This flexibility enables a wide range of use cases, including:
 
-1. Row group or page-level distinct sets: A finer-grained version of the file-level example in the rest of this blog.
+1. Row group or page-level distinct sets: a finer-grained version of the file-level example in this blog.
 
-2. [HyperLogLog] sketches for distinct value estimation, to address a common criticism<sup>3</sup> of Parquet’s lack of cardinality estimation
+2. [HyperLogLog] sketches for distinct value estimation, addressing a common criticism<sup>3</sup> of Parquet’s lack of cardinality estimation.
 
-3. Additional Zone Maps ([Small materialized aggregates]) such as precomputed `sum`s at the column chunk or data page level for faster query execution through reusing precomputed results.
+3. Additional zone maps ([small materialized aggregates]) such as precomputed `sum`s at the column chunk or data page level for faster query execution.
 
 4. Histograms or samples at the row group or column chunk level for predicate selectivity estimates.
 
@@ -126,39 +123,40 @@ Similarly to standard index structures, user defined indexes can be stored anywh
 
 ---
 
-This section shows how to actually use the ideas above to embed a simple distinct value index in Parquet files and use that index to do file‑level pruning (skipping) in DataFusion.
-The entire example is implemented in Rust and available in the DataFusion repository at
-[parquet_embedded_index.rs].
+This section demonstrates how to embed a simple distinct value index in Parquet files and use it for file-level pruning (skipping) in DataFusion. The full example is available in the DataFusion repository at [parquet_embedded_index.rs].
 
 [parquet_embedded_index.rs]: https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/parquet_embedded_index.rs
 
-The example requires **arrow‑rs v55.2.0** or later, which includes the new “buffered write” API ([apache/arrow-rs#7714]) which keeps the internal byte count in sync so you can append index bytes immediately after data pages.
+The example requires **arrow‑rs v55.2.0** or later, which includes the new “buffered write” API ([apache/arrow-rs#7714]) that keeps the internal byte count in sync so you can append index bytes immediately after data pages.
 
 [apache/arrow-rs#7714]: https://github.com/apache/arrow-rs/pull/7714  
 
-This example is simple to make it easier to understand, but you can adapt the same approach for any arbitrary index type or data types. The high‑level design is:
+This example is intentionally simple for clarity, but you can adapt the same approach for any index type or data types. The high-level design is:
 
-1. **Choose or define your index payload** (e.g. bitmap, Bloom filter, sketch, distinct values list, etc.).
-2. **Serialize your index to bytes** and append them into the Parquet file body, before writing the footer. 
-3. **Record the index location** by adding a key/value entry (for example `"my_index_offset" -> "<byte‑offset>"`) in the Parquet footer metadata.
-4. **Extend DataFusion** with a custom `TableProvider` (or wrap the existing Parquet provider) that:
-   - Reads the footer metadata to discover your index offset.
-   - Seeks to that offset and deserializes your index.
-   - Uses the index to speed up processing (for example, skip files, row groups, data pages, etc). 
+1. **Choose or define your index payload** (e.g., bitmap, Bloom filter, sketch, distinct values list, etc.).
 
-Note that the resulting parquet files are fully compatible with other tools such as DuckDB, Spark, etc. which will simply ignore the unknown index bytes and key/value metadata.
+2. **Serialize your index to bytes** and append them into the Parquet file body before writing the footer.
+
+3. **Record the index location** by adding a key/value entry (e.g., `"my_index_offset" -> "<byte‑offset>"`) in the Parquet footer metadata.
+
+4. **Extend DataFusion** with a custom `TableProvider` (or wrap the existing Parquet provider).
+
+
+The `TableProvider` simply reads the footer metadata to discover the index offset, seeks to that offset and deserializes the index, and then uses the index to speed up processing (e.g., skip files, row groups, data pages, etc.).
+
+The resulting Parquet files remain fully compatible with other tools such as DuckDB and Spark, which simply ignore the unknown index bytes and key/value metadata.
 
 
 ### Introduction to Distinct Value Indexes
 
 ---
 
-A **distinct value index** stores distinct values of a specific column. This type of index is effective for columns that have a relatively small number of distinct values, can be used to quickly skip files which do not match the query. These indexes are popular in several engines, such as the ["set" Skip Index in ClickHouse] and the [Distinct Value Cache] in InfluxDB 3.0.
+A **distinct value index** stores the unique values of a specific column. This type of index is effective for columns with a small number of distinct values and can be used to quickly skip files that do not match the query. These indexes are popular in several engines, such as the ["set" Skip Index in ClickHouse] and the [Distinct Value Cache] in InfluxDB 3.0.
 
 ["set" Skip Index in ClickHouse]: https://clickhouse.com/docs/optimize/skipping-indexes#set
 [Distinct Value Cache]: https://docs.influxdata.com/influxdb3/enterprise/admin/distinct-value-cache/
 
-For example, if the files contain a column named `Category` like this
+For example, if the files contain a column named `Category` like this:
 
 <table style="border-collapse:collapse;">
   <tr>
@@ -181,13 +179,9 @@ For example, if the files contain a column named `Category` like this
   </tr>
 </table>
 
-Then the distinct value index will contain the values `foo` and `bar` and `baz`.
-Using a traditional min/max statistics would store the minimum (`bar`) and maximum (`foo`)
-values, which would not allow quickly
-skipping this file for a query like `SELECT * FROM t WHERE Category = 'baq'` as 
-`baq` is between `bar` and `foo`. 
+The distinct value index will contain the values `foo`, `bar`, and `baz`. Using traditional min/max statistics would store the minimum (`bar`) and maximum (`foo`) values, which would not allow quickly skipping this file for a query like `SELECT * FROM t WHERE Category = 'bas'` as `bas` is between `bar` and `foo`.
 
-We represent this in Rust as a simple `HashSet<String>`:
+We represent this in Rust for our example as a simple `HashSet<String>`:
 
 ```rust
 /// An index of distinct values for a single column
@@ -201,7 +195,7 @@ struct DistinctIndex {
 
 ---
 
-In this example, we will write a distinct value index for the `Category` column into the Parquet file body after all the data pages, and record the index location in the footer metadata. The resulting file layout will look like this:
+In this example, we write a distinct value index for the `Category` column into the Parquet file body after all the data pages, and record the index location in the footer metadata. The resulting file layout looks like this:
 
 ```text
                   ┌──────────────────────┐                           
@@ -277,12 +271,16 @@ fn serialize<W: Write + Send>(
 ```
 
 This code does the following:
-1. Creates a newline‑separated UTF‑8 string from the distinct values.
-2. Writes a magic header (`IDX1`) and the length of the index.
-3. Writes the index bytes to the file using the [`ArrowWriter`] API.
-3. Records index location by adding a key/value entry (`"distinct_index_offset" -> <offset>`) in the Parquet footer metadata.
 
-Note that it is important to use the [`ArrowWriter::write_all`] API to ensure that the offsets in the footer are correctly tracked. 
+1. Creates a newline‑separated UTF‑8 string from the distinct values.
+
+2. Writes a magic header (`IDX1`) and the length of the index.
+
+3. Writes the index bytes to the file using the [ArrowWriter] API.
+
+4. Records the index location by adding a key/value entry (`"distinct_index_offset" -> <offset>`) in the Parquet footer metadata.
+
+Note: Use the [ArrowWriter::write_all] API to ensure the offsets in the footer are correctly tracked. 
 
 [ArrowWriter]: https://docs.rs/parquet/latest/parquet/arrow/arrow_writer/struct.ArrowWriter.html
 [ArrowWriter::write_all]: https://docs.rs/parquet/latest/parquet/arrow/arrow_writer/struct.ArrowWriter.html#method.write_all
@@ -292,7 +290,7 @@ Note that it is important to use the [`ArrowWriter::write_all`] API to ensure th
 
 ---
 
-To read the distinct index from a Parquet file, 
+This code reads the distinct index from a Parquet file:
 
 ```rust
 /// Read a `DistinctIndex` from a Parquet file
@@ -316,10 +314,12 @@ fn read_distinct_index(path: &Path) -> Result<DistinctIndex> {
 ```
 
 This function:
-1. Opens the Parquet footer and extract `distinct_index_offset` from the metadata.
+
+1. Opens the Parquet footer and extracts `distinct_index_offset` from the metadata.
+
 2. Calls `DistinctIndex::new_from_reader` to read the index from the file at that offset.
 
-The code to actually read the index is shown below, and corresponds to the `serialize` function above.
+`DistinctIndex::new_from_reader` actually reads the index as shown below:
 
 ```rust
  /// Read the distinct values index from a reader at the given offset and length
@@ -350,16 +350,21 @@ The code to actually read the index is shown below, and corresponds to the `seri
 ```
 
 This code:
+
 1. Seeks to the offset of the index in the file.
+
 2. Reads the magic bytes and checks they match `IDX1`.
+
 3. Reads the length of the index and allocates a buffer.
-4. Reads the index bytes into the buffer, converts it to a `String`, and splits it into lines to populate the `HashSet<String>`.
+
+4. Reads the index bytes, converts them to a `String`, and splits into lines to populate the `HashSet<String>`.
+
 
 ### Extending DataFusion’s `TableProvider`
 
 ---
 
-In order to use the distinct index for file‑level pruning, we need to extend DataFusion's `TableProvider` to read the index and apply it during query execution as shown below:
+To use the distinct index for file-level pruning, extend DataFusion's `TableProvider` to read the index and apply it during query execution:
 
 ```rust
 impl TableProvider for DistinctIndexTable {
@@ -441,17 +446,19 @@ impl TableProvider for DistinctIndexTable {
 ```
 
 This code does the following:
+
 1. Implements the `scan` method to filter files based on the distinct index.
 
 2. Checks if the filter is an equality predicate on the `category` column.
 
-3. If the target value is specified, it checks if the distinct index contains that value.
+3. If the target value is specified, checks if the distinct index contains that value.
 
 4. Builds a `FileScanConfig` with only the files that match the filter.
 
+
 ### Putting It All Together
 
-To use the distinct index in a DataFusion query, we need to write some sample Parquet files with the embedded index, register the `DistinctIndexTable` provider, and then run a query that uses the index for file‑level pruning:
+To use the distinct index in a DataFusion query, write sample Parquet files with the embedded index, register the `DistinctIndexTable` provider, and run a query with a predicate that can be optimized by the index.
 
 ```rust
 // Write sample files with embedded indexes
@@ -473,7 +480,7 @@ df.show().await?;
 
 ---
 
-Even with the extra bytes and unknown footer key, standard Parquet readers ignore our index. For example, we can use DuckDB to read the Parquet files we created with the embedded index:
+Even with extra bytes and unknown footer keys, standard Parquet readers ignore the index. You can verify this using another system such as DuckDB to read the Parquet created in the example. DuckDB will read the files without any issues, ignoring the custom index and unknown footer metadata.
 
 ```sql
 SELECT * FROM read_parquet('/tmp/parquet_index_data/*');
@@ -492,22 +499,14 @@ SELECT * FROM read_parquet('/tmp/parquet_index_data/*');
 └──────────┘
 ```
 
-DuckDB’s `read_parquet()` sees only the data pages and footer it understands—our embedded index is simply ignored, demonstrating seamless compatibility.
-
----
 
 ## Conclusion
 
-In this post, we described how to extend the Apache Parquet format with user defined indexes, and how to use these indexes to accelerate query processing in Apache DataFusion.
+In this post, we explained how index structures are stored in Apache Parquet, how to embed user-defined indexes without changing the format, and how to use user-defined indexes to speed up query processing.
 
-We hope this inspires you to explore the possibilities of custom indexes in Parquet files instead of proposing new file formats. By embedding user defined indexes, you can achieve significant performance improvements for specific query patterns without the operational complexity of external indexes.
+Parquet-based systems can achieve significant performance improvements for almost any query pattern while still retaining broad compatibility, using user-defined embedded indexes, external indexes<sup>[4](#footnote4)</sup> and rewriting files optimized for specific queries<sup>[5](#footnote5)</sup>. System designers can choose among the available options to make the appropriate trade-offs between operational complexity, performance, file size, and cost for their specific use cases.
 
- In addition to user defined indexes, other techniques can also be used to improve Parquet performance, such as:
-
-1. **External indexes**: See [this talk](https://www.youtube.com/watch?v=74YsJT1-Rdk) and the
-   [parquet_index.rs] and [advanced_parquet_index.rs] examples in the DataFusion repository for more details.
-
-2. **Rewrite files to optimize for specific queries**: Resorting, repartitioning and tuning datapage and row group sizes can lead to significiant performance gains. See [XiangpengHao/liquid‑cache#227](https://github.com/XiangpengHao/liquid-cache/issues/227) and the conversation between [JigaoLuo](https://github.com/JigaoLuo) and [XiangpengHao](https://github.com/XiangpengHao) for details.
+We hope this post inspires you to explore custom indexes in Parquet files, rather than proposing new file formats and reimplementing existing features. The DataFusion community is excited to see how you use this feature in your projects!
 
 
 [parquet_index.rs]: https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/parquet_index.rs
@@ -532,11 +531,16 @@ it out, we would love for you to join us.
 
 ### Footnotes
 
-<a id="footnote1"></a>`[1]` A commonly cited example is highly selective predicates (e.g. `category = 'foo'`) but for which the built in BloomFilters are not sufficient.
+<a id="footnote1"></a>`1`: A commonly cited example is highly selective predicates (e.g. `category = 'foo'`) but for which the built in BloomFilters are not sufficient.
 
-<a id="footnote2"></a>`[2]` There are other index structures such, but they are either 1) not widely supported (such as statistics in the page headers) or 2) not yet widely used in practice at the time of this writing (such as [GeospatialStatistics] and [SizeStatistics]).
+<a id="footnote2"></a>`2`: There are other index structures, but they are either 1) not widely supported (such as statistics in the page headers) or 2) not yet widely used in practice at the time of this writing (such as [GeospatialStatistics] and [SizeStatistics]).
 
-<a id="footnote3"></a>`[3]` [Seamless Integration of Parquet Files into Data Processing. / Rey, Alice; Freitag, Michael; Neumann, Thomas. / BTW 2023]: https://dl.gi.de/items/2a8571f8-0ef2-481c-8ee9-05f82ee258c8
+<a id="footnote3"></a>`3`: [Seamless Integration of Parquet Files into Data Processing. / Rey, Alice; Freitag, Michael; Neumann, Thomas. / BTW 2023](https://dl.gi.de/items/2a8571f8-0ef2-481c-8ee9-05f82ee258c8)
 
 [GeospatialStatistics]: https://github.com/apache/parquet-format/blob/819adce0ec6aa848e56c56f20b9347f4ab50857f/src/main/thrift/parquet.thrift#L256
 [SizeStatistics]: https://github.com/apache/parquet-format/blob/819adce0ec6aa848e56c56f20b9347f4ab50857f/src/main/thrift/parquet.thrift#L194-L202
+
+
+<a id="footnote4"></a>`4`: For more information about external indexes, see [this talk](https://www.youtube.com/watch?v=74YsJT1-Rdk) and the [parquet_index.rs] and [advanced_parquet_index.rs] examples in the DataFusion repository.
+
+<a id="footnote5"></a>`5`: For information about rewriting files to optimize for specific queries, such as resorting, repartitioning, and tuning data page and row group sizes, see [XiangpengHao/liquid‑cache#227](https://github.com/XiangpengHao/liquid-cache/issues/227) and the conversation between [JigaoLuo](https://github.com/JigaoLuo) and [XiangpengHao](https://github.com/XiangpengHao) for details. We hope to make a future post about this topic.
