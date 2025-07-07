@@ -1,6 +1,6 @@
 ---
 layout: post
-title: Add User-Defined Indexes to Apache Parquet for faster Query Processing in DataFusion
+title: Embedding User-Defined Indexes in Apache Parquet Files
 date: 2025-07-14
 author: Qi Zhu, Jigao Luo, and Andrew Lamb
 categories: [features]
