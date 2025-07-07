@@ -28,7 +28,6 @@ It’s a common misconception that [Apache Parquet] files are limited to basic M
 
 In this post, we review how indexes are stored in the Apache Parquet format, explain the mechanism for storing user-defined indexes, and finally show how to read and write a user-defined index using [Apache DataFusion].
 
-
 [Apache DataFusion]: https://datafusion.apache.org/
 [Apache Parquet]: https://parquet.apache.org/
 
@@ -50,7 +49,7 @@ External indexes are powerful and widespread, but have some drawbacks:
 
 These drawbacks have even been cited as justification for new file formats, such as Microsoft’s [Amudai](https://github.com/microsoft/amudai/blob/main/docs/spec/src/what_about_parquet.md).
 
-**However, Parquet is extensible with user-defined indexes**: Parquet tolerates unknown bytes within the file body and permits arbitrary key/value pairs in its footer. These two features enable **embedding** user-defined indexes directly in the file—no extra files, no format forks, and no compatibility breakage. 
+**However, Parquet is extensible with user-defined indexes**: Parquet tolerates unknown bytes within the file body and permits arbitrary key/value pairs in its footer metadata. These two features enable **embedding** user-defined indexes directly in the file—no extra files, no format forks, and no compatibility breakage. 
 
 [Scan Planning]: https://iceberg.apache.org/docs/latest/performance/#scan-planning
 [parquet_index.rs]: https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/parquet_index.rs
@@ -60,7 +59,7 @@ These drawbacks have even been cited as justification for new file formats, such
 
 ---
 
-Logically, Parquet files contain row groups, each with column chunks, which in turn contain data pages. Physically, a Parquet file is a sequence of bytes with a Thrift-encoded footer containing metadata about the file structure. The footer includes the schema, row groups, column chunks, and other metadata required to read the file.
+Logically, Parquet files contain row groups, each with column chunks, which in turn contain data pages. Physically, a Parquet file is a sequence of bytes with a Thrift-encoded footer metadata containing metadata about the file structure. The footer metadata includes the schema, row groups, column chunks, and other metadata required to read the file.
 
 The Parquet format includes three main types<sup>[2](#footnote2)</sup> of optional index structures:
 
@@ -78,7 +77,7 @@ The Parquet format includes three main types<sup>[2](#footnote2)</sup> of option
 
 **Figure 1**: Parquet file layout with standard index structures (as written by arrow-rs).
 
-Only the Min/Max/Null Count Statistics are stored inline in the Parquet footer metadata. The Page Index and Bloom Filters are stored in the file body before the Thrift footer. The locations of these index structures are recorded in the footer metadata, as shown in Figure 1. Parquet readers that do not understand these structures simply ignore them.
+Only the Min/Max/Null Count Statistics are stored inline in the Parquet footer metadata. The Page Index and Bloom Filters are stored in the file body before the Thrift-encoded footer metadata. The locations of these index structures are recorded in the footer metadata, as shown in Figure 1. Parquet readers that do not understand these structures simply ignore them.
 
 Modern Parquet writers create these indexes automatically and provide APIs for their generation and placement. For example, the [Apache Arrow Rust library] provides [Parquet WriterProperties], [EnabledStatistics], and [BloomFilterPosition].
 
@@ -94,7 +93,7 @@ Modern Parquet writers create these indexes automatically and provide APIs for t
 
 Embedding user-defined indexes in Parquet files is straightforward and follows the same principles as standard index structures:
 
-1. Serialize the index into a binary format and write it into the file body before the Thrift footer.
+1. Serialize the index into a binary format and write it into the file body before the Thrift-encoded footer metadata.
 
 2. Record the index location in the footer metadata as a key/value pair, such as `"my_index_offset" -> "<byte-offset>"`.
 
@@ -261,7 +260,7 @@ fn serialize<W: Write + Send>(
    // Write the index bytes
    arrow_writer.write_all(&index_bytes)?;
 
-   // Append metadata about the index to the Parquet file footer
+   // Append metadata about the index to the Parquet file footer metadata
    arrow_writer.append_key_value_metadata(KeyValue::new(
       "distinct_index_offset".to_string(),
       offset.to_string(),
@@ -280,7 +279,7 @@ This code does the following:
 
 4. Records the index location by adding a key/value entry (`"distinct_index_offset" -> <offset>`) in the Parquet footer metadata.
 
-Note: Use the [ArrowWriter::write_all] API to ensure the offsets in the footer are correctly tracked. 
+Note: Use the [ArrowWriter::write_all] API to ensure the offsets in the footer metadata are correctly tracked. 
 
 [ArrowWriter]: https://docs.rs/parquet/latest/parquet/arrow/arrow_writer/struct.ArrowWriter.html
 [ArrowWriter::write_all]: https://docs.rs/parquet/latest/parquet/arrow/arrow_writer/struct.ArrowWriter.html#method.write_all
@@ -315,7 +314,7 @@ fn read_distinct_index(path: &Path) -> Result<DistinctIndex> {
 
 This function:
 
-1. Opens the Parquet footer and extracts `distinct_index_offset` from the metadata.
+1. Opens the Parquet footer metadata and extracts `distinct_index_offset` from the metadata.
 
 2. Calls `DistinctIndex::new_from_reader` to read the index from the file at that offset.
 
@@ -480,7 +479,7 @@ df.show().await?;
 
 ---
 
-Even with extra bytes and unknown footer keys, standard Parquet readers ignore the index. You can verify this using another system such as DuckDB to read the Parquet created in the example. DuckDB will read the files without any issues, ignoring the custom index and unknown footer metadata.
+Even with extra bytes and unknown metadata keys, standard Parquet readers ignore the index. You can verify this using another system such as DuckDB to read the Parquet created in the example. DuckDB will read the files without any issues, ignoring the custom index and unknown footer metadata.
 
 ```sql
 SELECT * FROM read_parquet('/tmp/parquet_index_data/*');
