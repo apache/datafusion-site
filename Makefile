@@ -16,16 +16,19 @@
 # under the License.
 IMAGE_NAME = df-site-build
 REPO_NAME = infrastructure-actions
+COMMIT_HASH = 8aee7a080268198548d8d1b4f1315a4fb94bffea
 
 .PHONY: clone build-image build
 
 clone:
 	@if [ ! -d "$(REPO_NAME)" ]; then \
-		echo "Cloning $(REPO_NAME)..."; \
-		git clone https://github.com/apache/infrastructure-actions.git; \
+		echo "Cloning $(REPO_NAME) at specific commit $(COMMIT_HASH)..."; \
+		git clone --depth 1 https://github.com/apache/infrastructure-actions.git $(REPO_NAME); \
+		cd $(REPO_NAME) && git fetch --depth 1 origin $(COMMIT_HASH) && git checkout $(COMMIT_HASH); \
 	else \
 		echo "$(REPO_NAME) already exists, skipping clone."; \
 	fi
+	# Pinned to commit $(COMMIT_HASH) due to https://github.com/apache/infrastructure-actions/issues/218
 
 build-image:
 	@if ! docker image inspect $(IMAGE_NAME) > /dev/null 2>&1; then \
