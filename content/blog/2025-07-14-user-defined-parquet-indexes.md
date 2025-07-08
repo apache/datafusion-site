@@ -35,7 +35,7 @@ In this post, we review how indexes are stored in the Apache Parquet format, exp
 
 ---
 
-Apache Parquet is a popular columnar file format with well understood and [production grade libraries for high‑performance analytics]. Features like efficient encodings, column pruning, and predicate pushdown work well for many common query patterns. DataFusion includes a [highly optimized Parquet implementation] and has excellent performance in general. However, some production query patterns require more than the statistics included in the Parquet format itself<sup>[1](#footnote1)</sup>.
+Apache Parquet is a popular columnar file format with well understood and [production grade libraries for high‑performance analytics]. Features like efficient encodings, column pruning, and predicate pushdown work well for many common query patterns. Apache DataFusion includes a [highly optimized Parquet implementation] and has excellent performance in general. However, some production query patterns require more than the statistics included in the Parquet format itself<sup>[1](#footnote1)</sup>.
 
 [production grade libraries for high‑performance analytics]: https://arrow.apache.org/blog/2022/12/26/querying-parquet-with-millisecond-latency/
 [highly optimized Parquet implementation]: https://datafusion.apache.org/blog/2025/03/20/parquet-pruning/
