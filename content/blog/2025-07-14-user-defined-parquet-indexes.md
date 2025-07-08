@@ -200,6 +200,19 @@ This is a key benefit of the distinct value index: it enables accurate filtering
 
 While not a traditional index structure like a B-tree, the distinct value set acts as a lightweight, embedded index that enables fast pruning and is especially effective for columns with low cardinality.
 
+**Supported Filters**
+
+Distinct value indexes are most effective for **equality filters**, such as:
+
+```sql
+WHERE category = 'foo'
+WHERE category IN ('foo', 'bar')
+```
+
+They can also help with NOT IN and anti-joins, as long as the engine can evaluate them using the list of known distinct values.
+
+However, these indexes are not suitable for range predicates (e.g., category > 'foo'), as they do not preserve any ordering information. For such cases, min/max statistics or sorted data layouts are more effective.
+
 We represent this in Rust for our example as a simple `HashSet<String>`:
 
 ```rust
