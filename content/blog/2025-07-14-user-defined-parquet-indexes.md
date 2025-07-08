@@ -190,7 +190,15 @@ For example, if the files contain a column named `Category` like this:
   </tr>
 </table>
 
-The distinct value index will contain the values `foo`, `bar`, and `baz`. Using traditional min/max statistics would store the minimum (`bar`) and maximum (`foo`) values, which would not allow quickly skipping this file for a query like `SELECT * FROM t WHERE Category = 'bas'` as `bas` is between `bar` and `foo`.
+The distinct value index will contain the values `foo`, `bar`, and `baz`. In contrast, traditional min/max statistics would store only the minimum (`bar`) and maximum (`foo`) values. A query like
+```sql
+SELECT * FROM t WHERE Category = 'bas'
+``` 
+cannot be skipped using min/max because bas falls between bar and foo in lexicographic order—even though it doesn't actually exist in the file.
+
+This is a key benefit of the distinct value index: it enables accurate filtering without requiring the column to be sorted, unlike min/max-based pruning which is most effective when data is ordered.
+
+While not a traditional index structure like a B-tree, the distinct value set acts as a lightweight, embedded index that enables fast pruning and is especially effective for columns with low cardinality.
 
 We represent this in Rust for our example as a simple `HashSet<String>`:
 
