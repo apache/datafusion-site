@@ -93,7 +93,7 @@ Only the Min/Max/Null Count Statistics are stored inline in the Parquet footer m
 
 Modern Parquet writers create these indexes automatically and provide APIs for their generation and placement. For example, the [Apache Arrow Rust library] provides [Parquet WriterProperties], [EnabledStatistics], and [BloomFilterPosition].
 
-[Apache Arrow Rust library]: https://docs.rs/parquet/latest/parquet/file/index/
+[Apache Arrow Rust library]: https://docs.rs/parquet/latest/parquet/
 [Parquet WriterProperties]: https://docs.rs/parquet/latest/parquet/file/properties/struct.WriterProperties.html
 [EnabledStatistics]: https://docs.rs/parquet/latest/parquet/file/properties/enum.EnabledStatistics.html
 [BloomFilterPosition]: https://docs.rs/parquet/latest/parquet/file/properties/enum.BloomFilterPosition.html
