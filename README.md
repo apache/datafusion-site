@@ -24,7 +24,7 @@ will trigger a CI process that will build the site and push it to the branch
 `asf-staging`. Once this completes, the ASF infrastructure will auto publish
 this staged branch to https://datafusion.staged.apache.org/ It is important
 to note that this staging feature only works for branches on the main repo.
-If you are working on a forked repo, you will need to use the docker approach
+If you are working on a forked repo, you will need to use the local approach
 below.
 
 The most recently run staging CI pipeline will be published to this site. If you
