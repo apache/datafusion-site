@@ -53,12 +53,12 @@ Apache Parquet is a popular columnar file format with well understood and [produ
 
 Many systems improve query performance using *external* indexes or other metadata in addition to Parquet. For example, Apache Iceberg's [Scan Planning] uses metadata stored in separate files or an in memory cache, and the [parquet_index.rs] and [advanced_parquet_index.rs] examples in the DataFusion repository use external files for Parquet pruning (skipping).
 
-External indexes are powerful and widespread, but have some drawbacks:
+External indexes are powerful and widespread, but they have some drawbacks:
 
-* **Increased Cost and Operational Complexity:** Additional files and systems are needed as well as the original Parquet. 
-* **Synchronization Risks:** The external index may become out of sync with the Parquet data if not managed carefully.
+* **Increased Cost and Operational Complexity:** You need additional files and systems as well as the original Parquet. 
+* **Synchronization Risks:** The external index may become out of sync with the Parquet data if you do not manage it carefully.
 
-These drawbacks have even been cited as justification for new file formats, such as Microsoft’s [Amudai](https://github.com/microsoft/amudai/blob/main/docs/spec/src/what_about_parquet.md).
+Proponents have even cited these drawbacks as justification for new file formats, such as Microsoft's [Amudai](https://github.com/microsoft/amudai/blob/main/docs/spec/src/what_about_parquet.md).
 
 **However, Parquet is extensible with user-defined indexes**: Parquet tolerates unknown bytes within the file body and permits arbitrary key/value pairs in its footer metadata. These two features enable **embedding** user-defined indexes directly in the file—no extra files, no format forks, and no compatibility breakage. 
 
@@ -74,8 +74,10 @@ Logically, Parquet files contain row groups, each with column chunks, which in t
 
 The Parquet format includes three main types<sup>[2](#footnote2)</sup> of optional index structures:
 
-1. **[Min/Max/Null Count Statistics]** for each chunk in a row group. Used to quickly skip row groups that do not match a query predicate. 
-2. **[Page Index]**: Offsets, sizes, and statistics for each data page. Used to quickly locate data pages without scanning all pages for a column chunk.
+1. **[Min/Max/Null Count Statistics]** for each chunk in a row group. Engines use these to quickly skip row groups that do not match a query predicate. 
+
+2. **[Page Index]**: Offsets, sizes, and statistics for each data page. Engines use these to quickly locate data pages without scanning all pages for a column chunk.
+
 3. **[Bloom Filters]**: Data structure to quickly determine if a value is present in a column chunk without scanning any data pages. Particularly useful for equality and `IN` predicates.
 
 [Page Index]: https://parquet.apache.org/docs/file-format/pageindex/
