@@ -26,8 +26,7 @@ limitations under the License.
 
 It’s a common misconception that [Apache Parquet] files are limited to basic Min/Max/Null Count statistics and Bloom filters, and that adding more advanced indexes requires changing the specification or creating a new file format. In fact, footer metadata and offset-based addressing already provide everything needed to embed user-defined index structures within Parquet files without breaking compatibility with other Parquet readers.
 
-**Example scenario:**  
-Imagine your data is partitioned by a `Nation` column (dozens of distinct values) across thousands of Parquet files. You execute:
+**Motivating Example:** Imagine your data has a `Nation` column with dozens of distinct values across thousands of Parquet files. You execute:
 
 ```sql
   SELECT AVG(sales_amount)
@@ -36,7 +35,7 @@ Imagine your data is partitioned by a `Nation` column (dozens of distinct values
   GROUP BY year;
 ```
 
-Relying on min/max statistics alone isn’t very selective when a file’s Nation range spans “Argentina” through “Zimbabwe,” and Bloom filters still incur nontrivial I/O to load per file. Instead, you can store—in each file’s footer metadata—a compact list of every distinct nation value present. At query time, your engine reads just that tiny list to determine which files cannot contain 'Singapore' and skips them entirely. This yields dramatically better file‑pruning performance, all while preserving full compatibility with standard Parquet readers.
+Relying on the min/max statistics from the Parquet format will be ineffective at pruning files when `Nation` spans "Argentina" through "Zimbabwe". Instead of relying on a Bloom Filter, you may want to store a list of every distinct `Nation` value in the file near the end. At query time, your engine will read that tiny list and skip any file that does not contain 'Singapore'. This special distinct value index can yield dramatically better file‑pruning performance for your engine, all while preserving full compatibility with standard Parquet readers.
 
 In this post, we review how indexes are stored in the Apache Parquet format, explain the mechanism for storing user-defined indexes, and finally show how to read and write a user-defined index using [Apache DataFusion].
 
