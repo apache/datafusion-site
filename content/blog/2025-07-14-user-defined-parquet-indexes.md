@@ -435,6 +435,8 @@ impl TableProvider for DistinctIndexTable {
             }
         }
         // Determine which files to scan
+        // files_and_index is a Vec<(String, DistinctIndex)>,
+        // See the full example for how this is populated.
         let files_to_scan: Vec<_> = self
             .files_and_index
             .iter()
