@@ -88,11 +88,11 @@ The Parquet format includes three main types<sup>[2](#footnote2)</sup> of option
 
 **Figure 1**: Parquet file layout with standard index structures (as written by arrow-rs).
 
-Only the Min/Max/Null Count Statistics are stored inline in the Parquet footer metadata. The Page Index and Bloom Filters are stored in the file body before the Thrift-encoded footer metadata. The locations of these index structures are recorded in the footer metadata, as shown in Figure 1. Parquet readers that do not understand these structures simply ignore them.
+Only the Min/Max/Null Count Statistics are stored inline in the Parquet footer metadata. The Page Index and Bloom Filters are typically stored in the file body before the Thrift-encoded footer metadata. The locations of these index structures are recorded in the footer metadata, as shown in Figure 1. Parquet readers that do not understand these structures simply ignore them.
 
-Modern Parquet writers create these indexes automatically and provide APIs for their generation and placement. For example, the [Apache Arrow Rust library] provides [Parquet WriterProperties], [EnabledStatistics], and [BloomFilterPosition].
+Modern Parquet writers create these indexes automatically and provide APIs to control their generation and placement. For example, the [Rust Parquet Library] provides [Parquet WriterProperties], [EnabledStatistics], and [BloomFilterPosition].
 
-[Apache Arrow Rust library]: https://docs.rs/parquet/latest/parquet/
+[Rust Parquet Library]: https://docs.rs/parquet/latest/parquet/
 [Parquet WriterProperties]: https://docs.rs/parquet/latest/parquet/file/properties/struct.WriterProperties.html
 [EnabledStatistics]: https://docs.rs/parquet/latest/parquet/file/properties/enum.EnabledStatistics.html
 [BloomFilterPosition]: https://docs.rs/parquet/latest/parquet/file/properties/enum.BloomFilterPosition.html
