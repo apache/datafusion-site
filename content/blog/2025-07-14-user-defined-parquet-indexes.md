@@ -137,19 +137,20 @@ This section demonstrates how to embed a simple distinct value index in Parquet 
 
 [parquet_embedded_index.rs]: https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/parquet_embedded_index.rs
 
-The example requires **arrow‑rs v55.2.0** or later, which includes the new “buffered write” API ([apache/arrow-rs#7714]) that keeps the internal byte count in sync so you can append index bytes immediately after data pages.
+Note that the example requires **[arrow‑rs v55.2.0]** or later, which includes the new “buffered write” API ([apache/arrow-rs#7714]) to keep the internal byte count in sync after appending index bytes immediately after data pages.
 
-[apache/arrow-rs#7714]: https://github.com/apache/arrow-rs/pull/7714  
+[apache/arrow-rs#7714]: https://github.com/apache/arrow-rs/pull/7714
+[arrow‑rs v55.2.0]: https://crates.io/crates/parquet/55.2.0
 
 This example is intentionally simple for clarity, but you can adapt the same approach for any index type or data types. The high-level design is:
 
-1. **Choose or define your index payload** (e.g., bitmap, Bloom filter, sketch, distinct values list, etc.).
+1. **Define your index payload** (e.g., bitmap, Bloom filter, sketch, distinct values list, etc.).
 
 2. **Serialize your index to bytes** and append them into the Parquet file body before writing the footer.
 
 3. **Record the index location** by adding a key/value entry (e.g., `"my_index_offset" -> "<byte‑offset>"`) in the Parquet footer metadata.
 
-4. **Extend DataFusion** with a custom `TableProvider` (or wrap the existing Parquet provider).
+4. **Extend DataFusion** with a custom `TableProvider` (or wrap the existing Parquet provider) to use the index.
 
 
 The `TableProvider` simply reads the footer metadata to discover the index offset, seeks to that offset and deserializes the index, and then uses the index to speed up processing (e.g., skip files, row groups, data pages, etc.).
@@ -189,13 +190,13 @@ For example, if the files contain a column named `Category` like this:
   </tr>
 </table>
 
-The distinct value index will contain the values `foo`, `bar`, and `baz`. In contrast, traditional min/max statistics would store only the minimum (`bar`) and maximum (`foo`) values. A query like
+The distinct value index will contain the values `foo`, `bar`, and `baz`. In contrast, traditional min/max statistics would store only the minimum (`bar`) and maximum (`foo`) values, so a query like
 ```sql
 SELECT * FROM t WHERE Category = 'bas'
 ``` 
-cannot be skipped using min/max because bas falls between bar and foo in lexicographic order—even though it doesn't actually exist in the file.
+cannot skip the file using min/max values because `bas` falls between `bar` and `foo` in lexicographic order, even though `bas` does not appear in the column.
 
-This is a key benefit of the distinct value index: it enables accurate filtering without requiring the column to be sorted, unlike min/max-based pruning which is most effective when data is ordered.
+This is a key benefit of a distinct value index: accurate filtering without requiring the column to be sorted, unlike min/max-based pruning which is most effective when data is ordered.
 
 While not a traditional index structure like a B-tree, the distinct value set acts as a lightweight, embedded index that enables fast pruning and is especially effective for columns with low cardinality.
 
@@ -210,9 +211,9 @@ WHERE category IN ('foo', 'bar')
 
 They can also help with NOT IN and anti-joins, as long as the engine can evaluate them using the list of known distinct values.
 
-However, these indexes are not suitable for range predicates (e.g., category > 'foo'), as they do not preserve any ordering information. For such cases, min/max statistics or sorted data layouts are more effective.
+However, these indexes are not suitable for range predicates (e.g., category > 'foo'), as they do not preserve any ordering information. For such cases, other structures such as min/max statistics or sorted data layouts may be more effective.
 
-We represent this in Rust for our example as a simple `HashSet<String>`:
+We represent a distinct value index in Rust for our example as a simple `HashSet<String>`:
 
 ```rust
 /// An index of distinct values for a single column
