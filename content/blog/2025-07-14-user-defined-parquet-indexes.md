@@ -492,7 +492,7 @@ This code does the following:
 
 ### Putting It All Together
 
-To use the distinct index in a DataFusion query, write sample Parquet files with the embedded index, register the `DistinctIndexTable` provider, and run a query with a predicate that can be optimized by the index.
+To use the distinct index in a DataFusion query, write sample Parquet files with the embedded index, register the `DistinctIndexTable` provider, and run a query with a predicate that can be optimized by the index as shown below.
 
 ```rust
 // Write sample files with embedded indexes
