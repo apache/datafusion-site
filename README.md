@@ -16,8 +16,7 @@ There are a couple of important impacts on the publishing:
 
 There are two ways to preview your blog post before publishing the site. You can
 either locally build and test the site or you can use the auto staging feature
-of the CI system. To locally build the site on your machine, follow the docker
-instructions below.
+of the CI system. To locally build the site on your machine, follow the instructions below.
 
 To use the staging feature of the CI system, push a branch that starts with
 `site/` and create a PR to merge this branch into `main`. When you do so, it
@@ -25,31 +24,20 @@ will trigger a CI process that will build the site and push it to the branch
 `asf-staging`. Once this completes, the ASF infrastructure will auto publish
 this staged branch to https://datafusion.staged.apache.org/ It is important
 to note that this staging feature only works for branches on the main repo.
-If you are working on a forked repo, you will need to use the docker approach
+If you are working on a forked repo, you will need to use the local approach
 below.
 
 The most recently run staging CI pipeline will be published to this site. If you
 need to republish any branch, simply rerun the `Stage Site` workflow.
 
-## Setup for Docker
+## Local Setup
 
-To locally build and preview the site on your computer, you will need to build
-a docker container using these instructions:
-
+To locally build and preview the site on your computer, run
 ```shell
-git clone https://github.com/apache/infrastructure-actions.git
-cd infrastructure-actions
-docker build -t df-site-build pelican
+make
 ```
 
-Then within the directory that contains `datafusion-site` you can build and test
-the site using:
-
-```shell
-docker run -it --rm -p8000:8000 -v $PWD:/site --entrypoint /bin/bash df-site-build:latest
-pelicanasf content -o blog
-python3 -m http.server 8000
-```
+This will build the site using the [`ASF-Pelican`](https://github.com/apache/infrastructure-actions/tree/main/pelican) docker container.
 
 Navigate in your web browser to [http://localhost:8000/blog](http://localhost:8000/blog) to view the live
 website. In your terminal you can press Ctrl+C and rerun the last two commands
