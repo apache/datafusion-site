@@ -14,12 +14,16 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+
 IMAGE_NAME = df-site-build
 REPO_NAME = infrastructure-actions
 COMMIT_HASH = 8aee7a080268198548d8d1b4f1315a4fb94bffea
 
 .PHONY: clone build-image build
 
+all: build
+
+# clones the infrastructure-actions repository at a specific commit
 clone:
 	@if [ ! -d "$(REPO_NAME)" ]; then \
 		echo "Cloning $(REPO_NAME) at specific commit $(COMMIT_HASH)..."; \
@@ -30,6 +34,7 @@ clone:
 	fi
 	# Pinned to commit $(COMMIT_HASH) due to https://github.com/apache/infrastructure-actions/issues/218
 
+# builds the Docker image with pelicanasf installed
 build-image:
 	@if ! docker image inspect $(IMAGE_NAME) > /dev/null 2>&1; then \
 		echo "Building Docker image $(IMAGE_NAME)..."; \
@@ -38,6 +43,7 @@ build-image:
 		echo "Docker image $(IMAGE_NAME) already exists, skipping build."; \
 	fi
 
+# runs the Docker container to build the site
 build: clone build-image
 	docker run -it --rm -p8000:8000 -v $(PWD):/site --entrypoint /bin/bash $(IMAGE_NAME) -c \
 		"pelicanasf content -o blog && python3 -m http.server 8000"

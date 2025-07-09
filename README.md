@@ -34,7 +34,7 @@ need to republish any branch, simply rerun the `Stage Site` workflow.
 
 To locally build and preview the site on your computer, run
 ```shell
-make build
+make
 ```
 
 This will build the site using the [`ASF-Pelican`](https://github.com/apache/infrastructure-actions/tree/main/pelican) docker container.
