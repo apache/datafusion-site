@@ -1,5 +1,245 @@
 <?xml version="1.0" encoding="utf-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - pmc</title><link href="https://datafusion.apache.org/blog/" rel="alternate"></link><link href="https://datafusion.apache.org/blog/feeds/pmc.atom.xml" rel="self"></link><id>https://datafusion.apache.org/blog/</id><updated>2025-07-01T00:00:00+00:00</updated><subtitle></subtitle><entry><title>Apache DataFusion Comet 0.9.0 Release</title><link href="https://datafusion.apache.org/blog/2025/07/01/datafusion-comet-0.9.0" rel="alternate"></link><published>2025-07-01T00:00:00+00:00</published><updated>2025-07-01T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2025-07-01:/blog/2025/07/01/datafusion-comet-0.9.0</id><summary type="html">&lt;!--
+<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - PMC</title><link href="https://datafusion.apache.org/blog/" rel="alternate"></link><link href="https://datafusion.apache.org/blog/feeds/pmc.atom.xml" rel="self"></link><id>https://datafusion.apache.org/blog/</id><updated>2025-07-11T00:00:00+00:00</updated><subtitle></subtitle><entry><title>Apache DataFusion 47.0.0 Released</title><link href="https://datafusion.apache.org/blog/2025/07/11/datafusion-47.0.0" rel="alternate"></link><published>2025-07-11T00:00:00+00:00</published><updated>2025-07-11T00:00:00+00:00</updated><author><name>PMC</name></author><id>tag:datafusion.apache.org,2025-07-11:/blog/2025/07/11/datafusion-47.0.0</id><summary type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+&lt;!-- see https://github.com/apache/datafusion/issues/16347 for details --&gt;
+&lt;p&gt;We&amp;rsquo;re excited to announce the release of &lt;strong&gt;Apache DataFusion 47.0.0&lt;/strong&gt;! This new version represents a significant
+milestone for the project, packing in a wide range of improvements and fixes. You can find the complete details in the
+full &lt;a href="https://github.com/apache/datafusion/blob/branch-47/dev/changelog/47.0.0.md"&gt;changelog&lt;/a&gt;. We&amp;rsquo;ll highlight the most
+important changes below …&lt;/p&gt;</summary><content type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+&lt;!-- see https://github.com/apache/datafusion/issues/16347 for details --&gt;
+&lt;p&gt;We&amp;rsquo;re excited to announce the release of &lt;strong&gt;Apache DataFusion 47.0.0&lt;/strong&gt;! This new version represents a significant
+milestone for the project, packing in a wide range of improvements and fixes. You can find the complete details in the
+full &lt;a href="https://github.com/apache/datafusion/blob/branch-47/dev/changelog/47.0.0.md"&gt;changelog&lt;/a&gt;. We&amp;rsquo;ll highlight the most
+important changes below and guide you through upgrading.&lt;/p&gt;
+&lt;p&gt;Note that DataFusion 47.0.0 was released in April 2025, but we are only now publishing the blog post due to 
+limited bandwidth in the DataFusion community. We apologize for the delay and encourage you to come help us
+accelerate the next release and announcements 
+by &lt;a href="https://datafusion.apache.org/contributor-guide/communication.html"&gt;joining the community&lt;/a&gt;  🎣.&lt;/p&gt;
+&lt;h2&gt;Breaking Changes&lt;/h2&gt;
+&lt;p&gt;DataFusion 47.0.0 brings a few &lt;strong&gt;breaking changes&lt;/strong&gt; that may require adjustments to your code as described in
+the &lt;a href="https://datafusion.apache.org/library-user-guide/upgrading.html#datafusion-47-0-0"&gt;Upgrade Guide&lt;/a&gt;. Here are some notable ones:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href="https://github.com/apache/datafusion/pull/15466"&gt;Upgrades to arrow-rs and arrow-parquet 55.0.0 and object_store 0.12.0&lt;/a&gt;:
+  Several APIs changed in the underlying &lt;code&gt;arrow&lt;/code&gt;, &lt;code&gt;parquet&lt;/code&gt; and &lt;code&gt;object_store&lt;/code&gt; libraries to use a &lt;code&gt;u64&lt;/code&gt; instead of usize to better support
+  WASM. This requires converting from &lt;code&gt;usize&lt;/code&gt; to &lt;code&gt;u64&lt;/code&gt; occasionally as well as changes to ObjectStore implementations such as&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code class="language-Rust"&gt;impl ObjectStore {
+    ...
+
+    // The range is now a u64 instead of usize
+    async fn get_range(&amp;amp;self, location: &amp;amp;Path, range: Range&amp;lt;u64&amp;gt;) -&amp;gt; ObjectStoreResult&amp;lt;Bytes&amp;gt; {
+        self.inner.get_range(location, range).await
+    }
+
+    ...
+
+    // the lifetime is now 'static instead of '_ (meaning the captured closure can't contain references)
+    // (this also applies to list_with_offset)
+    fn list(&amp;amp;self, prefix: Option&amp;lt;&amp;amp;Path&amp;gt;) -&amp;gt; BoxStream&amp;lt;'static, ObjectStoreResult&amp;lt;ObjectMeta&amp;gt;&amp;gt; {
+        self.inner.list(prefix)
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href="https://github.com/apache/datafusion/issues/14914"&gt;DisplayFormatType::TreeRender&lt;/a&gt;:
+  Implementations of &lt;code&gt;ExecutionPlan&lt;/code&gt; must also provide a description in the &lt;code&gt;DisplayFormatType::TreeRender&lt;/code&gt; format to
+  provide support for the new &lt;a href="https://datafusion.apache.org/user-guide/sql/explain.html#tree-format-default"&gt;tree style explains&lt;/a&gt;.
+  This can be the same as the existing &lt;code&gt;DisplayFormatType::Default&lt;/code&gt;.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;Performance Improvements&lt;/h2&gt;
+&lt;p&gt;DataFusion 47.0.0 comes with numerous performance enhancements across the board. Here are some of the noteworthy
+optimizations in this release:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;&lt;code&gt;FIRST_VALUE&lt;/code&gt; and &lt;code&gt;LAST_VALUE&lt;/code&gt;:&lt;/strong&gt; &lt;code&gt;FIRST_VALUE&lt;/code&gt; and &lt;code&gt;LAST_VALUE&lt;/code&gt; functions execute much faster for data with high cardinality such as those with many groups or partitions. DataFusion 47.0.0 executes the following in &lt;strong&gt;7 seconds&lt;/strong&gt; compared to &lt;strong&gt;36 seconds&lt;/strong&gt; in DataFusion 46.0.0: &lt;code&gt;select id2, id4, first_value(v1 order by id2, id4) as r2 from '~/h2o_100m.parquet' group by id2, id4&lt;/code&gt; (h2o.ai dataset). (PR's &lt;a href="https://github.com/apache/datafusion/pull/15266"&gt;#15266&lt;/a&gt;
+  and &lt;a href="https://github.com/apache/datafusion/pull/15542"&gt;#15542&lt;/a&gt; by &lt;a href="https://github.com/UBarney"&gt;UBarney&lt;/a&gt;).&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;&lt;code&gt;MIN&lt;/code&gt;, &lt;code&gt;MAX&lt;/code&gt; and &lt;code&gt;AVG&lt;/code&gt; for Durations:&lt;/strong&gt;  DataFusion executes aggregate queries up to 2.5x faster when they include &lt;code&gt;MIN&lt;/code&gt;, &lt;code&gt;MAX&lt;/code&gt; and &lt;code&gt;AVG&lt;/code&gt; on &lt;code&gt;Duration&lt;/code&gt; columns. 
+  (PRs &lt;a href="https://github.com/apache/datafusion/pull/15322"&gt;#15322&lt;/a&gt; and &lt;a href="https://github.com/apache/datafusion/pull/15748"&gt;#15748&lt;/a&gt;
+  by &lt;a href="https://github.com/shruti2522"&gt;shruti2522&lt;/a&gt;).&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Short circuit evaluation for &lt;code&gt;AND&lt;/code&gt; and &lt;code&gt;OR&lt;/code&gt;:&lt;/strong&gt; DataFusion now eagerly skips the evaluation of
+  the right operand if the left is known to be false (&lt;code&gt;AND&lt;/code&gt;) or true (&lt;code&gt;OR&lt;/code&gt;) in certain cases. For complex predicates, such as those with many &lt;code&gt;LIKE&lt;/code&gt; or &lt;code&gt;CASE&lt;/code&gt; expressions, this optimization results in
+  &lt;a href="https://github.com/apache/datafusion/issues/11212#issuecomment-2753584617"&gt;significant performance improvements&lt;/a&gt; (up to 100x in extreme cases).
+  (PRs &lt;a href="https://github.com/apache/datafusion/pull/15462"&gt;#15462&lt;/a&gt; and &lt;a href="https://github.com/apache/datafusion/pull/15694"&gt;#15694&lt;/a&gt;
+  by &lt;a href="https://github.com/acking-you"&gt;acking-you&lt;/a&gt;).&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;TopK optimization for partially sorted input:&lt;/strong&gt; Previous versions of DataFusion implemented early termination
+  optimization (TopK) for fully sorted data. DataFusion 47.0.0 extends the optimization for partially sorted data, which is common in many real-world datasets, such as time-series data sorted by day but not within each day. 
+  (PR &lt;a href="https://github.com/apache/datafusion/pull/15563"&gt;#15563&lt;/a&gt; by &lt;a href="https://github.com/geoffreyclaude"&gt;geoffreyclaude&lt;/a&gt;).&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Disable re-validation of spilled files:&lt;/strong&gt; DataFusion no longer does unnecessary re-validation of temporary spill files. The validation is unnecessary and expensive as the data is known to be valid when it was written out
+  (PR &lt;a href="https://github.com/apache/datafusion/pull/15454"&gt;#15454&lt;/a&gt; by &lt;a href="https://github.com/zebsme"&gt;zebsme&lt;/a&gt;).&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;Highlighted New Features&lt;/h2&gt;
+&lt;h3&gt;Tree style explains&lt;/h3&gt;
+&lt;p&gt;In previous releases the &lt;a href="https://datafusion.apache.org/user-guide/sql/explain.html"&gt;EXPLAIN statement&lt;/a&gt; results in a formatted table
+which is succinct and contains important details for implementers, but was often hard to read
+especially with queries that included joins or unions having multiple children.&lt;/p&gt;
+&lt;p&gt;DataFusion 47.0.0 includes the new &lt;code&gt;EXPLAIN FORMAT TREE&lt;/code&gt; (default in
+&lt;code&gt;datafusion-cli&lt;/code&gt;) rendered in a visual tree style that is much easier to quickly
+understand.&lt;/p&gt;
+&lt;!-- SQL setup 
+create table t1(ti int) as values (1), (2), (3);
+create table t2(ti int) as values (1), (2), (3);
+--&gt;
+&lt;p&gt;Example of the new explain output:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;&amp;gt; explain select * from t1 inner join t2 on t1.ti=t2.ti;
++---------------+------------------------------------------------------------+
+| plan_type     | plan                                                       |
++---------------+------------------------------------------------------------+
+| physical_plan | &amp;boxdr;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxdl;                              |
+|               | &amp;boxv;    CoalesceBatchesExec    &amp;boxv;                              |
+|               | &amp;boxv;    --------------------   &amp;boxv;                              |
+|               | &amp;boxv;     target_batch_size:    &amp;boxv;                              |
+|               | &amp;boxv;            8192           &amp;boxv;                              |
+|               | &amp;boxur;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxhd;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxul;                              |
+|               | &amp;boxdr;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxhu;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxdl;                              |
+|               | &amp;boxv;        HashJoinExec       &amp;boxv;                              |
+|               | &amp;boxv;    --------------------   &amp;boxvr;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxdl;               |
+|               | &amp;boxv;       on: (ti = ti)       &amp;boxv;              &amp;boxv;               |
+|               | &amp;boxur;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxhd;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxul;              &amp;boxv;               |
+|               | &amp;boxdr;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxhu;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxdl;&amp;boxdr;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxhu;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxdl; |
+|               | &amp;boxv;       DataSourceExec      &amp;boxv;&amp;boxv;       DataSourceExec      &amp;boxv; |
+|               | &amp;boxv;    --------------------   &amp;boxv;&amp;boxv;    --------------------   &amp;boxv; |
+|               | &amp;boxv;         bytes: 112        &amp;boxv;&amp;boxv;         bytes: 112        &amp;boxv; |
+|               | &amp;boxv;       format: memory      &amp;boxv;&amp;boxv;       format: memory      &amp;boxv; |
+|               | &amp;boxv;          rows: 1          &amp;boxv;&amp;boxv;          rows: 1          &amp;boxv; |
+|               | &amp;boxur;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxul;&amp;boxur;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxul; |
+|               |                                                            |
++---------------+------------------------------------------------------------+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Example of the &lt;code&gt;EXPLAIN FORMAT INDENT&lt;/code&gt; output for the same query&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;&amp;gt; explain format indent select * from t1 inner join t2 on t1.ti=t2.ti;
++---------------+----------------------------------------------------------------------+
+| plan_type     | plan                                                                 |
++---------------+----------------------------------------------------------------------+
+| logical_plan  | Inner Join: t1.ti = t2.ti                                            |
+|               |   TableScan: t1 projection=[ti]                                      |
+|               |   TableScan: t2 projection=[ti]                                      |
+| physical_plan | CoalesceBatchesExec: target_batch_size=8192                          |
+|               |   HashJoinExec: mode=CollectLeft, join_type=Inner, on=[(ti@0, ti@0)] |
+|               |     DataSourceExec: partitions=1, partition_sizes=[1]                |
+|               |     DataSourceExec: partitions=1, partition_sizes=[1]                |
+|               |                                                                      |
++---------------+----------------------------------------------------------------------+
+2 row(s) fetched.
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/irenjj"&gt;irenjj&lt;/a&gt; for the initial work in PR &lt;a href="https://github.com/apache/datafusion/pull/14677"&gt;#14677&lt;/a&gt;
+and many others for completing the &lt;a href="https://github.com/apache/datafusion/issues/14914"&gt;followup epic&lt;/a&gt;&lt;/p&gt;
+&lt;h3&gt;SQL &lt;code&gt;VARCHAR&lt;/code&gt; defaults to Utf8View&lt;/h3&gt;
+&lt;p&gt;In previous releases when a column was created in SQL the column would be mapped to the &lt;a href="https://docs.rs/arrow/latest/arrow/datatypes/enum.DataType.html#variant.Utf8"&gt;Utf8 Arrow data type&lt;/a&gt;. In this release
+the SQL &lt;code&gt;varchar&lt;/code&gt; columns will be mapped to the &lt;a href="https://docs.rs/arrow/latest/arrow/datatypes/enum.DataType.html#variant.Utf8View"&gt;Utf8View arrow data type&lt;/a&gt; by default, which is a more efficient representation of UTF-8 strings in Arrow.&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;create table foo(x varchar);
+0 row(s) fetched.
+
+&amp;gt; describe foo;
++-------------+-----------+-------------+
+| column_name | data_type | is_nullable |
++-------------+-----------+-------------+
+| x           | Utf8View  | YES         |
++-------------+-----------+-------------+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Previous versions of DataFusion used &lt;code&gt;Utf8View&lt;/code&gt; when reading parquet files and it is faster in most cases.&lt;/p&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/zhuqi-lucas"&gt;zhuqi-lucas&lt;/a&gt; for PR &lt;a href="https://github.com/apache/datafusion/pull/15104"&gt;#15104&lt;/a&gt;&lt;/p&gt;
+&lt;h3&gt;Context propagation in spawned tasks (for tracing, logging, etc.)&lt;/h3&gt;
+&lt;p&gt;This release introduces an API for propagating user-defined context (such as tracing spans,
+logging, or metrics) across thread boundaries without depending on any specific instrumentation library.
+You can use the &lt;a href="https://docs.rs/datafusion/latest/datafusion/common/runtime/trait.JoinSetTracer.html"&gt;JoinSetTracer&lt;/a&gt; API to instrument DataFusion plans with your own tracing or logging libraries, or
+use pre-integrated community crates such as the &lt;a href="https://github.com/datafusion-contrib/datafusion-tracing"&gt;datafusion-tracing&lt;/a&gt; crate.&lt;/p&gt;
+&lt;div style="text-align: center;"&gt;
+&lt;a href="https://github.com/datafusion-contrib/datafusion-tracing"&gt;
+&lt;img alt="DataFusion telemetry project logo" class="img-responsive" src="/blog/images/datafusion-47.0.0/datafusion-telemetry.png" width="50%"/&gt;
+&lt;/a&gt;
+&lt;/div&gt;
+&lt;p&gt;Previously, tasks spawned on new threads &amp;mdash; such as those performing
+repartitioning or Parquet file reads &amp;mdash; could lose thread-local context, which is
+often used in instrumentation libraries. A full example of how to use this new
+API is available in the &lt;a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/tracing.rs"&gt;DataFusion examples&lt;/a&gt;, and a simple example is shown below.&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-Rust"&gt;/// Models a simple tracer. Calling `in_current_span()` and `in_scope()` saves thread-specific state
+/// for the current span and must be called at the start of each new task or thread.
+struct SpanTracer;
+
+/// Implements the `JoinSetTracer` trait so we can inject instrumentation
+/// for both async futures and blocking closures.
+impl JoinSetTracer for SpanTracer {
+    /// Instruments a boxed future to run in the current span. The future's
+    /// return type is erased to `Box&amp;lt;dyn Any + Send&amp;gt;`, which we simply
+    /// run inside the `Span::current()` context.
+    fn trace_future(
+        &amp;amp;self,
+        fut: BoxFuture&amp;lt;'static, Box&amp;lt;dyn Any + Send&amp;gt;&amp;gt;,
+    ) -&amp;gt; BoxFuture&amp;lt;'static, Box&amp;lt;dyn Any + Send&amp;gt;&amp;gt; {
+        // Ensures any thread-local context is set in this future 
+        fut.in_current_span().boxed()
+    }
+
+    /// Instruments a boxed blocking closure by running it inside the
+    /// `Span::current()` context.
+    fn trace_block(
+        &amp;amp;self,
+        f: Box&amp;lt;dyn FnOnce() -&amp;gt; Box&amp;lt;dyn Any + Send&amp;gt; + Send&amp;gt;,
+    ) -&amp;gt; Box&amp;lt;dyn FnOnce() -&amp;gt; Box&amp;lt;dyn Any + Send&amp;gt; + Send&amp;gt; {
+        let span = Span::current();
+        // Ensures any thread-local context is set for this closure
+        Box::new(move || span.in_scope(f))
+    }
+}
+
+...
+set_join_set_tracer(&amp;amp;SpanTracer).expect("Failed to set tracer");
+...
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/geoffreyclaude"&gt;geoffreyclaude&lt;/a&gt; for PR &lt;a href="https://github.com/apache/datafusion/issues/14914"&gt;#14914&lt;/a&gt;&lt;/p&gt;
+&lt;h2&gt;Upgrade Guide and Changelog&lt;/h2&gt;
+&lt;p&gt;Upgrading to 47.0.0 should be straightforward for most users, but do review
+the &lt;a href="https://datafusion.apache.org/library-user-guide/upgrading.html#datafusion-47-0-0"&gt;Upgrade Guide for DataFusion 47.0.0&lt;/a&gt; for detailed
+steps and code changes. The upgrade guide covers the breaking changes mentioned above and provides code snippets to help with the
+transition. For a comprehensive list of all changes, please refer to the &lt;a href="https://github.com/apache/datafusion/blob/branch-47/dev/changelog/47.0.0.md"&gt;changelog&lt;/a&gt; for 47.0.0. The changelog
+enumerates every merged PR in this release, including many smaller fixes and improvements that we couldn&amp;rsquo;t cover in this post.&lt;/p&gt;
+&lt;h2&gt;Get Involved&lt;/h2&gt;
+&lt;p&gt;Apache DataFusion is an open-source project, and we welcome involvement from anyone interested. Now is a great time to
+take 47.0.0 for a spin: try it out on your workloads, and let us know if you encounter any issues or have suggestions.
+You can report bugs or request features on our GitHub issue tracker, or better yet, submit a pull request. Join our
+community discussions &amp;ndash; whether you have questions, want to share how you&amp;rsquo;re using DataFusion, or are looking to
+contribute, we&amp;rsquo;d love to hear from you. A list of open issues suitable for beginners
+is &lt;a href="https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22"&gt;here&lt;/a&gt; and you
+can find how to reach us on the &lt;a href="https://datafusion.apache.org/contributor-guide/communication.html"&gt;communication doc&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Happy querying!&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Apache DataFusion Comet 0.9.0 Release</title><link href="https://datafusion.apache.org/blog/2025/07/01/datafusion-comet-0.9.0" rel="alternate"></link><published>2025-07-01T00:00:00+00:00</published><updated>2025-07-01T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2025-07-01:/blog/2025/07/01/datafusion-comet-0.9.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
