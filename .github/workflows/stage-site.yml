@@ -11,14 +11,14 @@ on:
     branches: ["main"]
 jobs:
   build-pelican:
-    if: startsWith(github.head_ref, 'site/')
     runs-on: ubuntu-latest
-    continue-on-error: true
+    # continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - run: pip install MarkupSafe==2.0.1
+      - run: mkdir -p blog/${{ github.head_ref }} # workaround to allow pelican use the nested folder
       - uses: apache/infrastructure-actions/pelican@main
         with:
           destination: 'asf-staging'
           gfm: 'false'
-          output: 'blog'
+          output: blog/${{ github.head_ref }}

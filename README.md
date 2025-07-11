@@ -57,7 +57,7 @@ the site to build via github actions and publish.
 
 #### Check site status
 
-The website is updated from the `asf-site` branch. You can check the status at 
+The website is updated from the `asf-site` branch. You can check the status at
 [ASF Infra sitesource](https://infra-reports.apache.org/#sitesource)
 
 ## Updating Dependencies
@@ -82,3 +82,4 @@ libraries to use are
 - In addition to these dependencies, we have some custom CSS files to improve
     the site layout. You can edit these files directly.
 
+Kevin is Awesome
