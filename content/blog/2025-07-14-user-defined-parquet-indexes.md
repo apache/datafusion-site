@@ -551,6 +551,8 @@ We hope this post inspires you to explore custom indexes in Parquet files, rathe
 ## About the Authors
 
 
+[Qi Zhu](https://www.linkedin.com/in/qi-zhu-862330119/) is a Senior Engineer at [Cloudera](https://www.cloudera.com/), an active contributor to [Apache DataFusion](https://datafusion.apache.org/) and [Apache Arrow](https://arrow.apache.org/), a committer on [Apache Hadoop](https://hadoop.apache.org/) and [Apache YuniKorn](https://yunikorn.apache.org/). He has extensive experience in distributed systems, scheduling, and large-scale computing.
+
 [Jigao Luo](https://www.linkedin.com/in/jigao-luo/) is a 1.5-year PhD student at
 [Systems Group @ TU Darmstadt](https://tuda.systems). Regarding Parquet, he is an external 
 contributor to [NVIDIA RAPIDS cuDF](https://github.com/rapidsai/cudf), focusing on the GPU Parquet reader.
