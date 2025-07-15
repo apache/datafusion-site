@@ -2,7 +2,7 @@
 layout: post
 title: Embedding User-Defined Indexes in Apache Parquet Files
 date: 2025-07-14
-author: Qi Zhu, Jigao Luo, and Andrew Lamb
+author: Qi Zhu (Cloudera), Jigao Luo (TU Darmstadt), and Andrew Lamb (InfluxData)
 categories: [features]
 ---
 <!--
@@ -548,22 +548,18 @@ We hope this post inspires you to explore custom indexes in Parquet files, rathe
 [parquet_index.rs]: https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/parquet_index.rs
 [advanced_parquet_index.rs]: https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/advanced_parquet_index.rs
 
-# About the Authors
+## About the Authors
 
-[Andrew Lamb](https://www.linkedin.com/in/andrewalamb/) is a Staff Engineer at
-[InfluxData](https://www.influxdata.com/) and an [Apache
-DataFusion](https://datafusion.apache.org/) PMC member. A Database Optimizer
-connoisseur, he worked on the [Vertica Analytic
-Database](https://vldb.org/pvldb/vol5/p1790_andrewlamb_vldb2012.pdf) Query
-Optimizer for six years, has several granted US patents related to query
-optimization<sup id="fn6">[6](#footnote6)</sup>, co-authored several papers<sup id="fn7">[7](#footnote7)</sup>  about the topic (including in
-VLDB 2024<sup id="fn8">[8](#footnote8)</sup>), and spent several weeks<sup id="fn9">[9](#footnote9)</sup> deeply geeking out about this topic
-with other experts (thank you Dagstuhl).
 
 [Jigao Luo](https://www.linkedin.com/in/jigao-luo/) is a 1.5-year PhD student at
 [Systems Group @ TU Darmstadt](https://tuda.systems). Regarding Parquet, he is an external 
 contributor to [NVIDIA RAPIDS cuDF](https://github.com/rapidsai/cudf), focusing on the GPU Parquet reader.
-He also spent one week at Dagstuhl<sup id="fn10">[10](#footnote10)</sup>, learning about database systems (thank you again Dagstuhl).
+He also spent one week at Dagstuhl<sup id="fn10">[10](#footnote10)</sup>, learning about database systems (thank you Dagstuhl).
+
+[Andrew Lamb](https://www.linkedin.com/in/andrewalamb/) is a Staff Engineer at
+[InfluxData](https://www.influxdata.com/), and a member of the [Apache
+DataFusion](https://datafusion.apache.org/) and [Apache Arrow](https://arrow.apache.org/) PMCs. He has been working on
+Databases and related systems more than 20 years.
 
 ## About DataFusion
 
@@ -596,13 +592,5 @@ it out, we would love for you to join us.
 <a id="footnote4"></a>`4`: For more information about external indexes, see [this talk](https://www.youtube.com/watch?v=74YsJT1-Rdk) and the [parquet_index.rs] and [advanced_parquet_index.rs] examples in the DataFusion repository.
 
 <a id="footnote5"></a>`5`: For information about rewriting files to optimize for specific queries, such as resorting, repartitioning, and tuning data page and row group sizes, see [XiangpengHao/liquid‑cache#227](https://github.com/XiangpengHao/liquid-cache/issues/227) and the conversation between [JigaoLuo](https://github.com/JigaoLuo) and [XiangpengHao](https://github.com/XiangpengHao) for details. We hope to make a future post about this topic.
-
-<a id="footnote6"></a><sup>[6]</sup> *Modular Query Optimizer, US 8,312,027 · Issued Nov 13, 2012*, Query Optimizer with schema conversion US 8,086,598 · Issued Dec 27, 2011
-
-<a id="footnote7"></a><sup>[7]</sup> [The Vertica Query Optimizer: The case for specialized Query Optimizers](https://www.researchgate.net/publication/269306314_The_Vertica_Query_Optimizer_The_case_for_specialized_query_optimizers)
-
-<a id="footnote8"></a><sup>[8]</sup> [https://www.vldb.org/pvldb/vol17/p1350-justen.pdf](https://www.vldb.org/pvldb/vol17/p1350-justen.pdf)
-
-<a id="footnote9"></a><sup>[9]</sup> [https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/24101](https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/24101), [https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/22111](https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/22111), [https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/12321](https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/12321)
 
 <a id="footnote10"></a><sup>[10]</sup> [https://www.dagstuhl.de/de/seminars/seminar-calendar/seminar-details/24254](https://www.dagstuhl.de/de/seminars/seminar-calendar/seminar-details/24254)
