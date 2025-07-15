@@ -2,7 +2,7 @@
 layout: post
 title: Embedding User-Defined Indexes in Apache Parquet Files
 date: 2025-07-14
-author: Qi Zhu (Cloudera), Jigao Luo (TU Darmstadt), and Andrew Lamb (InfluxData)
+author: Qi Zhu (Cloudera), Jigao Luo (Systems Group at TU Darmstadt), and Andrew Lamb (InfluxData)
 categories: [features]
 ---
 <!--
@@ -550,13 +550,11 @@ We hope this post inspires you to explore custom indexes in Parquet files, rathe
 
 ## About the Authors
 
-
 [Qi Zhu](https://www.linkedin.com/in/qi-zhu-862330119/) is a Senior Engineer at [Cloudera](https://www.cloudera.com/), an active contributor to [Apache DataFusion](https://datafusion.apache.org/) and [Apache Arrow](https://arrow.apache.org/), a committer on [Apache Hadoop](https://hadoop.apache.org/) and [Apache YuniKorn](https://yunikorn.apache.org/). He has extensive experience in distributed systems, scheduling, and large-scale computing.
 
 [Jigao Luo](https://www.linkedin.com/in/jigao-luo/) is a 1.5-year PhD student at
 [Systems Group @ TU Darmstadt](https://tuda.systems). Regarding Parquet, he is an external 
 contributor to [NVIDIA RAPIDS cuDF](https://github.com/rapidsai/cudf), focusing on the GPU Parquet reader.
-He also spent one week at Dagstuhl<sup id="fn10">[6](#footnote10)</sup>, learning about database systems (thank you Dagstuhl).
 
 [Andrew Lamb](https://www.linkedin.com/in/andrewalamb/) is a Staff Engineer at
 [InfluxData](https://www.influxdata.com/), and a member of the [Apache
@@ -594,5 +592,3 @@ it out, we would love for you to join us.
 <a id="footnote4"></a>`4`: For more information about external indexes, see [this talk](https://www.youtube.com/watch?v=74YsJT1-Rdk) and the [parquet_index.rs] and [advanced_parquet_index.rs] examples in the DataFusion repository.
 
 <a id="footnote5"></a>`5`: For information about rewriting files to optimize for specific queries, such as resorting, repartitioning, and tuning data page and row group sizes, see [XiangpengHao/liquid‑cache#227](https://github.com/XiangpengHao/liquid-cache/issues/227) and the conversation between [JigaoLuo](https://github.com/JigaoLuo) and [XiangpengHao](https://github.com/XiangpengHao) for details. We hope to make a future post about this topic.
-
-<a id="footnote6"></a>`6`: [https://www.dagstuhl.de/de/seminars/seminar-calendar/seminar-details/24254](https://www.dagstuhl.de/de/seminars/seminar-calendar/seminar-details/24254)
