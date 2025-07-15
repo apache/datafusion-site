@@ -2,7 +2,7 @@
 layout: post
 title: Embedding User-Defined Indexes in Apache Parquet Files
 date: 2025-07-14
-author: Qi Zhu, Jigao Luo, and Andrew Lamb
+author: Qi Zhu (Cloudera), Jigao Luo (Systems Group at TU Darmstadt), and Andrew Lamb (InfluxData)
 categories: [features]
 ---
 <!--
@@ -548,6 +548,19 @@ We hope this post inspires you to explore custom indexes in Parquet files, rathe
 [parquet_index.rs]: https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/parquet_index.rs
 [advanced_parquet_index.rs]: https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/advanced_parquet_index.rs
 
+## About the Authors
+
+[Qi Zhu](https://www.linkedin.com/in/qi-zhu-862330119/) is a Senior Engineer at [Cloudera](https://www.cloudera.com/), an active contributor to [Apache DataFusion](https://datafusion.apache.org/) and [Apache Arrow](https://arrow.apache.org/), a committer on [Apache Hadoop](https://hadoop.apache.org/) and [Apache YuniKorn](https://yunikorn.apache.org/). He has extensive experience in distributed systems, scheduling, and large-scale computing.
+
+[Jigao Luo](https://www.linkedin.com/in/jigao-luo/) is a 1.5-year PhD student at
+[Systems Group @ TU Darmstadt](https://tuda.systems). Regarding Parquet, he is an external 
+contributor to [NVIDIA RAPIDS cuDF](https://github.com/rapidsai/cudf), focusing on the GPU Parquet reader.
+
+[Andrew Lamb](https://www.linkedin.com/in/andrewalamb/) is a Staff Engineer at
+[InfluxData](https://www.influxdata.com/), and a member of the [Apache
+DataFusion](https://datafusion.apache.org/) and [Apache Arrow](https://arrow.apache.org/) PMCs. He has been working on
+Databases and related systems more than 20 years.
+
 ## About DataFusion
 
 [Apache DataFusion] is an extensible query engine toolkit, written
@@ -575,7 +588,6 @@ it out, we would love for you to join us.
 
 [GeospatialStatistics]: https://github.com/apache/parquet-format/blob/819adce0ec6aa848e56c56f20b9347f4ab50857f/src/main/thrift/parquet.thrift#L256
 [SizeStatistics]: https://github.com/apache/parquet-format/blob/819adce0ec6aa848e56c56f20b9347f4ab50857f/src/main/thrift/parquet.thrift#L194-L202
-
 
 <a id="footnote4"></a>`4`: For more information about external indexes, see [this talk](https://www.youtube.com/watch?v=74YsJT1-Rdk) and the [parquet_index.rs] and [advanced_parquet_index.rs] examples in the DataFusion repository.
 
