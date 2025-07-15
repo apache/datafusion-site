@@ -556,7 +556,7 @@ We hope this post inspires you to explore custom indexes in Parquet files, rathe
 [Jigao Luo](https://www.linkedin.com/in/jigao-luo/) is a 1.5-year PhD student at
 [Systems Group @ TU Darmstadt](https://tuda.systems). Regarding Parquet, he is an external 
 contributor to [NVIDIA RAPIDS cuDF](https://github.com/rapidsai/cudf), focusing on the GPU Parquet reader.
-He also spent one week at Dagstuhl<sup id="fn10">[10](#footnote10)</sup>, learning about database systems (thank you Dagstuhl).
+He also spent one week at Dagstuhl<sup id="fn10">[6](#footnote10)</sup>, learning about database systems (thank you Dagstuhl).
 
 [Andrew Lamb](https://www.linkedin.com/in/andrewalamb/) is a Staff Engineer at
 [InfluxData](https://www.influxdata.com/), and a member of the [Apache
@@ -595,4 +595,4 @@ it out, we would love for you to join us.
 
 <a id="footnote5"></a>`5`: For information about rewriting files to optimize for specific queries, such as resorting, repartitioning, and tuning data page and row group sizes, see [XiangpengHao/liquid‑cache#227](https://github.com/XiangpengHao/liquid-cache/issues/227) and the conversation between [JigaoLuo](https://github.com/JigaoLuo) and [XiangpengHao](https://github.com/XiangpengHao) for details. We hope to make a future post about this topic.
 
-<a id="footnote10"></a><sup>[10]</sup> [https://www.dagstuhl.de/de/seminars/seminar-calendar/seminar-details/24254](https://www.dagstuhl.de/de/seminars/seminar-calendar/seminar-details/24254)
+<a id="footnote6"></a>`6`: [https://www.dagstuhl.de/de/seminars/seminar-calendar/seminar-details/24254](https://www.dagstuhl.de/de/seminars/seminar-calendar/seminar-details/24254)
