@@ -1,5 +1,199 @@
 <?xml version="1.0" encoding="utf-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - PMC</title><link href="https://datafusion.apache.org/blog/" rel="alternate"></link><link href="https://datafusion.apache.org/blog/feeds/pmc.atom.xml" rel="self"></link><id>https://datafusion.apache.org/blog/</id><updated>2025-07-11T00:00:00+00:00</updated><subtitle></subtitle><entry><title>Apache DataFusion 47.0.0 Released</title><link href="https://datafusion.apache.org/blog/2025/07/11/datafusion-47.0.0" rel="alternate"></link><published>2025-07-11T00:00:00+00:00</published><updated>2025-07-11T00:00:00+00:00</updated><author><name>PMC</name></author><id>tag:datafusion.apache.org,2025-07-11:/blog/2025/07/11/datafusion-47.0.0</id><summary type="html">&lt;!--
+<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - PMC</title><link href="https://datafusion.apache.org/blog/" rel="alternate"></link><link href="https://datafusion.apache.org/blog/feeds/pmc.atom.xml" rel="self"></link><id>https://datafusion.apache.org/blog/</id><updated>2025-07-16T00:00:00+00:00</updated><subtitle></subtitle><entry><title>Apache DataFusion 48.0.0 Released</title><link href="https://datafusion.apache.org/blog/2025/07/16/datafusion-48.0.0" rel="alternate"></link><published>2025-07-16T00:00:00+00:00</published><updated>2025-07-16T00:00:00+00:00</updated><author><name>PMC</name></author><id>tag:datafusion.apache.org,2025-07-16:/blog/2025/07/16/datafusion-48.0.0</id><summary type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+&lt;!-- see https://github.com/apache/datafusion/issues/16347 for details --&gt;
+&lt;p&gt;We&amp;rsquo;re excited to announce the release of &lt;strong&gt;Apache DataFusion 48.0.0&lt;/strong&gt;! As always, this version packs in a wide range of 
+improvements and fixes. You can find the complete details in the full 
+&lt;a href="https://github.com/apache/datafusion/blob/branch-48/dev/changelog/48.0.0.md"&gt;changelog&lt;/a&gt;. We&amp;rsquo;ll highlight the most
+important changes below and guide you through upgrading.&lt;/p&gt;
+&lt;h2&gt;Breaking …&lt;/h2&gt;</summary><content type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+&lt;!-- see https://github.com/apache/datafusion/issues/16347 for details --&gt;
+&lt;p&gt;We&amp;rsquo;re excited to announce the release of &lt;strong&gt;Apache DataFusion 48.0.0&lt;/strong&gt;! As always, this version packs in a wide range of 
+improvements and fixes. You can find the complete details in the full 
+&lt;a href="https://github.com/apache/datafusion/blob/branch-48/dev/changelog/48.0.0.md"&gt;changelog&lt;/a&gt;. We&amp;rsquo;ll highlight the most
+important changes below and guide you through upgrading.&lt;/p&gt;
+&lt;h2&gt;Breaking Changes&lt;/h2&gt;
+&lt;p&gt;DataFusion 48.0.0 brings a few &lt;strong&gt;breaking changes&lt;/strong&gt; that may require adjustments to your code as described in
+the &lt;a href="https://datafusion.apache.org/library-user-guide/upgrading.html#datafusion-48-0-0"&gt;Upgrade Guide&lt;/a&gt;. Here are the most notable ones:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;datafusion.execution.collect_statistics&lt;/code&gt; defaults to &lt;code&gt;true&lt;/code&gt;: In DataFusion 48.0.0, the default value of this &lt;a href="https://datafusion.apache.org/user-guide/configs.html"&gt;configuration setting&lt;/a&gt; is now true, and DataFusion will collect and store statistics when a table is first created via &lt;code&gt;CREATE EXTERNAL TABLE&lt;/code&gt; or one of the &lt;code&gt;DataFrame::register_*&lt;/code&gt; APIs.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;Expr::Literal&lt;/code&gt; has optional metadata: The &lt;code&gt;Expr::Literal&lt;/code&gt; variant now includes optional metadata, which allows 
+  for carrying through Arrow field metadata to support extension types and other uses. This means code such as&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;match expr {
+...
+  Expr::Literal(scalar) =&amp;gt; ...
+...
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Should be updated to:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;match expr {
+...
+  Expr::Literal(scalar, _metadata) =&amp;gt; ...
+...
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;Expr::WindowFunction&lt;/code&gt; is now Boxed: &lt;code&gt;Expr::WindowFunction&lt;/code&gt; is now a &lt;code&gt;Box&amp;lt;WindowFunction&amp;gt;&lt;/code&gt; instead of a &lt;code&gt;WindowFunction&lt;/code&gt; 
+  directly. This change was made to reduce the size of &lt;code&gt;Expr&lt;/code&gt; and improve performance when planning queries 
+  (see details on &lt;a href="https://github.com/apache/datafusion/pull/16207"&gt;#16207&lt;/a&gt;).&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;UDFs changed to use &lt;code&gt;FieldRef&lt;/code&gt; instead of &lt;code&gt;DataType&lt;/code&gt;: To support metadata handling and 
+  prepare for extension types, UDF traits now use &lt;a href="https://docs.rs/arrow/latest/arrow/datatypes/type.FieldRef.html"&gt;FieldRef&lt;/a&gt; rather than a &lt;code&gt;DataType&lt;/code&gt;
+  and nullability. &lt;code&gt;FieldRef&lt;/code&gt; contains the type and nullability, and additionally allows access to 
+  metadata fields, which can be used for extension types.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Physical Expression return &lt;code&gt;Field&lt;/code&gt;: Similarly to UDFs, in order to prepare for extension type support the 
+  &lt;a href="https://docs.rs/datafusion/latest/datafusion/physical_expr/trait.PhysicalExpr.html"&gt;PhysicalExpr&lt;/a&gt; trait has been changed to return &lt;a href="https://docs.rs/arrow/latest/arrow/datatypes/struct.Field.html"&gt;Field&lt;/a&gt; rather than &lt;code&gt;DataType&lt;/code&gt;. To upgrade structs which 
+  implement &lt;code&gt;PhysicalExpr&lt;/code&gt; you need to implement the &lt;code&gt;return_field&lt;/code&gt; function. &lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;FileFormat::supports_filters_pushdown&lt;/code&gt; was replaced with &lt;code&gt;FileSource::try_pushdown_filters&lt;/code&gt; to support upcoming work to push down dynamic filters and physical filter pushdown. &lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;ParquetExec&lt;/code&gt;, &lt;code&gt;AvroExec&lt;/code&gt;, &lt;code&gt;CsvExec&lt;/code&gt;, &lt;code&gt;JsonExec&lt;/code&gt; removed: &lt;code&gt;ParquetExec&lt;/code&gt;, &lt;code&gt;AvroExec&lt;/code&gt;, &lt;code&gt;CsvExec&lt;/code&gt;, and &lt;code&gt;JsonExec&lt;/code&gt;
+  were deprecated in DataFusion 46 and are removed in DataFusion 48.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;Performance Improvements&lt;/h2&gt;
+&lt;p&gt;DataFusion 48.0.0 comes with some noteworthy performance enhancements:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Fewer unnecessary projections:&lt;/strong&gt; DataFusion now removes additional unnecessary &lt;code&gt;Projection&lt;/code&gt;s in queries. (PRs &lt;a href="https://github.com/apache/datafusion/pull/15787"&gt;#15787&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/15761"&gt;#15761&lt;/a&gt;,
+  and &lt;a href="https://github.com/apache/datafusion/pull/15746"&gt;#15746&lt;/a&gt; by &lt;a href="https://github.com/xudong963"&gt;xudong963&lt;/a&gt;).&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Accelerated string functions&lt;/strong&gt;: The &lt;code&gt;ascii&lt;/code&gt; function was optimized to significantly improve its performance
+  (PR &lt;a href="https://github.com/apache/datafusion/pull/16087"&gt;#16087&lt;/a&gt; by &lt;a href="https://github.com/tlm365"&gt;tlm365&lt;/a&gt;). The &lt;code&gt;character_length&lt;/code&gt; function was optimized resulting in 
+  &lt;a href="https://github.com/apache/datafusion/pull/15931#issuecomment-2848561984"&gt;up to 3x&lt;/a&gt; performance improvement (PR &lt;a href="https://github.com/apache/datafusion/pull/15931"&gt;#15931&lt;/a&gt; by &lt;a href="https://github.com/Dandandan"&gt;Dandandan&lt;/a&gt;)&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Constant aggregate window expressions:&lt;/strong&gt; For unbounded aggregate window functions the result is the 
+  same for all rows within a partition. DataFusion 48.0.0 avoids unnecessary computation for such queries, resulting in &lt;a href="https://github.com/apache/datafusion/pull/16234#issuecomment-2935960865"&gt;improved performance by 5.6x&lt;/a&gt;
+  (PR &lt;a href="https://github.com/apache/datafusion/pull/16234"&gt;#16234&lt;/a&gt; by &lt;a href="https://github.com/suibianwanwank"&gt;suibianwanwank&lt;/a&gt;)&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;Highlighted New Features&lt;/h2&gt;
+&lt;h3&gt;New &lt;code&gt;datafusion-spark&lt;/code&gt; crate&lt;/h3&gt;
+&lt;p&gt;The DataFusion community has requested &lt;a href="https://spark.apache.org"&gt;Apache Spark&lt;/a&gt;-compatible functions for many years, but the current builtin function library is most similar to Postgresql, which leads to friction. Unfortunately, there are even functions with the same name but different signatures and/or return types in the two systems.&lt;/p&gt;
+&lt;p&gt;One of the many uses of DataFusion is to enhance (e.g. &lt;a href="https://github.com/apache/datafusion-comet"&gt;Apache DataFusion Comet&lt;/a&gt;) 
+or replace (e.g. &lt;a href="https://github.com/lakehq/sail"&gt;Sail&lt;/a&gt;) &lt;a href="https://spark.apache.org/"&gt;Apache Spark&lt;/a&gt;. To 
+support the community requests and the use cases mentioned above, we have introduced a new
+&lt;a href="https://crates.io/crates/datafusion-spark"&gt;datafusion-spark&lt;/a&gt; crate for DataFusion with spark-compatible functions so the 
+community can collaborate to build this shared resource. There are several hundred functions to implement, and we are looking for help to &lt;a href="https://github.com/apache/datafusion/issues/15914"&gt;complete datafusion-spark Spark Compatible Functions&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;To register all functions in &lt;code&gt;datafusion-spark&lt;/code&gt; you can use:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-Rust"&gt;    // Create a new session context
+    let mut ctx = SessionContext::new();
+    // register all spark functions with the context
+    datafusion_spark::register_all(&amp;amp;mut ctx)?;
+    // run a query. Note the `sha2` function is now available which
+    // has Spark semantics
+    let df = ctx.sql("SELECT sha2('The input String', 256)").await?;
+    ...
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Or, to use an individual function, you can do:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-Rust"&gt;use datafusion_expr::{col, lit};
+use datafusion_spark::expr_fn::sha2;
+// Create the expression `sha2(my_data, 256)`
+let expr = sha2(col("my_data"), lit(256));
+...
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/shehabgamin"&gt;shehabgamin&lt;/a&gt; for the initial PR &lt;a href="https://github.com/apache/datafusion/pull/15168"&gt;#15168&lt;/a&gt; 
+and many others for their help adding additional functions. Please consider 
+helping &lt;a href="https://github.com/apache/datafusion/issues/15914"&gt;complete datafusion-spark Spark Compatible Functions&lt;/a&gt;. &lt;/p&gt;
+&lt;h3&gt;&lt;code&gt;ORDER BY ALL sql&lt;/code&gt; support&lt;/h3&gt;
+&lt;p&gt;Inspired by &lt;a href="https://duckdb.org/docs/stable/sql/query_syntax/orderby.html#order-by-all-examples"&gt;DuckDB&lt;/a&gt;, DataFusion 48.0.0 adds support for &lt;code&gt;ORDER BY ALL&lt;/code&gt;. This allows for easy ordering of all columns in a query:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;&amp;gt; set datafusion.sql_parser.dialect = 'DuckDB';
+0 row(s) fetched.
+&amp;gt; CREATE OR REPLACE TABLE addresses AS
+    SELECT '123 Quack Blvd' AS address, 'DuckTown' AS city, '11111' AS zip
+    UNION ALL
+    SELECT '111 Duck Duck Goose Ln', 'DuckTown', '11111'
+    UNION ALL
+    SELECT '111 Duck Duck Goose Ln', 'Duck Town', '11111'
+    UNION ALL
+    SELECT '111 Duck Duck Goose Ln', 'Duck Town', '11111-0001';
+0 row(s) fetched.
+&amp;gt; SELECT * FROM addresses ORDER BY ALL;
++------------------------+-----------+------------+
+| address                | city      | zip        |
++------------------------+-----------+------------+
+| 111 Duck Duck Goose Ln | Duck Town | 11111      |
+| 111 Duck Duck Goose Ln | Duck Town | 11111-0001 |
+| 111 Duck Duck Goose Ln | DuckTown  | 11111      |
+| 123 Quack Blvd         | DuckTown  | 11111      |
++------------------------+-----------+------------+
+4 row(s) fetched.
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/PokIsemaine"&gt;PokIsemaine&lt;/a&gt; for PR &lt;a href="https://github.com/apache/datafusion/pull/15772"&gt;#15772&lt;/a&gt;&lt;/p&gt;
+&lt;h3&gt;FFI Support for &lt;code&gt;AggregateUDF&lt;/code&gt; and &lt;code&gt;WindowUDF&lt;/code&gt;&lt;/h3&gt;
+&lt;p&gt;This improvement allows for using user defined aggregate and user defined window functions across FFI boundaries, which enables shared libraries to pass functions back and forth. This feature unlocks:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Modules to provide DataFusion based FFI aggregates that can be reused in projects such as &lt;a href="https://github.com/apache/datafusion-python"&gt;datafusion-python&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Using the same aggregate and window functions without recompiling with different DataFusion versions.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;This completes the work to add support for all UDF types to DataFusion's FFI bindings. Thanks to &lt;a href="https://github.com/timsaucer"&gt;timsaucer&lt;/a&gt;
+for PRs &lt;a href="https://github.com/apache/datafusion/pull/16261"&gt;#16261&lt;/a&gt; and &lt;a href="https://github.com/apache/datafusion/pull/14775"&gt;#14775&lt;/a&gt;.&lt;/p&gt;
+&lt;h3&gt;Reduced size of &lt;code&gt;Expr&lt;/code&gt; struct&lt;/h3&gt;
+&lt;p&gt;The &lt;a href="https://docs.rs/datafusion/latest/datafusion/logical_expr/enum.Expr.html"&gt;Expr&lt;/a&gt; struct is widely used across the DataFusion and downstream codebases. By &lt;code&gt;Box&lt;/code&gt;ing &lt;code&gt;WindowFunction&lt;/code&gt;s,  we reduced the size of &lt;code&gt;Expr&lt;/code&gt; by almost 50%, from &lt;code&gt;272&lt;/code&gt; to &lt;code&gt;144&lt;/code&gt; bytes. This reduction improved planning times between 10% and 20% and reduced memory usage. Thanks to &lt;a href="https://github.com/hendrikmakait"&gt;hendrikmakait&lt;/a&gt; for 
+PR &lt;a href="https://github.com/apache/datafusion/pull/16207"&gt;#16207&lt;/a&gt;&lt;/p&gt;
+&lt;h2&gt;Upgrade Guide and Changelog&lt;/h2&gt;
+&lt;p&gt;Upgrading to 48.0.0 should be straightforward for most users, but do review
+the &lt;a href="https://datafusion.apache.org/library-user-guide/upgrading.html#datafusion-48-0-0"&gt;Upgrade Guide for DataFusion 48.0.0&lt;/a&gt; for detailed
+steps and code changes. The upgrade guide covers the breaking changes mentioned above and provides code snippets to help with the
+transition. For a comprehensive list of all changes, please refer to the &lt;a href="https://github.com/apache/datafusion/blob/branch-48/dev/changelog/48.0.0.md"&gt;changelog&lt;/a&gt; 
+for the 48.0.0 release. The changelog enumerates every merged PR in this release, including many smaller fixes and improvements 
+that we couldn&amp;rsquo;t cover in this post.&lt;/p&gt;
+&lt;h2&gt;Get Involved&lt;/h2&gt;
+&lt;p&gt;Apache DataFusion is an open-source project, and we welcome involvement from anyone interested. Now is a great time to
+take 48.0.0 for a spin: try it out on your workloads, and let us know if you encounter any issues or have suggestions.
+You can report bugs or request features on our GitHub issue tracker, or better yet, submit a pull request. Join our
+community discussions &amp;ndash; whether you have questions, want to share how you&amp;rsquo;re using DataFusion, or are looking to
+contribute, we&amp;rsquo;d love to hear from you. A list of open issues suitable for beginners
+is &lt;a href="https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22"&gt;here&lt;/a&gt; and you
+can find how to reach us on the &lt;a href="https://datafusion.apache.org/contributor-guide/communication.html"&gt;communication doc&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Happy querying!&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Apache DataFusion 47.0.0 Released</title><link href="https://datafusion.apache.org/blog/2025/07/11/datafusion-47.0.0" rel="alternate"></link><published>2025-07-11T00:00:00+00:00</published><updated>2025-07-11T00:00:00+00:00</updated><author><name>PMC</name></author><id>tag:datafusion.apache.org,2025-07-11:/blog/2025/07/11/datafusion-47.0.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
