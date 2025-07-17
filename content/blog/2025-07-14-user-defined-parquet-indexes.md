@@ -104,7 +104,7 @@ Modern Parquet writers create these indexes automatically and provide APIs to co
 
 ---
 
-Embedding user-defined indexes in Parquet files is straightforward and follows the same principles as standard index structures:
+Embedding user-defined indexes in Parquet files is straightforward and follows the same principles as standard index structures<sup>[6](#footnote6)</sup>:
 
 1. Serialize the index into a binary format and write it into the file body before the Thrift-encoded footer metadata.
 
@@ -592,3 +592,5 @@ it out, we would love for you to join us.
 <a id="footnote4"></a>`4`: For more information about external indexes, see [this talk](https://www.youtube.com/watch?v=74YsJT1-Rdk) and the [parquet_index.rs] and [advanced_parquet_index.rs] examples in the DataFusion repository.
 
 <a id="footnote5"></a>`5`: For information about rewriting files to optimize for specific queries, such as resorting, repartitioning, and tuning data page and row group sizes, see [XiangpengHao/liquid‑cache#227](https://github.com/XiangpengHao/liquid-cache/issues/227) and the conversation between [JigaoLuo](https://github.com/JigaoLuo) and [XiangpengHao](https://github.com/XiangpengHao) for details. We hope to make a future post about this topic.
+
+<a id="footnote6"></a>`6`: An index can also be stored inline in the key-value metadata. This approach is simple to implement and ensures the index is available once the footer is read, without additional I/O. However, it requires the index to be serialized as a UTF-8 string, which may be less efficient and increases the size of the footer metadata, impacting all Parquet readers, even those that ignore the index.
