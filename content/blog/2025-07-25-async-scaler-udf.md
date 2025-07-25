@@ -57,6 +57,25 @@ FROM users
 LIMIT 100;
 ```
 
+## Understanding Sync vs Async UDFs
+
+Before diving into implementation, it's crucial to understand when to use each type:
+**Synchronous UDFs** are perfect for:
+
+- Pure computations (math, string operations)
+- CPU-intensive algorithms
+- Operations that complete instantly
+- Functions that don't need external resources
+
+**Asynchronous UDFs** excel at:
+
+- Network requests (HTTP APIs, database calls)
+- File I/O operations
+- Long-running computations that can yield control
+- Any operation that involves "waiting"
+
+**The key insight**: if your function might block waiting for something external, make it async.
+
 ## Building Your First Async UDF: An AI-Powered Example
 
 Let's create a practical async UDF that simulates asking an LLM whether an animal is furry. While our example uses mock logic, it demonstrates the pattern you'd use for real AI service integration.
@@ -285,7 +304,7 @@ impl AsyncScalarUDFImpl for AskLLM {
 
 ### 1. Dual Trait Implementation
 
-Async UDFs implement both `ScalarUDFImpl` (for metadata) and `AsyncScalarUDFImpl` (for async execution).
+Async UDFs implement both `ScalarUDFImpl` (for metadata) and `AsyncScalarUDFImpl` (for async execution).This design allows DataFusion to optimize async operations while maintaining compatibility with the existing UDF system.
 
 ### 2. Natural SQL Integration
 
@@ -297,7 +316,7 @@ DataFusion automatically uses `AsyncFuncExec` nodes in the physical plan for eff
 
 ### 4. Production Considerations
 
-For real HTTP requests, consider using a separate tokio runtime to avoid blocking query execution.
+For heavy I/O operations, consider using a separate tokio runtime to prevent blocking the query engine's main runtime.
 
 ## Real-World Use Cases
 
@@ -329,21 +348,27 @@ WHERE domain_reputation_check(email) > 0.8;
 4. **Caching**: Cache expensive API responses when appropriate
 5. **Rate Limiting**: Respect external service limits with proper throttling
 
-## What This Means for the Future
+## The Bigger picture: Why This Matters
 
-[DataFusion](https://datafusion.apache.org/)'s async UDF support represents a paradigm shift. SQL is no longer confined to data at rest—it becomes a bridge between your analytical workloads and the broader digital ecosystem. This opens doors to:
+[DataFusion](https://datafusion.apache.org/)'s sync UDF implementation isn't just another feature-it's a **paradigm shift** in how we think about SQL engines. While user-defined scalar and aggregate functions are common across databases, **native async support in SQL execution** puts DataFusion in uncharted territory.
 
-- Real-time AI integration in analytical queries
-- Dynamic data enrichment from multiple sources
-- Hybrid cloud-edge processing scenarios
-- Event-driven analytics with external triggers
+Traditional SQL engines treat the database as an island. Data flows in through ETL pipelines, gets processed, and flows out through reports or APIs. But modern applications need something more fluid—they need SQL that can reach out to the world in real-time, making decisions based on live data from multiple sources.
+
+Consider the transformative possibilities:
+
+- **Financial services** running fraud detection that queries real-time risk APIs during transaction processing
+- **E-commerce platforms** enriching product catalogs with live pricing from competitor APIs
+- **Healthcare systems** validating patient data against external medical databases
+- **IoT platforms** correlating sensor data with weather services and maintenance APIs
+
+This isn't just about convenience—it's about **breaking down the barriers** between analytical workloads and operational systems.
 
 ## Getting Started and Best Practices
 
 Ready to dive in? Here's your roadmap:
 
 1. **Start Simple**: Begin with mock implementations like our LLM example, then gradually add real HTTP clients and external integrations.
-2. **Study the Patterns**: The DataFusion UDF documentation provides essential patterns for both sync and async implementations.
+2. **Study the Patterns**: The DataFusion [UDF documentation](https://datafusion.apache.org/python/user-guide/common-operations/udf-and-udfa.html) provides essential patterns for both sync and async implementations.
 3. **Performance First**: Async doesn't automatically mean faster. Profile your implementations and consider batching strategies for external API calls.
 4. **Error Resilience**: Network calls fail. Design your UDFs with circuit breakers, retries, and graceful degradation from the start.
 5. **Security Mindset**: External integrations introduce new attack vectors. Validate inputs, sanitize outputs, and consider rate limiting.
@@ -359,7 +384,7 @@ Whether you're a Rust veteran or just getting started, there's a place for you:
 - **Researchers:** Explore the performance characteristics and help optimize async execution
 
 For anyone who is curious about [DataFusion](https://datafusion.apache.org/) I highly recommend
-giving it a try. This post was designed to make it easier for new users to work with Aync User Defined Window Functions by giving a few examples of how one might implement these.
+giving it a try. This post was designed to make it easier for new users to work with Aync User Defined Window Functions by providing practical examples and real-world patterns.
 
 The async UDF feature is just the beginning. As more developers experiment and share their innovations, we'll see new patterns emerge that we can't even imagine today.
 
