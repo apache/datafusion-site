@@ -25,56 +25,43 @@ limitations under the License.
 {% endcomment %}
 -->
 
-[Apache DataFusion] continues to push the boundaries of what a query engine can do. The latest innovation? **Asynchronous User Defined Functions (Async UDFs)** — a feature that opens new frontiers for how SQL queries can interact with the outside world.
+Imagine writing SQL that can call APIs, interact with AI models, or fetch data from external storage—all natively within your query. This isn't a dream anymore. [Apache DataFusion] has just introduced **Asynchronous User Defined Functions (Async UDFs)**, making it one of the **first SQL engines** to support native asynchronous operations in query execution.
 
-## Understanding sync UDFs?
+## The Synchronous Limitation
 
-[User Defined Functions (UDFs)] are custom functions written in Rust and registered with DataFusion to be used in SQL queries. Traditionally, these functions were synchronous and suitable only for CPU-bound operations. But many real-world tasks — such as HTTP calls, AI model inference, and cloud storage fetches — are inherently **asynchronous**.
+Traditional [User Defined Functions (UDFs)] in DataFusion (and most SQL engines) are synchronous, limiting them to CPU-bound operations. While perfect for mathematical calculations or string manipulations, they fall short when you need to:
 
-With the introduction of async UDFs, DataFusion becomes one of the **first SQL engines** to support **native asynchronous logic** in its execution plan.
+- Make HTTP requests to external APIs (Wikipedia, OpenAI, REST services)
+- Fetch data from cloud object storage on demand
+- Perform I/O-heavy operations or long-running computations
+- Integrate with external databases or microservices
+
+These real-world scenarios often require **waiting** for external resources—something synchronous functions simply can't handle efficiently.
 
 [User Defined Functions (UDFs)]: https://datafusion.apache.org/python/user-guide/common-operations/udf-and-udfa.html
 
-## Why It Matters
+## Enter Async UDFs: SQL That Talks to the World
 
-Most query engines today are built around synchronous execution models. This makes it difficult to perform tasks like:
+DataFusion's async UDFs remove this fundamental limitation. Now you can write SQL queries that seamlessly integrate with the outside world, opening up possibilities like:
 
-- Fetching data from APIs (e.g., Wikipedia, OpenAI, etc.)
+```sql
+--Note - this is just an Example
+-- Query with AI-powered content analysis
+SELECT content, classify_sentiment(content) as sentiment
+FROM social_posts
+WHERE analyze_toxicity(content) = false;
 
-- Accessing cloud object storage on demand
+-- Enrich data with external API calls
+SELECT user_id, enrich_user_profile(user_id) as profile_data
+FROM users
+LIMIT 100;
+```
 
--Running I/O-heavy business logic or long-running computations
+## Building Your First Async UDF: An AI-Powered Example
 
-Async UDFs in DataFusion remove this limitation, making it possible to run **SQL that talks to the world**.
-
-## Example for creating an async UDF with Datafusion
-
-lets look in a real life example for creating an async UDF that interact with an LLM and decide whether an animal is furry or not . Although we are not directly connecting to LLM but we can surely extend the capabilities.
+Let's create a practical async UDF that simulates asking an LLM whether an animal is furry. While our example uses mock logic, it demonstrates the pattern you'd use for real AI service integration.
 
 ```rust
-// Licensed to the Apache Software Foundation (ASF) under one
-// or more contributor license agreements.  See the NOTICE file
-// distributed with this work for additional information
-// regarding copyright ownership.  The ASF licenses this file
-// to you under the Apache License, Version 2.0 (the
-// "License"); you may not use this file except in compliance
-// with the License.  You may obtain a copy of the License at
-//
-//   http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing,
-// software distributed under the License is distributed on an
-// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied.  See the License for the
-// specific language governing permissions and limitations
-// under the License.
-
-//! This example shows how to create and use "Async UDFs" in DataFusion.
-//!
-//! Async UDFs allow you to perform asynchronous operations, such as
-//! making network requests. This can be used for tasks like fetching
-//! data from an external API such as a LLM service or an external database.
-
 use arrow::array::{ArrayRef, BooleanArray, Int64Array, RecordBatch, StringArray};
 use arrow_schema::{DataType, Field, Schema};
 use async_trait::async_trait;
@@ -294,19 +281,91 @@ impl AsyncScalarUDFImpl for AskLLM {
 
 ```
 
-## Final Thoughts and Recommendations
+## Key Implementation Points
 
-Window functions may be common in SQL, but _Async UDFs_ in engines very first in the segment.
-While many databases support user defined scalar and user defined aggregate functions, user defined window functions are not as common and Datafusion making it easier for all .
+### 1. Dual Trait Implementation
+
+Async UDFs implement both `ScalarUDFImpl` (for metadata) and `AsyncScalarUDFImpl` (for async execution).
+
+### 2. Natural SQL Integration
+
+Once registered, async UDFs work seamlessly in SQL queries—users don't need to know they're async.
+
+### 3. Special Execution Path
+
+DataFusion automatically uses `AsyncFuncExec` nodes in the physical plan for efficient async execution.
+
+### 4. Production Considerations
+
+For real HTTP requests, consider using a separate tokio runtime to avoid blocking query execution.
+
+## Real-World Use Cases
+
+Async UDFs unlock powerful patterns:
+**AI-Powered Analytics:**
+
+```sql
+SELECT product_id,
+       sentiment_score(review_text) as sentiment,
+       classify_intent(review_text) as intent
+FROM product_reviews
+WHERE toxicity_check(review_text) = 'safe';
+```
+
+**External Validation:**
+
+```sql
+SELECT email,
+       validate_email_deliverability(email) as is_valid
+FROM email_list
+WHERE domain_reputation_check(email) > 0.8;
+```
+
+## Performance and Best Practices
+
+1. **Batch Processing**: Async UDFs process entire Arrow arrays, enabling efficient bulk operations
+2. **Runtime Isolation**: Consider separate tokio runtimes for heavy I/O to prevent blocking
+3. **Error Handling**: Implement robust retry logic and graceful degradation
+4. **Caching**: Cache expensive API responses when appropriate
+5. **Rate Limiting**: Respect external service limits with proper throttling
+
+## What This Means for the Future
+
+[DataFusion](https://datafusion.apache.org/)'s async UDF support represents a paradigm shift. SQL is no longer confined to data at rest—it becomes a bridge between your analytical workloads and the broader digital ecosystem. This opens doors to:
+
+- Real-time AI integration in analytical queries
+- Dynamic data enrichment from multiple sources
+- Hybrid cloud-edge processing scenarios
+- Event-driven analytics with external triggers
+
+## Getting Started and Best Practices
+
+Ready to dive in? Here's your roadmap:
+
+1. **Start Simple**: Begin with mock implementations like our LLM example, then gradually add real HTTP clients and external integrations.
+2. **Study the Patterns**: The DataFusion UDF documentation provides essential patterns for both sync and async implementations.
+3. **Performance First**: Async doesn't automatically mean faster. Profile your implementations and consider batching strategies for external API calls.
+4. **Error Resilience**: Network calls fail. Design your UDFs with circuit breakers, retries, and graceful degradation from the start.
+5. **Security Mindset**: External integrations introduce new attack vectors. Validate inputs, sanitize outputs, and consider rate limiting.
+
+## Join the Revolution
+
+The [Apache Arrow](https://arrow.apache.org/) and [DataFusion](https://datafusion.apache.org/) communities aren't just building a query engine—they're **reimagining what analytical computing can be**. Every contribution, from bug reports to feature implementations, helps push the boundaries of what's possible.
+Whether you're a Rust veteran or just getting started, there's a place for you:
+
+- **Developers:** Dive into the [open issues](https://github.com/apache/datafusion/issues) and help build the future
+- **Users:** Share your async UDF use cases and help shape the roadmap
+- **Advocates:** Write about your experiences and help others discover these capabilities
+- **Researchers:** Explore the performance characteristics and help optimize async execution
 
 For anyone who is curious about [DataFusion](https://datafusion.apache.org/) I highly recommend
 giving it a try. This post was designed to make it easier for new users to work with Aync User Defined Window Functions by giving a few examples of how one might implement these.
 
-When it comes to designing UDFs, I strongly recommend reviewing the
-[Window functions](https://datafusion.apache.org/library-user-guide/adding-udfs.html) documentation.
+The async UDF feature is just the beginning. As more developers experiment and share their innovations, we'll see new patterns emerge that we can't even imagine today.
 
-A heartfelt thank you to [@andygrove] for their invaluable reviews and thoughtful feedback—they’ve been instrumental in shaping this post.
+Heartfelt thanks to [@alamb] for the invaluable reviews and insights that shaped this exploration, and to [@andygrove] and the entire DataFusion community for making this groundbreaking feature a reality.
 
-The Apache Arrow and Apache DataFusion communities are vibrant, welcoming, and full of passionate developers building something truly powerful. If you’re excited about high-performance analytics and want to be part of an open-source journey, I highly encourage you to explore the [official documentation](<(https://datafusion.apache.org/)>) and dive into one of the many [open issues](https://github.com/apache/datafusion/issues). There’s never been a better time to get involved!
+`The future of SQL is async, distributed, and connected. Welcome to the new era of analytical computing.`
 
 [@alamb]: https://github.com/alamb
+[@andygrove]: https://github.com/andygrove
