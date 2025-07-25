@@ -1,6 +1,6 @@
 ---
 layout: post
-title: Async User defined Window Functions in DataFusion
+title: Async Scaler User defined Functions in DataFusion
 date: 2025-07-25
 author: Aditya Singh Rathore
 categories: [tutorial]
