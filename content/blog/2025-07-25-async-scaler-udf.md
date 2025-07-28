@@ -384,7 +384,7 @@ Whether you're a Rust veteran or just getting started, there's a place for you:
 - **Researchers:** Explore the performance characteristics and help optimize async execution
 
 For anyone who is curious about [DataFusion](https://datafusion.apache.org/) I highly recommend
-giving it a try. This post was designed to make it easier for new users to work with Aync User Defined Window Functions by providing practical examples and real-world patterns.
+giving it a try. This post was designed to make it easier for new users to work with Aync User Defined Functions by providing practical examples and real-world patterns.
 
 The async UDF feature is just the beginning. As more developers experiment and share their innovations, we'll see new patterns emerge that we can't even imagine today.
 
