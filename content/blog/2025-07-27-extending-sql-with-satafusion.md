@@ -58,8 +58,7 @@ Before diving into custom implementations, let's understand how DataFusion proce
 ```
 
 1. **SQL Text:** The raw SQL string you write
-2. **Parser:** DataFusion's `DFParser` converts SQL text into an Abstract Syntax Tree (AST)
-3. **AST:** A structured representation of the SQL statement using DataFusion's `Statement` enum
+2. **AST:** DataFusion's `DFParser` converts SQL text into an Abstract Syntax Tree (AST), a structured representation of the SQL statement using DataFusion's `Statement` enum
 4. **Logical Plan:** DataFusion's internal representation that describes what to do
 5. **Physical Plan:** The executable plan that describes how to do it
 6. **Execution:** The actual query execution
