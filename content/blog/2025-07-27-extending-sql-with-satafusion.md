@@ -52,10 +52,9 @@ Standard SQL doesn't have this capability, but DataFusion's extensible architect
 Before diving into custom implementations, let's understand how DataFusion processes SQL queries. The journey from SQL text to execution follows this path:
 
 ```text
-+-------+      +--------+      +-----+      +-------------+      +--------------+      +----------+
-| Query | ---> | Parser | ---> | AST | ---> |Logical Plan | ---> |Physical Plan | ---> |Execution |
-+-------+      +--------+      +-----+      +-------------+      +--------------+      +----------+
-
++----------+     +-----+      +--------------+      +---------------+      +-----------+
+| SQL Text |---> | AST | ---> | Logical Plan | ---> | Physical Plan | ---> | Execution |
++----------+     +-----+      +--------------+      +---------------+      +-----------+
 ```
 
 1. **SQL Text:** The raw SQL string you write
