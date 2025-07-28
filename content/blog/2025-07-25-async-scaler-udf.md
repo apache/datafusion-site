@@ -368,7 +368,7 @@ This isn't just about convenience—it's about **breaking down the barriers** be
 Ready to dive in? Here's your roadmap:
 
 1. **Start Simple**: Begin with mock implementations like our LLM example, then gradually add real HTTP clients and external integrations.
-2. **Study the Patterns**: The DataFusion [UDF documentation](https://datafusion.apache.org/python/user-guide/common-operations/udf-and-udfa.html) provides essential patterns for both sync and async implementations.
+2. **Study the Patterns**: The DataFusion [UDF documentation](https://datafusion.apache.org/library-user-guide/functions/adding-udfs.html#) provides essential patterns for both sync and async implementations.
 3. **Performance First**: Async doesn't automatically mean faster. Profile your implementations and consider batching strategies for external API calls.
 4. **Error Resilience**: Network calls fail. Design your UDFs with circuit breakers, retries, and graceful degradation from the start.
 5. **Security Mindset**: External integrations introduce new attack vectors. Validate inputs, sanitize outputs, and consider rate limiting.
