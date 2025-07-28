@@ -79,6 +79,9 @@ Before diving into implementation, it's crucial to understand when to use each t
 ## Building Your First Async UDF: An AI-Powered Example
 
 Let's create a practical async UDF that simulates asking an LLM whether an animal is furry. While our example uses mock logic, it demonstrates the pattern you'd use for real AI service integration.
+you can follow along this [example](https://github.com/apache/datafusion/tree/main/datafusion-examples#running-examples).
+
+Note - The Following example is available at [asunc_udf.rs](https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/async_udf.rs)
 
 ```rust
 use arrow::array::{ArrayRef, BooleanArray, Int64Array, RecordBatch, StringArray};
