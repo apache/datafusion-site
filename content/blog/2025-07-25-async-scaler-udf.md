@@ -38,7 +38,7 @@ Traditional [User Defined Functions (UDFs)] in DataFusion (and most SQL engines)
 
 These real-world scenarios often require **waiting** for external resources—something synchronous functions simply can't handle efficiently.
 
-[User Defined Functions (UDFs)]: https://datafusion.apache.org/python/user-guide/common-operations/udf-and-udfa.html
+[User Defined Functions (UDFs)]: https://datafusion.apache.org/library-user-guide/functions/adding-udfs.html#
 
 ## Enter Async UDFs: SQL That Talks to the World
 
