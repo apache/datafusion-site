@@ -33,7 +33,7 @@ Have you ever wished you could extend SQL with custom statements tailored to you
 
 ## The Challenge: Beyond Standard SQL
 
-Imagine you're building a data platform that uses a parquet-files-on-S3 storage pattern. Your application needs to dynamically discover and attach databases, similar to how [DuckDB] handles multiple databases with its `ATTACH` statement. While [DataFusion] supports `CREATE EXTERNAL TABLE`, you need something more flexible – perhaps a statement like:
+Imagine you're building a data platform that uses a parquet-files-on-S3 storage pattern. Your application needs to dynamically discover and attach databases, similar to how [DuckDB] handles multiple databases with its `ATTACH` statement. While [DataFusion] supports [CREATE EXTERNAL TABLE], you need something more flexible – perhaps a statement like:
 
 ```sql
 CREATE EXTERNAL CATALOG my_catalog
@@ -45,30 +45,40 @@ OPTIONS (
 );
 ```
 
-Standard SQL doesn't have this capability, but DataFusion's extensible architecture makes it possible to add custom SQL statements like this.
+[CREATE EXTERNAL TABLE]: https://datafusion.apache.org/user-guide/sql/ddl.html#create-external-table
+
+While the SQL provided in DataFusion doesn't have this capability, its extensible architecture makes it possible to add custom SQL statements by leveraging the existing SQL parsing and execution framework and injecting your custom logic where needed.
 
 ## Understanding the SQL Processing Pipeline
 
-Before diving into custom implementations, let's understand how DataFusion processes SQL queries. The journey from SQL text to execution follows this path:
+Before diving into custom implementations, let's review how DataFusion processes SQL queries. As in most query engines, the journey from SQL text to execution follows this path:
 
 ```text
 +----------+     +-----+      +--------------+      +---------------+      +-----------+
-| SQL Text |---> | AST | ---> | Logical Plan | ---> | Physical Plan | ---> | Execution |
+| SQL Text |---> | AST | ---> | Logical Plan | ---> | Physical Plan | ---> |  Stream   |
 +----------+     +-----+      +--------------+      +---------------+      +-----------+
 ```
 
 1. **SQL Text:** The raw SQL string you write
-2. **AST:** DataFusion's `DFParser` converts SQL text into an Abstract Syntax Tree (AST), a structured representation of the SQL statement using DataFusion's `Statement` enum
-4. **Logical Plan:** DataFusion's internal representation that describes what to do
-5. **Physical Plan:** The executable plan that describes how to do it
-6. **Execution:** The actual query execution
+2. **AST:** DataFusion's [DFParser] converts SQL text into an [Abstract Syntax Tree] (AST), a structured representation of the SQL statement using DataFusion's [Statement] enum
+4. **Logical Plan:**  A tree of [LogicalPlan] nodes that describes what to do
+5. **Physical Plan:** A tree of [ExecutionPlan] nodes that describes how to do it
+6. **Stream:** [SendableRecordBatchStream]s form a data flow graph to efficiently execute the query
 
-The key insight is that DataFusion allows you to wrap and extend the existing `DFParser` to handle custom statements while still leveraging all the built-in SQL parsing capabilities
+[DFParser]: https://docs.rs/datafusion/latest/datafusion/sql/parser/struct.DFParser.html
+[Abstract Syntax Tree]: https://en.wikipedia.org/wiki/Abstract_syntax_tree
+[Statement]: https://docs.rs/datafusion/latest/datafusion/sql/parser/enum.Statement.html
+[LogicalPlan]: https://docs.rs/datafusion/latest/datafusion/logical_expr/enum.LogicalPlan.html
+[ExecutionPlan]: https://docs.rs/datafusion/latest/datafusion/physical_plan/trait.ExecutionPlan.html
+[SendableRecordBatchStream]: https://docs.rs/datafusion/latest/datafusion/execution/type.SendableRecordBatchStream.html
+
+The key insight is that DataFusion allows you to wrap and extend the existing `DFParser` to handle custom statements while delegating to the built-in SQL parsing capabilities and the the rest of the SQL processing pipeline.
 
 ## Extending the SQL Parser: Learning from the Example
 
-DataFusion provides an excellent example of custom SQL dialect implementation in their [sql_dialect.rs] example. Let's break down how it works and then apply the pattern to our `ATTACH DATABASE` use case.
-[sql_dialect.rs](https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/sql_dialect.rs)
+DataFusion provides an excellent example of custom SQL dialect implementation in the [sql_dialect.rs] example. Let's break down how it works and then apply the pattern to our `ATTACH DATABASE` use case.
+
+[sql_dialect.rs]: https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/sql_dialect.rs
 
 ## The DataFusion Pattern: Wrapping and Extending
 
