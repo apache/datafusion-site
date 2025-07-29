@@ -1,5 +1,1233 @@
 <?xml version="1.0" encoding="utf-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - blog</title><link href="https://datafusion.apache.org/blog/" rel="alternate"></link><link href="https://datafusion.apache.org/blog/feeds/blog.atom.xml" rel="self"></link><id>https://datafusion.apache.org/blog/</id><updated>2025-07-01T00:00:00+00:00</updated><subtitle></subtitle><entry><title>Apache DataFusion Comet 0.9.0 Release</title><link href="https://datafusion.apache.org/blog/2025/07/01/datafusion-comet-0.9.0" rel="alternate"></link><published>2025-07-01T00:00:00+00:00</published><updated>2025-07-01T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2025-07-01:/blog/2025/07/01/datafusion-comet-0.9.0</id><summary type="html">&lt;!--
+<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - blog</title><link href="https://datafusion.apache.org/blog/" rel="alternate"></link><link href="https://datafusion.apache.org/blog/feeds/blog.atom.xml" rel="self"></link><id>https://datafusion.apache.org/blog/</id><updated>2025-07-28T00:00:00+00:00</updated><subtitle></subtitle><entry><title>Apache DataFusion 49.0.0 Released</title><link href="https://datafusion.apache.org/blog/2025/07/28/datafusion-49.0.0" rel="alternate"></link><published>2025-07-28T00:00:00+00:00</published><updated>2025-07-28T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2025-07-28:/blog/2025/07/28/datafusion-49.0.0</id><summary type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+&lt;!-- see https://github.com/apache/datafusion/issues/16347 for details --&gt;
+&lt;h2&gt;Introduction&lt;/h2&gt;
+&lt;p&gt;We are proud to announce the release of &lt;a href="https://crates.io/crates/datafusion/49.0.0"&gt;DataFusion 49.0.0&lt;/a&gt;. This blog post highlights some of
+the major improvements since the release of &lt;a href="https://datafusion.apache.org/blog/2025/07/18/datafusion-48.0.0/"&gt;DataFusion 48.0.0&lt;/a&gt;. The complete list of changes is available in the &lt;a href="https://github.com/apache/datafusion/blob/branch-49/dev/changelog/49.0.0.md"&gt;changelog&lt;/a&gt;.&lt;/p&gt;
+&lt;h2&gt;Performance Improvements 🚀&lt;/h2&gt;
+&lt;p&gt;DataFusion continues to focus on enhancing performance, as …&lt;/p&gt;</summary><content type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+&lt;!-- see https://github.com/apache/datafusion/issues/16347 for details --&gt;
+&lt;h2&gt;Introduction&lt;/h2&gt;
+&lt;p&gt;We are proud to announce the release of &lt;a href="https://crates.io/crates/datafusion/49.0.0"&gt;DataFusion 49.0.0&lt;/a&gt;. This blog post highlights some of
+the major improvements since the release of &lt;a href="https://datafusion.apache.org/blog/2025/07/18/datafusion-48.0.0/"&gt;DataFusion 48.0.0&lt;/a&gt;. The complete list of changes is available in the &lt;a href="https://github.com/apache/datafusion/blob/branch-49/dev/changelog/49.0.0.md"&gt;changelog&lt;/a&gt;.&lt;/p&gt;
+&lt;h2&gt;Performance Improvements 🚀&lt;/h2&gt;
+&lt;p&gt;DataFusion continues to focus on enhancing performance, as shown in the ClickBench and other results. &lt;/p&gt;
+&lt;p&gt;&lt;img alt="ClickBench performance results over time for DataFusion" class="img-responsive" src="/blog/images/datafusion-49.0.0/performance_over_time_clickbench.png" width="100%"/&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Figure 1&lt;/strong&gt;: ClickBench performance improvements over time
+Average and median normalized query execution times for ClickBench queries for each git revision. 
+Query times are normalized using the ClickBench definition. Data and definitions on the 
+&lt;a href="https://alamb.github.io/datafusion-benchmarking/"&gt;DataFusion Benchmarking Page&lt;/a&gt;. &lt;/p&gt;
+&lt;!--
+NOTE: Andrew is working on gathering these numbers
+
+&lt;img
+src="/blog/images/datafusion-49.0.0/performance_over_time_planning.png"
+width="80%"
+class="img-responsive"
+alt="Planning benchmark performance results over time for DataFusion"
+/&gt;
+
+**Figure 2**: Planning benchmark performance improved XXX between DataFusion 48.0.1 and DataFusion 49.0.0. Chart source: TODO
+--&gt;
+&lt;p&gt;Here are some noteworthy optimizations added since DataFusion 48:&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Equivalence system upgrade:&lt;/strong&gt; The lower levels of the equivalence system, which is used to implement the
+  optimizations described in &lt;a href="https://datafusion.apache.org/blog/2025/03/11/ordering-analysis"&gt;Using Ordering for Better Plans&lt;/a&gt;, were rewritten, leading to
+  much faster planning times, especially for queries with a &lt;a href="https://github.com/apache/datafusion/pull/16217#pullrequestreview-2891941229"&gt;large number of columns&lt;/a&gt;. This change also prepares
+  the way for more sophisticated sort-based optimizations in the future. (PR &lt;a href="https://github.com/apache/datafusion/pull/16217"&gt;#16217&lt;/a&gt; by &lt;a href="https://github.com/ozankabak"&gt;ozankabak&lt;/a&gt;).&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Dynamic Filters and TopK pushdown&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;DataFusion now supports dynamic filters, which are improved during query execution,
+and physical filter pushdown. Together, these features improve the performance of
+queries that use &lt;code&gt;LIMIT&lt;/code&gt; and &lt;code&gt;ORDER BY&lt;/code&gt; clauses, such as the following:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT *
+FROM data
+ORDER BY timestamp DESC
+LIMIT 10
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;While the query above is simple, without dynamic filtering or knowing that the data
+is already sorted by &lt;code&gt;timestamp&lt;/code&gt;, a query engine must decode &lt;em&gt;all&lt;/em&gt; of the data to
+find the top 10 values. With the dynamic filters system, DataFusion applies an
+increasingly selective filter during query execution. It checks the &lt;strong&gt;current&lt;/strong&gt;
+top 10 values of the &lt;code&gt;timestamp&lt;/code&gt; column &lt;strong&gt;before&lt;/strong&gt; opening files or reading
+Parquet Row Groups and Data Pages, which can skip older data very quickly.&lt;/p&gt;
+&lt;p&gt;Dynamic predicates are a common feature of advanced engines such as &lt;a href="https://docs.starburst.io/latest/admin/dynamic-filtering.html"&gt;Dynamic
+Filters in Starburst&lt;/a&gt; and &lt;a href="https://www.snowflake.com/en/engineering-blog/optimizing-top-k-aggregation-snowflake/"&gt;Top-K Aggregation Optimization at Snowflake&lt;/a&gt;. The
+technique drastically improves query performance (we've seen over a 1.5x
+improvement for some TPC-H-style queries), especially in combination with late
+materialization and columnar file formats such as Parquet. We &lt;a href="https://github.com/apache/datafusion/issues/15513"&gt;plan to write a
+blog post&lt;/a&gt; explaining the details of this optimization in the future, and we expect to
+use the same mechanism to implement additional optimizations such as &lt;a href="https://github.com/apache/datafusion/issues/7955"&gt;Sideways
+Information Passing for joins&lt;/a&gt; (Issue
+&lt;a href="https://github.com/apache/datafusion/issues/15037"&gt;#15037&lt;/a&gt; PR
+&lt;a href="https://github.com/apache/datafusion/pull/15770"&gt;#15770&lt;/a&gt; by
+&lt;a href="https://github.com/adriangb"&gt;adriangb&lt;/a&gt;).&lt;/p&gt;
+&lt;h2&gt;Community Growth  📈&lt;/h2&gt;
+&lt;p&gt;The last few months, between &lt;code&gt;46.0.0&lt;/code&gt; and &lt;code&gt;49.0.0&lt;/code&gt;, have seen our community grow:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;New PMC members and committers: &lt;a href="https://github.com/berkaysynnada"&gt;berkay&lt;/a&gt;, &lt;a href="https://github.com/xudong963"&gt;xudong963&lt;/a&gt; and &lt;a href="https://github.com/timsaucer"&gt;timsaucer&lt;/a&gt; joined the PMC.
+   &lt;a href="https://github.com/blaginin"&gt;blaginin&lt;/a&gt;, &lt;a href="https://github.com/milenkovicm"&gt;milenkovicm&lt;/a&gt;, &lt;a href="https://github.com/adriangb"&gt;adriangb&lt;/a&gt; and &lt;a href="https://github.com/kosiew"&gt;kosiew&lt;/a&gt; joined as committers. See the &lt;a href="https://lists.apache.org/list.html?dev@datafusion.apache.org"&gt;mailing list&lt;/a&gt; for more details.&lt;/li&gt;
+&lt;li&gt;In the &lt;a href="https://github.com/apache/arrow-datafusion"&gt;core DataFusion repo&lt;/a&gt; alone, we reviewed and accepted over 850 PRs from 172 different
+   committers, created over 669 issues, and closed 379 of them 🚀. All changes are listed in the detailed
+   &lt;a href="https://github.com/apache/datafusion/tree/main/dev/changelog"&gt;changelogs&lt;/a&gt;.&lt;/li&gt;
+&lt;li&gt;DataFusion published a number of blog posts, including &lt;a href="https://datafusion.apache.org/blog/2025/04/19/user-defined-window-functions"&gt;User defined Window Functions&lt;/a&gt;, &lt;a href="https://datafusion.apache.org/blog/2025/06/15/optimizing-sql-dataframes-part-one"&gt;Optimizing SQL (and DataFrames)
+   in DataFusion part 1&lt;/a&gt;, &lt;a href="https://datafusion.apache.org/blog/2025/06/15/optimizing-sql-dataframes-part-two"&gt;part 2&lt;/a&gt;, &lt;a href="https://datafusion.apache.org/blog/2025/06/30/cancellation"&gt;Using Rust async for Query Execution and Cancelling Long-Running Queries&lt;/a&gt;, and
+   &lt;a href="https://datafusion.apache.org/blog/2025/07/14/user-defined-parquet-indexes/"&gt;Embedding User-Defined Indexes in Apache Parquet Files&lt;/a&gt;.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;!--
+# Unique committers
+$ git shortlog -sn 46.0.0..49.0.0-rc1  .| wc -l
+     172
+# commits
+$ git log --pretty=oneline 46.0.0..49.0.0-rc1 . | wc -l
+     884
+
+
+https://crates.io/crates/datafusion/49.0.0
+DataFusion 49 released July 25, 2025
+
+https://crates.io/crates/datafusion/46.0.0
+DataFusion 46 released March 7, 2025
+
+Issues created in this time: 290 open, 379 closed = 669 total
+https://github.com/apache/datafusion/issues?q=is%3Aissue+created%3A2025-03-07..2025-07-25
+
+Issues closed: 508
+https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+closed%3A2025-03-07..2025-07-25
+
+PRs merged in this time 874
+https://github.com/apache/arrow-datafusion/pulls?q=is%3Apr+merged%3A2025-03-07..2025-07-25
+
+--&gt;
+&lt;h2&gt;New Features ✨&lt;/h2&gt;
+&lt;h3&gt;Async User-Defined Functions&lt;/h3&gt;
+&lt;p&gt;It is now possible to write &lt;code&gt;async&lt;/code&gt; User-Defined Functions
+(UDFs) in DataFusion that perform asynchronous
+operations, such as network requests or database queries, without blocking the
+execution of the query. This enables new use cases, such as
+integrating with large language models (LLMs) or other external services, and we can't
+wait to see what the community builds with it.&lt;/p&gt;
+&lt;p&gt;See the &lt;a href="https://datafusion.apache.org/library-user-guide/functions/adding-udfs.html"&gt;documentation&lt;/a&gt; for more details and the &lt;a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/async_udf.rs"&gt;async UDF example&lt;/a&gt; for
+working code. &lt;/p&gt;
+&lt;p&gt;You could, for example, implement a function &lt;code&gt;ask_llm&lt;/code&gt; that asks a large language model
+(LLM) service a question based on the content of two columns.&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT * 
+FROM animal a
+WHERE ask_llm(a.name, 'Is this animal furry?')")
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;The implementation of an async UDF is almost identical to a normal
+UDF, except that it must implement the &lt;code&gt;AsyncScalarUDFImpl&lt;/code&gt; trait in addition to &lt;code&gt;ScalarUDFImpl&lt;/code&gt; and
+provide an &lt;code&gt;async&lt;/code&gt; implementation via &lt;code&gt;invoke_async_with_args&lt;/code&gt;:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;#[derive(Debug)]
+struct AskLLM {
+    signature: Signature,
+}
+
+#[async_trait]
+impl AsyncScalarUDFImpl for AskLLM {
+    /// The `invoke_async_with_args` method is similar to `invoke_with_args`,
+    /// but it returns a `Future` that resolves to the result.
+    ///
+    /// Since this signature is `async`, it can do any `async` operations, such
+    /// as network requests.
+    async fn invoke_async_with_args(
+        &amp;amp;self,
+        args: ScalarFunctionArgs,
+        options: &amp;amp;ConfigOptions,
+    ) -&amp;gt; Result&amp;lt;ArrayRef&amp;gt; {
+        // Converts the arguments to arrays for simplicity.
+        let args = ColumnarValue::values_to_arrays(&amp;amp;args.args)?;
+        let [column_of_interest, question] = take_function_args(self.name(), args)?;
+        let client = Client::new();
+
+        // Make a network request to a hypothetical LLM service
+        let res = client
+            .post(URI)
+            .headers(get_llm_headers(options))
+            .json(&amp;amp;req)
+            .send()
+            .await?
+            .json::&amp;lt;LLMResponse&amp;gt;()
+            .await?;
+
+        let results = extract_results_from_llm_response(&amp;amp;res);
+
+        Ok(Arc::new(results))
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;(Issue &lt;a href="https://github.com/apache/datafusion/issues/6518"&gt;#6518&lt;/a&gt;,
+&lt;a href="https://github.com/apache/datafusion/pull/14837"&gt;PR #14837&lt;/a&gt; from
+&lt;a href="https://github.com/goldmedal"&gt;goldmedal&lt;/a&gt; 🏆)&lt;/p&gt;
+&lt;h3&gt;Better Cancellation for Certain Long-Running Queries&lt;/h3&gt;
+&lt;p&gt;In rare cases, it was previously not possible to cancel long-running queries,
+leading to unresponsiveness. Other projects would likely have fixed this issue
+by treating the symptom, but &lt;a href="https://github.com/pepijnve"&gt;pepijnve&lt;/a&gt; and the DataFusion community worked together to
+treat the root cause. The general solution required a deep understanding of the
+DataFusion execution engine, Rust &lt;code&gt;Streams&lt;/code&gt;, and the tokio cooperative
+scheduling model. The &lt;a href="https://github.com/apache/datafusion/pull/16398"&gt;resulting PR&lt;/a&gt; is a model of careful
+community engineering and a great example of using Rust's &lt;code&gt;async&lt;/code&gt; ecosystem
+to implement complex functionality. It even resulted in a &lt;a href="https://github.com/tokio-rs/tokio/pull/7405"&gt;contribution upstream to tokio&lt;/a&gt;
+(since accepted). See the &lt;a href="https://datafusion.apache.org/blog/2025/06/30/cancellation"&gt;blog post&lt;/a&gt; for more details.&lt;/p&gt;
+&lt;h3&gt;Metadata for User Defined Types such as &lt;code&gt;Variant&lt;/code&gt; and &lt;code&gt;Geometry&lt;/code&gt;&lt;/h3&gt;
+&lt;p&gt;User-defined types have been &lt;a href="https://github.com/apache/datafusion/issues/12644"&gt;a long-requested feature&lt;/a&gt;, and this release provides
+the low-level APIs to support them efficiently.&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Metadata handling in PRs &lt;a href="https://github.com/apache/datafusion/pull/15646"&gt;#15646&lt;/a&gt; and &lt;a href="https://github.com/apache/datafusion/pull/16170"&gt;#16170&lt;/a&gt; from &lt;a href="https://github.com/timsaucer"&gt;timsaucer&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Pushdown of filters and expressions (see "Dynamic Filters and TopK pushdown" section above)&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;We still have some work to do to fully support user-defined types, specifically
+in documentation and testing, and we would
+love your help in this area. If you are interested in contributing,
+please see &lt;a href="https://github.com/apache/datafusion/issues/12644"&gt;issue #12644&lt;/a&gt;.&lt;/p&gt;
+&lt;h3&gt;Parquet Modular Encryption&lt;/h3&gt;
+&lt;p&gt;DataFusion now supports reading and writing encrypted &lt;a href="https://parquet.apache.org/"&gt;Apache Parquet&lt;/a&gt; files with &lt;a href="https://parquet.apache.org/docs/file-format/data-pages/encryption/"&gt;modular
+encryption&lt;/a&gt;. This allows users to encrypt specific columns in a Parquet file
+using different keys, while still being able to read data without needing to
+decrypt the entire file.&lt;/p&gt;
+&lt;p&gt;Here is an example of how to configure DataFusion to read an encrypted Parquet
+table with two columns, &lt;code&gt;double_field&lt;/code&gt; and &lt;code&gt;float_field&lt;/code&gt;, using modular
+encryption:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;CREATE EXTERNAL TABLE encrypted_parquet_table
+(
+double_field double,
+float_field float
+)
+STORED AS PARQUET LOCATION 'pq/' OPTIONS (
+    -- encryption
+    'format.crypto.file_encryption.encrypt_footer' 'true',
+    'format.crypto.file_encryption.footer_key_as_hex' '30313233343536373839303132333435',  -- b"0123456789012345"
+    'format.crypto.file_encryption.column_key_as_hex::double_field' '31323334353637383930313233343530', -- b"1234567890123450"
+    'format.crypto.file_encryption.column_key_as_hex::float_field' '31323334353637383930313233343531', -- b"1234567890123451"
+    -- decryption
+    'format.crypto.file_decryption.footer_key_as_hex' '30313233343536373839303132333435', -- b"0123456789012345"
+    'format.crypto.file_decryption.column_key_as_hex::double_field' '31323334353637383930313233343530', -- b"1234567890123450"
+    'format.crypto.file_decryption.column_key_as_hex::float_field' '31323334353637383930313233343531', -- b"1234567890123451"
+);
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;(&lt;a href="https://github.com/apache/datafusion/issues/15216"&gt;Issue #15216&lt;/a&gt;,
+&lt;a href="https://github.com/apache/datafusion/pull/16351"&gt;PR #16351&lt;/a&gt;
+from &lt;a href="https://github.com/corwinjoy"&gt;corwinjoy&lt;/a&gt; and &lt;a href="https://github.com/adamreeve"&gt;adamreeve&lt;/a&gt;)&lt;/p&gt;
+&lt;h3&gt;Support for &lt;code&gt;WITHIN GROUP&lt;/code&gt; for Ordered-Set Aggregate Functions&lt;/h3&gt;
+&lt;p&gt;DataFusion now supports the &lt;code&gt;WITHIN GROUP&lt;/code&gt; clause for &lt;a href="https://www.postgresql.org/docs/9.4/functions-aggregate.html#FUNCTIONS-ORDEREDSET-TABLE"&gt;ordered-set aggregate
+functions&lt;/a&gt; such as &lt;code&gt;approx_percentile_cont&lt;/code&gt;, &lt;code&gt;percentile_cont&lt;/code&gt;, and
+&lt;code&gt;percentile_disc&lt;/code&gt;, which allows users to specify the precise order.&lt;/p&gt;
+&lt;p&gt;For example, the following query computes the 50th percentile for the &lt;code&gt;temperature&lt;/code&gt; column
+in the &lt;code&gt;city_data&lt;/code&gt; table, ordered by &lt;code&gt;date&lt;/code&gt;:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT
+    percentile_disc(0.5) WITHIN GROUP (ORDER BY date) AS median_temperature
+FROM city_data;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;(Issue &lt;a href="https://github.com/apache/datafusion/issues/11732"&gt;#11732&lt;/a&gt;, 
+PR &lt;a href="https://github.com/apache/datafusion/pull/13511"&gt;#13511&lt;/a&gt;,
+by &lt;a href="https://github.com/Garamda"&gt;Garamda&lt;/a&gt;)&lt;/p&gt;
+&lt;h3&gt;Compressed Spill Files&lt;/h3&gt;
+&lt;p&gt;DataFusion now supports compressing the files written to disk when spilling
+larger-than-memory datasets while sorting and grouping. Using compression
+can significantly reduce the
+size of the intermediate files and improve performance when reading them back into memory.&lt;/p&gt;
+&lt;p&gt;(Issue &lt;a href="https://github.com/apache/datafusion/issues/16130"&gt;#16130&lt;/a&gt;,
+PR &lt;a href="https://github.com/apache/datafusion/pull/16268"&gt;#16268&lt;/a&gt;
+by &lt;a href="https://github.com/ding-young"&gt;ding-young&lt;/a&gt;)&lt;/p&gt;
+&lt;h3&gt;Support for &lt;code&gt;REGEX_INSTR&lt;/code&gt; function&lt;/h3&gt;
+&lt;p&gt;DataFusion now supports the [&lt;code&gt;REGEXP_INSTR&lt;/code&gt; function], which returns the position of a
+regular expression match within a string.&lt;/p&gt;
+&lt;p&gt;For example, to find the position of the first match of the regular expression
+&lt;code&gt;C(.)(..)&lt;/code&gt; in the string &lt;code&gt;ABCDEF&lt;/code&gt;, you can use:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;&amp;gt; SELECT regexp_instr('ABCDEF', 'C(.)(..)');
++---------------------------------------------------------------+
+| regexp_instr(Utf8("ABCDEF"),Utf8("C(.)(..)"))                 |
++---------------------------------------------------------------+
+| 3                                                             |
++---------------------------------------------------------------+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;(&lt;a href="https://github.com/apache/datafusion/issues/13009"&gt;Issue #13009&lt;/a&gt;,
+&lt;a href="https://github.com/apache/datafusion/pull/15928"&gt;PR #15928&lt;/a&gt;
+by &lt;a href="https://github.com/nirnayroy"&gt;nirnayroy&lt;/a&gt;)&lt;/p&gt;
+&lt;h2&gt;Upgrade Guide and Changelog&lt;/h2&gt;
+&lt;p&gt;Upgrading to 49.0.0 should be straightforward for most users. Please review the
+&lt;a href="https://datafusion.apache.org/library-user-guide/upgrading.html"&gt;Upgrade Guide&lt;/a&gt;
+for details on breaking changes and code snippets to help with the transition.
+Recently, some users have reported success automatically upgrading DataFusion by
+pairing AI tools with the upgrade guide. For a comprehensive list of all changes,
+please refer to the &lt;a href="https://github.com/apache/datafusion/blob/branch-49/dev/changelog/49.0.0.md"&gt;changelog&lt;/a&gt;.&lt;/p&gt;
+&lt;h2&gt;About DataFusion&lt;/h2&gt;
+&lt;p&gt;&lt;a href="https://datafusion.apache.org/"&gt;Apache DataFusion&lt;/a&gt; is an extensible query engine, written in &lt;a href="https://www.rust-lang.org/"&gt;Rust&lt;/a&gt;, that
+uses &lt;a href="https://arrow.apache.org"&gt;Apache Arrow&lt;/a&gt; as its in-memory format. DataFusion is used by developers to
+create new, fast, data-centric systems such as databases, dataframe libraries,
+and machine learning and streaming applications. While &lt;a href="https://datafusion.apache.org/user-guide/introduction.html#project-goals"&gt;DataFusion&amp;rsquo;s primary design
+goal&lt;/a&gt; is to accelerate the creation of other data-centric systems, it provides a
+reasonable experience directly out of the box as a &lt;a href="https://datafusion.apache.org/user-guide/dataframe.html"&gt;dataframe library&lt;/a&gt;,
+&lt;a href="https://datafusion.apache.org/python/"&gt;python library&lt;/a&gt;, and [command-line SQL tool].&lt;/p&gt;
+&lt;p&gt;DataFusion's core thesis is that as a community, together we can build much more
+advanced technology than any of us as individuals or companies could do alone.
+Without DataFusion, highly performant vectorized query engines would remain
+the domain of a few large companies and world-class research institutions.
+With DataFusion, we can all build on top of a shared foundation and focus on
+what makes our projects unique.&lt;/p&gt;
+&lt;h2&gt;How to Get Involved&lt;/h2&gt;
+&lt;p&gt;DataFusion is not a project built or driven by a single person, company, or
+foundation. Rather, our community of users and contributors works together to
+build a shared technology that none of us could have built alone.&lt;/p&gt;
+&lt;p&gt;If you are interested in joining us, we would love to have you. You can try out
+DataFusion on some of your own data and projects and let us know how it goes,
+contribute suggestions, documentation, bug reports, or a PR with documentation,
+tests, or code. A list of open issues suitable for beginners is &lt;a href="https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22"&gt;here&lt;/a&gt;, and you
+can find out how to reach us on the &lt;a href="https://datafusion.apache.org/contributor-guide/communication.html"&gt;communication doc&lt;/a&gt;.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Apache DataFusion 48.0.0 Released</title><link href="https://datafusion.apache.org/blog/2025/07/16/datafusion-48.0.0" rel="alternate"></link><published>2025-07-16T00:00:00+00:00</published><updated>2025-07-16T00:00:00+00:00</updated><author><name>PMC</name></author><id>tag:datafusion.apache.org,2025-07-16:/blog/2025/07/16/datafusion-48.0.0</id><summary type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+&lt;!-- see https://github.com/apache/datafusion/issues/16347 for details --&gt;
+&lt;p&gt;We&amp;rsquo;re excited to announce the release of &lt;strong&gt;Apache DataFusion 48.0.0&lt;/strong&gt;! As always, this version packs in a wide range of 
+improvements and fixes. You can find the complete details in the full 
+&lt;a href="https://github.com/apache/datafusion/blob/branch-48/dev/changelog/48.0.0.md"&gt;changelog&lt;/a&gt;. We&amp;rsquo;ll highlight the most
+important changes below and guide you through upgrading.&lt;/p&gt;
+&lt;h2&gt;Breaking …&lt;/h2&gt;</summary><content type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+&lt;!-- see https://github.com/apache/datafusion/issues/16347 for details --&gt;
+&lt;p&gt;We&amp;rsquo;re excited to announce the release of &lt;strong&gt;Apache DataFusion 48.0.0&lt;/strong&gt;! As always, this version packs in a wide range of 
+improvements and fixes. You can find the complete details in the full 
+&lt;a href="https://github.com/apache/datafusion/blob/branch-48/dev/changelog/48.0.0.md"&gt;changelog&lt;/a&gt;. We&amp;rsquo;ll highlight the most
+important changes below and guide you through upgrading.&lt;/p&gt;
+&lt;h2&gt;Breaking Changes&lt;/h2&gt;
+&lt;p&gt;DataFusion 48.0.0 brings a few &lt;strong&gt;breaking changes&lt;/strong&gt; that may require adjustments to your code as described in
+the &lt;a href="https://datafusion.apache.org/library-user-guide/upgrading.html#datafusion-48-0-0"&gt;Upgrade Guide&lt;/a&gt;. Here are the most notable ones:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;datafusion.execution.collect_statistics&lt;/code&gt; defaults to &lt;code&gt;true&lt;/code&gt;: In DataFusion 48.0.0, the default value of this &lt;a href="https://datafusion.apache.org/user-guide/configs.html"&gt;configuration setting&lt;/a&gt; is now true, and DataFusion will collect and store statistics when a table is first created via &lt;code&gt;CREATE EXTERNAL TABLE&lt;/code&gt; or one of the &lt;code&gt;DataFrame::register_*&lt;/code&gt; APIs.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;Expr::Literal&lt;/code&gt; has optional metadata: The &lt;code&gt;Expr::Literal&lt;/code&gt; variant now includes optional metadata, which allows 
+  for carrying through Arrow field metadata to support extension types and other uses. This means code such as&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;match expr {
+...
+  Expr::Literal(scalar) =&amp;gt; ...
+...
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Should be updated to:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;match expr {
+...
+  Expr::Literal(scalar, _metadata) =&amp;gt; ...
+...
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;Expr::WindowFunction&lt;/code&gt; is now Boxed: &lt;code&gt;Expr::WindowFunction&lt;/code&gt; is now a &lt;code&gt;Box&amp;lt;WindowFunction&amp;gt;&lt;/code&gt; instead of a &lt;code&gt;WindowFunction&lt;/code&gt; 
+  directly. This change was made to reduce the size of &lt;code&gt;Expr&lt;/code&gt; and improve performance when planning queries 
+  (see details on &lt;a href="https://github.com/apache/datafusion/pull/16207"&gt;#16207&lt;/a&gt;).&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;UDFs changed to use &lt;code&gt;FieldRef&lt;/code&gt; instead of &lt;code&gt;DataType&lt;/code&gt;: To support metadata handling and 
+  prepare for extension types, UDF traits now use &lt;a href="https://docs.rs/arrow/latest/arrow/datatypes/type.FieldRef.html"&gt;FieldRef&lt;/a&gt; rather than a &lt;code&gt;DataType&lt;/code&gt;
+  and nullability. &lt;code&gt;FieldRef&lt;/code&gt; contains the type and nullability, and additionally allows access to 
+  metadata fields, which can be used for extension types.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Physical Expression return &lt;code&gt;Field&lt;/code&gt;: Similarly to UDFs, in order to prepare for extension type support the 
+  &lt;a href="https://docs.rs/datafusion/latest/datafusion/physical_expr/trait.PhysicalExpr.html"&gt;PhysicalExpr&lt;/a&gt; trait has been changed to return &lt;a href="https://docs.rs/arrow/latest/arrow/datatypes/struct.Field.html"&gt;Field&lt;/a&gt; rather than &lt;code&gt;DataType&lt;/code&gt;. To upgrade structs which 
+  implement &lt;code&gt;PhysicalExpr&lt;/code&gt; you need to implement the &lt;code&gt;return_field&lt;/code&gt; function. &lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;FileFormat::supports_filters_pushdown&lt;/code&gt; was replaced with &lt;code&gt;FileSource::try_pushdown_filters&lt;/code&gt; to support upcoming work to push down dynamic filters and physical filter pushdown. &lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;ParquetExec&lt;/code&gt;, &lt;code&gt;AvroExec&lt;/code&gt;, &lt;code&gt;CsvExec&lt;/code&gt;, &lt;code&gt;JsonExec&lt;/code&gt; removed: &lt;code&gt;ParquetExec&lt;/code&gt;, &lt;code&gt;AvroExec&lt;/code&gt;, &lt;code&gt;CsvExec&lt;/code&gt;, and &lt;code&gt;JsonExec&lt;/code&gt;
+  were deprecated in DataFusion 46 and are removed in DataFusion 48.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;Performance Improvements&lt;/h2&gt;
+&lt;p&gt;DataFusion 48.0.0 comes with some noteworthy performance enhancements:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Fewer unnecessary projections:&lt;/strong&gt; DataFusion now removes additional unnecessary &lt;code&gt;Projection&lt;/code&gt;s in queries. (PRs &lt;a href="https://github.com/apache/datafusion/pull/15787"&gt;#15787&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/15761"&gt;#15761&lt;/a&gt;,
+  and &lt;a href="https://github.com/apache/datafusion/pull/15746"&gt;#15746&lt;/a&gt; by &lt;a href="https://github.com/xudong963"&gt;xudong963&lt;/a&gt;).&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Accelerated string functions&lt;/strong&gt;: The &lt;code&gt;ascii&lt;/code&gt; function was optimized to significantly improve its performance
+  (PR &lt;a href="https://github.com/apache/datafusion/pull/16087"&gt;#16087&lt;/a&gt; by &lt;a href="https://github.com/tlm365"&gt;tlm365&lt;/a&gt;). The &lt;code&gt;character_length&lt;/code&gt; function was optimized resulting in 
+  &lt;a href="https://github.com/apache/datafusion/pull/15931#issuecomment-2848561984"&gt;up to 3x&lt;/a&gt; performance improvement (PR &lt;a href="https://github.com/apache/datafusion/pull/15931"&gt;#15931&lt;/a&gt; by &lt;a href="https://github.com/Dandandan"&gt;Dandandan&lt;/a&gt;)&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Constant aggregate window expressions:&lt;/strong&gt; For unbounded aggregate window functions the result is the 
+  same for all rows within a partition. DataFusion 48.0.0 avoids unnecessary computation for such queries, resulting in &lt;a href="https://github.com/apache/datafusion/pull/16234#issuecomment-2935960865"&gt;improved performance by 5.6x&lt;/a&gt;
+  (PR &lt;a href="https://github.com/apache/datafusion/pull/16234"&gt;#16234&lt;/a&gt; by &lt;a href="https://github.com/suibianwanwank"&gt;suibianwanwank&lt;/a&gt;)&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;Highlighted New Features&lt;/h2&gt;
+&lt;h3&gt;New &lt;code&gt;datafusion-spark&lt;/code&gt; crate&lt;/h3&gt;
+&lt;p&gt;The DataFusion community has requested &lt;a href="https://spark.apache.org"&gt;Apache Spark&lt;/a&gt;-compatible functions for many years, but the current builtin function library is most similar to Postgresql, which leads to friction. Unfortunately, there are even functions with the same name but different signatures and/or return types in the two systems.&lt;/p&gt;
+&lt;p&gt;One of the many uses of DataFusion is to enhance (e.g. &lt;a href="https://github.com/apache/datafusion-comet"&gt;Apache DataFusion Comet&lt;/a&gt;) 
+or replace (e.g. &lt;a href="https://github.com/lakehq/sail"&gt;Sail&lt;/a&gt;) &lt;a href="https://spark.apache.org/"&gt;Apache Spark&lt;/a&gt;. To 
+support the community requests and the use cases mentioned above, we have introduced a new
+&lt;a href="https://crates.io/crates/datafusion-spark"&gt;datafusion-spark&lt;/a&gt; crate for DataFusion with spark-compatible functions so the 
+community can collaborate to build this shared resource. There are several hundred functions to implement, and we are looking for help to &lt;a href="https://github.com/apache/datafusion/issues/15914"&gt;complete datafusion-spark Spark Compatible Functions&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;To register all functions in &lt;code&gt;datafusion-spark&lt;/code&gt; you can use:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-Rust"&gt;    // Create a new session context
+    let mut ctx = SessionContext::new();
+    // register all spark functions with the context
+    datafusion_spark::register_all(&amp;amp;mut ctx)?;
+    // run a query. Note the `sha2` function is now available which
+    // has Spark semantics
+    let df = ctx.sql("SELECT sha2('The input String', 256)").await?;
+    ...
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Or, to use an individual function, you can do:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-Rust"&gt;use datafusion_expr::{col, lit};
+use datafusion_spark::expr_fn::sha2;
+// Create the expression `sha2(my_data, 256)`
+let expr = sha2(col("my_data"), lit(256));
+...
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/shehabgamin"&gt;shehabgamin&lt;/a&gt; for the initial PR &lt;a href="https://github.com/apache/datafusion/pull/15168"&gt;#15168&lt;/a&gt; 
+and many others for their help adding additional functions. Please consider 
+helping &lt;a href="https://github.com/apache/datafusion/issues/15914"&gt;complete datafusion-spark Spark Compatible Functions&lt;/a&gt;. &lt;/p&gt;
+&lt;h3&gt;&lt;code&gt;ORDER BY ALL sql&lt;/code&gt; support&lt;/h3&gt;
+&lt;p&gt;Inspired by &lt;a href="https://duckdb.org/docs/stable/sql/query_syntax/orderby.html#order-by-all-examples"&gt;DuckDB&lt;/a&gt;, DataFusion 48.0.0 adds support for &lt;code&gt;ORDER BY ALL&lt;/code&gt;. This allows for easy ordering of all columns in a query:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;&amp;gt; set datafusion.sql_parser.dialect = 'DuckDB';
+0 row(s) fetched.
+&amp;gt; CREATE OR REPLACE TABLE addresses AS
+    SELECT '123 Quack Blvd' AS address, 'DuckTown' AS city, '11111' AS zip
+    UNION ALL
+    SELECT '111 Duck Duck Goose Ln', 'DuckTown', '11111'
+    UNION ALL
+    SELECT '111 Duck Duck Goose Ln', 'Duck Town', '11111'
+    UNION ALL
+    SELECT '111 Duck Duck Goose Ln', 'Duck Town', '11111-0001';
+0 row(s) fetched.
+&amp;gt; SELECT * FROM addresses ORDER BY ALL;
++------------------------+-----------+------------+
+| address                | city      | zip        |
++------------------------+-----------+------------+
+| 111 Duck Duck Goose Ln | Duck Town | 11111      |
+| 111 Duck Duck Goose Ln | Duck Town | 11111-0001 |
+| 111 Duck Duck Goose Ln | DuckTown  | 11111      |
+| 123 Quack Blvd         | DuckTown  | 11111      |
++------------------------+-----------+------------+
+4 row(s) fetched.
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/PokIsemaine"&gt;PokIsemaine&lt;/a&gt; for PR &lt;a href="https://github.com/apache/datafusion/pull/15772"&gt;#15772&lt;/a&gt;&lt;/p&gt;
+&lt;h3&gt;FFI Support for &lt;code&gt;AggregateUDF&lt;/code&gt; and &lt;code&gt;WindowUDF&lt;/code&gt;&lt;/h3&gt;
+&lt;p&gt;This improvement allows for using user defined aggregate and user defined window functions across FFI boundaries, which enables shared libraries to pass functions back and forth. This feature unlocks:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Modules to provide DataFusion based FFI aggregates that can be reused in projects such as &lt;a href="https://github.com/apache/datafusion-python"&gt;datafusion-python&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Using the same aggregate and window functions without recompiling with different DataFusion versions.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;This completes the work to add support for all UDF types to DataFusion's FFI bindings. Thanks to &lt;a href="https://github.com/timsaucer"&gt;timsaucer&lt;/a&gt;
+for PRs &lt;a href="https://github.com/apache/datafusion/pull/16261"&gt;#16261&lt;/a&gt; and &lt;a href="https://github.com/apache/datafusion/pull/14775"&gt;#14775&lt;/a&gt;.&lt;/p&gt;
+&lt;h3&gt;Reduced size of &lt;code&gt;Expr&lt;/code&gt; struct&lt;/h3&gt;
+&lt;p&gt;The &lt;a href="https://docs.rs/datafusion/latest/datafusion/logical_expr/enum.Expr.html"&gt;Expr&lt;/a&gt; struct is widely used across the DataFusion and downstream codebases. By &lt;code&gt;Box&lt;/code&gt;ing &lt;code&gt;WindowFunction&lt;/code&gt;s,  we reduced the size of &lt;code&gt;Expr&lt;/code&gt; by almost 50%, from &lt;code&gt;272&lt;/code&gt; to &lt;code&gt;144&lt;/code&gt; bytes. This reduction improved planning times between 10% and 20% and reduced memory usage. Thanks to &lt;a href="https://github.com/hendrikmakait"&gt;hendrikmakait&lt;/a&gt; for 
+PR &lt;a href="https://github.com/apache/datafusion/pull/16207"&gt;#16207&lt;/a&gt;&lt;/p&gt;
+&lt;h2&gt;Upgrade Guide and Changelog&lt;/h2&gt;
+&lt;p&gt;Upgrading to 48.0.0 should be straightforward for most users, but do review
+the &lt;a href="https://datafusion.apache.org/library-user-guide/upgrading.html#datafusion-48-0-0"&gt;Upgrade Guide for DataFusion 48.0.0&lt;/a&gt; for detailed
+steps and code changes. The upgrade guide covers the breaking changes mentioned above and provides code snippets to help with the
+transition. For a comprehensive list of all changes, please refer to the &lt;a href="https://github.com/apache/datafusion/blob/branch-48/dev/changelog/48.0.0.md"&gt;changelog&lt;/a&gt; 
+for the 48.0.0 release. The changelog enumerates every merged PR in this release, including many smaller fixes and improvements 
+that we couldn&amp;rsquo;t cover in this post.&lt;/p&gt;
+&lt;h2&gt;Get Involved&lt;/h2&gt;
+&lt;p&gt;Apache DataFusion is an open-source project, and we welcome involvement from anyone interested. Now is a great time to
+take 48.0.0 for a spin: try it out on your workloads, and let us know if you encounter any issues or have suggestions.
+You can report bugs or request features on our GitHub issue tracker, or better yet, submit a pull request. Join our
+community discussions &amp;ndash; whether you have questions, want to share how you&amp;rsquo;re using DataFusion, or are looking to
+contribute, we&amp;rsquo;d love to hear from you. A list of open issues suitable for beginners
+is &lt;a href="https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22"&gt;here&lt;/a&gt; and you
+can find how to reach us on the &lt;a href="https://datafusion.apache.org/contributor-guide/communication.html"&gt;communication doc&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Happy querying!&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Embedding User-Defined Indexes in Apache Parquet Files</title><link href="https://datafusion.apache.org/blog/2025/07/14/user-defined-parquet-indexes" rel="alternate"></link><published>2025-07-14T00:00:00+00:00</published><updated>2025-07-14T00:00:00+00:00</updated><author><name>Qi Zhu (Cloudera), Jigao Luo (Systems Group at TU Darmstadt), and Andrew Lamb (InfluxData)</name></author><id>tag:datafusion.apache.org,2025-07-14:/blog/2025/07/14/user-defined-parquet-indexes</id><summary type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+&lt;p&gt;It&amp;rsquo;s a common misconception that &lt;a href="https://parquet.apache.org/"&gt;Apache Parquet&lt;/a&gt; files are limited to basic Min/Max/Null Count statistics and Bloom filters, and that adding more advanced indexes requires changing the specification or creating a new file format. In fact, footer metadata and offset-based addressing already provide everything needed to embed …&lt;/p&gt;</summary><content type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+&lt;p&gt;It&amp;rsquo;s a common misconception that &lt;a href="https://parquet.apache.org/"&gt;Apache Parquet&lt;/a&gt; files are limited to basic Min/Max/Null Count statistics and Bloom filters, and that adding more advanced indexes requires changing the specification or creating a new file format. In fact, footer metadata and offset-based addressing already provide everything needed to embed user-defined index structures within Parquet files without breaking compatibility with other Parquet readers.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Motivating Example:&lt;/strong&gt; Imagine your data has a &lt;code&gt;Nation&lt;/code&gt; column with dozens of distinct values across thousands of Parquet files. You execute:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;  SELECT AVG(sales_amount)
+  FROM sales
+  WHERE nation = 'Singapore'
+  GROUP BY year;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Relying on the min/max statistics from the Parquet format will be ineffective at pruning files when &lt;code&gt;Nation&lt;/code&gt; spans "Argentina" through "Zimbabwe". Instead of relying on a Bloom Filter, you may want to store a list of every distinct &lt;code&gt;Nation&lt;/code&gt; value in the file near the end. At query time, your engine will read that tiny list and skip any file that does not contain 'Singapore'. This special distinct value index can yield dramatically better file‑pruning performance for your engine, all while preserving full compatibility with standard Parquet readers.&lt;/p&gt;
+&lt;p&gt;In this post, we review how indexes are stored in the Apache Parquet format, explain the mechanism for storing user-defined indexes, and finally show how to read and write a user-defined index using &lt;a href="https://datafusion.apache.org/"&gt;Apache DataFusion&lt;/a&gt;.&lt;/p&gt;
+&lt;h2&gt;Introduction&lt;/h2&gt;
+&lt;hr/&gt;
+&lt;p&gt;Apache Parquet is a popular columnar file format with well understood and &lt;a href="https://arrow.apache.org/blog/2022/12/26/querying-parquet-with-millisecond-latency/"&gt;production grade libraries for high‑performance analytics&lt;/a&gt;. Features like efficient encodings, column pruning, and predicate pushdown work well for many common query patterns. Apache DataFusion includes a &lt;a href="https://datafusion.apache.org/blog/2025/03/20/parquet-pruning/"&gt;highly optimized Parquet implementation&lt;/a&gt; and has excellent performance in general. However, some production query patterns require more than the statistics included in the Parquet format itself&lt;sup&gt;&lt;a href="#footnote1"&gt;1&lt;/a&gt;&lt;/sup&gt;.&lt;/p&gt;
+&lt;p&gt;Many systems improve query performance using &lt;em&gt;external&lt;/em&gt; indexes or other metadata in addition to Parquet. For example, Apache Iceberg's &lt;a href="https://iceberg.apache.org/docs/latest/performance/#scan-planning"&gt;Scan Planning&lt;/a&gt; uses metadata stored in separate files or an in memory cache, and the &lt;a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/parquet_index.rs"&gt;parquet_index.rs&lt;/a&gt; and &lt;a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/advanced_parquet_index.rs"&gt;advanced_parquet_index.rs&lt;/a&gt; examples in the DataFusion repository use external files for Parquet pruning (skipping).&lt;/p&gt;
+&lt;p&gt;External indexes are powerful and widespread, but they have some drawbacks:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Increased Cost and Operational Complexity:&lt;/strong&gt; You need additional files and systems as well as the original Parquet. &lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Synchronization Risks:&lt;/strong&gt; The external index may become out of sync with the Parquet data if you do not manage it carefully.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Proponents have even cited these drawbacks as justification for new file formats, such as Microsoft's &lt;a href="https://github.com/microsoft/amudai/blob/main/docs/spec/src/what_about_parquet.md"&gt;Amudai&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;However, Parquet is extensible with user-defined indexes&lt;/strong&gt;: Parquet tolerates unknown bytes within the file body and permits arbitrary key/value pairs in its footer metadata. These two features enable &lt;strong&gt;embedding&lt;/strong&gt; user-defined indexes directly in the file&amp;mdash;no extra files, no format forks, and no compatibility breakage. &lt;/p&gt;
+&lt;h2&gt;Parquet File Anatomy &amp;amp; Standard Index Structures&lt;/h2&gt;
+&lt;hr/&gt;
+&lt;p&gt;Logically, Parquet files contain row groups, each with column chunks, which in turn contain data pages. Physically, a Parquet file is a sequence of bytes with a Thrift-encoded footer metadata containing metadata about the file structure. The footer metadata includes the schema, row groups, column chunks, and other metadata required to read the file.&lt;/p&gt;
+&lt;p&gt;The Parquet format includes three main types&lt;sup&gt;&lt;a href="#footnote2"&gt;2&lt;/a&gt;&lt;/sup&gt; of optional index structures:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;&lt;a href="https://github.com/apache/parquet-format/blob/819adce0ec6aa848e56c56f20b9347f4ab50857f/src/main/thrift/parquet.thrift#L263-L266"&gt;Min/Max/Null Count Statistics&lt;/a&gt;&lt;/strong&gt; for each chunk in a row group. Engines use these to quickly skip row groups that do not match a query predicate. &lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;&lt;a href="https://parquet.apache.org/docs/file-format/pageindex/"&gt;Page Index&lt;/a&gt;&lt;/strong&gt;: Offsets, sizes, and statistics for each data page. Engines use these to quickly locate data pages without scanning all pages for a column chunk.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;&lt;a href="https://parquet.apache.org/docs/file-format/bloomfilter/"&gt;Bloom Filters&lt;/a&gt;&lt;/strong&gt;: Data structure to quickly determine if a value is present in a column chunk without scanning any data pages. Particularly useful for equality and &lt;code&gt;IN&lt;/code&gt; predicates.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;!-- Source: https://docs.google.com/presentation/d/1aFjTLEDJyDqzFZHgcmRxecCvLKKXV2OvyEpTQFCNZPw --&gt;
+&lt;p&gt;&lt;img alt="Parquet File layout with standard index structures." class="img-responsive" src="/blog/images/user-defined-parquet-indexes/standard_index_structures.png" width="80%"/&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Figure 1&lt;/strong&gt;: Parquet file layout with standard index structures (as written by arrow-rs).&lt;/p&gt;
+&lt;p&gt;Only the Min/Max/Null Count Statistics are stored inline in the Parquet footer metadata. The Page Index and Bloom Filters are typically stored in the file body before the Thrift-encoded footer metadata. The locations of these index structures are recorded in the footer metadata, as shown in Figure 1. Parquet readers that do not understand these structures simply ignore them.&lt;/p&gt;
+&lt;p&gt;Modern Parquet writers create these indexes automatically and provide APIs to control their generation and placement. For example, the &lt;a href="https://docs.rs/parquet/latest/parquet/"&gt;Rust Parquet Library&lt;/a&gt; provides &lt;a href="https://docs.rs/parquet/latest/parquet/file/properties/struct.WriterProperties.html"&gt;Parquet WriterProperties&lt;/a&gt;, &lt;a href="https://docs.rs/parquet/latest/parquet/file/properties/enum.EnabledStatistics.html"&gt;EnabledStatistics&lt;/a&gt;, and &lt;a href="https://docs.rs/parquet/latest/parquet/file/properties/enum.BloomFilterPosition.html"&gt;BloomFilterPosition&lt;/a&gt;.&lt;/p&gt;
+&lt;h2&gt;Embedding User Defined Indexes in Parquet Files&lt;/h2&gt;
+&lt;hr/&gt;
+&lt;p&gt;Embedding user-defined indexes in Parquet files is straightforward and follows the same principles as standard index structures&lt;sup&gt;&lt;a href="#footnote6"&gt;6&lt;/a&gt;&lt;/sup&gt;:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;Serialize the index into a binary format and write it into the file body before the Thrift-encoded footer metadata.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Record the index location in the footer metadata as a key/value pair, such as &lt;code&gt;"my_index_offset" -&amp;gt; "&amp;lt;byte-offset&amp;gt;"&lt;/code&gt;.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Figure 2 shows the resulting file layout.&lt;/p&gt;
+&lt;!-- Source: https://docs.google.com/presentation/d/1aFjTLEDJyDqzFZHgcmRxecCvLKKXV2OvyEpTQFCNZPw --&gt;
+&lt;p&gt;&lt;img alt="Parquet File layout with custom index structures." class="img-responsive" src="/blog/images/user-defined-parquet-indexes/custom_index_structures.png" width="80%"/&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Figure 2&lt;/strong&gt;: Parquet file layout with user-defined indexes.&lt;/p&gt;
+&lt;p&gt;Like standard index structures, user-defined indexes can be stored anywhere in the file body, such as after row group data or before the footer. There is no limit to the number of user-defined indexes, nor any restriction on their granularity: they can operate at the file, row group, page, or even row level. This flexibility enables a wide range of use cases, including:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;Row group or page-level distinct sets: a finer-grained version of the file-level example in this blog.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href="https://en.wikipedia.org/wiki/HyperLogLog"&gt;HyperLogLog&lt;/a&gt; sketches for distinct value estimation, addressing a common criticism&lt;sup&gt;3&lt;/sup&gt; of Parquet&amp;rsquo;s lack of cardinality estimation.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Additional zone maps (&lt;a href="https://www.vldb.org/conf/1998/p476.pdf"&gt;small materialized aggregates&lt;/a&gt;) such as precomputed &lt;code&gt;sum&lt;/code&gt;s at the column chunk or data page level for faster query execution.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Histograms or samples at the row group or column chunk level for predicate selectivity estimates.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2&gt;Example: Embedding a User Defined Distinct Value Index in Parquet Files&lt;/h2&gt;
+&lt;hr/&gt;
+&lt;p&gt;This section demonstrates how to embed a simple distinct value index in Parquet files and use it for file-level pruning (skipping) in DataFusion. The full example is available in the DataFusion repository at &lt;a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/parquet_embedded_index.rs"&gt;parquet_embedded_index.rs&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Note that the example requires &lt;strong&gt;&lt;a href="https://crates.io/crates/parquet/55.2.0"&gt;arrow‑rs v55.2.0&lt;/a&gt;&lt;/strong&gt; or later, which includes the new &amp;ldquo;buffered write&amp;rdquo; API (&lt;a href="https://github.com/apache/arrow-rs/pull/7714"&gt;apache/arrow-rs#7714&lt;/a&gt;) to keep the internal byte count in sync after appending index bytes immediately after data pages.&lt;/p&gt;
+&lt;p&gt;This example is intentionally simple for clarity, but you can adapt the same approach for any index type or data types. The high-level design is:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Define your index payload&lt;/strong&gt; (e.g., bitmap, Bloom filter, sketch, distinct values list, etc.).&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Serialize your index to bytes&lt;/strong&gt; and append them into the Parquet file body before writing the footer.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Record the index location&lt;/strong&gt; by adding a key/value entry (e.g., &lt;code&gt;"my_index_offset" -&amp;gt; "&amp;lt;byte‑offset&amp;gt;"&lt;/code&gt;) in the Parquet footer metadata.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Extend DataFusion&lt;/strong&gt; with a custom &lt;code&gt;TableProvider&lt;/code&gt; (or wrap the existing Parquet provider) to use the index.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;The &lt;code&gt;TableProvider&lt;/code&gt; simply reads the footer metadata to discover the index offset, seeks to that offset and deserializes the index, and then uses the index to speed up processing (e.g., skip files, row groups, data pages, etc.).&lt;/p&gt;
+&lt;p&gt;The resulting Parquet files remain fully compatible with other tools such as DuckDB and Spark, which simply ignore the unknown index bytes and key/value metadata.&lt;/p&gt;
+&lt;h3&gt;Introduction to Distinct Value Indexes&lt;/h3&gt;
+&lt;hr/&gt;
+&lt;p&gt;A &lt;strong&gt;distinct value index&lt;/strong&gt; stores the unique values of a specific column. This type of index is effective for columns with a small number of distinct values and can be used to quickly skip files that do not match the query. These indexes are popular in several engines, such as the &lt;a href="https://clickhouse.com/docs/optimize/skipping-indexes#set"&gt;"set" Skip Index in ClickHouse&lt;/a&gt; and the &lt;a href="https://docs.influxdata.com/influxdb3/enterprise/admin/distinct-value-cache/"&gt;Distinct Value Cache&lt;/a&gt; in InfluxDB 3.0.&lt;/p&gt;
+&lt;p&gt;For example, if the files contain a column named &lt;code&gt;Category&lt;/code&gt; like this:&lt;/p&gt;
+&lt;table style="border-collapse:collapse;"&gt;
+&lt;tr&gt;
+&lt;td style="border:1px solid #888;padding:2px 6px;"&gt;&lt;b&gt;&lt;code&gt;Category&lt;/code&gt;&lt;/b&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style="border:1px solid #888;padding:2px 6px;"&gt;&lt;code&gt;foo&lt;/code&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style="border:1px solid #888;padding:2px 6px;"&gt;&lt;code&gt;bar&lt;/code&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style="border:1px solid #888;padding:2px 6px;"&gt;&lt;code&gt;...&lt;/code&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style="border:1px solid #888;padding:2px 6px;"&gt;&lt;code&gt;baz&lt;/code&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style="border:1px solid #888;padding:2px 6px;"&gt;&lt;code&gt;foo&lt;/code&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/table&gt;
+&lt;p&gt;The distinct value index will contain the values &lt;code&gt;foo&lt;/code&gt;, &lt;code&gt;bar&lt;/code&gt;, and &lt;code&gt;baz&lt;/code&gt;. In contrast, traditional min/max statistics would store only the minimum (&lt;code&gt;bar&lt;/code&gt;) and maximum (&lt;code&gt;foo&lt;/code&gt;) values, so a query like&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT * FROM t WHERE Category = 'bas'
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;cannot skip the file using min/max values because &lt;code&gt;bas&lt;/code&gt; falls between &lt;code&gt;bar&lt;/code&gt; and &lt;code&gt;foo&lt;/code&gt; in lexicographic order, even though &lt;code&gt;bas&lt;/code&gt; does not appear in the column.&lt;/p&gt;
+&lt;p&gt;This is a key benefit of a distinct value index: accurate filtering without requiring the column to be sorted, unlike min/max-based pruning which is most effective when data is ordered.&lt;/p&gt;
+&lt;p&gt;While not a traditional index structure like a B-tree, the distinct value set acts as a lightweight, embedded index that enables fast pruning and is especially effective for columns with low cardinality.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Supported Filters&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;Distinct value indexes are most effective for &lt;strong&gt;equality filters&lt;/strong&gt;, such as:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;WHERE category = 'foo'
+WHERE category IN ('foo', 'bar')
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;They can also help with NOT IN and anti-joins, as long as the engine can evaluate them using the list of known distinct values.&lt;/p&gt;
+&lt;p&gt;However, these indexes are not suitable for range predicates (e.g., category &amp;gt; 'foo'), as they do not preserve any ordering information. For such cases, other structures such as min/max statistics or sorted data layouts may be more effective.&lt;/p&gt;
+&lt;p&gt;We represent a distinct value index in Rust for our example as a simple &lt;code&gt;HashSet&amp;lt;String&amp;gt;&lt;/code&gt;:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;/// An index of distinct values for a single column
+#[derive(Debug, Clone)]
+struct DistinctIndex {
+   inner: HashSet&amp;lt;String&amp;gt;,
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;File Layout with Distinct Value Index&lt;/h3&gt;
+&lt;hr/&gt;
+&lt;p&gt;In this example, we write a distinct value index for the &lt;code&gt;Category&lt;/code&gt; column into the Parquet file body after all the data pages, and record the index location in the footer metadata. The resulting file layout looks like this:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-text"&gt;                  &amp;boxdr;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxdl;                           
+                  &amp;boxv;&amp;boxdr;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxdl; &amp;boxv;                           
+                  &amp;boxv;&amp;boxv;     DataPage      &amp;boxv; &amp;boxv;                           
+                  &amp;boxv;&amp;boxur;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxul; &amp;boxv;                           
+ Standard Parquet &amp;boxv;&amp;boxdr;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxdl; &amp;boxv;                           
+ Data Pages       &amp;boxv;&amp;boxv;     DataPage      &amp;boxv; &amp;boxv;                           
+                  &amp;boxv;&amp;boxur;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxul; &amp;boxv;                           
+                  &amp;boxv;        ...           &amp;boxv;                           
+                  &amp;boxv;&amp;boxdr;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxdl; &amp;boxv;                           
+                  &amp;boxv;&amp;boxv;     DataPage      &amp;boxv; &amp;boxv;                           
+                  &amp;boxv;&amp;boxur;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxul; &amp;boxv;                           
+                  &amp;boxv;┏━━━━━━━━━━━━━━━━━━━┓ &amp;boxv;                           
+Non standard      &amp;boxv;┃                   ┃ &amp;boxv;                           
+index (ignored by &amp;boxv;┃Custom Binary Index┃ &amp;boxv;                           
+other Parquet     &amp;boxv;┃ (Distinct Values) ┃◀&amp;boxv;&amp;boxh; &amp;boxh; &amp;boxh;                      
+readers)          &amp;boxv;┃                   ┃ &amp;boxv;     &amp;boxv;                     
+                  &amp;boxv;┗━━━━━━━━━━━━━━━━━━━┛ &amp;boxv;                           
+Standard Parquet  &amp;boxv;┏━━━━━━━━━━━━━━━━━━━┓ &amp;boxv;     &amp;boxv;  key/value metadata
+Page Index        &amp;boxv;┃    Page Index     ┃ &amp;boxv;        contains location  
+                  &amp;boxv;┗━━━━━━━━━━━━━━━━━━━┛ &amp;boxv;     &amp;boxv;  of special index   
+                  &amp;boxv;&amp;boxDR;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxDL; &amp;boxv;                           
+                  &amp;boxv;&amp;boxV; Parquet Footer w/ &amp;boxV; &amp;boxv;     &amp;boxv;                     
+                  &amp;boxv;&amp;boxV;     Metadata      &amp;boxV; &amp;boxvh; &amp;boxh; &amp;boxh;                       
+                  &amp;boxv;&amp;boxV; (Thrift Encoded)  &amp;boxV; &amp;boxv;                           
+                  &amp;boxv;&amp;boxUR;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxUL; &amp;boxv;                           
+                  &amp;boxur;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxul;                           
+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;Serializing the Distinct‑Value Index&lt;/h3&gt;
+&lt;hr/&gt;
+&lt;p&gt;The example uses a simple newline‑separated UTF‑8 format as the binary format. The code to serialize the distinct index is shown below:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;/// Magic bytes to identify our custom index format
+const INDEX_MAGIC: &amp;amp;[u8] = b"IDX1";
+
+/// Serialize the distinct index to a writer as bytes
+fn serialize&amp;lt;W: Write + Send&amp;gt;(
+   &amp;amp;self,
+   arrow_writer: &amp;amp;mut ArrowWriter&amp;lt;W&amp;gt;,
+) -&amp;gt; Result&amp;lt;()&amp;gt; {
+   let serialized = self
+           .inner
+           .iter()
+           .map(|s| s.as_str())
+           .collect::&amp;lt;Vec&amp;lt;_&amp;gt;&amp;gt;()
+           .join("\n");
+   let index_bytes = serialized.into_bytes();
+
+   // Set the offset for the index
+   let offset = arrow_writer.bytes_written();
+   let index_len = index_bytes.len() as u64;
+
+   // Write the index magic and length to the file
+   arrow_writer.write_all(INDEX_MAGIC)?;
+   arrow_writer.write_all(&amp;amp;index_len.to_le_bytes())?;
+
+   // Write the index bytes
+   arrow_writer.write_all(&amp;amp;index_bytes)?;
+
+   // Append metadata about the index to the Parquet file footer metadata
+   arrow_writer.append_key_value_metadata(KeyValue::new(
+      "distinct_index_offset".to_string(),
+      offset.to_string(),
+   ));
+   Ok(())
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;This code does the following:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;Creates a newline‑separated UTF‑8 string from the distinct values.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Writes a magic header (&lt;code&gt;IDX1&lt;/code&gt;) and the length of the index.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Writes the index bytes to the file using the &lt;a href="https://docs.rs/parquet/latest/parquet/arrow/arrow_writer/struct.ArrowWriter.html"&gt;ArrowWriter&lt;/a&gt; API.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Records the index location by adding a key/value entry (&lt;code&gt;"distinct_index_offset" -&amp;gt; &amp;lt;offset&amp;gt;&lt;/code&gt;) in the Parquet footer metadata.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Note: Use the &lt;a href="https://docs.rs/parquet/latest/parquet/arrow/arrow_writer/struct.ArrowWriter.html#method.write_all"&gt;ArrowWriter::write_all&lt;/a&gt; API to ensure the offsets in the footer metadata are correctly tracked. &lt;/p&gt;
+&lt;h3&gt;Reading the Index&lt;/h3&gt;
+&lt;hr/&gt;
+&lt;p&gt;This code reads the distinct index from a Parquet file:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;/// Read a `DistinctIndex` from a Parquet file
+fn read_distinct_index(path: &amp;amp;Path) -&amp;gt; Result&amp;lt;DistinctIndex&amp;gt; {
+    let file = File::open(path)?;
+
+    let file_size = file.metadata()?.len();
+    println!("Reading index from {} (size: {file_size})", path.display(), );
+
+    let reader = SerializedFileReader::new(file.try_clone()?)?;
+    let meta = reader.metadata().file_metadata();
+
+    let offset = get_key_value(meta, "distinct_index_offset")
+        .ok_or_else(|| ParquetError::General("Missing index offset".into()))?
+        .parse::&amp;lt;u64&amp;gt;()
+        .map_err(|e| ParquetError::General(e.to_string()))?;
+
+    println!("Reading index at offset: {offset}, length");
+    DistinctIndex::new_from_reader(file, offset)
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;This function:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;Opens the Parquet footer metadata and extracts &lt;code&gt;distinct_index_offset&lt;/code&gt; from the metadata.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Calls &lt;code&gt;DistinctIndex::new_from_reader&lt;/code&gt; to read the index from the file at that offset.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;code&gt;DistinctIndex::new_from_reader&lt;/code&gt; actually reads the index as shown below:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt; /// Read the distinct values index from a reader at the given offset and length
+ pub fn new_from_reader&amp;lt;R: Read + Seek&amp;gt;(mut reader: R, offset: u64) -&amp;gt; Result&amp;lt;DistinctIndex&amp;gt; {
+     reader.seek(SeekFrom::Start(offset))?;
+
+     let mut magic_buf = [0u8; 4];
+     reader.read_exact(&amp;amp;mut magic_buf)?;
+     if magic_buf != INDEX_MAGIC {
+         return exec_err!("Invalid index magic number at offset {offset}");
+     }
+
+     let mut len_buf = [0u8; 8];
+     reader.read_exact(&amp;amp;mut len_buf)?;
+     let stored_len = u64::from_le_bytes(len_buf) as usize;
+
+     let mut index_buf = vec![0u8; stored_len];
+     reader.read_exact(&amp;amp;mut index_buf)?;
+
+     let Ok(s) = String::from_utf8(index_buf) else {
+         return exec_err!("Invalid UTF-8 in index data");
+     };
+
+     Ok(Self {
+         inner: s.lines().map(|s| s.to_string()).collect(),
+     })
+ }
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;This code:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;Seeks to the offset of the index in the file.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Reads the magic bytes and checks they match &lt;code&gt;IDX1&lt;/code&gt;.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Reads the length of the index and allocates a buffer.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Reads the index bytes, converts them to a &lt;code&gt;String&lt;/code&gt;, and splits into lines to populate the &lt;code&gt;HashSet&amp;lt;String&amp;gt;&lt;/code&gt;.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3&gt;Extending DataFusion&amp;rsquo;s &lt;code&gt;TableProvider&lt;/code&gt;&lt;/h3&gt;
+&lt;hr/&gt;
+&lt;p&gt;To use the distinct index for file-level pruning, extend DataFusion's &lt;code&gt;TableProvider&lt;/code&gt; to read the index and apply it during query execution:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;impl TableProvider for DistinctIndexTable {
+    /* ... */
+
+    /// Prune files before reading: only keep files whose distinct set
+    /// contains the filter value
+    async fn scan(
+        &amp;amp;self,
+        _ctx: &amp;amp;dyn Session,
+        _proj: Option&amp;lt;&amp;amp;Vec&amp;lt;usize&amp;gt;&amp;gt;,
+        filters: &amp;amp;[Expr],
+        _limit: Option&amp;lt;usize&amp;gt;,
+    ) -&amp;gt; Result&amp;lt;Arc&amp;lt;dyn ExecutionPlan&amp;gt;&amp;gt; {
+        // This example only handles filters of the form
+        // `category = 'X'` where X is a string literal
+        //
+        // You can use `PruningPredicate` for much more general range and
+        // equality analysis or write your own custom logic.
+        let mut target: Option&amp;lt;&amp;amp;str&amp;gt; = None;
+
+        if filters.len() == 1 {
+            if let Expr::BinaryExpr(expr) = &amp;amp;filters[0] {
+                if expr.op == Operator::Eq {
+                    if let (
+                        Expr::Column(c),
+                        Expr::Literal(ScalarValue::Utf8(Some(v)), _),
+                    ) = (&amp;amp;*expr.left, &amp;amp;*expr.right)
+                    {
+                        if c.name == "category" {
+                            println!("Filtering for category: {v}");
+                            target = Some(v);
+                        }
+                    }
+                }
+            }
+        }
+        // Determine which files to scan
+        // files_and_index is a Vec&amp;lt;(String, DistinctIndex)&amp;gt;,
+        // See the full example for how this is populated.
+        let files_to_scan: Vec&amp;lt;_&amp;gt; = self
+            .files_and_index
+            .iter()
+            .filter_map(|(f, distinct_index)| {
+                // keep file if no target or target is in the distinct set
+                if target.is_none() || distinct_index.contains(target?) {
+                    Some(f)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        // Build ParquetSource to actually read the files
+        let url = ObjectStoreUrl::parse("file://")?;
+        let source = Arc::new(ParquetSource::default().with_enable_page_index(true));
+        let mut builder = FileScanConfigBuilder::new(url, self.schema.clone(), source);
+        for file in files_to_scan {
+            let path = self.dir.join(file);
+            let len = std::fs::metadata(&amp;amp;path)?.len();
+           // If the index contained information about row groups or pages,
+           // you could also pass that information here to further prune
+           // the data read from the file.
+           let partitioned_file =
+                   PartitionedFile::new(path.to_str().unwrap().to_string(), len);
+           builder = builder.with_file(partitioned_file);
+        }
+        Ok(DataSourceExec::from_data_source(builder.build()))
+    }
+
+    /// Tell DataFusion that we can handle filters on the "category" column
+    fn supports_filters_pushdown(
+        &amp;amp;self,
+        fs: &amp;amp;[&amp;amp;Expr],
+    ) -&amp;gt; Result&amp;lt;Vec&amp;lt;TableProviderFilterPushDown&amp;gt;&amp;gt; {
+        // Mark as inexact since pruning is file‑granular
+        Ok(vec![TableProviderFilterPushDown::Inexact; fs.len()])
+    }
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;This code does the following:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;Implements the &lt;code&gt;scan&lt;/code&gt; method to filter files based on the distinct index.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Checks if the filter is an equality predicate on the &lt;code&gt;category&lt;/code&gt; column.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;If the target value is specified, checks if the distinct index contains that value.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Builds a &lt;code&gt;FileScanConfig&lt;/code&gt; with only the files that match the filter.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3&gt;Putting It All Together&lt;/h3&gt;
+&lt;p&gt;To use the distinct index in a DataFusion query, write sample Parquet files with the embedded index, register the &lt;code&gt;DistinctIndexTable&lt;/code&gt; provider, and run a query with a predicate that can be optimized by the index as shown below.&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;// Write sample files with embedded indexes
+tmp_dir.iter().for_each(|(name, vals)| {
+    write_file_with_index(&amp;amp;dir.join(name), vals).unwrap();
+});
+
+// Register provider and query
+let provider = Arc::new(DistinctIndexTable::try_new(dir, schema.clone())?);
+ctx.register_table("t", provider)?;
+
+// Only files containing 'foo' will be scanned
+let df = ctx.sql("SELECT * FROM t WHERE category = 'foo'").await?;
+df.show().await?;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;Verifying Compatibility with DuckDB&lt;/h3&gt;
+&lt;hr/&gt;
+&lt;p&gt;Even with extra bytes and unknown metadata keys, standard Parquet readers ignore the index. You can verify this using another system such as DuckDB to read the Parquet created in the example. DuckDB will read the files without any issues, ignoring the custom index and unknown footer metadata.&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT * FROM read_parquet('/tmp/parquet_index_data/*');
+&amp;boxdr;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxdl;
+&amp;boxv; category &amp;boxv;
+&amp;boxv; varchar  &amp;boxv;
+&amp;boxvr;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxvl;
+&amp;boxv; foo      &amp;boxv;
+&amp;boxv; bar      &amp;boxv;
+&amp;boxv; foo      &amp;boxv;
+&amp;boxv; baz      &amp;boxv;
+&amp;boxv; qux      &amp;boxv;
+&amp;boxv; foo      &amp;boxv;
+&amp;boxv; quux     &amp;boxv;
+&amp;boxv; quux     &amp;boxv;
+&amp;boxur;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxul;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2&gt;Conclusion&lt;/h2&gt;
+&lt;p&gt;In this post, we explained how index structures are stored in Apache Parquet, how to embed user-defined indexes without changing the format, and how to use user-defined indexes to speed up query processing.&lt;/p&gt;
+&lt;p&gt;Parquet-based systems can achieve significant performance improvements for almost any query pattern while still retaining broad compatibility, using user-defined embedded indexes, external indexes&lt;sup&gt;&lt;a href="#footnote4"&gt;4&lt;/a&gt;&lt;/sup&gt; and rewriting files optimized for specific queries&lt;sup&gt;&lt;a href="#footnote5"&gt;5&lt;/a&gt;&lt;/sup&gt;. System designers can choose among the available options to make the appropriate trade-offs between operational complexity, performance, file size, and cost for their specific use cases.&lt;/p&gt;
+&lt;p&gt;We hope this post inspires you to explore custom indexes in Parquet files, rather than proposing new file formats and reimplementing existing features. The DataFusion community is excited to see how you use this feature in your projects!&lt;/p&gt;
+&lt;h2&gt;About the Authors&lt;/h2&gt;
+&lt;p&gt;&lt;a href="https://www.linkedin.com/in/qi-zhu-862330119/"&gt;Qi Zhu&lt;/a&gt; is a Senior Engineer at &lt;a href="https://www.cloudera.com/"&gt;Cloudera&lt;/a&gt;, an active contributor to &lt;a href="https://datafusion.apache.org/"&gt;Apache DataFusion&lt;/a&gt; and &lt;a href="https://arrow.apache.org/"&gt;Apache Arrow&lt;/a&gt;, a committer on &lt;a href="https://hadoop.apache.org/"&gt;Apache Hadoop&lt;/a&gt; and &lt;a href="https://yunikorn.apache.org/"&gt;Apache YuniKorn&lt;/a&gt;. He has extensive experience in distributed systems, scheduling, and large-scale computing.&lt;/p&gt;
+&lt;p&gt;&lt;a href="https://www.linkedin.com/in/jigao-luo/"&gt;Jigao Luo&lt;/a&gt; is a 1.5-year PhD student at
+&lt;a href="https://tuda.systems"&gt;Systems Group @ TU Darmstadt&lt;/a&gt;. Regarding Parquet, he is an external 
+contributor to &lt;a href="https://github.com/rapidsai/cudf"&gt;NVIDIA RAPIDS cuDF&lt;/a&gt;, focusing on the GPU Parquet reader.&lt;/p&gt;
+&lt;p&gt;&lt;a href="https://www.linkedin.com/in/andrewalamb/"&gt;Andrew Lamb&lt;/a&gt; is a Staff Engineer at
+&lt;a href="https://www.influxdata.com/"&gt;InfluxData&lt;/a&gt;, and a member of the &lt;a href="https://datafusion.apache.org/"&gt;Apache
+DataFusion&lt;/a&gt; and &lt;a href="https://arrow.apache.org/"&gt;Apache Arrow&lt;/a&gt; PMCs. He has been working on
+Databases and related systems more than 20 years.&lt;/p&gt;
+&lt;h2&gt;About DataFusion&lt;/h2&gt;
+&lt;p&gt;&lt;a href="https://datafusion.apache.org/"&gt;Apache DataFusion&lt;/a&gt; is an extensible query engine toolkit, written
+in Rust, that uses &lt;a href="https://arrow.apache.org/"&gt;Apache Arrow&lt;/a&gt; as its in-memory format. DataFusion and
+similar technology are part of the next generation &amp;ldquo;Deconstructed Database&amp;rdquo;
+architectures, where new systems are built on a foundation of fast, modular
+components, rather than as a single tightly integrated system.&lt;/p&gt;
+&lt;p&gt;The &lt;a href="https://datafusion.apache.org/contributor-guide/communication.html"&gt;DataFusion community&lt;/a&gt; is always looking for new contributors to help
+improve the project. If you are interested in learning more about how query
+execution works, help document or improve the DataFusion codebase, or just try
+it out, we would love for you to join us.&lt;/p&gt;
+&lt;h3&gt;Footnotes&lt;/h3&gt;
+&lt;p&gt;&lt;a id="footnote1"&gt;&lt;/a&gt;&lt;code&gt;1&lt;/code&gt;: A commonly cited example is highly selective predicates (e.g. &lt;code&gt;category = 'foo'&lt;/code&gt;) but for which the built in BloomFilters are not sufficient.&lt;/p&gt;
+&lt;p&gt;&lt;a id="footnote2"&gt;&lt;/a&gt;&lt;code&gt;2&lt;/code&gt;: There are other index structures, but they are either 1) not widely supported (such as statistics in the page headers) or 2) not yet widely used in practice at the time of this writing (such as &lt;a href="https://github.com/apache/parquet-format/blob/819adce0ec6aa848e56c56f20b9347f4ab50857f/src/main/thrift/parquet.thrift#L256"&gt;GeospatialStatistics&lt;/a&gt; and &lt;a href="https://github.com/apache/parquet-format/blob/819adce0ec6aa848e56c56f20b9347f4ab50857f/src/main/thrift/parquet.thrift#L194-L202"&gt;SizeStatistics&lt;/a&gt;).&lt;/p&gt;
+&lt;p&gt;&lt;a id="footnote3"&gt;&lt;/a&gt;&lt;code&gt;3&lt;/code&gt;: &lt;a href="https://dl.gi.de/items/2a8571f8-0ef2-481c-8ee9-05f82ee258c8"&gt;Seamless Integration of Parquet Files into Data Processing. / Rey, Alice; Freitag, Michael; Neumann, Thomas. / BTW 2023&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;a id="footnote4"&gt;&lt;/a&gt;&lt;code&gt;4&lt;/code&gt;: For more information about external indexes, see &lt;a href="https://www.youtube.com/watch?v=74YsJT1-Rdk"&gt;this talk&lt;/a&gt; and the &lt;a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/parquet_index.rs"&gt;parquet_index.rs&lt;/a&gt; and &lt;a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/advanced_parquet_index.rs"&gt;advanced_parquet_index.rs&lt;/a&gt; examples in the DataFusion repository.&lt;/p&gt;
+&lt;p&gt;&lt;a id="footnote5"&gt;&lt;/a&gt;&lt;code&gt;5&lt;/code&gt;: For information about rewriting files to optimize for specific queries, such as resorting, repartitioning, and tuning data page and row group sizes, see &lt;a href="https://github.com/XiangpengHao/liquid-cache/issues/227"&gt;XiangpengHao/liquid‑cache#227&lt;/a&gt; and the conversation between &lt;a href="https://github.com/JigaoLuo"&gt;JigaoLuo&lt;/a&gt; and &lt;a href="https://github.com/XiangpengHao"&gt;XiangpengHao&lt;/a&gt; for details. We hope to make a future post about this topic.&lt;/p&gt;
+&lt;p&gt;&lt;a id="footnote6"&gt;&lt;/a&gt;&lt;code&gt;6&lt;/code&gt;: An index can also be stored inline in the key-value metadata. This approach is simple to implement and ensures the index is available once the footer is read, without additional I/O. However, it requires the index to be serialized as a UTF-8 string, which may be less efficient and increases the size of the footer metadata, impacting all Parquet readers, even those that ignore the index.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Apache DataFusion 47.0.0 Released</title><link href="https://datafusion.apache.org/blog/2025/07/11/datafusion-47.0.0" rel="alternate"></link><published>2025-07-11T00:00:00+00:00</published><updated>2025-07-11T00:00:00+00:00</updated><author><name>PMC</name></author><id>tag:datafusion.apache.org,2025-07-11:/blog/2025/07/11/datafusion-47.0.0</id><summary type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+&lt;!-- see https://github.com/apache/datafusion/issues/16347 for details --&gt;
+&lt;p&gt;We&amp;rsquo;re excited to announce the release of &lt;strong&gt;Apache DataFusion 47.0.0&lt;/strong&gt;! This new version represents a significant
+milestone for the project, packing in a wide range of improvements and fixes. You can find the complete details in the
+full &lt;a href="https://github.com/apache/datafusion/blob/branch-47/dev/changelog/47.0.0.md"&gt;changelog&lt;/a&gt;. We&amp;rsquo;ll highlight the most
+important changes below …&lt;/p&gt;</summary><content type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+&lt;!-- see https://github.com/apache/datafusion/issues/16347 for details --&gt;
+&lt;p&gt;We&amp;rsquo;re excited to announce the release of &lt;strong&gt;Apache DataFusion 47.0.0&lt;/strong&gt;! This new version represents a significant
+milestone for the project, packing in a wide range of improvements and fixes. You can find the complete details in the
+full &lt;a href="https://github.com/apache/datafusion/blob/branch-47/dev/changelog/47.0.0.md"&gt;changelog&lt;/a&gt;. We&amp;rsquo;ll highlight the most
+important changes below and guide you through upgrading.&lt;/p&gt;
+&lt;p&gt;Note that DataFusion 47.0.0 was released in April 2025, but we are only now publishing the blog post due to 
+limited bandwidth in the DataFusion community. We apologize for the delay and encourage you to come help us
+accelerate the next release and announcements 
+by &lt;a href="https://datafusion.apache.org/contributor-guide/communication.html"&gt;joining the community&lt;/a&gt;  🎣.&lt;/p&gt;
+&lt;h2&gt;Breaking Changes&lt;/h2&gt;
+&lt;p&gt;DataFusion 47.0.0 brings a few &lt;strong&gt;breaking changes&lt;/strong&gt; that may require adjustments to your code as described in
+the &lt;a href="https://datafusion.apache.org/library-user-guide/upgrading.html#datafusion-47-0-0"&gt;Upgrade Guide&lt;/a&gt;. Here are some notable ones:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href="https://github.com/apache/datafusion/pull/15466"&gt;Upgrades to arrow-rs and arrow-parquet 55.0.0 and object_store 0.12.0&lt;/a&gt;:
+  Several APIs changed in the underlying &lt;code&gt;arrow&lt;/code&gt;, &lt;code&gt;parquet&lt;/code&gt; and &lt;code&gt;object_store&lt;/code&gt; libraries to use a &lt;code&gt;u64&lt;/code&gt; instead of usize to better support
+  WASM. This requires converting from &lt;code&gt;usize&lt;/code&gt; to &lt;code&gt;u64&lt;/code&gt; occasionally as well as changes to ObjectStore implementations such as&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code class="language-Rust"&gt;impl ObjectStore {
+    ...
+
+    // The range is now a u64 instead of usize
+    async fn get_range(&amp;amp;self, location: &amp;amp;Path, range: Range&amp;lt;u64&amp;gt;) -&amp;gt; ObjectStoreResult&amp;lt;Bytes&amp;gt; {
+        self.inner.get_range(location, range).await
+    }
+
+    ...
+
+    // the lifetime is now 'static instead of '_ (meaning the captured closure can't contain references)
+    // (this also applies to list_with_offset)
+    fn list(&amp;amp;self, prefix: Option&amp;lt;&amp;amp;Path&amp;gt;) -&amp;gt; BoxStream&amp;lt;'static, ObjectStoreResult&amp;lt;ObjectMeta&amp;gt;&amp;gt; {
+        self.inner.list(prefix)
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href="https://github.com/apache/datafusion/issues/14914"&gt;DisplayFormatType::TreeRender&lt;/a&gt;:
+  Implementations of &lt;code&gt;ExecutionPlan&lt;/code&gt; must also provide a description in the &lt;code&gt;DisplayFormatType::TreeRender&lt;/code&gt; format to
+  provide support for the new &lt;a href="https://datafusion.apache.org/user-guide/sql/explain.html#tree-format-default"&gt;tree style explains&lt;/a&gt;.
+  This can be the same as the existing &lt;code&gt;DisplayFormatType::Default&lt;/code&gt;.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;Performance Improvements&lt;/h2&gt;
+&lt;p&gt;DataFusion 47.0.0 comes with numerous performance enhancements across the board. Here are some of the noteworthy
+optimizations in this release:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;&lt;code&gt;FIRST_VALUE&lt;/code&gt; and &lt;code&gt;LAST_VALUE&lt;/code&gt;:&lt;/strong&gt; &lt;code&gt;FIRST_VALUE&lt;/code&gt; and &lt;code&gt;LAST_VALUE&lt;/code&gt; functions execute much faster for data with high cardinality such as those with many groups or partitions. DataFusion 47.0.0 executes the following in &lt;strong&gt;7 seconds&lt;/strong&gt; compared to &lt;strong&gt;36 seconds&lt;/strong&gt; in DataFusion 46.0.0: &lt;code&gt;select id2, id4, first_value(v1 order by id2, id4) as r2 from '~/h2o_100m.parquet' group by id2, id4&lt;/code&gt; (h2o.ai dataset). (PR's &lt;a href="https://github.com/apache/datafusion/pull/15266"&gt;#15266&lt;/a&gt;
+  and &lt;a href="https://github.com/apache/datafusion/pull/15542"&gt;#15542&lt;/a&gt; by &lt;a href="https://github.com/UBarney"&gt;UBarney&lt;/a&gt;).&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;&lt;code&gt;MIN&lt;/code&gt;, &lt;code&gt;MAX&lt;/code&gt; and &lt;code&gt;AVG&lt;/code&gt; for Durations:&lt;/strong&gt;  DataFusion executes aggregate queries up to 2.5x faster when they include &lt;code&gt;MIN&lt;/code&gt;, &lt;code&gt;MAX&lt;/code&gt; and &lt;code&gt;AVG&lt;/code&gt; on &lt;code&gt;Duration&lt;/code&gt; columns. 
+  (PRs &lt;a href="https://github.com/apache/datafusion/pull/15322"&gt;#15322&lt;/a&gt; and &lt;a href="https://github.com/apache/datafusion/pull/15748"&gt;#15748&lt;/a&gt;
+  by &lt;a href="https://github.com/shruti2522"&gt;shruti2522&lt;/a&gt;).&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Short circuit evaluation for &lt;code&gt;AND&lt;/code&gt; and &lt;code&gt;OR&lt;/code&gt;:&lt;/strong&gt; DataFusion now eagerly skips the evaluation of
+  the right operand if the left is known to be false (&lt;code&gt;AND&lt;/code&gt;) or true (&lt;code&gt;OR&lt;/code&gt;) in certain cases. For complex predicates, such as those with many &lt;code&gt;LIKE&lt;/code&gt; or &lt;code&gt;CASE&lt;/code&gt; expressions, this optimization results in
+  &lt;a href="https://github.com/apache/datafusion/issues/11212#issuecomment-2753584617"&gt;significant performance improvements&lt;/a&gt; (up to 100x in extreme cases).
+  (PRs &lt;a href="https://github.com/apache/datafusion/pull/15462"&gt;#15462&lt;/a&gt; and &lt;a href="https://github.com/apache/datafusion/pull/15694"&gt;#15694&lt;/a&gt;
+  by &lt;a href="https://github.com/acking-you"&gt;acking-you&lt;/a&gt;).&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;TopK optimization for partially sorted input:&lt;/strong&gt; Previous versions of DataFusion implemented early termination
+  optimization (TopK) for fully sorted data. DataFusion 47.0.0 extends the optimization for partially sorted data, which is common in many real-world datasets, such as time-series data sorted by day but not within each day. 
+  (PR &lt;a href="https://github.com/apache/datafusion/pull/15563"&gt;#15563&lt;/a&gt; by &lt;a href="https://github.com/geoffreyclaude"&gt;geoffreyclaude&lt;/a&gt;).&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Disable re-validation of spilled files:&lt;/strong&gt; DataFusion no longer does unnecessary re-validation of temporary spill files. The validation is unnecessary and expensive as the data is known to be valid when it was written out
+  (PR &lt;a href="https://github.com/apache/datafusion/pull/15454"&gt;#15454&lt;/a&gt; by &lt;a href="https://github.com/zebsme"&gt;zebsme&lt;/a&gt;).&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;Highlighted New Features&lt;/h2&gt;
+&lt;h3&gt;Tree style explains&lt;/h3&gt;
+&lt;p&gt;In previous releases the &lt;a href="https://datafusion.apache.org/user-guide/sql/explain.html"&gt;EXPLAIN statement&lt;/a&gt; results in a formatted table
+which is succinct and contains important details for implementers, but was often hard to read
+especially with queries that included joins or unions having multiple children.&lt;/p&gt;
+&lt;p&gt;DataFusion 47.0.0 includes the new &lt;code&gt;EXPLAIN FORMAT TREE&lt;/code&gt; (default in
+&lt;code&gt;datafusion-cli&lt;/code&gt;) rendered in a visual tree style that is much easier to quickly
+understand.&lt;/p&gt;
+&lt;!-- SQL setup 
+create table t1(ti int) as values (1), (2), (3);
+create table t2(ti int) as values (1), (2), (3);
+--&gt;
+&lt;p&gt;Example of the new explain output:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;&amp;gt; explain select * from t1 inner join t2 on t1.ti=t2.ti;
++---------------+------------------------------------------------------------+
+| plan_type     | plan                                                       |
++---------------+------------------------------------------------------------+
+| physical_plan | &amp;boxdr;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxdl;                              |
+|               | &amp;boxv;    CoalesceBatchesExec    &amp;boxv;                              |
+|               | &amp;boxv;    --------------------   &amp;boxv;                              |
+|               | &amp;boxv;     target_batch_size:    &amp;boxv;                              |
+|               | &amp;boxv;            8192           &amp;boxv;                              |
+|               | &amp;boxur;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxhd;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxul;                              |
+|               | &amp;boxdr;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxhu;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxdl;                              |
+|               | &amp;boxv;        HashJoinExec       &amp;boxv;                              |
+|               | &amp;boxv;    --------------------   &amp;boxvr;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxdl;               |
+|               | &amp;boxv;       on: (ti = ti)       &amp;boxv;              &amp;boxv;               |
+|               | &amp;boxur;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxhd;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxul;              &amp;boxv;               |
+|               | &amp;boxdr;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxhu;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxdl;&amp;boxdr;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxhu;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxdl; |
+|               | &amp;boxv;       DataSourceExec      &amp;boxv;&amp;boxv;       DataSourceExec      &amp;boxv; |
+|               | &amp;boxv;    --------------------   &amp;boxv;&amp;boxv;    --------------------   &amp;boxv; |
+|               | &amp;boxv;         bytes: 112        &amp;boxv;&amp;boxv;         bytes: 112        &amp;boxv; |
+|               | &amp;boxv;       format: memory      &amp;boxv;&amp;boxv;       format: memory      &amp;boxv; |
+|               | &amp;boxv;          rows: 1          &amp;boxv;&amp;boxv;          rows: 1          &amp;boxv; |
+|               | &amp;boxur;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxul;&amp;boxur;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxul; |
+|               |                                                            |
++---------------+------------------------------------------------------------+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Example of the &lt;code&gt;EXPLAIN FORMAT INDENT&lt;/code&gt; output for the same query&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;&amp;gt; explain format indent select * from t1 inner join t2 on t1.ti=t2.ti;
++---------------+----------------------------------------------------------------------+
+| plan_type     | plan                                                                 |
++---------------+----------------------------------------------------------------------+
+| logical_plan  | Inner Join: t1.ti = t2.ti                                            |
+|               |   TableScan: t1 projection=[ti]                                      |
+|               |   TableScan: t2 projection=[ti]                                      |
+| physical_plan | CoalesceBatchesExec: target_batch_size=8192                          |
+|               |   HashJoinExec: mode=CollectLeft, join_type=Inner, on=[(ti@0, ti@0)] |
+|               |     DataSourceExec: partitions=1, partition_sizes=[1]                |
+|               |     DataSourceExec: partitions=1, partition_sizes=[1]                |
+|               |                                                                      |
++---------------+----------------------------------------------------------------------+
+2 row(s) fetched.
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/irenjj"&gt;irenjj&lt;/a&gt; for the initial work in PR &lt;a href="https://github.com/apache/datafusion/pull/14677"&gt;#14677&lt;/a&gt;
+and many others for completing the &lt;a href="https://github.com/apache/datafusion/issues/14914"&gt;followup epic&lt;/a&gt;&lt;/p&gt;
+&lt;h3&gt;SQL &lt;code&gt;VARCHAR&lt;/code&gt; defaults to Utf8View&lt;/h3&gt;
+&lt;p&gt;In previous releases when a column was created in SQL the column would be mapped to the &lt;a href="https://docs.rs/arrow/latest/arrow/datatypes/enum.DataType.html#variant.Utf8"&gt;Utf8 Arrow data type&lt;/a&gt;. In this release
+the SQL &lt;code&gt;varchar&lt;/code&gt; columns will be mapped to the &lt;a href="https://docs.rs/arrow/latest/arrow/datatypes/enum.DataType.html#variant.Utf8View"&gt;Utf8View arrow data type&lt;/a&gt; by default, which is a more efficient representation of UTF-8 strings in Arrow.&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;create table foo(x varchar);
+0 row(s) fetched.
+
+&amp;gt; describe foo;
++-------------+-----------+-------------+
+| column_name | data_type | is_nullable |
++-------------+-----------+-------------+
+| x           | Utf8View  | YES         |
++-------------+-----------+-------------+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Previous versions of DataFusion used &lt;code&gt;Utf8View&lt;/code&gt; when reading parquet files and it is faster in most cases.&lt;/p&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/zhuqi-lucas"&gt;zhuqi-lucas&lt;/a&gt; for PR &lt;a href="https://github.com/apache/datafusion/pull/15104"&gt;#15104&lt;/a&gt;&lt;/p&gt;
+&lt;h3&gt;Context propagation in spawned tasks (for tracing, logging, etc.)&lt;/h3&gt;
+&lt;p&gt;This release introduces an API for propagating user-defined context (such as tracing spans,
+logging, or metrics) across thread boundaries without depending on any specific instrumentation library.
+You can use the &lt;a href="https://docs.rs/datafusion/latest/datafusion/common/runtime/trait.JoinSetTracer.html"&gt;JoinSetTracer&lt;/a&gt; API to instrument DataFusion plans with your own tracing or logging libraries, or
+use pre-integrated community crates such as the &lt;a href="https://github.com/datafusion-contrib/datafusion-tracing"&gt;datafusion-tracing&lt;/a&gt; crate.&lt;/p&gt;
+&lt;div style="text-align: center;"&gt;
+&lt;a href="https://github.com/datafusion-contrib/datafusion-tracing"&gt;
+&lt;img alt="DataFusion telemetry project logo" class="img-responsive" src="/blog/images/datafusion-47.0.0/datafusion-telemetry.png" width="50%"/&gt;
+&lt;/a&gt;
+&lt;/div&gt;
+&lt;p&gt;Previously, tasks spawned on new threads &amp;mdash; such as those performing
+repartitioning or Parquet file reads &amp;mdash; could lose thread-local context, which is
+often used in instrumentation libraries. A full example of how to use this new
+API is available in the &lt;a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/tracing.rs"&gt;DataFusion examples&lt;/a&gt;, and a simple example is shown below.&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-Rust"&gt;/// Models a simple tracer. Calling `in_current_span()` and `in_scope()` saves thread-specific state
+/// for the current span and must be called at the start of each new task or thread.
+struct SpanTracer;
+
+/// Implements the `JoinSetTracer` trait so we can inject instrumentation
+/// for both async futures and blocking closures.
+impl JoinSetTracer for SpanTracer {
+    /// Instruments a boxed future to run in the current span. The future's
+    /// return type is erased to `Box&amp;lt;dyn Any + Send&amp;gt;`, which we simply
+    /// run inside the `Span::current()` context.
+    fn trace_future(
+        &amp;amp;self,
+        fut: BoxFuture&amp;lt;'static, Box&amp;lt;dyn Any + Send&amp;gt;&amp;gt;,
+    ) -&amp;gt; BoxFuture&amp;lt;'static, Box&amp;lt;dyn Any + Send&amp;gt;&amp;gt; {
+        // Ensures any thread-local context is set in this future 
+        fut.in_current_span().boxed()
+    }
+
+    /// Instruments a boxed blocking closure by running it inside the
+    /// `Span::current()` context.
+    fn trace_block(
+        &amp;amp;self,
+        f: Box&amp;lt;dyn FnOnce() -&amp;gt; Box&amp;lt;dyn Any + Send&amp;gt; + Send&amp;gt;,
+    ) -&amp;gt; Box&amp;lt;dyn FnOnce() -&amp;gt; Box&amp;lt;dyn Any + Send&amp;gt; + Send&amp;gt; {
+        let span = Span::current();
+        // Ensures any thread-local context is set for this closure
+        Box::new(move || span.in_scope(f))
+    }
+}
+
+...
+set_join_set_tracer(&amp;amp;SpanTracer).expect("Failed to set tracer");
+...
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/geoffreyclaude"&gt;geoffreyclaude&lt;/a&gt; for PR &lt;a href="https://github.com/apache/datafusion/issues/14914"&gt;#14914&lt;/a&gt;&lt;/p&gt;
+&lt;h2&gt;Upgrade Guide and Changelog&lt;/h2&gt;
+&lt;p&gt;Upgrading to 47.0.0 should be straightforward for most users, but do review
+the &lt;a href="https://datafusion.apache.org/library-user-guide/upgrading.html#datafusion-47-0-0"&gt;Upgrade Guide for DataFusion 47.0.0&lt;/a&gt; for detailed
+steps and code changes. The upgrade guide covers the breaking changes mentioned above and provides code snippets to help with the
+transition. For a comprehensive list of all changes, please refer to the &lt;a href="https://github.com/apache/datafusion/blob/branch-47/dev/changelog/47.0.0.md"&gt;changelog&lt;/a&gt; for 47.0.0. The changelog
+enumerates every merged PR in this release, including many smaller fixes and improvements that we couldn&amp;rsquo;t cover in this post.&lt;/p&gt;
+&lt;h2&gt;Get Involved&lt;/h2&gt;
+&lt;p&gt;Apache DataFusion is an open-source project, and we welcome involvement from anyone interested. Now is a great time to
+take 47.0.0 for a spin: try it out on your workloads, and let us know if you encounter any issues or have suggestions.
+You can report bugs or request features on our GitHub issue tracker, or better yet, submit a pull request. Join our
+community discussions &amp;ndash; whether you have questions, want to share how you&amp;rsquo;re using DataFusion, or are looking to
+contribute, we&amp;rsquo;d love to hear from you. A list of open issues suitable for beginners
+is &lt;a href="https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22"&gt;here&lt;/a&gt; and you
+can find how to reach us on the &lt;a href="https://datafusion.apache.org/contributor-guide/communication.html"&gt;communication doc&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Happy querying!&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Apache DataFusion Comet 0.9.0 Release</title><link href="https://datafusion.apache.org/blog/2025/07/01/datafusion-comet-0.9.0" rel="alternate"></link><published>2025-07-01T00:00:00+00:00</published><updated>2025-07-01T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2025-07-01:/blog/2025/07/01/datafusion-comet-0.9.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -1146,7 +2374,219 @@ community&lt;/a&gt;. We welcome first time contributors as well as long time par
 to the fun of building a database together.&lt;/p&gt;
 &lt;h2&gt;Notes&lt;/h2&gt;
 &lt;p&gt;&lt;a id="footnote7"&gt;&lt;/a&gt;&lt;sup&gt;[7]&lt;/sup&gt; See &lt;a href="https://btw-2015.informatik.uni-hamburg.de/res/proceedings/Hauptband/Wiss/Neumann-Unnesting_Arbitrary_Querie.pdf"&gt;Unnesting Arbitrary Queries&lt;/a&gt; from Neumann and Kemper for a more academic treatment.&lt;/p&gt;
-&lt;p&gt;&lt;a id="footnote8"&gt;&lt;/a&gt;&lt;sup&gt;[8]&lt;/sup&gt; One of my favorite terms I learned from Andy Pavlo&amp;rsquo;s CMU online lectures&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Apache DataFusion Comet 0.8.0 Release</title><link href="https://datafusion.apache.org/blog/2025/05/06/datafusion-comet-0.8.0" rel="alternate"></link><published>2025-05-06T00:00:00+00:00</published><updated>2025-05-06T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2025-05-06:/blog/2025/05/06/datafusion-comet-0.8.0</id><summary type="html">&lt;!--
+&lt;p&gt;&lt;a id="footnote8"&gt;&lt;/a&gt;&lt;sup&gt;[8]&lt;/sup&gt; One of my favorite terms I learned from Andy Pavlo&amp;rsquo;s CMU online lectures&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Field metadata and extension type support in user defined functions</title><link href="https://datafusion.apache.org/blog/2025/06/09/metadata-handling" rel="alternate"></link><published>2025-06-09T00:00:00+00:00</published><updated>2025-06-09T00:00:00+00:00</updated><author><name>Tim Saucer, Dewey Dunnington, Andrew Lamb</name></author><id>tag:datafusion.apache.org,2025-06-09:/blog/2025/06/09/metadata-handling</id><summary type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}x
+--&gt;
+&lt;p&gt;&lt;a href="https://datafusion.apache.org/blog/2025/07/16/datafusion-48.0.0/"&gt;DataFusion 48.0.0&lt;/a&gt; introduced a change in the interface for writing custom functions
+which enables a variety of interesting improvements. Now users can access metadata on
+the input columns to functions and produce metadata in the output.&lt;/p&gt;
+&lt;p&gt;One use case for this metadata is to enable &lt;a href="https://arrow.apache.org/docs/format/Columnar.html#format-metadata-extension-types"&gt;extension types&lt;/a&gt;, which …&lt;/p&gt;</summary><content type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}x
+--&gt;
+&lt;p&gt;&lt;a href="https://datafusion.apache.org/blog/2025/07/16/datafusion-48.0.0/"&gt;DataFusion 48.0.0&lt;/a&gt; introduced a change in the interface for writing custom functions
+which enables a variety of interesting improvements. Now users can access metadata on
+the input columns to functions and produce metadata in the output.&lt;/p&gt;
+&lt;p&gt;One use case for this metadata is to enable &lt;a href="https://arrow.apache.org/docs/format/Columnar.html#format-metadata-extension-types"&gt;extension types&lt;/a&gt;, which are user defined
+data types. The data is stored using one of the existing &lt;a href="https://arrow.apache.org/docs/format/Columnar.html#data-types"&gt;Arrow data types&lt;/a&gt; but the
+metadata specifies how we are to interpret the stored data. These can be used for things
+like specifying a currency on a floating point value, indicating that a fixed length
+binary data is a UUID, or adding geometric information to a binary array.&lt;/p&gt;
+&lt;p&gt;The use of extension types was one of the primary motivations for adding metadata
+to the function processing, but arbitrary metadata can be put on the input and
+output fields. This allows for a range of other interesting use cases.&lt;/p&gt;
+&lt;h2&gt;Why metadata handling is important&lt;/h2&gt;
+&lt;p&gt;Data in Arrow record batches carry a &lt;code&gt;Schema&lt;/code&gt; in addition to the Arrow arrays. Each
+&lt;a href="https://arrow.apache.org/docs/format/Glossary.html#term-field"&gt;Field&lt;/a&gt; in this &lt;code&gt;Schema&lt;/code&gt; contains a name, data type, nullability, and metadata. The
+metadata is specified as a map of key-value pairs of strings.  In the new
+implementation, during processing of all user defined functions we pass the input
+field information.&lt;/p&gt;
+&lt;figure&gt;
+&lt;img alt="Relationship between a Record Batch, it's schema, and the underlying arrays. There is a one to one relationship between each Field in the Schema and Array entry in the Columns." class="img-responsive" src="/blog/images/metadata-handling/arrow_record_batch.png" width="100%"/&gt;
+&lt;figcaption&gt;
+    Relationship between a Record Batch, it's schema, and the underlying arrays. There is a one to one relationship between each Field in the Schema and Array entry in the Columns.
+  &lt;/figcaption&gt;
+&lt;/figure&gt;
+&lt;p&gt;It is often desirable to write a generic function for reuse. With the prior version of
+user defined functions, we only had access to the &lt;code&gt;DataType&lt;/code&gt; of the input columns. This
+works well for some features that only rely on the types of data. Other use cases may
+need additional information that describes the data.&lt;/p&gt;
+&lt;p&gt;For example, suppose I wish to write a function that takes in a UUID and returns a string
+of the &lt;a href="https://www.ietf.org/rfc/rfc9562.html#section-4.1"&gt;variant&lt;/a&gt; of the input field. We would want this function to be able to handle
+all of the string types and also a binary encoded UUID. The arrow specification does not
+contain a unsigned 128 bit value, it is common to encode a UUID as a fixed sized binary
+array where each element is 16 bytes long. With the metadata handling in &lt;a href="https://datafusion.apache.org/blog/2025/07/16/datafusion-48.0.0/"&gt;DataFusion 48.0.0&lt;/a&gt;
+we can validate during planning that the input data not only has the correct underlying
+data type, but that it also represents the right &lt;em&gt;kind&lt;/em&gt; of data. The UUID example is a
+common one, and it is included in the &lt;a href="https://arrow.apache.org/docs/format/CanonicalExtensions.html"&gt;canonical extension types&lt;/a&gt; that are now
+supported in DataFusion.&lt;/p&gt;
+&lt;p&gt;Another common application of metadata handling is understanding encoding of a blob of data.
+Suppose you have a column that contains image data. Most likely this data is stored as
+an array of &lt;code&gt;u8&lt;/code&gt; data. Without knowing a priori what the encoding of that blob of data is,
+you cannot ensure you are using the correct methods for decoding it. You may work around
+this by adding another column to your data source indicating the encoding, but this can be
+wasteful for systems where the encoding never changes. Instead, you could use metadata to
+specify the encoding for the entire column.&lt;/p&gt;
+&lt;h2&gt;How to use metadata in user defined functions&lt;/h2&gt;
+&lt;p&gt;When working with metadata for user defined scalar functions, there are typically two
+places in the function definition that require implementation.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Computing the return field from the arguments&lt;/li&gt;
+&lt;li&gt;Invocation&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;During planning, we will attempt to call the function &lt;code&gt;return_field_from_args()&lt;/code&gt;. This will
+provide a list of input fields to the function and return the output field. To evaluate
+metadata on the input side, you can write a functions similar to this example:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;fn return_field_from_args(
+    &amp;amp;self,
+    args: ReturnFieldArgs,
+) -&amp;gt; datafusion::common::Result&amp;lt;FieldRef&amp;gt; {
+    if args.arg_fields.len() != 1 {
+        return exec_err!("Incorrect number of arguments for uuid_version");
+    }
+
+    let input_field = &amp;amp;args.arg_fields[0];
+    if &amp;amp;DataType::FixedSizeBinary(16) == input_field.data_type() {
+        let Ok(CanonicalExtensionType::Uuid(_)) = input_field.try_canonical_extension_type()
+        else {
+            return exec_err!("Input field must contain the UUID canonical extension type");
+        };
+    }
+
+    Ok(Arc::new(Field::new(self.name(), DataType::UInt32, true)))
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;In this example, we take advantage of the fact that we already have support for extension
+types that evaluate metadata. If you were attempting to check for metadata other than
+extension type support, we could have instead written a snippet such as:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;    if &amp;amp;DataType::FixedSizeBinary(16) == input_field.data_type() {
+        let _ = input_field
+            .metadata()
+            .get("ARROW:extension:metadata")
+            .ok_or(exec_datafusion_err!("Input field must contain the UUID canonical extension type"))?;
+        };
+    }
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;If you are writing a user defined function that will instead return metadata on output
+you can add this directly into the &lt;code&gt;Field&lt;/code&gt; that is the output of the &lt;code&gt;return_field_from_args&lt;/code&gt;
+call. In our above example, we could change the return line to:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;    Ok(Arc::new(
+        Field::new(self.name(), DataType::UInt32, true).with_metadata(
+            [("my_key".to_string(), "my_value".to_string())]
+                .into_iter()
+                .collect(),
+        ),
+    ))
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;By checking the metadata during the planning process, we can identify errors early in
+the query process. There are cases were we wish to have access to this metadata during
+execution as well. The function &lt;code&gt;invoke_with_args&lt;/code&gt; in the user defined function takes
+the updated struct &lt;code&gt;ScalarFunctionArgs&lt;/code&gt;. This now contains the input fields, which can
+be used to check for metadata. For example, you can do the following:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;fn invoke_with_args(&amp;amp;self, args: ScalarFunctionArgs) -&amp;gt; Result&amp;lt;ColumnarValue&amp;gt; {
+    assert_eq!(args.arg_fields.len(), 1);
+    let my_value = args.arg_fields[0]
+        .metadata()
+        .get("encoding_type");
+    ...
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;In this snippet we have extracted an &lt;code&gt;Option&amp;lt;String&amp;gt;&lt;/code&gt; from the input field metadata
+which we can then use to determine which functions we might want to call. We could
+then parse the returned value to determine what type of encoding to use when
+evaluating the array in the arguments. Since &lt;code&gt;return_field_from_args&lt;/code&gt; is not &lt;code&gt;&amp;amp;mut self&lt;/code&gt;
+this check could not be performed during the planning stage.&lt;/p&gt;
+&lt;p&gt;The description in this section applies to scalar user defined functions, but equivalent
+support exists for aggregate and window functions.&lt;/p&gt;
+&lt;h2&gt;Extension types&lt;/h2&gt;
+&lt;p&gt;Extension types are one of the primary motivations for this  enhancement in
+&lt;a href="https://datafusion.apache.org/blog/2025/07/16/datafusion-48.0.0/"&gt;Datafusion 48.0.0&lt;/a&gt;. The official Rust implementation of Apache Arrow, &lt;a href="https://github.com/apache/arrow-rs"&gt;arrow-rs&lt;/a&gt;,
+already contains support for the &lt;a href="https://arrow.apache.org/docs/format/CanonicalExtensions.html"&gt;canonical extension types&lt;/a&gt;. This support includes
+helper functions such as &lt;code&gt;try_canonical_extension_type()&lt;/code&gt; in the earlier example.&lt;/p&gt;
+&lt;p&gt;For a concrete example of how extension types can be used in DataFusion functions,
+there is an &lt;a href="https://github.com/timsaucer/datafusion_extension_type_examples"&gt;example repository&lt;/a&gt; that demonstrates using UUIDs. The UUID extension
+type specifies that the data are stored as a Fixed Size Binary of length 16. In the
+DataFusion core functions, we have the ability to generate string representations of
+UUIDs that match the version 4 specification. These are helpful, but a user may
+wish to do additional work with UUIDs where having them in the dense representation
+is preferable. Alternatively, the user may already have data with the binary encoding
+and we want to extract values such as the version, timestamp, or string
+representation.&lt;/p&gt;
+&lt;p&gt;In the example repository we have created three user defined functions: &lt;code&gt;UuidVersion&lt;/code&gt;,
+&lt;code&gt;StringToUuid&lt;/code&gt;, and &lt;code&gt;UuidToString&lt;/code&gt;. Each of these implements &lt;code&gt;ScalarUDFImpl&lt;/code&gt; and can
+be used thusly:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;async fn main() -&amp;gt; Result&amp;lt;()&amp;gt; {
+    let ctx = create_context()?;
+
+    // get a DataFrame from the context
+    let mut df = ctx.table("t").await?;
+
+    // Create the string UUIDs
+    df = df.select(vec![uuid().alias("string_uuid")])?;
+
+    // Convert string UUIDs to canonical extension UUIDs
+    let string_to_uuid = ScalarUDF::new_from_impl(StringToUuid::default());
+    df = df.with_column("uuid", string_to_uuid.call(vec![col("string_uuid")]))?;
+
+    // Extract version number from canonical extension UUIDs
+    let version = ScalarUDF::new_from_impl(UuidVersion::default());
+    df = df.with_column("version", version.call(vec![col("uuid")]))?;
+
+    // Convert back to a string
+    let uuid_to_string = ScalarUDF::new_from_impl(UuidToString::default());
+    df = df.with_column("string_round_trip", uuid_to_string.call(vec![col("uuid")]))?;
+
+    df.show().await?;
+
+    Ok(())
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;The &lt;a href="https://github.com/timsaucer/datafusion_extension_type_examples"&gt;example repository&lt;/a&gt; also contains a crate that demonstrates how to expose these
+UDFs to &lt;a href="https://datafusion.apache.org/python/"&gt;datafusion-python&lt;/a&gt;. This requires version 48.0.0 or later.&lt;/p&gt;
+&lt;h2&gt;Thanks to our sponsor&lt;/h2&gt;
+&lt;p&gt;We would like to thank &lt;a href="https://rerun.io"&gt;Rerun.io&lt;/a&gt; for sponsoring the development of this work. &lt;a href="https://rerun.io"&gt;Rerun.io&lt;/a&gt;
+is building a data visualization system for Physical AI and uses metadata to specify 
+context about columns in Arrow record batches.&lt;/p&gt;
+&lt;h2&gt;Conclusion&lt;/h2&gt;
+&lt;p&gt;The enhancements to the metadata handling in &lt;a href="https://datafusion.apache.org/blog/2025/07/16/datafusion-48.0.0/"&gt;DataFusion 48.0.0&lt;/a&gt; are a significant step
+forward in the ability to handle more interesting types of data. We can validate the input
+data matches not only the data types but also the intent of the data to be processed. We
+can enable complex operations on binary data because we understand the encoding used. We
+can also use metadata to create new and interesting user defined data types.&lt;/p&gt;
+&lt;h2&gt;Get Involved&lt;/h2&gt;
+&lt;p&gt;The DataFusion team is an active and engaging community and we would love to have you join
+us and help the project.&lt;/p&gt;
+&lt;p&gt;Here are some ways to get involved:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Learn more by visiting the &lt;a href="https://datafusion.apache.org/index.html"&gt;DataFusion&lt;/a&gt; project page.&lt;/li&gt;
+&lt;li&gt;Try out the project and provide feedback, file issues, and contribute code.&lt;/li&gt;
+&lt;li&gt;Work on a &lt;a href="https://github.com/apache/datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22"&gt;good first issue&lt;/a&gt;.&lt;/li&gt;
+&lt;li&gt;Reach out to us via the &lt;a href="https://datafusion.apache.org/contributor-guide/communication.html"&gt;communication doc&lt;/a&gt;.&lt;/li&gt;
+&lt;/ul&gt;</content><category term="blog"></category></entry><entry><title>Apache DataFusion Comet 0.8.0 Release</title><link href="https://datafusion.apache.org/blog/2025/05/06/datafusion-comet-0.8.0" rel="alternate"></link><published>2025-05-06T00:00:00+00:00</published><updated>2025-05-06T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2025-05-06:/blog/2025/05/06/datafusion-comet-0.8.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with

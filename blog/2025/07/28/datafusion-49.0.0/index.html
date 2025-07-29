@@ -1,0 +1,370 @@
+<!doctype html>
+<html class="no-js" lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apache DataFusion 49.0.0 Released - Apache DataFusion Blog</title>
+<link href="/blog/css/bootstrap.min.css" rel="stylesheet">
+<link href="/blog/css/fontawesome.all.min.css" rel="stylesheet">
+<link href="/blog/css/headerlink.css" rel="stylesheet">
+<link href="/blog/highlight/default.min.css" rel="stylesheet">
+<script src="/blog/highlight/highlight.js"></script>
+<script>hljs.highlightAll();</script>  </head>
+  <body class="d-flex flex-column h-100">
+  <main class="flex-shrink-0">
+<!-- nav bar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark" aria-label="Fifth navbar example">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/blog"><img src="/blog/images/logo_original4x.png" style="height: 32px;"/> Apache DataFusion Blog</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarADP" aria-controls="navbarADP" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarADP">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/about.html">About</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/feed.xml">RSS</a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>    
+
+
+<!-- article contents -->
+<div id="contents">
+    <div class="bg-white p-5 rounded">
+        <div class="col-sm-8 mx-auto">
+          <h1>
+            Apache DataFusion 49.0.0 Released
+          </h1>
+            <p>Posted on: Mon 28 July 2025 by pmc</p>
+            <!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+-->
+<!-- see https://github.com/apache/datafusion/issues/16347 for details -->
+<h2>Introduction</h2>
+<p>We are proud to announce the release of <a href="https://crates.io/crates/datafusion/49.0.0">DataFusion 49.0.0</a>. This blog post highlights some of
+the major improvements since the release of <a href="https://datafusion.apache.org/blog/2025/07/18/datafusion-48.0.0/">DataFusion 48.0.0</a>. The complete list of changes is available in the <a href="https://github.com/apache/datafusion/blob/branch-49/dev/changelog/49.0.0.md">changelog</a>.</p>
+<h2>Performance Improvements 🚀</h2>
+<p>DataFusion continues to focus on enhancing performance, as shown in the ClickBench and other results. </p>
+<p><img alt="ClickBench performance results over time for DataFusion" class="img-responsive" src="/blog/images/datafusion-49.0.0/performance_over_time_clickbench.png" width="100%"/></p>
+<p><strong>Figure 1</strong>: ClickBench performance improvements over time
+Average and median normalized query execution times for ClickBench queries for each git revision. 
+Query times are normalized using the ClickBench definition. Data and definitions on the 
+<a href="https://alamb.github.io/datafusion-benchmarking/">DataFusion Benchmarking Page</a>. </p>
+<!--
+NOTE: Andrew is working on gathering these numbers
+
+<img
+src="/blog/images/datafusion-49.0.0/performance_over_time_planning.png"
+width="80%"
+class="img-responsive"
+alt="Planning benchmark performance results over time for DataFusion"
+/>
+
+**Figure 2**: Planning benchmark performance improved XXX between DataFusion 48.0.1 and DataFusion 49.0.0. Chart source: TODO
+-->
+<p>Here are some noteworthy optimizations added since DataFusion 48:</p>
+<p><strong>Equivalence system upgrade:</strong> The lower levels of the equivalence system, which is used to implement the
+  optimizations described in <a href="https://datafusion.apache.org/blog/2025/03/11/ordering-analysis">Using Ordering for Better Plans</a>, were rewritten, leading to
+  much faster planning times, especially for queries with a <a href="https://github.com/apache/datafusion/pull/16217#pullrequestreview-2891941229">large number of columns</a>. This change also prepares
+  the way for more sophisticated sort-based optimizations in the future. (PR <a href="https://github.com/apache/datafusion/pull/16217">#16217</a> by <a href="https://github.com/ozankabak">ozankabak</a>).</p>
+<p><strong>Dynamic Filters and TopK pushdown</strong></p>
+<p>DataFusion now supports dynamic filters, which are improved during query execution,
+and physical filter pushdown. Together, these features improve the performance of
+queries that use <code>LIMIT</code> and <code>ORDER BY</code> clauses, such as the following:</p>
+<pre><code class="language-sql">SELECT *
+FROM data
+ORDER BY timestamp DESC
+LIMIT 10
+</code></pre>
+<p>While the query above is simple, without dynamic filtering or knowing that the data
+is already sorted by <code>timestamp</code>, a query engine must decode <em>all</em> of the data to
+find the top 10 values. With the dynamic filters system, DataFusion applies an
+increasingly selective filter during query execution. It checks the <strong>current</strong>
+top 10 values of the <code>timestamp</code> column <strong>before</strong> opening files or reading
+Parquet Row Groups and Data Pages, which can skip older data very quickly.</p>
+<p>Dynamic predicates are a common feature of advanced engines such as <a href="https://docs.starburst.io/latest/admin/dynamic-filtering.html">Dynamic
+Filters in Starburst</a> and <a href="https://www.snowflake.com/en/engineering-blog/optimizing-top-k-aggregation-snowflake/">Top-K Aggregation Optimization at Snowflake</a>. The
+technique drastically improves query performance (we've seen over a 1.5x
+improvement for some TPC-H-style queries), especially in combination with late
+materialization and columnar file formats such as Parquet. We <a href="https://github.com/apache/datafusion/issues/15513">plan to write a
+blog post</a> explaining the details of this optimization in the future, and we expect to
+use the same mechanism to implement additional optimizations such as <a href="https://github.com/apache/datafusion/issues/7955">Sideways
+Information Passing for joins</a> (Issue
+<a href="https://github.com/apache/datafusion/issues/15037">#15037</a> PR
+<a href="https://github.com/apache/datafusion/pull/15770">#15770</a> by
+<a href="https://github.com/adriangb">adriangb</a>).</p>
+<h2>Community Growth  📈</h2>
+<p>The last few months, between <code>46.0.0</code> and <code>49.0.0</code>, have seen our community grow:</p>
+<ol>
+<li>New PMC members and committers: <a href="https://github.com/berkaysynnada">berkay</a>, <a href="https://github.com/xudong963">xudong963</a> and <a href="https://github.com/timsaucer">timsaucer</a> joined the PMC.
+   <a href="https://github.com/blaginin">blaginin</a>, <a href="https://github.com/milenkovicm">milenkovicm</a>, <a href="https://github.com/adriangb">adriangb</a> and <a href="https://github.com/kosiew">kosiew</a> joined as committers. See the <a href="https://lists.apache.org/list.html?dev@datafusion.apache.org">mailing list</a> for more details.</li>
+<li>In the <a href="https://github.com/apache/arrow-datafusion">core DataFusion repo</a> alone, we reviewed and accepted over 850 PRs from 172 different
+   committers, created over 669 issues, and closed 379 of them 🚀. All changes are listed in the detailed
+   <a href="https://github.com/apache/datafusion/tree/main/dev/changelog">changelogs</a>.</li>
+<li>DataFusion published a number of blog posts, including <a href="https://datafusion.apache.org/blog/2025/04/19/user-defined-window-functions">User defined Window Functions</a>, <a href="https://datafusion.apache.org/blog/2025/06/15/optimizing-sql-dataframes-part-one">Optimizing SQL (and DataFrames)
+   in DataFusion part 1</a>, <a href="https://datafusion.apache.org/blog/2025/06/15/optimizing-sql-dataframes-part-two">part 2</a>, <a href="https://datafusion.apache.org/blog/2025/06/30/cancellation">Using Rust async for Query Execution and Cancelling Long-Running Queries</a>, and
+   <a href="https://datafusion.apache.org/blog/2025/07/14/user-defined-parquet-indexes/">Embedding User-Defined Indexes in Apache Parquet Files</a>.</li>
+</ol>
+<!--
+# Unique committers
+$ git shortlog -sn 46.0.0..49.0.0-rc1  .| wc -l
+     172
+# commits
+$ git log --pretty=oneline 46.0.0..49.0.0-rc1 . | wc -l
+     884
+
+
+https://crates.io/crates/datafusion/49.0.0
+DataFusion 49 released July 25, 2025
+
+https://crates.io/crates/datafusion/46.0.0
+DataFusion 46 released March 7, 2025
+
+Issues created in this time: 290 open, 379 closed = 669 total
+https://github.com/apache/datafusion/issues?q=is%3Aissue+created%3A2025-03-07..2025-07-25
+
+Issues closed: 508
+https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+closed%3A2025-03-07..2025-07-25
+
+PRs merged in this time 874
+https://github.com/apache/arrow-datafusion/pulls?q=is%3Apr+merged%3A2025-03-07..2025-07-25
+
+-->
+<h2>New Features ✨</h2>
+<h3>Async User-Defined Functions</h3>
+<p>It is now possible to write <code>async</code> User-Defined Functions
+(UDFs) in DataFusion that perform asynchronous
+operations, such as network requests or database queries, without blocking the
+execution of the query. This enables new use cases, such as
+integrating with large language models (LLMs) or other external services, and we can't
+wait to see what the community builds with it.</p>
+<p>See the <a href="https://datafusion.apache.org/library-user-guide/functions/adding-udfs.html">documentation</a> for more details and the <a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/async_udf.rs">async UDF example</a> for
+working code. </p>
+<p>You could, for example, implement a function <code>ask_llm</code> that asks a large language model
+(LLM) service a question based on the content of two columns.</p>
+<pre><code class="language-sql">SELECT * 
+FROM animal a
+WHERE ask_llm(a.name, 'Is this animal furry?')")
+</code></pre>
+<p>The implementation of an async UDF is almost identical to a normal
+UDF, except that it must implement the <code>AsyncScalarUDFImpl</code> trait in addition to <code>ScalarUDFImpl</code> and
+provide an <code>async</code> implementation via <code>invoke_async_with_args</code>:</p>
+<pre><code class="language-rust">#[derive(Debug)]
+struct AskLLM {
+    signature: Signature,
+}
+
+#[async_trait]
+impl AsyncScalarUDFImpl for AskLLM {
+    /// The `invoke_async_with_args` method is similar to `invoke_with_args`,
+    /// but it returns a `Future` that resolves to the result.
+    ///
+    /// Since this signature is `async`, it can do any `async` operations, such
+    /// as network requests.
+    async fn invoke_async_with_args(
+        &amp;self,
+        args: ScalarFunctionArgs,
+        options: &amp;ConfigOptions,
+    ) -&gt; Result&lt;ArrayRef&gt; {
+        // Converts the arguments to arrays for simplicity.
+        let args = ColumnarValue::values_to_arrays(&amp;args.args)?;
+        let [column_of_interest, question] = take_function_args(self.name(), args)?;
+        let client = Client::new();
+
+        // Make a network request to a hypothetical LLM service
+        let res = client
+            .post(URI)
+            .headers(get_llm_headers(options))
+            .json(&amp;req)
+            .send()
+            .await?
+            .json::&lt;LLMResponse&gt;()
+            .await?;
+
+        let results = extract_results_from_llm_response(&amp;res);
+
+        Ok(Arc::new(results))
+    }
+}
+</code></pre>
+<p>(Issue <a href="https://github.com/apache/datafusion/issues/6518">#6518</a>,
+<a href="https://github.com/apache/datafusion/pull/14837">PR #14837</a> from
+<a href="https://github.com/goldmedal">goldmedal</a> 🏆)</p>
+<h3>Better Cancellation for Certain Long-Running Queries</h3>
+<p>In rare cases, it was previously not possible to cancel long-running queries,
+leading to unresponsiveness. Other projects would likely have fixed this issue
+by treating the symptom, but <a href="https://github.com/pepijnve">pepijnve</a> and the DataFusion community worked together to
+treat the root cause. The general solution required a deep understanding of the
+DataFusion execution engine, Rust <code>Streams</code>, and the tokio cooperative
+scheduling model. The <a href="https://github.com/apache/datafusion/pull/16398">resulting PR</a> is a model of careful
+community engineering and a great example of using Rust's <code>async</code> ecosystem
+to implement complex functionality. It even resulted in a <a href="https://github.com/tokio-rs/tokio/pull/7405">contribution upstream to tokio</a>
+(since accepted). See the <a href="https://datafusion.apache.org/blog/2025/06/30/cancellation">blog post</a> for more details.</p>
+<h3>Metadata for User Defined Types such as <code>Variant</code> and <code>Geometry</code></h3>
+<p>User-defined types have been <a href="https://github.com/apache/datafusion/issues/12644">a long-requested feature</a>, and this release provides
+the low-level APIs to support them efficiently.</p>
+<ol>
+<li>Metadata handling in PRs <a href="https://github.com/apache/datafusion/pull/15646">#15646</a> and <a href="https://github.com/apache/datafusion/pull/16170">#16170</a> from <a href="https://github.com/timsaucer">timsaucer</a></li>
+<li>Pushdown of filters and expressions (see "Dynamic Filters and TopK pushdown" section above)</li>
+</ol>
+<p>We still have some work to do to fully support user-defined types, specifically
+in documentation and testing, and we would
+love your help in this area. If you are interested in contributing,
+please see <a href="https://github.com/apache/datafusion/issues/12644">issue #12644</a>.</p>
+<h3>Parquet Modular Encryption</h3>
+<p>DataFusion now supports reading and writing encrypted <a href="https://parquet.apache.org/">Apache Parquet</a> files with <a href="https://parquet.apache.org/docs/file-format/data-pages/encryption/">modular
+encryption</a>. This allows users to encrypt specific columns in a Parquet file
+using different keys, while still being able to read data without needing to
+decrypt the entire file.</p>
+<p>Here is an example of how to configure DataFusion to read an encrypted Parquet
+table with two columns, <code>double_field</code> and <code>float_field</code>, using modular
+encryption:</p>
+<pre><code class="language-sql">CREATE EXTERNAL TABLE encrypted_parquet_table
+(
+double_field double,
+float_field float
+)
+STORED AS PARQUET LOCATION 'pq/' OPTIONS (
+    -- encryption
+    'format.crypto.file_encryption.encrypt_footer' 'true',
+    'format.crypto.file_encryption.footer_key_as_hex' '30313233343536373839303132333435',  -- b"0123456789012345"
+    'format.crypto.file_encryption.column_key_as_hex::double_field' '31323334353637383930313233343530', -- b"1234567890123450"
+    'format.crypto.file_encryption.column_key_as_hex::float_field' '31323334353637383930313233343531', -- b"1234567890123451"
+    -- decryption
+    'format.crypto.file_decryption.footer_key_as_hex' '30313233343536373839303132333435', -- b"0123456789012345"
+    'format.crypto.file_decryption.column_key_as_hex::double_field' '31323334353637383930313233343530', -- b"1234567890123450"
+    'format.crypto.file_decryption.column_key_as_hex::float_field' '31323334353637383930313233343531', -- b"1234567890123451"
+);
+</code></pre>
+<p>(<a href="https://github.com/apache/datafusion/issues/15216">Issue #15216</a>,
+<a href="https://github.com/apache/datafusion/pull/16351">PR #16351</a>
+from <a href="https://github.com/corwinjoy">corwinjoy</a> and <a href="https://github.com/adamreeve">adamreeve</a>)</p>
+<h3>Support for <code>WITHIN GROUP</code> for Ordered-Set Aggregate Functions</h3>
+<p>DataFusion now supports the <code>WITHIN GROUP</code> clause for <a href="https://www.postgresql.org/docs/9.4/functions-aggregate.html#FUNCTIONS-ORDEREDSET-TABLE">ordered-set aggregate
+functions</a> such as <code>approx_percentile_cont</code>, <code>percentile_cont</code>, and
+<code>percentile_disc</code>, which allows users to specify the precise order.</p>
+<p>For example, the following query computes the 50th percentile for the <code>temperature</code> column
+in the <code>city_data</code> table, ordered by <code>date</code>:</p>
+<pre><code class="language-sql">SELECT
+    percentile_disc(0.5) WITHIN GROUP (ORDER BY date) AS median_temperature
+FROM city_data;
+</code></pre>
+<p>(Issue <a href="https://github.com/apache/datafusion/issues/11732">#11732</a>, 
+PR <a href="https://github.com/apache/datafusion/pull/13511">#13511</a>,
+by <a href="https://github.com/Garamda">Garamda</a>)</p>
+<h3>Compressed Spill Files</h3>
+<p>DataFusion now supports compressing the files written to disk when spilling
+larger-than-memory datasets while sorting and grouping. Using compression
+can significantly reduce the
+size of the intermediate files and improve performance when reading them back into memory.</p>
+<p>(Issue <a href="https://github.com/apache/datafusion/issues/16130">#16130</a>,
+PR <a href="https://github.com/apache/datafusion/pull/16268">#16268</a>
+by <a href="https://github.com/ding-young">ding-young</a>)</p>
+<h3>Support for <code>REGEX_INSTR</code> function</h3>
+<p>DataFusion now supports the [<code>REGEXP_INSTR</code> function], which returns the position of a
+regular expression match within a string.</p>
+<p>For example, to find the position of the first match of the regular expression
+<code>C(.)(..)</code> in the string <code>ABCDEF</code>, you can use:</p>
+<pre><code class="language-sql">&gt; SELECT regexp_instr('ABCDEF', 'C(.)(..)');
++---------------------------------------------------------------+
+| regexp_instr(Utf8("ABCDEF"),Utf8("C(.)(..)"))                 |
++---------------------------------------------------------------+
+| 3                                                             |
++---------------------------------------------------------------+
+</code></pre>
+<p>(<a href="https://github.com/apache/datafusion/issues/13009">Issue #13009</a>,
+<a href="https://github.com/apache/datafusion/pull/15928">PR #15928</a>
+by <a href="https://github.com/nirnayroy">nirnayroy</a>)</p>
+<h2>Upgrade Guide and Changelog</h2>
+<p>Upgrading to 49.0.0 should be straightforward for most users. Please review the
+<a href="https://datafusion.apache.org/library-user-guide/upgrading.html">Upgrade Guide</a>
+for details on breaking changes and code snippets to help with the transition.
+Recently, some users have reported success automatically upgrading DataFusion by
+pairing AI tools with the upgrade guide. For a comprehensive list of all changes,
+please refer to the <a href="https://github.com/apache/datafusion/blob/branch-49/dev/changelog/49.0.0.md">changelog</a>.</p>
+<h2>About DataFusion</h2>
+<p><a href="https://datafusion.apache.org/">Apache DataFusion</a> is an extensible query engine, written in <a href="https://www.rust-lang.org/">Rust</a>, that
+uses <a href="https://arrow.apache.org">Apache Arrow</a> as its in-memory format. DataFusion is used by developers to
+create new, fast, data-centric systems such as databases, dataframe libraries,
+and machine learning and streaming applications. While <a href="https://datafusion.apache.org/user-guide/introduction.html#project-goals">DataFusion&rsquo;s primary design
+goal</a> is to accelerate the creation of other data-centric systems, it provides a
+reasonable experience directly out of the box as a <a href="https://datafusion.apache.org/user-guide/dataframe.html">dataframe library</a>,
+<a href="https://datafusion.apache.org/python/">python library</a>, and [command-line SQL tool].</p>
+<p>DataFusion's core thesis is that as a community, together we can build much more
+advanced technology than any of us as individuals or companies could do alone.
+Without DataFusion, highly performant vectorized query engines would remain
+the domain of a few large companies and world-class research institutions.
+With DataFusion, we can all build on top of a shared foundation and focus on
+what makes our projects unique.</p>
+<h2>How to Get Involved</h2>
+<p>DataFusion is not a project built or driven by a single person, company, or
+foundation. Rather, our community of users and contributors works together to
+build a shared technology that none of us could have built alone.</p>
+<p>If you are interested in joining us, we would love to have you. You can try out
+DataFusion on some of your own data and projects and let us know how it goes,
+contribute suggestions, documentation, bug reports, or a PR with documentation,
+tests, or code. A list of open issues suitable for beginners is <a href="https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22">here</a>, and you
+can find out how to reach us on the <a href="https://datafusion.apache.org/contributor-guide/communication.html">communication doc</a>.</p>
+
+    <!--
+        Enable giscuss comments: Allows comments on the blogs posted as
+        https://github.com/apache/datafusion-site/discussions
+
+        More details on https://github.com/apache/datafusion-site/issues/80
+    -->
+    <div id="article_comments">
+        <div id="comment_thread"></div>
+
+        <script src="https://giscus.app/client.js"
+            data-repo="apache/datafusion-site"
+            data-repo-id="R_kgDOL8FTzw"
+            data-category="Announcements"
+            data-category-id="DIC_kwDOL8FTz84Csqua"
+            data-mapping="title"
+            data-strict="1"
+            data-reactions-enabled="1"
+            data-emit-metadata="0"
+            data-input-position="bottom"
+            data-theme="preferred_color_scheme"
+            data-lang="en"
+            data-loading="lazy"
+            crossorigin="anonymous"
+            async>
+        </script>
+    </div>          </div>
+      </div>
+    </div>    
+    <!-- footer -->
+    <div class="row g-0">
+      <div class="col-12">
+        <p style="font-style: italic; font-size: 0.8rem; text-align: center;">
+          Copyright 2025, <a href="https://www.apache.org/">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a>.<br/>
+          Apache&reg; and the Apache feather logo are trademarks of The Apache Software Foundation.
+        </p>
+      </div>
+    </div>
+    <script src="/blog/js/bootstrap.bundle.min.js"></script>  </main>
+  </body>
+</html>
