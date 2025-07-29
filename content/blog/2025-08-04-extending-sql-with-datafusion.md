@@ -1,7 +1,7 @@
 ---
 layout: post
 title: Implementing your own SQL dialect and SQL statements with DataFusion
-date: 2025-07-26
+date: 2025-08-04
 author: Aditya Singh Rathore
 categories: [tutorial]
 ---
