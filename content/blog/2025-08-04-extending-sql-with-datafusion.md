@@ -87,13 +87,7 @@ Let's examine the actual DataFusion example to understand the pattern:
 ### Step 1: Wrap the DataFusion Parser
 
 ```rust
-
-use datafusion::sql::{
-    parser::{CopyToSource, CopyToStatement, DFParser, DFParserBuilder, Statement},
-    sqlparser::{keywords::Keyword, tokenizer::Token},
-};
-
-/// Wrap the existing DFParser rather than replacing it
+/// Our custom parser wrap the existing DFParser rather than replacing it
 struct MyParser<'a> {
     df_parser: DFParser<'a>,
 }
@@ -104,7 +98,8 @@ impl<'a> MyParser<'a> {
         Ok(Self { df_parser })
     }
 
-    /// Check if we're dealing with a COPY statement
+    /// Check if we're dealing with a COPY statement by
+    /// inspecting the next token in the parser's stream
     fn is_copy(&self) -> bool {
         matches!(
             self.df_parser.parser.peek_token().token,
@@ -112,7 +107,6 @@ impl<'a> MyParser<'a> {
         )
     }
 }
-
 ```
 
 ### Step 2: Delegate Parsing, Add Custom Logic
