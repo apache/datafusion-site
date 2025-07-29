@@ -27,14 +27,19 @@ limitations under the License.
 which enables a variety of interesting improvements. Now users can access metadata on
 the input columns to functions and produce metadata in the output.
 
-One use case for this metadata is to enable [extension types], which are user defined
-data types. The data is stored using one of the existing [Arrow data types] but the
-metadata specifies how we are to interpret the stored data. These can be used for things
-like specifying a currency on a floating point value, indicating that a fixed length
-binary data is a UUID, or adding geometric information to a binary array.
+Metadata is specified as a map of key-value pairs of strings. This extra metadata is used
+by Arrow implementations implement [extension types] and can also be used to add
+use case-specific context to a column of values where the formality of an extension type
+is not required. In previous versions of DataFusion field metadata was propagated through
+certain operations (e.g., renaming or selecting a column) but was not accessible to others
+(e.g., scalar, window, or aggregate function calls). In the new implementation, during
+processing of all user defined functions we pass the input field information and allow
+user defined function implementations to return field information to the caller.
 
-The use of extension types was one of the primary motivations for adding metadata
-to the function processing, but arbitrary metadata can be put on the input and
+[Extension types] are user defined data types where the data is stored using one of the
+existing [Arrow data types] but the metadata specifies how we are to interpret the
+stored data. The use of extension types was one of the primary motivations for adding
+metadata to the function processing, but arbitrary metadata can be put on the input and
 output fields. This allows for a range of other interesting use cases.
 
 [DataFusion 48.0.0]: https://datafusion.apache.org/blog/2025/07/16/datafusion-48.0.0/
@@ -238,7 +243,7 @@ The enhancements to the metadata handling in [DataFusion 48.0.0] are a significa
 forward in the ability to handle more interesting types of data. We can validate the input
 data matches not only the data types but also the intent of the data to be processed. We
 can enable complex operations on binary data because we understand the encoding used. We
-can also use metadata to create new and interesting user defined data types.
+can also use metadata to create new and interesting user defined data types.    
 
 ## Get Involved
 
