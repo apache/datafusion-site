@@ -24,11 +24,22 @@ limitations under the License.
 -->
 
 [DataFusion 48.0.0] introduced a change in the interface for writing custom functions
-which enables a variety of interesting improvements. Now users can access additional
-data about the input columns to functions and produce metadata in the function output.
-This enables processing of extension types as well as a variety of other use cases.
+which enables a variety of interesting improvements. Now users can access metadata on
+the input columns to functions and produce metadata in the output.
+
+One use case for this metadata is to enable [extension types], which are user defined
+data types. The data is stored using one of the existing [Arrow data types] but the
+metadata specifies how we are to interpret the stored data. These can be used for things
+like specifying a currency on a floating point value, indicating that a fixed length
+binary data is a UUID, or adding geometric information to a binary array.
+
+The use of extension types was one of the primary motivations for adding metadata
+to the function processing, but arbitrary metadata can be put on the input and
+output fields. This allows for a range of other interesting use cases.
 
 [DataFusion 48.0.0]: https://datafusion.apache.org/blog/2025/07/16/datafusion-48.0.0/
+[extension types]: https://arrow.apache.org/docs/format/Columnar.html#format-metadata-extension-types
+[Arrow data types]: https://arrow.apache.org/docs/format/Columnar.html#data-types
 
 ## Why metadata handling is important
 
@@ -57,7 +68,7 @@ contain a unsigned 128 bit value, it is common to encode a UUID as a fixed sized
 array where each element is 16 bytes long. With the metadata handling in [DataFusion 48.0.0]
 we can validate during planning that the input data not only has the correct underlying
 data type, but that it also represents the right *kind* of data. The UUID example is a
-common one, and it is included in the [canonical arrow extension types] that are now
+common one, and it is included in the [canonical extension types] that are now
 supported in DataFusion.
 
 Another common application of metadata handling is understanding encoding of a blob of data.
@@ -70,7 +81,7 @@ specify the encoding for the entire column.
 
 [field]: https://arrow.apache.org/docs/format/Glossary.html#term-field
 [variant]: https://www.ietf.org/rfc/rfc9562.html#section-4.1
-[canonical arrow extension types]: https://arrow.apache.org/docs/format/CanonicalExtensions.html
+[canonical extension types]: https://arrow.apache.org/docs/format/CanonicalExtensions.html
 
 ## How to use metadata in user defined functions
 
@@ -159,17 +170,59 @@ support exists for aggregate and window functions.
 
 ## Extension types
 
-TODO
+Extension types are one of the primary motivations for this  enhancement in
+[Datafusion 48.0.0]. The official Rust implementation of Apache Arrow, [arrow-rs],
+already contains support for the [canonical extension types]. This support includes
+helper functions such as `try_canonical_extension_type()` in the earlier example.
 
-https://github.com/timsaucer/datafusion_extension_type_examples
+For a concrete example of how extension types can be used in DataFusion functions,
+there is an [example repository] that demonstrates using UUIDs. The UUID extension
+type specifies that the data are stored as a Fixed Size Binary of length 16. In the
+DataFusion core functions, we have the ability to generate string representations of
+UUIDs that match the version 4 specification. These are helpful, but a user may
+wish to do additional work with UUIDs where having them in the dense representation
+is preferable. Alternatively, the user may already have data with the binary encoding
+and we want to extract values such as the version, timestamp, or string
+representation.
 
-## Other uses for Metadata
+In the example repository we have created three user defined functions: `UuidVersion`,
+`StringToUuid`, and `UuidToString`. Each of these implements `ScalarUDFImpl` and can
+be used thusly:
 
-HERE PUT THE RERUN EXAMPLE
+```rust
+async fn main() -> Result<()> {
+    let ctx = create_context()?;
 
-## Working with literals
+    // get a DataFrame from the context
+    let mut df = ctx.table("t").await?;
 
-TODO
+    // Create the string UUIDs
+    df = df.select(vec![uuid().alias("string_uuid")])?;
+
+    // Convert string UUIDs to canonical extension UUIDs
+    let string_to_uuid = ScalarUDF::new_from_impl(StringToUuid::default());
+    df = df.with_column("uuid", string_to_uuid.call(vec![col("string_uuid")]))?;
+
+    // Extract version number from canonical extension UUIDs
+    let version = ScalarUDF::new_from_impl(UuidVersion::default());
+    df = df.with_column("version", version.call(vec![col("uuid")]))?;
+
+    // Convert back to a string
+    let uuid_to_string = ScalarUDF::new_from_impl(UuidToString::default());
+    df = df.with_column("string_round_trip", uuid_to_string.call(vec![col("uuid")]))?;
+    
+    df.show().await?;
+    
+    Ok(())
+}
+```
+
+The [example repository] also contains a crate that demonstrates how to expose these
+UDFs to [datafusion-python]. This requires version 48.0.0 or later.
+
+[example repository]: https://github.com/timsaucer/datafusion_extension_type_examples
+[arrow-rs]: https://github.com/apache/arrow-rs
+[datafusion-python]: https://datafusion.apache.org/python/
 
 ## Thanks to our sponsor
 
@@ -181,4 +234,24 @@ context about columns in Arrow record batches.
 
 ## Conclusion
 
-TODO
+The enhancements to the metadata handling in [DataFusion 48.0.0] are a significant step
+forward in the ability to handle more interesting types of data. We can validate the input
+data matches not only the data types but also the intent of the data to be processed. We
+can enable complex operations on binary data because we understand the encoding used. We
+can also use metadata to create new and interesting user defined data types.
+
+## Get Involved
+
+The DataFusion team is an active and engaging community and we would love to have you join
+us and help the project.
+
+Here are some ways to get involved:
+
+* Learn more by visiting the [DataFusion] project page.
+* Try out the project and provide feedback, file issues, and contribute code.
+* Work on a [good first issue].
+* Reach out to us via the [communication doc].
+
+[DataFusion]: https://datafusion.apache.org/index.html
+[good first issue]: https://github.com/apache/datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22
+[communication doc]: https://datafusion.apache.org/contributor-guide/communication.html
