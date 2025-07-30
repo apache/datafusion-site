@@ -229,6 +229,29 @@ UDFs to [datafusion-python]. This requires version 48.0.0 or later.
 [arrow-rs]: https://github.com/apache/arrow-rs
 [datafusion-python]: https://datafusion.apache.org/python/
 
+## Other use cases
+
+The metadata attached to the fields can be used to store *any* user data in key/value
+pairs. Some of the other use cases that have been identified include:
+
+- Storing statistics data for a column. If you have a table provider that can produce
+  column level statistics, then you can write functions that take advantage of that
+  data.
+- Creating output for downstream systems. One user of DataFusion produces
+  [data visualizations] that are dependant upon metadata in record batch fields. By
+  enabling metadata on output of user defined functions, we can now produce batches
+  that are directly consumable by these systems.
+- Describe the relationships between columns of data. You can store data about how
+  one column of data relates to another and use these during function evaluation. For
+  example, in robotics it is common to use [transforms] to describe how to convert
+  from one coordinate system to another. It can be convenient to send the function
+  all of the columns that contain transform information and then allow the function
+  to determine which columns to use based on the metadata. This allows for
+  encapsulation of the transform logic within the user function.
+
+[data visualizations]: https://rerun.io/blog/column-chunks
+[transforms]: https://wiki.ros.org/tf2
+
 ## Thanks to our sponsor
 
 We would like to thank [Rerun.io] for sponsoring the development of this work. [Rerun.io]
