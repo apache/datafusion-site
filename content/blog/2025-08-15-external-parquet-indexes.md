@@ -308,15 +308,93 @@ there is no need to re-read and re-parse the footer for each query.
 
 [previous blog on the topic]: https://www.influxdata.com/blog/how-good-parquet-wide-tables/
 
-This technique is also shown in the [advanced_parquet_index.rs] example in the DataFusion
-
-You can do this with DataFusion liek this:
-```
-TODO
-```
+This technique is also shown in the [advanced_parquet_index.rs] example. The high level flow
+involves reading and caching the metadata for each file when the index is built and then 
+using the cached metadata when reading the files during query execution.
 
 [advanced_parquet_index.rs]:  https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/advanced_parquet_index.rs
 
+You can do this first by implementing a custom [ParquetFileReaderFactory] like this (again slightly simplified for clarity):
+
+[ParquetFileReaderFactory]: https://docs.rs/datafusion/latest/datafusion/datasource/physical_plan/trait.ParquetFileReaderFactory.html
+
+```rust
+impl ParquetFileReaderFactory for CachedParquetFileReaderFactory {
+    fn create_reader(
+        &self,
+        _partition_index: usize,
+        file_meta: FileMeta,
+        metadata_size_hint: Option<usize>,
+        _metrics: &ExecutionPlanMetricsSet,
+    ) -> Result<Box<dyn AsyncFileReader + Send>> {
+        let filename = file_meta.location();
+        
+        // Pass along the information to access the underlying storage
+        // (e.g. S3, GCS, local filesystem, etc)
+        let object_store = Arc::clone(&self.object_store);
+        let mut inner =
+            ParquetObjectReader::new(object_store, file_meta.object_meta.location)
+                .with_file_size(file_meta.object_meta.size);
+      
+        // retrieve the pre-parsed metadata from the cache
+        // (which was built when the index was built and is kept in memory)
+        let metadata = self
+            .metadata
+            .get(&filename)
+            .expect("metadata for file not found: {filename}");
+      
+        // Return a ParquetReader that uses the cached metadata
+        Ok(Box::new(ParquetReaderWithCache {
+            filename,
+            metadata: Arc::clone(metadata),
+            inner,
+        }))
+    }
+}
+```
+
+Then, in your TableProvider use the factory to avoid re-reading the metadata
+for each file:
+
+```rust
+impl TableProvider for IndexTableProvider {
+    async fn scan(
+        &self,
+        state: &dyn Session,
+        projection: Option<&Vec<usize>>,
+        filters: &[Expr],
+        limit: Option<usize>,
+    ) -> Result<Arc<dyn ExecutionPlan>> {
+      
+        // Configure a factory interface to avoid re-reading the metadata for each file
+        let reader_factory =
+            CachedParquetFileReaderFactory::new(Arc::clone(&self.object_store))
+                .with_file(indexed_file);
+
+        // build the partitioned file (see example for details)
+        let partitioned_file = ...; 
+      
+        // Create the ParquetSource with the predicate and the factory
+        let file_source = Arc::new(
+            ParquetSource::default()
+                // provide the factory to create parquet reader without re-reading metadata
+                .with_parquet_file_reader_factory(Arc::new(reader_factory)),
+        );
+      
+        // Pass along the information needed to read the files
+        let file_scan_config =
+            FileScanConfigBuilder::new(object_store_url, schema, file_source)
+                .with_limit(limit)
+                .with_projection(projection.cloned())
+                .with_file(partitioned_file)
+                .build();
+
+        // Finally, put it all together into a DataSourceExec
+        Ok(DataSourceExec::from_data_source(file_scan_config))
+    }
+    ...
+}
+```
 
 
 # Conclusion
