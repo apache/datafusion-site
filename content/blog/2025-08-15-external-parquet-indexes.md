@@ -292,7 +292,113 @@ systems can use external indexes / metadata stores along with Parquet's built-in
 structures to quickly rule out row groups and data pages that cannot match the query.
 In this case, the index has ruled out all but three data pages.
 
+At a high level you can provide an optional [ParquetAccessPlan] for each file
+that tells DataFusion what parts of the file to read. This plan is then further
+processed by the DataFusion parquet reader based on the with the built-in
+Parquet metadata to potentially prune additional row groups and data pages
+during query execution. You can find a full working example of using information
+from an external index to prune parts of a Parquet file in the
+[advanced_parquet_index.rs] example.
 
+```rust
+// Default to scan all row groups
+let mut access_plan = ParquetAccessPlan::new_all(4);
+access_plan.skip(0); // skip row group
+// Use parquet reader RowSelector to specify scanning rows 100-200 and 350-400
+// in a row group that has 1000 rows
+let row_selection = RowSelection::from(vec![
+   RowSelector::skip(100),
+   RowSelector::select(100),
+   RowSelector::skip(150),
+   RowSelector::select(50),
+   RowSelector::skip(600),  // skip last 600 rows
+]);
+access_plan.scan_selection(1, row_selection);
+access_plan.skip(2); // skip row group 2
+// row group 3 is scanned by default
+```
+
+The resulting plan looks like this:
+
+```text
+┌ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┐
+
+│                   │  SKIP
+
+└ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┘
+Row Group 0
+┌ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┐
+┌────────────────┐    SCAN ONLY ROWS
+│└────────────────┘ │  100-200
+┌────────────────┐    350-400
+│└────────────────┘ │
+─ ─ ─ ─ ─ ─ ─ ─ ─ ─
+Row Group 1
+┌ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┐
+SKIP
+│                   │
+
+└ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┘
+Row Group 2
+┌───────────────────┐
+│                   │  SCAN ALL ROWS
+│                   │
+│                   │
+└───────────────────┘
+Row Group 3
+```
+
+You connect this to your `TableProvider` in a similar way as described in the previous section
+for pruning files. In the `scan` method, you can return a `ParquetExec` that includes the
+`ParquetAccessPlan` for each file as show in the simplified except below:
+
+```rust
+impl TableProvider for IndexTableProvider {
+    async fn scan(
+        &self,
+        state: &dyn Session,
+        projection: Option<&Vec<usize>>,
+        filters: &[Expr],
+        limit: Option<usize>,
+    ) -> Result<Arc<dyn ExecutionPlan>> {
+        let indexed_file = &self.indexed_file;
+        let predicate = self.filters_to_predicate(state, filters)?;
+
+        // Use the external index to create a starting ParquetAccessPlan
+        // that determines which row groups to scan based on the predicate
+        let access_plan = self.create_plan(&predicate)?;
+
+        let partitioned_file = indexed_file
+            .partitioned_file()
+            // provide the access plan to the DataSourceExec by
+            // storing it as  "extensions" on PartitionedFile
+            .with_extensions(Arc::new(access_plan) as _);
+
+        let file_source = Arc::new(
+            ParquetSource::default()
+                // provide the predicate to the standard DataFusion source as well so
+                // DataFusion's parquet reader will apply row group pruning based on
+                // the built-in parquet metadata (min/max, bloom filters, etc) as well
+                .with_predicate(predicate)
+        );
+        let file_scan_config =
+            FileScanConfigBuilder::new(object_store_url, schema, file_source)
+                .with_limit(limit)
+                .with_projection(projection.cloned())
+                .with_file(partitioned_file)
+                .build();
+
+        // Finally, put it all together into a DataSourceExec
+        Ok(DataSourceExec::from_data_source(file_scan_config))
+    }
+    ...
+}
+
+```
+
+
+[advanced_parquet_index.rs]:  https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/advanced_parquet_index.rs
+[ParquetAccessPlan]: https://docs.rs/datafusion/latest/datafusion/datasource/physical_plan/parquet/struct.ParquetAccessPlan.html
 
 
 # Caching Parquet Metadata
