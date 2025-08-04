@@ -1,6 +1,6 @@
 ---
 layout: post
-title: Using External Indexes and Metadata Stores to Accelerate Queries on Apache Parquet
+title: Using External Indexes / Metadata Stores / Catalogs to Accelerate Queries on Apache Parquet
 date: 2025-08-15
 author: and Andrew Lamb (InfluxData)
 categories: [features]
@@ -25,117 +25,203 @@ limitations under the License.
 -->
 
 
-In this blog, we describe an important aspect of query performance in analytic
-systems, namely how to quickly find where the desired data is stored using
-indexes and metadata stores for Apache Parquet based system. We will then
-illustrate how to implement such systems using Apache DataFusion.
+It is a common misconception that [Apache Parquet] is limited to indexing
+structures built into the format. However, you can use Parquet's heirarchal data
+organization to easily build custom external indexes to significantly speed up query
+processing.
 
-* Note there is a companion [video] and [presentation] for this blog. */
+In this blog, we describe why you might need external indexes, what they are,
+how analytic systems use them to accelerate query processing, and provide a
+working example using [Apache DataFusion].
 
-[video]: https://www.youtube.com/watch?v=74YsJT1-Rdk
+*Note there is a [companion video] and [presentation].*
+
+# Motivation
+
+System designers choose between a pre-configured data system or the very
+challenging task of building their own custom data platform from scratch.
+
+For many users and use cases, one of the existing traditional data systems will
+likely be good enough. However, systems such as [Apache Spark], [DuckDB],
+[ClickHouse], [Hive], [Snowflake] are each optimized for a certain set of
+tradeoffs between performance, cost, availability, interoperability, deployment
+target, cloud / on prem, operational ease and many other factors.
+
+For new, or especially demanding use cases, where no existing system has your
+optimal tradeoffs, you can build your own custom data platform. Previously this
+was a long and expensive endeavor, but today, in the era of [Composable Data
+Systems] it is increasingly feasible. High quality, open source building blocks
+such as [Apache Parquet] for storage, [Apache Arrow] for in-memory processing,
+and [Apache DataFusion] for query execution make it possible to quickly build
+custom data platforms optimized for your specific
+needs<sup>[1](#footnote1)</sup>.
+
+
+[companion video]: https://www.youtube.com/watch?v=74YsJT1-Rdk
 [presentation]: https://docs.google.com/presentation/d/1e_Z_F8nt2rcvlNvhU11khF5lzJJVqNtqtyJ-G3mp4-Q/edit
 
+[Apache Parquet]: https://parquet.apache.org/
+[Apache DataFusion]: https://datafusion.apache.org/
+[Apache Arrow]: https://arrow.apache.org/
+[FDAP Stack]: https://www.influxdata.com/blog/flight-datafusion-arrow-parquet-fdap-architecture-influxdb/
+[Composable Data Systems]: https://www.vldb.org/pvldb/vol16/p2679-pedreira.pdf
 
-(TODO picture / diagram about what external indexes are / are used for - combine diagrams from below)
 
-Existing data platforms each make a certain set of tradeoffs for performance,
-cost, availability, interoperability, deployment target, and operational ease.
-For some usecases an existing solution works great, and for others you must
-assemble your own platform to get the tradeoffs that are most optimal for your
-usecase. Thankfully,  the era of Composable Data Systems (link) makes it
-increasingly easy to build custom data platforms, observability stacks, and
-databases without having to re-create all the pisces
+# Introduction to External Indexes / Catalogs / Metadata Stores
+
+<div class="text-center">
+<img
+src="/blog/images/external-parquet-indexes/external-index-overview.png"
+width="80%"
+class="img-responsive"
+alt="Using External Indexes to Accelerate Queries"
+/>
+</div>
+
+**Figure 1**: Using external indexes to speed up queries in an analytic system.
+Given a user's query (Step 1), the system uses an external index (that is not
+stored as part of the data files) to quickly find the files that may contain
+relevant data (Step 2). Then, for each file, the system uses the external index
+to further narrow the required data by locating only those parts of each file
+(data pages) that are relevant (Step 3). Finally, the system reads only those
+parts of the file and returns the results to the user (Step 4).
+
+All Data Systems have some way of storing information (metadata) to find data
+relevant to a query, often stored in structures with names like "index" or
+"catalog." In this blog, we use the term **"index"** to mean any structure that
+helps locate relevant data during processing.
+
+There are many different types of indexes, content stored in indexes, strategies
+to keep indexes up to date, and ways to apply indexes during query processing.
+This wide variety means that there is no one-size-fits-all solution for
+metadata, and instead, there are many different approaches, each with their own
+tradeoffs. For example, in Hive uses the [Hive Metastore], a more classic
+analytic database like Vertica uses a [Catalog] and recently open data lake
+systems store such information using a table format like [Apache Iceberg] or
+[Delta Lake].
+
+**External indexes** store information separately ("external") to the data files
+themselves. External indexes are flexible and widely used in data systems, but
+require additional operational overhead to keep in sync with the Data files
+files. For example, if you add a new Parquet file to your data lake you must
+also update the external index to include information about the new file. Note,
+it is possible to avoid external indexes embed user-defined indexes directly in
+Parquet files, which is describe our previous blog [Embedding User-Defined
+Indexes in Apache Parquet Files].
+
+Examples of information stored in external indexes include:
+
+* Min/Max statistics
+* Bloom filters
+* Inverted indexes
+* Full text indexes 
+* Other use case specific indexes
+* Information needed to read the remote file (such as the location of data pages within a Parquet file, typically stored in the footer)
+
+Examples of index storage include:
+
+* In a separate file (e.g. a JSON or Parquet file that contains the index)
+* In a database (e.g. a [PostgreSQL] table that contains the index)
+* In a distributed key-value store (e.g. [Redis] or [Cassandra])
+* In an in-memory cache
+
+[Hive Metastore]: https://cwiki.apache.org/confluence/display/Hive/Design#Design-Metastore
+[Catalog]: https://www.vertica.com/docs/latest/HTML/Content/Authoring/AdministratorsGuide/Managing/Metadata/CatalogOverview.htm
+[Apache Iceberg]: https://iceberg.apache.org/
+[Delta Lake]: https://delta.io/
+[Embedding User-Defined Indexes in Apache Parquet Files]: https://datafusion.apache.org/blog/2025/07/14/user-defined-parquet-indexes/
+[PostgreSQL]: https://www.postgresql.org/
+[Redis]: https://redis.io/
+[Cassandra]: https://cassandra.apache.org/
 
 # Using Apache Parquet for Storage
 
-Apache Parquet’s (TODO link) combination of good compression, high-performance,
-high quality open source ilbraries, and wide ecosystem interoperability make it
-a compelling choice when building new systems. While there are some niche use
-case that may benefit from using a different format, for many usecases Parquet
-is the obvious choice.
+Apache Parquet's combination of good compression, high-performance, high quality
+open source libraries, and wide ecosystem interoperability make it a compelling
+choice when building new systems. While there are some niche use case that may
+benefit from specialized formats, for many usecases Parquet is the obvious
+choice and the rest of this blog shows how to build external indexes with
+Parquet based systems.
 
-As I argue in the companion video of this blog, even in ClickBench (todo link), the current analytics benchmark that vendors love to BenchMaxx, there is less than a factor of two in performance between custom file formats such as DuckDB or Vortex and Parquet. The difference is even lower if the benchmark parquet files are rewritten to use more of the features Parquet already provides such as Column or Offset Indexes or Bloom Filters. Compared to the low interoperability and expensive transcoding/loading step of alternate file formats, Parquet looks pretty good.
+While recent proprietary file formats differ in details, they all use the same
+high level structure<sup>[2](#footnote2)</sup>: metadata, typically at the end
+of the file, and data divided into columns and then into horizontal slices (e.g.
+Parquet Row Groups and/or Data Pages). The structure is widespread because it
+enables a hierarchical approach to pruning (finding what you want quickly) as
+described in the next section.
+
+For example, the [Clickhouse MergeTree] format consists of *Parts* (similar to
+Parquet files), and *Granules* (similar to Row Groups), and the [Clickhouse
+indexing strategy] is designed to quickly locate the parts and granules that may
+contain relevant data for the query. This is directly analogous to finding files
+and then Row Groups / Data Pages within those files for Parquet based systems.
+
+[Clickhouse MergeTree]: https://clickhouse.com/docs/engines/table-engines/mergetree-family/mergetree
+[Clickhouse indexing strategy]: https://clickhouse.com/docs/guides/best-practices/sparse-primary-indexes#clickhouse-index-design
+
+A common criticism of Parquet is that it is not as performant as some new
+proposal. These criticisms typically cherry pick a few queries and/or datasets
+and then build a specialized index or data layout for that specific cases.
+However, as described in the [companion video] of this blog, even for
+[ClickBench], the current benchmaxxing<sup>[3](#footnote3)</sup> darling of
+analytics vendors that has a wide variety of query patterns, there is less than
+a factor of two difference in performance between custom file formats and
+Parquet. The difference becomes even lower when the benchmark is run with
+Parquet files that contain more modern Parquet files such as including Column
+and Offset Indexes or Bloom Filters (see XXXX). Compared to the low
+interoperability and expensive transcoding/loading step of alternate file
+formats, Parquet is often hard to beat. 
+
+
+[DuckDB]: https://duckdb.org/
+[Vortex]: https://docs.vortex.dev/
+[ClickBench]: https://clickbench.com/
+[companion video]: https://www.youtube.com/watch?v=74YsJT1-Rdk
+
 
 # Apache Parquet Overview
 
-This section provides a brief background on the organization of Apache Parquet files.
+This section provides a brief background on the organization of Apache Parquet
+files which is needed to full understand how external indexes accelerate query
+processing. If you are already familiar with Parquet, you can skip this section.
 
-organizes data into row groups and column chunks, as shown in figure 1.
 
+Parquet organizes data into row groups and column chunks, as shown below. 
+
+<div class="text-center">
 <img
 src="/blog/images/external-parquet-indexes/parquet-layout.png"
 width="80%"
 class="img-responsive"
 alt="Parquet File layout: Row Groups and Column Chunks."
 />
+</div>
 
-**Figure**: Parquet File Layout
+**Figure 2**: Parquet File Layout
 
+<div class="text-center">
 <img
 src="/blog/images/external-parquet-indexes/parquet-metadata.png"
 width="80%"
 class="img-responsive"
 alt="Parquet File layout: Metadata and footer."
 />
-
+</div>
 **Figure**: Parquet Metadata in the Footer
 
-
+<div class="text-center">
 <img
-src="/blog/images/external-parquet-indexes/parquet-filter-pushdown.png"
-width="80%"
-class="img-responsive"
-alt="Parquet Filter Pushdown: use filter predicate to skip pages."
+  src="/blog/images/external-parquet-indexes/parquet-filter-pushdown.png"
+  width="80%"
+  class="img-responsive"
+  alt="Parquet Filter Pushdown: use filter predicate to skip pages."
 />
-
+</div>
 **Figure**: Filter Pushdown in Parquet: use the predicate "C > 25" from the query
 along with various statistics from the indexes / metadata to skip pages that
 cannot match the predicate.
 
 Please refer to XXX for more details
-
-While more recent file formats differ in the details, almost all of them have
-the same high level structure (and many even use the same terminology) of
-metadata in the footer, and then data that is divided into row groups (called
-“PAX” in the database literature after the first research paper to describe the
-technique) and then into smaller units of IO. This structure is so similar
-because it enables a hierarchical approach to pruning (finding what you want
-quickly) as described in the next section
-
-Proprietary formats have same high level structure:
-PAX + Data Pages + Metadata
-e.g Clickhouse: Parts + Granules + Indexes
-
-Differences: where metadata stored (and encodings, which I ignore)
-
-⇒ Nothing theoretically prevents other metadata with Parquet (only software engineering)
-
-# External Indexes and Metadata Stores
-
-We use the term "external indexes" to refer to any metadata that is stored separately
-from the Parquet file itself that can be used to accelerate queries. They typically
-include information such as:
-* Min/Max statistics for columns in each file
-* Bloom filters for columns in each file
-* Inverted indexes for columns in each file
-* Full text indexes for columns in each file
-* Other custom indexes that are specific to your use case
-
-External indexes can be stored in a variety of ways, including:
-* In a separate file (e.g. a JSON or Parquet file that contains the index
-* In a database (e.g. a PostgreSQL or MySQL table that contains the index)
-* In a distributed key-value store (e.g. Redis or Cassandra)
-
-External indexes are very flexible and widely used in many systems, but they
-do require additional operational overhead to maintain and keep in sync with the
-Parquet files. For example, if you add a new Parquet file to your data lake
-you must also update the external index to include information about the new file.
-
-Depending on your needs, it is possible to avoid external indexes entirely and   
-embed user-defined indexes directly in Parquet files,
-which is describedin our previous blog [Embedding User-Defined Indexes in Apache Parquet Files].
-
-[Embedding User-Defined Indexes in Apache Parquet Files]: https://datafusion.apache.org/blog/2025/07/14/user-defined-parquet-indexes/
 
 # Query Acceleration: Skip as Much as Possible
 
@@ -167,13 +253,14 @@ predicate on the `time` column, the index might store the minimum and maximum `t
 values in each file, allowing the system to quickly rule out files that
 cannot possibly match the predicate.
 
+<div class="text-center">
 <img
 src="/blog/images/external-parquet-indexes/prune-files.png"
 width="80%"
 class="img-responsive"
 alt="Data Skipping: Pruning Files."
 />
-
+</div>  
 **Figure**: Step 1: File Pruning. Given a query predicate, systems use external
 indexes / metadata stores to quickly rule out files that cannot match the query.
 In this case, by consulting the index all but two files can be ruled out.
@@ -538,10 +625,16 @@ it out, we would love for you to join us.
 [DataFusion community]: https://datafusion.apache.org/contributor-guide/communication.html
 
 
-<sup>[2](#footnote2)</sup>
 ### Footnotes
 
-<a id="footnote1"></a>`1`: A commonly cited example is highly selective predicates (e.g. `category = 'foo'`) but for which the built in BloomFilters are not sufficient.
+<a id="footnote1"></a>`1`: This trend is described in more detail in the [FDAP Stack] blog
+
+<a id="footnote2"></a>`2`: This layout is referred to a “PAX” in the
+database literature (TODO LINK) after the first research paper to describe the technique,
+
+<a id="footnote3"></a>`3`: Benchmaxxing (verb): to add specific optimizations that only
+impact benchmark results and are not widely applicable to real world use cases.
+
 
 
 
