@@ -242,21 +242,26 @@ Parquet predicate pushdown is shown in the figure below:
 />
 </div>
 
-**Figure 4**: Filter Pushdown in Parquet: Using the predicate, `C > 25` from the
-query along with statistics from indexes can be used to skip pages that cannot
-match the predicate. Only pages that may match the predicate are read for
-further processing.
+**Figure 4**: Filter Pushdown in Parquet: query engines use the the predicate,
+`C > 25`, from the query along with statistics from the metadata, to identify
+pages that may match the predicate which  are read for further processing.
+**NOTE the exact same pattern can be applied using information from external
+indexes, as described in the next sections.**
 
 Please refer to the XXX blog for more details on these optimizations in Parquet.
 
-# Query Acceleration: Skip as Much as Possible
+# Hierarchical Pruning Overview
 
-Query processing systems in general are optimized first by quickly figuring how to skip
-as much data as quickly as possible. Analytic systems typically do this via a
-hierarchical approach,nwhich progressively narrows the set of data needed –
-first entire files are ruled out, and then within each file , large sections
-(e.g. row groups) are ruled out, followed by ruling out data pages and finally
-to individual rows, as shown in the figure below:
+A key technique to optimize query processing systems is to quickly figure how to
+skip as much data as quickly as possible. Analytic systems typically us a
+hierarchical approach to progressively narrow the set of data to be explored:
+
+1. First, entire files are ruled out, 
+2. Then, within each file, large sections (e.g. Row Groups) are ruled out
+3. Then (optionally) smaller sections (e.g. Data Pages)  are ruled out
+
+Finally, the system reads only the relevant data pages and applies the query
+predicate to the data.
 
 <img 
   src="/blog/images/external-parquet-indexes/processing-pipeline.png" 
@@ -265,10 +270,11 @@ to individual rows, as shown in the figure below:
   alt="Standard Pruning Layers."
 />
 
-**Figure**: Layered Filtering.
+**Figure 5**: Hierarchical Pruning: The system first rules out files, then
+Row Groups, then Data Pages, and finally reads only the relevant data pages.
 
-Again, while there are differences in metadata placement and encoding between
-systems, the overall processing pipeline is similar.
+While there are differences in the deatils of metadata placement and encoding between
+systems, the overall processing pipelines are all very similar.
 
 # Pruning Files with External Indexes
 
@@ -287,20 +293,22 @@ class="img-responsive"
 alt="Data Skipping: Pruning Files."
 />
 </div>  
-**Figure**: Step 1: File Pruning. Given a query predicate, systems use external
-indexes / metadata stores to quickly rule out files that cannot match the query.
-In this case, by consulting the index all but two files can be ruled out.
 
-There are many different existing example of this type of "index" such as the
+**Figure 6**: Step 1: File Pruning. Given a query predicate, systems use external
+indexes to quickly rule out files that cannot match the query. In this case, by
+consulting the index all but two files can be ruled out.
+
+There are many different systems that match this "index" pattern such as the
 [Hive Metadata Store](https://cwiki.apache.org/confluence/display/Hive/Design#Design-Metastore),
+[Iceberg](https://iceberg.apache.org/), 
+[Delta Lake](https://delta.io/),
+[DuckLake](https://duckdb.org/2025/05/27/ducklake.html),
+and [Hive Style Partitioning](https://sparkbyexamples.com/apache-hive/hive-partitions-explained-with-examples/) (which is a simple form of indexing based on directory paths).
 
-[Iceberg](https://iceberg.apache.org/), [Delta Lake](https://delta.io/),
-[DuckLake](https://duckdb.org/2025/05/27/ducklake.html)
-[Hive style partitioning](https://sparkbyexamples.com/apache-hive/hive-partitions-explained-with-examples/) (which is a simple form of indexing).
-
-Each of these systems works well for their intended usecases, and has different tradeoffs in terms of
-the size of the index, the types of queries that can be accelerated, the operational
-overhead (e.g. external services) and the complexity of maintaining the index.
+Each of these systems works well for their intended usecases, and has different
+tradeoffs across size of the index, types of queries that can be accelerated, 
+operational overhead (e.g. external services) and complexity of maintaining the
+index.
 
 If none of the existing systems meets your needs, or want to experiment, you can
 build your own with DataFusion. This is part of the full working and well
@@ -385,7 +393,7 @@ DataFusion also includes code to help you with common filtering tasks, such as:
 [ExprSimplifier]: https://docs.rs/datafusion/latest/datafusion/optimizer/simplify_expressions/struct.ExprSimplifier.html#method.simplify
 [cp_solver]: https://docs.rs/datafusion/latest/datafusion/physical_expr/intervals/cp_solver/index.html
 
-# Pruning Parts of Parquet Files using Indexes
+# Pruning Parts of Parquet Files with External Indexes
 
 Once the set of files to be scanned has been determined, the next step is to
 prune parts of each Parquet file that cannot match the query. While the Parquet format
