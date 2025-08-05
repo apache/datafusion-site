@@ -185,8 +185,8 @@ This section provides a brief background on the organization of Apache Parquet
 files which is needed to full understand how external indexes accelerate query
 processing. If you are already familiar with Parquet, you can skip this section.
 
-
-Parquet organizes data into row groups and column chunks, as shown below. 
+Parquet files are organized into a logical structures of *Row Groups* and *Column
+Chunks* as shown in the figure below.
 
 <div class="text-center">
 <img
@@ -197,7 +197,13 @@ alt="Parquet File layout: Row Groups and Column Chunks."
 />
 </div>
 
-**Figure 2**: Parquet File Layout
+**Figure 2**: Logical Parquet File Layout: Data is first divided in horizontal slices
+called Row Groups. The data is then stored column by column in *Column Chunks*.
+This arrangement allows efficient access to only the portions of columns needed
+for a query.
+
+Physically, Parquet data is stored as a series of Data Pages along with metadata
+stored at the end of the file (in the footer), as shown in the figure below.
 
 <div class="text-center">
 <img
@@ -207,7 +213,25 @@ class="img-responsive"
 alt="Parquet File layout: Metadata and footer."
 />
 </div>
-**Figure**: Parquet Metadata in the Footer
+
+**Figure 3**: Physical Parquet File Layout: A typical Parquet file is composed
+of many data pages,  which contain the raw encoded data, and a footer that
+stores metadata about the file, including the schema and the location of the
+relevant data pages, and optional statistics such as min/max values for each
+Column Chunk.
+
+Parquet files are designed so that systems can read only the data they need for a
+query via two main mechanisms:
+
+1. *Projection Pushdown*: if a query only needs a few columns from a wide table, it
+   only needs to read the pages for the relevant Column Chunks
+
+2. *Filter Pushdown*: Similarly, given a query with a filter predicate (e.g.
+   `WHERE C > 25`), query engines can use statistics such as (but not limited to)
+   the min/max values stored in the metadata to skip reading pages that
+   cannot possibly match the predicate.
+
+Parquet predicate pushdown is shown in the figure below:
 
 <div class="text-center">
 <img
@@ -217,11 +241,13 @@ alt="Parquet File layout: Metadata and footer."
   alt="Parquet Filter Pushdown: use filter predicate to skip pages."
 />
 </div>
-**Figure**: Filter Pushdown in Parquet: use the predicate "C > 25" from the query
-along with various statistics from the indexes / metadata to skip pages that
-cannot match the predicate.
 
-Please refer to XXX for more details
+**Figure 4**: Filter Pushdown in Parquet: Using the predicate, `C > 25` from the
+query along with statistics from indexes can be used to skip pages that cannot
+match the predicate. Only pages that may match the predicate are read for
+further processing.
+
+Please refer to the XXX blog for more details on these optimizations in Parquet.
 
 # Query Acceleration: Skip as Much as Possible
 
