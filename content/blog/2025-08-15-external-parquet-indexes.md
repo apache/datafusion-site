@@ -278,19 +278,19 @@ systems, the overall processing pipelines are all very similar.
 
 # Pruning Files with External Indexes
 
-The first step in the pruning process is to quickly rule out files that cannot
+The first step in heirarchal pruning is quickly ruling out files that cannot
 match the query. This is typically done using external indexes or metadata stores
 that store summary information about each file. For example, if a query has a
 predicate on the `time` column, the index might store the minimum and maximum `time` 
-values in each file, allowing the system to quickly rule out files that
-cannot possibly match the predicate.
+values in each file, allowing the system to quickly find only the subset of files that
+can contain data that match the predicate.
 
 <div class="text-center">
 <img
-src="/blog/images/external-parquet-indexes/prune-files.png"
-width="80%"
-class="img-responsive"
-alt="Data Skipping: Pruning Files."
+  src="/blog/images/external-parquet-indexes/prune-files.png"
+  width="80%"
+  class="img-responsive"
+  alt="Data Skipping: Pruning Files."
 />
 </div>  
 
@@ -298,39 +298,46 @@ alt="Data Skipping: Pruning Files."
 indexes to quickly rule out files that cannot match the query. In this case, by
 consulting the index all but two files can be ruled out.
 
-There are many different systems that match this "index" pattern such as the
+There are many different systems that match the external index to find files pattern such as the
 [Hive Metadata Store](https://cwiki.apache.org/confluence/display/Hive/Design#Design-Metastore),
 [Iceberg](https://iceberg.apache.org/), 
 [Delta Lake](https://delta.io/),
 [DuckLake](https://duckdb.org/2025/05/27/ducklake.html),
-and [Hive Style Partitioning](https://sparkbyexamples.com/apache-hive/hive-partitions-explained-with-examples/) (which is a simple form of indexing based on directory paths).
-
+and [Hive Style Partitioning](https://sparkbyexamples.com/apache-hive/hive-partitions-explained-with-examples/)<sup>[4](#footnote4)</sup>.
 Each of these systems works well for their intended usecases, and has different
 tradeoffs across size of the index, types of queries that can be accelerated, 
 operational overhead (e.g. external services) and complexity of maintaining the
 index.
 
-If none of the existing systems meets your needs, or want to experiment, you can
-build your own with DataFusion. This is part of the full working and well
-commented [parquet_index.rs] example in the DataFusion repository.
+If none of the existing systems meets your needs, or you want to experiment with
+different strategies, you can easily build your own external index using
+DataFusion.
+
+## Pruning Files with External Indexes Using DataFusion
+
+Tho implement file pruning in DataFusion, you implement a custom [TableProvider]
+with the [supports_filter_pushdown] and [scan] methods. The
+`supports_filter_pushdown` method tells DataFusion which predicates can be used
+by the `TableProvider` and the `scan` method uses those predicates with the
+external index to find the files that may contain data that matches the query.
+
+[TableProvider]: https://docs.rs/datafusion/latest/datafusion/datasource/trait.TableProvider.html
+[supports_filter_pushdown]: https://docs.rs/datafusion/latest/datafusion/datasource/trait.TableProvider.html#method.supports_filters_pushdown
+[scan]: https://docs.rs/datafusion/latest/datafusion/datasource/trait.TableProvider.html#tymethod.scan
+
+The DataFusion repository contains a fully working and well commented
+[parquet_index.rs] example of using an external index to prune files based on a
+query predicate. The example demonstrates query that includes the predicate
+`value = 150`, and how the `IndexTableProvider` uses the index to determine
+that only two files are needed.
 
 [parquet_index.rs]: https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/parquet_index.rs
-
-The basic idea is to implement a custom `TableProvider` that
-implements the `supports_filter_pushdown` and `scan` methods. In the
-`supports_filter_pushdown` method, you can analyze the filter predicates and
-determine which files need to be scanned. In the `scan` method, you can return
-a `ParquetExec` that only scans the files that need to be scanned.
-
-For example, when you run a query that includes the predicate `value = 150`, the
-IndexTableProvider will use the index to determine that only two files are needed. 
 
 ```sql
 SELECT file_name, value FROM index_table WHERE value = 150
 ```
 
-The code to implement this looks like the following (slightly simplified for
-clarity):
+The code from the example is as follows (slightly simplified for clarity):
 
 ```rust
 impl TableProvider for IndexTableProvider {
@@ -358,7 +365,7 @@ impl TableProvider for IndexTableProvider {
                 .with_limit(limit);
 
         // Add the files to the scan config
-        for (file) in files {
+        for file in files {
             file_scan_config_builder = file_scan_config_builder.with_file(
                 PartitionedFile::new(file.path(), file_size.size()),
             );
@@ -371,55 +378,73 @@ impl TableProvider for IndexTableProvider {
 }
 ```
 
-While the example in DataFusion uses a simple min/max index, you can implement any 
-indexing strategy that meets your needs. For example, you might want to
-implement a bloom filter index, or a full text index, or a more complex
-multi-dimensional index. 
+While this example uses a standard min/max index, you can implement any indexing
+strategy you need, such as a bloom filters, a full text index, or a more
+complex multi-dimensional index.
 
 DataFusion handles the details of pushing down the filters to the
-`TableProvider` and the mechanics of reading the parquet files, so you you can
-focus on the system specific details such as building, storing and applying the
-index. 
+`TableProvider` and the mechanics of reading the parquet files, and you focus on
+the system specific details such as building, storing and applying the index.
 
-DataFusion also includes code to help you with common filtering tasks, such as:
+DataFusion also includes several libraries code to help you with common
+filtering tasks, such as:
 
-* Range Based Pruning ([PruningPredicate]) for cases where your index stores min/max values for  some/all columns.
+* A full and well documented expression representation ([Expr]) and [APIs for
+  building, vistiting, and rewriting] query predicates
+
+* Range Based Pruning ([PruningPredicate]) for cases where your index stores min/max values for some/all columns.
 
 * Expression simplification ([ExprSimplifier] for simplifying predicates before applying them to the index.
 
 * Range analysis for predicates [cp_solver] for interval based range analysis (e.g. `col > 5 AND col < 10`)
 
+[Expr]: https://docs.rs/datafusion/latest/datafusion/logical_expr/enum.Expr.html
+[APIs for building, vistiting, and rewriting]: https://docs.rs/datafusion/latest/datafusion/logical_expr/enum.Expr.html#visiting-and-rewriting-exprs
 [PruningPredicate]: https://docs.rs/datafusion/latest/datafusion/physical_optimizer/pruning/struct.PruningPredicate.html
 [ExprSimplifier]: https://docs.rs/datafusion/latest/datafusion/optimizer/simplify_expressions/struct.ExprSimplifier.html#method.simplify
 [cp_solver]: https://docs.rs/datafusion/latest/datafusion/physical_expr/intervals/cp_solver/index.html
 
 # Pruning Parts of Parquet Files with External Indexes
 
-Once the set of files to be scanned has been determined, the next step is to
-prune parts of each Parquet file that cannot match the query. While the Parquet format
-itself contains some built-in metadata that can be used for this purpose (e.g.
-min/max statistics (TODO link) , and bloom filters (TODO LINK))), you are not limited to just the built-in
-metadata, and you can also use external indexes for filtering *WITIHIN* Parquet files.
+Once the set of files to be scanned has been determined, the next step is
+determine which parts of each file can match the query. Similarly to the
+previous step, almost all advanced query processing systems use additional
+metadata to prune unnecessary parts of the file, such as [Data Skipping Indexes
+in ClickHouse]. 
+
+For Parquet based systems, the most common strategy is to use the built-in metadata such
+as [min/max statistics], and [Bloom Filters]). However, it is also possible to use external
+indexes even for filtering *WITIHIN* Parquet files as shown below. 
+
+[Data Skipping Indexes in ClickHouse]: https://clickhouse.com/docs/optimize/skipping-indexes
+[min/max statistics]: https://github.com/apache/parquet-format/blob/1dbc814b97c9307687a2e4bee55545ab6a2ef106/src/main/thrift/parquet.thrift#L267
+[Bloom Filters]: https://parquet.apache.org/docs/file-format/bloomfilter/
 
 <img
-src="/blog/images/external-parquet-indexes/prune-row-groups.png"
-width="80%"
-class="img-responsive"
-alt="Data Skipping: Pruning Row Groups and DataPages"
+  src="/blog/images/external-parquet-indexes/prune-row-groups.png"
+  width="80%"
+  class="img-responsive"
+  alt="Data Skipping: Pruning Row Groups and DataPages"
 />
 
-**Figure**: Step 2: Pruning Parquet Row Groups and Data Pages. Given a query predicate,
+**Figure 7**: Step 2: Pruning Parquet Row Groups and Data Pages. Given a query predicate,
 systems can use external indexes / metadata stores along with Parquet's built-in
 structures to quickly rule out row groups and data pages that cannot match the query.
-In this case, the index has ruled out all but three data pages.
+In this case, the index has ruled out all but three data pages which must then be fetched
+for more processing.
 
-At a high level you can provide an optional [ParquetAccessPlan] for each file
-that tells DataFusion what parts of the file to read. This plan is then further
-processed by the DataFusion parquet reader based on the with the built-in
-Parquet metadata to potentially prune additional row groups and data pages
-during query execution. You can find a full working example of using information
-from an external index to prune parts of a Parquet file in the
+# Pruning Parts of Parquet Files with External Indexes using DataFusion
+
+To implement intra file pruning in DataFusion, you provide a [ParquetAccessPlan]
+for each file that tells DataFusion what parts of the file to read. This plan is
+then [further refined by the DataFusion Parquet reader] based on the
+built-in Parquet metadata to potentially prune additional row groups and data
+pages during query execution. You can find a full working example of using
+information from an external index to prune parts of a Parquet file in the
 [advanced_parquet_index.rs] example.
+
+[ParquetAccessPlan]: https://docs.rs/datafusion/latest/datafusion/datasource/physical_plan/parquet/struct.ParquetAccessPlan.html
+[further refined by the DataFusion Parquet reader]: https://docs.rs/datafusion/latest/datafusion/datasource/physical_plan/parquet/source/struct.ParquetSource.html#implementing-external-indexes
 
 ```rust
 // Default to scan all row groups
@@ -669,75 +694,7 @@ database literature (TODO LINK) after the first research paper to describe the t
 <a id="footnote3"></a>`3`: Benchmaxxing (verb): to add specific optimizations that only
 impact benchmark results and are not widely applicable to real world use cases.
 
+<a id="footnote4"></a>`4`: Hive Style Partitioning is which is a simple and widely used form of indexing based on directory paths, where the directory structure is used to
+store information about the data in the files. For example, a directory structure like `year=2025/month=08/day=15/` can be used to store data for a specific day
+and the system can quickly rule out directories that do not match the query predicate.
 
-
-
-Andrew explained that while reading Parquet files can be slow due to footer
-parsing, stateful systems can optimize this by memoizing footer information and
-using advanced features in Data Fusion to efficiently read and scan specific row
-groups and data pages.
-
-
-
-
-Database Pruning in Analytic Systems
-
-Andrew discussed the application of database pruning techniques in Parquet
-systems, emphasizing that similar methods could be implemented in other systems
-like Data Fusion. He explained that given filters or predicates, the system can
-determine which files need to be scanned for further processing, a concept
-applicable across various analytic systems. Andrew provided an example using
-Data Fusion, mentioning a Parquet Index video that demonstrates how to configure
-the system to read only relevant files based on index structures. He concluded
-by presenting Rust code that illustrates the basic idea of a table provider in
-Data Fusion, highlighting its simplicity and applicability.
-
-API for Filter Optimization
-
-Andrew explained the API for handling filters and file reading, emphasizing its
-ability to optimize data access by determining which files need to be consulted
-based on query predicates. He described how the API can handle complex
-algorithms, including range analysis for minimum and maximum values, and
-highlighted that data fusion includes the necessary logic for such analyses.
-Andrew also mentioned that the API is flexible, allowing for various
-optimizations like bloom filters or full-text indexes, and provided a concrete
-example of using the API to extract and store max values for columns in a
-separate structure.
-
-Catalog Systems Data Filtering Techniques
-
-Andrew discussed various catalog systems and their approaches to filtering and
-querying data. He explained how systems like his use PostgreSQL to store
-metadata and quickly narrow down file subsets using time predicates. Andrew also
-described how Log Fire and Iceberg use similar techniques, with Log Fire
-rewriting query predicates into SQL for metadata filtering. He then shifted
-focus to Parquet files, explaining how Data Fusion can not only filter which
-files to consider but also rule out unnecessary portions within individual
-Parquet files by using index structures and additional information outside the
-files.
-
-
-
-He demonstrated an example from the Data Fusion
-repository showing how to implement this optimization, highlighting that while
-many systems choose to read entire files, it's possible to build more efficient
-systems that only process necessary data.
-
-Parquet File Scanning Optimization
-
-Andrew explained how Parquet files are scanned using access plans that specify
-which row groups to scan and which ranges to target. He described how special
-indexes can efficiently locate specific rows within row groups by skipping
-unnecessary data and only fetching relevant data pages. Andrew also mentioned
-that pre-parsed metadata can be used to avoid parsing the footer for each query,
-reducing I/O and parsing costs during the query execution.
-
-Parquet Analytics and Performance Improvements
-
-Andrew discussed the use of Parquet files for analytics, emphasizing that they
-can be used for both high-performance and low-latency analytics without being
-restricted to built-in metadata. He highlighted the importance of allowing
-additional indexes on top of Parquet and encouraged collaboration to improve
-data fusion, noting that it is an open-source project. Andrew also invited
-attendees to join efforts to enhance performance and regain a leading position
-in benchmarks, providing a web page for further information.
