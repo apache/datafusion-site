@@ -26,13 +26,13 @@ limitations under the License.
 
 
 It is a common misconception that [Apache Parquet] is limited to indexing
-structures built into the format. However, you can use Parquet's heirarchal data
-organization to easily build custom external indexes to significantly speed up query
-processing.
+structures built into the format. You can use Parquet's heirarchal data
+organization to easily build custom external indexes to significantly speed up
+query processing.
 
-In this blog, we describe why you might need external indexes, what they are,
-how analytic systems use them to accelerate query processing, and provide a
-working example using [Apache DataFusion].
+In this blog, we describe the role of external indexes, what they are, how they
+are used , and provide a working example of accelerating Parquet processing
+using [Apache DataFusion].
 
 *Note there is a [companion video] and [presentation].*
 
@@ -71,10 +71,10 @@ needs<sup>[1](#footnote1)</sup>.
 
 <div class="text-center">
 <img
-src="/blog/images/external-parquet-indexes/external-index-overview.png"
-width="80%"
-class="img-responsive"
-alt="Using External Indexes to Accelerate Queries"
+  src="/blog/images/external-parquet-indexes/external-index-overview.png"
+  width="80%"
+  class="img-responsive"
+  alt="Using External Indexes to Accelerate Queries"
 />
 </div>
 
@@ -435,23 +435,25 @@ for more processing.
 
 # Pruning Parts of Parquet Files with External Indexes using DataFusion
 
-To implement intra file pruning in DataFusion, you provide a [ParquetAccessPlan]
-for each file that tells DataFusion what parts of the file to read. This plan is
-then [further refined by the DataFusion Parquet reader] based on the
-built-in Parquet metadata to potentially prune additional row groups and data
-pages during query execution. You can find a full working example of using
-information from an external index to prune parts of a Parquet file in the
-[advanced_parquet_index.rs] example.
+To implement pruning within Parquet files, you provide a [ParquetAccessPlan] for
+each file that tells DataFusion what parts of the file to read. This plan is
+then [further refined by the DataFusion Parquet reader] using the built-in
+Parquet metadata to potentially prune additional row groups and data pages
+during query execution. You can find a full working example of this technique in
+the [advanced_parquet_index.rs] example.
 
 [ParquetAccessPlan]: https://docs.rs/datafusion/latest/datafusion/datasource/physical_plan/parquet/struct.ParquetAccessPlan.html
 [further refined by the DataFusion Parquet reader]: https://docs.rs/datafusion/latest/datafusion/datasource/physical_plan/parquet/source/struct.ParquetSource.html#implementing-external-indexes
+
+Here is how you can build a `ParquetAccessPlan` to scan only specific row groups
+and rows within those row groups. 
 
 ```rust
 // Default to scan all row groups
 let mut access_plan = ParquetAccessPlan::new_all(4);
 access_plan.skip(0); // skip row group
-// Use parquet reader RowSelector to specify scanning rows 100-200 and 350-400
-// in a row group that has 1000 rows
+// Specify scanning rows 100-200 and 350-400
+// in row group 1 that has 1000 rows
 let row_selection = RowSelection::from(vec![
    RowSelector::skip(100),
    RowSelector::select(100),
@@ -461,7 +463,7 @@ let row_selection = RowSelection::from(vec![
 ]);
 access_plan.scan_selection(1, row_selection);
 access_plan.skip(2); // skip row group 2
-// row group 3 is scanned by default
+// all of row group 3 is scanned by default
 ```
 
 The resulting plan looks like this:
@@ -474,14 +476,14 @@ The resulting plan looks like this:
 └ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┘
 Row Group 0
 ┌ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┐
-┌────────────────┐    SCAN ONLY ROWS
+ ┌────────────────┐    SCAN ONLY ROWS
 │└────────────────┘ │  100-200
-┌────────────────┐    350-400
+ ┌────────────────┐    350-400
 │└────────────────┘ │
 ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
 Row Group 1
 ┌ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┐
-SKIP
+       SKIP
 │                   │
 
 └ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┘
@@ -494,9 +496,10 @@ Row Group 2
 Row Group 3
 ```
 
-You connect this to your `TableProvider` in a similar way as described in the previous section
-for pruning files. In the `scan` method, you can return a `ParquetExec` that includes the
-`ParquetAccessPlan` for each file as show in the simplified except below:
+You provide the `ParquetAccessPlan` via a `TableProvider`, similarly to the
+previous section. In the `scan` method, you can return an `ExecutionPlan` that
+includes the `ParquetAccessPlan` for each file as follows (again, slightly
+simplified for clarity):
 
 ```rust
 impl TableProvider for IndexTableProvider {
@@ -542,33 +545,35 @@ impl TableProvider for IndexTableProvider {
 
 ```
 
-
 [advanced_parquet_index.rs]:  https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/advanced_parquet_index.rs
 [ParquetAccessPlan]: https://docs.rs/datafusion/latest/datafusion/datasource/physical_plan/parquet/struct.ParquetAccessPlan.html
 
-
 # Caching Parquet Metadata
 
-It is often said that Parquet is not suitable for low latency queries because
-the footer must be read and parsed for each query. While I am convinced that
-existing parquet libraries can be made significantly faster with additional
-engineering effort (see Xiangpeng Hao's (TODO LINK)) [previous blog on the topic]),
-in practice most analytic systems are stateful and have
-some sort of caching layer. In these systems, it is common to cache
-the parsed footer in memory or stored in the external index or metadata store so 
-there is no need to re-read and re-parse the footer for each query.
+It is often said that Parquet is unsuitable for low latency query systems
+because the footer must be read and parsed for each query, which is simply not
+true. Low latency analytic systems are always stateful in practice, with multiple caching layers. 
+These systems optimize for low latency by caching the parsed metadata in memory, so there
+is no need to re-read and re-parse the footer for each query.
 
-[previous blog on the topic]: https://www.influxdata.com/blog/how-good-parquet-wide-tables/
+## Caching Parquet Metadata using DataFusion
 
-This technique is also shown in the [advanced_parquet_index.rs] example. The high level flow
-involves reading and caching the metadata for each file when the index is built and then 
-using the cached metadata when reading the files during query execution.
+Reusing cached Parquet Metadata is also shown in the [advanced_parquet_index.rs]
+example. The example reads and caches the metadata for each file when the index
+is built and then uses the cached metadata when reading the files during query
+execution.
 
-[advanced_parquet_index.rs]:  https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/advanced_parquet_index.rs
+Note thanks to [Nuno Faria], the ListingTable will also cache parsed metadata in
+the next release of DataFusion (50.0.0). See the [mini epic] for details.
 
-You can do this first by implementing a custom [ParquetFileReaderFactory] like this (again slightly simplified for clarity):
+To avoid reparsing the metadata, first implement a custom
+[ParquetFileReaderFactory]  (again slightly simplified for clarity):
 
 [ParquetFileReaderFactory]: https://docs.rs/datafusion/latest/datafusion/datasource/physical_plan/trait.ParquetFileReaderFactory.html
+[advanced_parquet_index.rs]:  https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/advanced_parquet_index.rs
+[mini epic]: https://github.com/apache/datafusion/issues/17000
+[Nuno Faria]: https://nuno-faria.github.io/
+
 
 ```rust
 impl ParquetFileReaderFactory for CachedParquetFileReaderFactory {
@@ -651,11 +656,19 @@ impl TableProvider for IndexTableProvider {
 
 # Conclusion
 
-Parquet has the right structure for high performance analytics
-You can indexing more than the built in Metadata
-⇒ We don’t need new file formats, we need more investment in Apache DataFusion and special indexes
-Come Join Us! 🎣
-https://datafusion.apache.org/
+Parquet has the right structure for high performance analytics and it is straightforward
+to build external indexes to accelerate queries using DataFusion without
+changing the file format.
+
+I am a firm believer that data systems of the future will built on a foundation
+of modular, high quality, open source components such as Parquet, Arrow and
+DataFusion. and we should focus our efforts as a community on improving these
+components rather than building new file formats that are optimized for
+narrow use cases.
+
+Come Join Us! 🎣 
+
+[https://datafusion.apache.org/](https://datafusion.apache.org/)
 
 
 
@@ -688,8 +701,10 @@ it out, we would love for you to join us.
 
 <a id="footnote1"></a>`1`: This trend is described in more detail in the [FDAP Stack] blog
 
-<a id="footnote2"></a>`2`: This layout is referred to a “PAX” in the
-database literature (TODO LINK) after the first research paper to describe the technique,
+<a id="footnote2"></a>`2`: This layout is referred to a [PAX in the
+database literature] after the first research paper to describe the technique.
+
+[PAX in the database literature]: https://www.vldb.org/conf/2001/P169.pdf
 
 <a id="footnote3"></a>`3`: Benchmaxxing (verb): to add specific optimizations that only
 impact benchmark results and are not widely applicable to real world use cases.
@@ -698,3 +713,11 @@ impact benchmark results and are not widely applicable to real world use cases.
 store information about the data in the files. For example, a directory structure like `year=2025/month=08/day=15/` can be used to store data for a specific day
 and the system can quickly rule out directories that do not match the query predicate.
 
+<a id="footnote5"></a>`5`: I am also convinced that we can speed up the process of parsing Parquet footer
+with additional engineering effort (see [Xiangpeng Hao]'s [previous blog on the
+topic]). [Ed Seidl] is begining this effort. See the [ticket] for details.
+
+[Xiangpeng Hao]: https://xiangpeng.systems/
+[previous blog on the topic]: https://www.influxdata.com/blog/how-good-parquet-wide-tables/
+[Ed Seidl]: https://github.com/etseidl
+[ticket]: https://github.com/apache/arrow-rs/issues/5854
