@@ -190,10 +190,10 @@ Chunks* as shown in the figure below.
 
 <div class="text-center">
 <img
-src="/blog/images/external-parquet-indexes/parquet-layout.png"
-width="80%"
-class="img-responsive"
-alt="Parquet File layout: Row Groups and Column Chunks."
+  src="/blog/images/external-parquet-indexes/parquet-layout.png"
+  width="80%"
+  class="img-responsive"
+  alt="Parquet File layout: Row Groups and Column Chunks."
 />
 </div>
 
@@ -207,10 +207,10 @@ stored at the end of the file (in the footer), as shown in the figure below.
 
 <div class="text-center">
 <img
-src="/blog/images/external-parquet-indexes/parquet-metadata.png"
-width="80%"
-class="img-responsive"
-alt="Parquet File layout: Metadata and footer."
+  src="/blog/images/external-parquet-indexes/parquet-metadata.png"
+  width="80%"
+  class="img-responsive"
+  alt="Parquet File layout: Metadata and footer."
 />
 </div>
 
@@ -263,12 +263,14 @@ hierarchical approach to progressively narrow the set of data to be explored:
 Finally, the system reads only the relevant data pages and applies the query
 predicate to the data.
 
+<div class="text-center">
 <img 
   src="/blog/images/external-parquet-indexes/processing-pipeline.png" 
   width="80%" 
   class="img-responsive" 
   alt="Standard Pruning Layers."
 />
+</div>
 
 **Figure 5**: Hierarchical Pruning: The system first rules out files, then
 Row Groups, then Data Pages, and finally reads only the relevant data pages.
@@ -560,19 +562,23 @@ is no need to re-read and re-parse the footer for each query.
 
 Reusing cached Parquet Metadata is also shown in the [advanced_parquet_index.rs]
 example. The example reads and caches the metadata for each file when the index
-is built and then uses the cached metadata when reading the files during query
-execution.
+is first built and then uses the cached metadata when reading the files during
+query execution.
 
-Note thanks to [Nuno Faria], the ListingTable will also cache parsed metadata in
-the next release of DataFusion (50.0.0). See the [mini epic] for details.
+( Note that thanks to [Nuno Faria], the built in [ListingTable] will cache
+parsed metadata in the next release of DataFusion (50.0.0). See the [mini epic]
+for details).
 
-To avoid reparsing the metadata, first implement a custom
-[ParquetFileReaderFactory]  (again slightly simplified for clarity):
-
-[ParquetFileReaderFactory]: https://docs.rs/datafusion/latest/datafusion/datasource/physical_plan/trait.ParquetFileReaderFactory.html
 [advanced_parquet_index.rs]:  https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/advanced_parquet_index.rs
+[ListingTable]: https://docs.rs/datafusion/latest/datafusion/datasource/listing/struct.ListingTable.html
 [mini epic]: https://github.com/apache/datafusion/issues/17000
 [Nuno Faria]: https://nuno-faria.github.io/
+
+To avoid reparsing the metadata, first implement a custom
+[ParquetFileReaderFactory] as shown below, again slightly simplified for
+clarity:
+
+[ParquetFileReaderFactory]: https://docs.rs/datafusion/latest/datafusion/datasource/physical_plan/trait.ParquetFileReaderFactory.html
 
 
 ```rust
@@ -610,7 +616,7 @@ impl ParquetFileReaderFactory for CachedParquetFileReaderFactory {
 }
 ```
 
-Then, in your TableProvider use the factory to avoid re-reading the metadata
+Then, in your [`TableProvider`] use the factory to avoid re-reading the metadata
 for each file:
 
 ```rust
@@ -622,13 +628,12 @@ impl TableProvider for IndexTableProvider {
         filters: &[Expr],
         limit: Option<usize>,
     ) -> Result<Arc<dyn ExecutionPlan>> {
-      
         // Configure a factory interface to avoid re-reading the metadata for each file
         let reader_factory =
             CachedParquetFileReaderFactory::new(Arc::clone(&self.object_store))
                 .with_file(indexed_file);
 
-        // build the partitioned file (see example for details)
+        // build the partitioned file (see example above for details)
         let partitioned_file = ...; 
       
         // Create the ParquetSource with the predicate and the factory
@@ -656,9 +661,9 @@ impl TableProvider for IndexTableProvider {
 
 # Conclusion
 
-Parquet has the right structure for high performance analytics and it is straightforward
-to build external indexes to accelerate queries using DataFusion without
-changing the file format.
+Parquet has the right structure for high performance analytics and it is
+straightforward to build external indexes to speed up queries using DataFusion
+without changing the file format.
 
 I am a firm believer that data systems of the future will built on a foundation
 of modular, high quality, open source components such as Parquet, Arrow and
@@ -668,8 +673,14 @@ narrow use cases.
 
 Come Join Us! 🎣 
 
-[https://datafusion.apache.org/](https://datafusion.apache.org/)
-
+<a href="https://datafusion.apache.org/contributor-guide/communication.html">
+<img
+  src="/blog/images/logo_original4x.png"
+  width="20%"
+  class="img-responsive"
+  alt="https://datafusion.apache.org/"
+/>
+</a>
 
 
 ## About the Author
