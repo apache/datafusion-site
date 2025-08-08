@@ -146,41 +146,83 @@ Examples of locations external indexes can be stored include:
 
 # Using Apache Parquet for Storage
 
+While the rest of this blog focuses on building custom external indexes using
+Parquet and DataFusion, we first briefly discuss why Parquet is a good choice
+for modern analytic systems. The research community frequently confuses
+limitations of a particular [implementation of the Parquet format] with the
+[Parquet Format] itself and it is important to clarify this distinction.
+
+[implementation of the Parquet format]: https://parquet.apache.org/docs/file-format/implementationstatus/
+[Parquet Format]: https://parquet.apache.org/docs/file-format/
+
 Apache Parquet's combination of good compression, high-performance, high quality
 open source libraries, and wide ecosystem interoperability make it a compelling
 choice when building new systems. While there are some niche use case that may
-benefit from specialized formats, for many usecases Parquet is the obvious
-choice and the rest of this blog shows how to build external indexes with
-Parquet based systems.
-
+benefit from specialized formats, Parquet is typically the obvious choice.
 While recent proprietary file formats differ in details, they all use the same
-high level structure<sup>[2](#footnote2)</sup>: metadata, typically at the end
-of the file, and data divided into columns and then into horizontal slices (e.g.
-Parquet Row Groups and/or Data Pages). The structure is widespread because it
-enables a hierarchical approach to pruning (finding what you want quickly) as
-described in the next section.
+high level structure<sup>[2](#footnote2)</sup>: 
 
-For example, the [Clickhouse MergeTree] format consists of *Parts* (similar to
-Parquet files), and *Granules* (similar to Row Groups), and the [Clickhouse
-indexing strategy] is designed to quickly locate the parts and granules that may
-contain relevant data for the query. This is directly analogous to finding files
-and then Row Groups / Data Pages within those files for Parquet based systems.
+1. Metadata (typically at the end  of the file)
+2. Data divided into columns and then into horizontal slices (e.g. Parquet Row Groups and/or Data Pages). 
+
+The structure is so widespread because it enables the hierarchical pruning
+approach described in the next section. For example, the native [Clickhouse
+MergeTree] format consists of *Parts* (similar to Parquet files), and *Granules*
+(similar to Row Groups). The [Clickhouse indexing strategy] follows a classic
+heirarchal pruning approach that first locates the Parts and then the Granules
+that may contain relevant data for the query. This is exactly the same pattern
+as Parquet based systems, which first locate the relevant Parquet files and then
+the Row Groups / Data Pages within those files.
 
 [Clickhouse MergeTree]: https://clickhouse.com/docs/engines/table-engines/mergetree-family/mergetree
 [Clickhouse indexing strategy]: https://clickhouse.com/docs/guides/best-practices/sparse-primary-indexes#clickhouse-index-design
+[Parquet Format]: https://parquet.apache.org/documentation/latest/
 
-A common criticism of Parquet is that it is not as performant as some new
-proposal. These criticisms typically cherry pick a few queries and/or datasets
-and then build a specialized index or data layout for that specific cases.
-However, as described in the [companion video] of this blog, even for
-[ClickBench], the current benchmaxxing<sup>[3](#footnote3)</sup> darling of
-analytics vendors that has a wide variety of query patterns, there is less than
-a factor of two difference in performance between custom file formats and
-Parquet. The difference becomes even lower when the benchmark is run with
-Parquet files that contain more modern Parquet files such as including Column
-and Offset Indexes or Bloom Filters (see XXXX). Compared to the low
+A common criticism of using Parquet is that it is not as performant as some new
+proposal. These criticisms typically cherry-pick a few queries and/or datasets
+and build a specialized index or data layout for that specific cases. However,
+as I explain in the [companion video] of this blog, even for
+[ClickBench]<sup>[6](#footnote6)</sup>, the current
+benchmaxxing<sup>[3](#footnote3)</sup> target of analytics vendors, there is
+less than a factor of two difference in performance between custom file formats
+and Parquet. The difference becomes even lower when using Parquet files that
+actually use the full range of existing Parquet features such Column and Offset
+Indexes and Bloom Filters<sup>[7](#footnote7)</sup>. Compared to the low
 interoperability and expensive transcoding/loading step of alternate file
-formats, Parquet is often hard to beat. 
+formats, Parquet is hard to beat.
+
+# Hierarchical Pruning Overview
+
+The key technique for optimizing query processing systems is quickly skipping as
+much data as quickly as possible. Analytic systems typically use a hierarchical
+approach to progressively narrow the set of data that needs to be processed. 
+The standard approach is shown in Figure 2:
+
+1. Entire files are ruled out
+2. Within each file, large sections (e.g. Row Groups) are ruled out
+3. (Optionally) smaller sections (e.g. Data Pages) are ruled out
+4. Finally, the system reads only the relevant data pages and applies the query
+   predicate to the data
+
+<div class="text-center">
+<img 
+  src="/blog/images/external-parquet-indexes/processing-pipeline.png" 
+  width="80%" 
+  class="img-responsive" 
+  alt="Standard Pruning Layers."
+/>
+</div>
+
+**Figure 2**: Hierarchical Pruning: The system first rules out files, then
+Row Groups, then Data Pages, and finally reads only the relevant data pages.
+
+The process is hierarchical because the per-row computation required at the
+earlier stages (e.g. skipping a entire file) is lower than the computation
+required at later stages (apply predicates to the data). 
+
+As mentioned before, while the details of what metadata is used and how that
+metadata is managed varies substantially across query systems, they almost all
+use a hierarchical pruning strategy.
 
 
 [DuckDB]: https://duckdb.org/
@@ -188,43 +230,42 @@ formats, Parquet is often hard to beat.
 [ClickBench]: https://clickbench.com/
 [companion video]: https://www.youtube.com/watch?v=74YsJT1-Rdk
 
-
 # Apache Parquet Overview
 
 This section provides a brief background on the organization of Apache Parquet
-files which is needed to full understand how external indexes accelerate query
-processing. If you are already familiar with Parquet, you can skip this section.
+files which is needed to fully understand the sections on implementing external indexes.
+If you are already familiar with Parquet, you can skip this section.
 
-Parquet files are organized into a logical structures of *Row Groups* and *Column
-Chunks* as shown in the figure below.
+Logically, Parquet files are organized into  *Row Groups* and *Column Chunks* as
+shown below.
 
 <div class="text-center">
 <img
   src="/blog/images/external-parquet-indexes/parquet-layout.png"
   width="80%"
   class="img-responsive"
-  alt="Parquet File layout: Row Groups and Column Chunks."
+  alt="Logical Parquet File layout: Row Groups and Column Chunks."
 />
 </div>
 
-**Figure 2**: Logical Parquet File Layout: Data is first divided in horizontal slices
+**Figure 3**: Logical Parquet File Layout: Data is first divided in horizontal slices
 called Row Groups. The data is then stored column by column in *Column Chunks*.
 This arrangement allows efficient access to only the portions of columns needed
 for a query.
 
 Physically, Parquet data is stored as a series of Data Pages along with metadata
-stored at the end of the file (in the footer), as shown in the figure below.
+stored at the end of the file (in the footer), as shown below.
 
 <div class="text-center">
 <img
   src="/blog/images/external-parquet-indexes/parquet-metadata.png"
   width="80%"
   class="img-responsive"
-  alt="Parquet File layout: Metadata and footer."
+  alt="Physical Parquet File layout: Metadata and Footer."
 />
 </div>
 
-**Figure 3**: Physical Parquet File Layout: A typical Parquet file is composed
+**Figure 4**: Physical Parquet File Layout: A typical Parquet file is composed
 of many data pages,  which contain the raw encoded data, and a footer that
 stores metadata about the file, including the schema and the location of the
 relevant data pages, and optional statistics such as min/max values for each
@@ -259,34 +300,6 @@ pages that may match the predicate which  are read for further processing.
 indexes, as described in the next sections.**
 
 Please refer to the XXX blog for more details on these optimizations in Parquet.
-
-# Hierarchical Pruning Overview
-
-A key technique to optimize query processing systems is to quickly figure how to
-skip as much data as quickly as possible. Analytic systems typically us a
-hierarchical approach to progressively narrow the set of data to be explored:
-
-1. First, entire files are ruled out, 
-2. Then, within each file, large sections (e.g. Row Groups) are ruled out
-3. Then (optionally) smaller sections (e.g. Data Pages)  are ruled out
-
-Finally, the system reads only the relevant data pages and applies the query
-predicate to the data.
-
-<div class="text-center">
-<img 
-  src="/blog/images/external-parquet-indexes/processing-pipeline.png" 
-  width="80%" 
-  class="img-responsive" 
-  alt="Standard Pruning Layers."
-/>
-</div>
-
-**Figure 5**: Hierarchical Pruning: The system first rules out files, then
-Row Groups, then Data Pages, and finally reads only the relevant data pages.
-
-While there are differences in the deatils of metadata placement and encoding between
-systems, the overall processing pipelines are all very similar.
 
 # Pruning Files with External Indexes
 
@@ -737,6 +750,17 @@ and the system can quickly rule out directories that do not match the query pred
 <a id="footnote5"></a>`5`: I am also convinced that we can speed up the process of parsing Parquet footer
 with additional engineering effort (see [Xiangpeng Hao]'s [previous blog on the
 topic]). [Ed Seidl] is begining this effort. See the [ticket] for details.
+
+<a id="footnote6"></a>`6`: ClickBench includes a wide variety of query patterns
+such as point lookups, filters of different selectivity, and aggregations.
+
+<a id="footnote7"></a>`7`: For example, [Zhu Qi] was able to speed up reads by over 2x 
+simply by rewriting the Parquet files with Offset Indexes and no compression (see [issue #16149 comment]) for details).
+There is likely substantial additional performance available by using Bloom Filters and resorting the data
+to be clustered in a more optimal way for the queries.
+
+[Zhu Qi]: https://github.com/zhuqi-lucas
+[issue #16149 comment]: https://github.com/apache/datafusion/issues/16149#issuecomment-2918761743
 
 [Xiangpeng Hao]: https://xiangpeng.systems/
 [previous blog on the topic]: https://www.influxdata.com/blog/how-good-parquet-wide-tables/
