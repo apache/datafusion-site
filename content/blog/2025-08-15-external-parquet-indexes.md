@@ -271,18 +271,17 @@ stores metadata about the file, including the schema and the location of the
 relevant data pages, and optional statistics such as min/max values for each
 Column Chunk.
 
-Parquet files are designed so that systems can read only the data they need for a
-query via two main mechanisms:
+Parquet files are organized to minimize IO and processing using two key mechanisms:
 
-1. *Projection Pushdown*: if a query only needs a few columns from a wide table, it
+1. **Projection Pushdown**: if a query needs only a subset of columns from a table, it
    only needs to read the pages for the relevant Column Chunks
 
-2. *Filter Pushdown*: Similarly, given a query with a filter predicate (e.g.
-   `WHERE C > 25`), query engines can use statistics such as (but not limited to)
-   the min/max values stored in the metadata to skip reading pages that
+2. **Filter Pushdown**: Similarly, given a query with a filter predicate such as
+   `WHERE C > 25`, query engines can use statistics such as (but not limited to)
+   the min/max values stored in the metadata to skip reading and decoding pages that
    cannot possibly match the predicate.
 
-Parquet predicate pushdown is shown in the figure below:
+The high level mechanics of Parquet predicate pushdown is shown below:
 
 <div class="text-center">
 <img
@@ -293,22 +292,33 @@ Parquet predicate pushdown is shown in the figure below:
 />
 </div>
 
-**Figure 4**: Filter Pushdown in Parquet: query engines use the the predicate,
+**Figure 5**: Filter Pushdown in Parquet: query engines use the the predicate,
 `C > 25`, from the query along with statistics from the metadata, to identify
-pages that may match the predicate which  are read for further processing.
+pages that may match the predicate which are read for further processing. 
+Please refer to the [Efficient Filter Pushdown] blog for more details.
 **NOTE the exact same pattern can be applied using information from external
 indexes, as described in the next sections.**
 
-Please refer to the XXX blog for more details on these optimizations in Parquet.
+
+[Efficient Filter Pushdown]: https://datafusion.apache.org/blog/2025/03/21/parquet-pushdown
 
 # Pruning Files with External Indexes
 
 The first step in heirarchal pruning is quickly ruling out files that cannot
-match the query. This is typically done using external indexes or metadata stores
-that store summary information about each file. For example, if a query has a
-predicate on the `time` column, the index might store the minimum and maximum `time` 
-values in each file, allowing the system to quickly find only the subset of files that
-can contain data that match the predicate.
+match the query.  For example, if a system expects to have see queries that
+apply to a time range, it might create an external index to store the minimum
+and maximum `time` values for each file. Then, during query processing, the
+system can quickly rule out files that can not possible contain relevant data.
+For example, if the user issues a query that only matches the last 7 days of
+data:
+
+```sql
+WHERE time > now() - interval '7 days'
+```
+
+The index can quickly rule out files that only have data older than 7 days.
+
+<!-- TODO update the diagram to match the example above -- and have time predicates -->
 
 <div class="text-center">
 <img
@@ -323,24 +333,20 @@ can contain data that match the predicate.
 indexes to quickly rule out files that cannot match the query. In this case, by
 consulting the index all but two files can be ruled out.
 
-There are many different systems that match the external index to find files pattern such as the
+There are many different systems that use external indexs to find files such as 
 [Hive Metadata Store](https://cwiki.apache.org/confluence/display/Hive/Design#Design-Metastore),
 [Iceberg](https://iceberg.apache.org/), 
 [Delta Lake](https://delta.io/),
 [DuckLake](https://duckdb.org/2025/05/27/ducklake.html),
 and [Hive Style Partitioning](https://sparkbyexamples.com/apache-hive/hive-partitions-explained-with-examples/)<sup>[4](#footnote4)</sup>.
-Each of these systems works well for their intended usecases, and has different
-tradeoffs across size of the index, types of queries that can be accelerated, 
-operational overhead (e.g. external services) and complexity of maintaining the
-index.
-
-If none of the existing systems meets your needs, or you want to experiment with
+Of course, each of these systems works well for their intended usecases, but
+if none meets your needs, or you want to experiment with
 different strategies, you can easily build your own external index using
 DataFusion.
 
 ## Pruning Files with External Indexes Using DataFusion
 
-Tho implement file pruning in DataFusion, you implement a custom [TableProvider]
+To implement file pruning in DataFusion, you implement a custom [TableProvider]
 with the [supports_filter_pushdown] and [scan] methods. The
 `supports_filter_pushdown` method tells DataFusion which predicates can be used
 by the `TableProvider` and the `scan` method uses those predicates with the
