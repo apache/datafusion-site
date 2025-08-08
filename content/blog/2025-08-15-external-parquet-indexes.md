@@ -1,6 +1,6 @@
 ---
 layout: post
-title: Using External Indexes / Metadata Stores / Catalogs to Accelerate Queries on Apache Parquet
+title: Using External Indexes, Metadata Stores, Catalogs and Caches to Accelerate Queries on Apache Parquet
 date: 2025-08-15
 author: and Andrew Lamb (InfluxData)
 categories: [features]
@@ -46,14 +46,15 @@ likely be good enough. However, traditional systems such as [Apache Spark], [Duc
 tradeoffs between performance, cost, availability, interoperability, deployment
 target, cloud / on prem, operational ease and many other factors.
 
-For new, or especially demanding use cases, where no existing system has your
+For new, or especially demanding use cases, where no existing system makes your
 optimal tradeoffs, you can build your own custom data platform. Previously this
 was a long and expensive endeavor, but today, in the era of [Composable Data
-Systems] it is increasingly feasible. High quality, open source building blocks
+Systems], it is increasingly feasible. High quality, open source building blocks
 such as [Apache Parquet] for storage, [Apache Arrow] for in-memory processing,
 and [Apache DataFusion] for query execution make it possible to quickly build
 custom data platforms optimized for your specific
 needs<sup>[1](#footnote1)</sup>.
+
 
 
 [companion video]: https://www.youtube.com/watch?v=74YsJT1-Rdk
@@ -64,9 +65,13 @@ needs<sup>[1](#footnote1)</sup>.
 [Apache Arrow]: https://arrow.apache.org/
 [FDAP Stack]: https://www.influxdata.com/blog/flight-datafusion-arrow-parquet-fdap-architecture-influxdb/
 [Composable Data Systems]: https://www.vldb.org/pvldb/vol16/p2679-pedreira.pdf
+[Apache Spark]: https://spark.apache.org/
+[ClickHouse]: https://clickhouse.com/
+[Hive]: https://hive.apache.org/
+[Snowflake]: https://www.snowflake.com/
 
 
-# Introduction to External Indexes / Catalogs / Metadata Stores
+# Introduction to External Indexes / Catalogs / Metadata Stores / Caches
 
 <div class="text-center">
 <img
@@ -78,58 +83,64 @@ needs<sup>[1](#footnote1)</sup>.
 </div>
 
 **Figure 1**: Using external indexes to speed up queries in an analytic system.
-Given a user's query (Step 1), the system uses an external index (that is not
-stored as part of the data files) to quickly find the files that may contain
+Given a user's query (Step 1), the system uses an external index (one that is not
+stored inline in the data files) to quickly find files that may contain
 relevant data (Step 2). Then, for each file, the system uses the external index
-to further narrow the required data by locating only those parts of each file
-(data pages) that are relevant (Step 3). Finally, the system reads only those
+to further narrow the required data to only those **parts** of each file
+(e.g. data pages) that are relevant (Step 3). Finally, the system reads only those
 parts of the file and returns the results to the user (Step 4).
 
-All Data Systems have some way of storing information (metadata) to find data
-relevant to a query, often stored in structures with names like "index" or
-"catalog." In this blog, we use the term **"index"** to mean any structure that
-helps locate relevant data during processing.
+In this blog, we use the term **"index"** to mean any structure that helps
+locate relevant data during processing, and a high level overview of how
+external indexes are used to speed up queries is shown in Figure 1.
 
-There are many different types of indexes, content stored in indexes, strategies
-to keep indexes up to date, and ways to apply indexes during query processing.
-This wide variety means that there is no one-size-fits-all solution for
-metadata, and instead, there are many different approaches, each with their own
-tradeoffs. For example, in Hive uses the [Hive Metastore], a more classic
-analytic database like Vertica uses a [Catalog] and recently open data lake
-systems store such information using a table format like [Apache Iceberg] or
-[Delta Lake].
+All Data Systems typically store both the data itself and additional information
+(metadata) to more quickly find data relevant to a query. Metadata is often
+stored in structures with names like "index," "catalog" and "cache" and the
+terminology varies widely across systems. 
 
-**External indexes** store information separately ("external") to the data files
-themselves. External indexes are flexible and widely used in data systems, but
-require additional operational overhead to keep in sync with the Data files
-files. For example, if you add a new Parquet file to your data lake you must
-also update the external index to include information about the new file. Note,
-it is possible to avoid external indexes embed user-defined indexes directly in
-Parquet files, which is describe our previous blog [Embedding User-Defined
-Indexes in Apache Parquet Files].
+There are many different types of indexes, types of content stored in indexes,
+strategies to keep indexes up to date, and ways to apply indexes during query
+processing. These differences each have their own set of tradeoffs, and thus
+different systems understandably make different choices depending on their use
+case. There is no one-size-fits-all solution for indexing. For example, Hive
+uses the [Hive Metastore], [Vertica] uses a purpose built-in [Catalog] and open
+data lake systems typically use a table format like [Apache Iceberg] or [Delta
+Lake].
 
-Examples of information stored in external indexes include:
+**External Indexes** store information separately ("external") to the data
+itself. External indexes are flexible and widely used, but require additional
+operational overhead to keep in sync with the data files. For example, if you
+add a new Parquet file to your data lake you must also update the relevant
+external index to include information about the new file. Note, it **is**
+possible to avoid external indexes by only using information from the data files
+themselves, such as embed user-defined indexes directly in Parquet files,
+describe our previous blog [Embedding User-Defined Indexes in Apache Parquet
+Files].
+
+Examples of information commonly stored in external indexes include:
 
 * Min/Max statistics
 * Bloom filters
-* Inverted indexes
-* Full text indexes 
-* Other use case specific indexes
-* Information needed to read the remote file (such as the location of data pages within a Parquet file, typically stored in the footer)
+* Inverted indexes / Full Text indexes 
+* Information needed to read the remote file (e.g the schema, or Parquet footer metadata)
+* Use case specific indexes
 
-Examples of index storage include:
+Examples of locations external indexes can be stored include:
 
-* In a separate file (e.g. a JSON or Parquet file that contains the index)
-* In a database (e.g. a [PostgreSQL] table that contains the index)
-* In a distributed key-value store (e.g. [Redis] or [Cassandra])
-* In an in-memory cache
+* **Separate files** such as a [JSON] or Parquet file.
+* **Transactional databases** such as a [PostgreSQL] table.
+* **Distributed key-value store** such as [Redis] or [Cassandra].
+* **Local memory** such as an in memory hash map.
 
 [Hive Metastore]: https://cwiki.apache.org/confluence/display/Hive/Design#Design-Metastore
 [Catalog]: https://www.vertica.com/docs/latest/HTML/Content/Authoring/AdministratorsGuide/Managing/Metadata/CatalogOverview.htm
 [Apache Iceberg]: https://iceberg.apache.org/
 [Delta Lake]: https://delta.io/
 [Embedding User-Defined Indexes in Apache Parquet Files]: https://datafusion.apache.org/blog/2025/07/14/user-defined-parquet-indexes/
+[JSON]: https://www.json.org/
 [PostgreSQL]: https://www.postgresql.org/
+[Vertica]: https://www.vertica.com/
 [Redis]: https://redis.io/
 [Cassandra]: https://cassandra.apache.org/
 
