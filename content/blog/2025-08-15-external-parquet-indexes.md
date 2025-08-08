@@ -25,24 +25,23 @@ limitations under the License.
 -->
 
 
-It is a common misconception that [Apache Parquet] is limited to indexing
-structures built into the format. You can use Parquet's heirarchal data
-organization to easily build custom external indexes to significantly speed up
-query processing.
+It is a common misconception that [Apache Parquet] requires (slow) reparsing of
+metadata and is limited to indexing structures provided by the format. By
+caching parsed metadata and using custom external indexes along with the
+Parquet's hierarchical data organization to significantly speed up query processing.
 
-In this blog, we describe the role of external indexes, what they are, how they
-are used , and provide a working example of accelerating Parquet processing
-using [Apache DataFusion].
-
-*Note there is a [companion video] and [presentation].*
+In this blog, we describe the role of external indexes, caches, and metadata
+stores in high performance systems, and demonstrate how to apply these concepts
+to Parquet processing using [Apache DataFusion]. *Note this is an expanded
+version of the [companion video] and [presentation].*
 
 # Motivation
 
-System designers choose between a pre-configured data system or the very
-challenging task of building their own custom data platform from scratch.
+System designers choose between a pre-configured data system or the often
+daunting task of building their own custom data platform from scratch.
 
-For many users and use cases, one of the existing traditional data systems will
-likely be good enough. However, systems such as [Apache Spark], [DuckDB],
+For many users and use cases, one of the existing data systems will
+likely be good enough. However, traditional systems such as [Apache Spark], [DuckDB],
 [ClickHouse], [Hive], [Snowflake] are each optimized for a certain set of
 tradeoffs between performance, cost, availability, interoperability, deployment
 target, cloud / on prem, operational ease and many other factors.
