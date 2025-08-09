@@ -334,7 +334,7 @@ The index can quickly rule out files that only have data older than 7 days.
 indexes to quickly rule out files that cannot match the query. In this case, by
 consulting the index all but two files can be ruled out.
 
-There are many different systems that use external indexs to find files such as 
+There are many different systems that use external indexes to find files such as 
 [Hive Metadata Store](https://cwiki.apache.org/confluence/display/Hive/Design#Design-Metastore),
 [Iceberg](https://iceberg.apache.org/), 
 [Delta Lake](https://delta.io/),
@@ -747,7 +747,7 @@ database literature] after the first research paper to describe the technique.
 <a id="footnote3"></a>`3`: Benchmaxxing (verb): to add specific optimizations that only
 impact benchmark results and are not widely applicable to real world use cases.
 
-<a id="footnote4"></a>`4`: Hive Style Partitioning is which is a simple and widely used form of indexing based on directory paths, where the directory structure is used to
+<a id="footnote4"></a>`4`: Hive Style Partitioning is a simple and widely used form of indexing based on directory paths, where the directory structure is used to
 store information about the data in the files. For example, a directory structure like `year=2025/month=08/day=15/` can be used to store data for a specific day
 and the system can quickly rule out directories that do not match the query predicate.
 
