@@ -95,7 +95,7 @@ In this blog, I use the term **"index"** to mean any structure that helps
 locate relevant data during processing, and a high level overview of how
 external indexes are used to speed up queries is shown in Figure 1.
 
-All Data Systems typically store both the data itself and additional information
+All data systems typically store both the data itself and additional information
 (metadata) to more quickly find data relevant to a query. Metadata is often
 stored in structures with names like "index," "catalog" and "cache" and the
 terminology varies widely across systems. 
@@ -106,7 +106,7 @@ processing. These differences each have their own set of tradeoffs, and thus
 different systems understandably make different choices depending on their use
 case. There is no one-size-fits-all solution for indexing. For example, Hive
 uses the [Hive Metastore], [Vertica] uses a purpose-built [Catalog], and open
-data lake systems typically use a table format like [Apache Iceberg] or [Delta
+data lake systems typically use a table format such as [Apache Iceberg] or [Delta
 Lake].
 
 **External Indexes** store information separately ("external") to the data
@@ -128,10 +128,10 @@ Examples of information commonly stored in external indexes include:
 
 Examples of locations where external indexes can be stored include:
 
-* **Separate files** such as a [JSON] or Parquet file.
-* **Transactional databases** such as a [PostgreSQL] table.
-* **Distributed key-value store** such as [Redis] or [Cassandra].
-* **Local memory** such as an in memory hash map.
+* **Separate files** such as [JSON] or Parquet files.
+* **Transactional databases** such as [PostgreSQL] tables.
+* **Distributed key-value stores** such as [Redis] or [Cassandra].
+* **Local memory** such as an in-memory hash map.
 
 [Hive Metastore]: https://cwiki.apache.org/confluence/display/Hive/Design#Design-Metastore
 [Catalog]: https://www.vertica.com/docs/latest/HTML/Content/Authoring/AdministratorsGuide/Managing/Metadata/CatalogOverview.htm
@@ -218,7 +218,7 @@ The standard approach is shown in Figure 2:
 Row Groups, then Data Pages, and finally reads only the relevant data pages.
 
 The process is hierarchical because the per-row computation required at the
-earlier stages (e.g. skipping a entire file) is lower than the computation
+earlier stages (e.g. skipping an entire file) is lower than the computation
 required at later stages (apply predicates to the data). 
 As mentioned before, while the details of what metadata is used and how that
 metadata is managed varies substantially across query systems, they almost all
@@ -317,7 +317,8 @@ data:
 WHERE time > now() - interval '7 days'
 ```
 
-The index can quickly rule out files that only have data older than 7 days.
+then the index can quickly rule out files that only have data older than the
+most recent 7 days.
 
 <div class="text-center">
 <img
@@ -343,7 +344,7 @@ milliseconds of latency].
 [S3]: https://aws.amazon.com/s3/
 [GCS]: https://cloud.google.com/storage
 [Azure Blob Store]: https://azure.microsoft.com/en-us/services/storage/blobs/
-[tens to hundreds of milliseconds latency]: https://www.vldb.org/pvldb/vol16/p2769-durner.pdf
+[tens to hundreds of milliseconds of latency]: https://www.vldb.org/pvldb/vol16/p2769-durner.pdf
 
 There are many different systems that use external indexes to find files such as 
 [Hive Metadata Store](https://cwiki.apache.org/confluence/display/Hive/Design#Design-Metastore),
@@ -351,7 +352,7 @@ There are many different systems that use external indexes to find files such as
 [Delta Lake](https://delta.io/),
 [DuckLake](https://duckdb.org/2025/05/27/ducklake.html),
 and [Hive Style Partitioning](https://sparkbyexamples.com/apache-hive/hive-partitions-explained-with-examples/)<sup>[4](#footnote4)</sup>.
-Of course, each of these systems works well for their intended usecases, but
+Of course, each of these systems works well for their intended use cases, but
 if none meets your needs, or you want to experiment with
 different strategies, you can easily build your own external index using
 DataFusion.
@@ -425,7 +426,7 @@ DataFusion handles the details of pushing down the filters to the
 `TableProvider` and the mechanics of reading the parquet files, so you can focus
 on the system specific details such as building, storing, and applying the index.
 While this example uses a standard min/max index, you can implement any indexing
-strategy you need, such as a bloom filters, a full text index, or a more complex
+strategy you need, such as bloom filters, a full text index, or a more complex
 multidimensional index.
 
 DataFusion also includes several libraries to help with common filtering and
