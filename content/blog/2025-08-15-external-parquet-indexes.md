@@ -411,22 +411,25 @@ impl TableProvider for IndexTableProvider {
 
 DataFusion handles the details of pushing down the filters to the
 `TableProvider` and the mechanics of reading the parquet files, so you can focus
-on the system specific details such as building, storing and applying the index.
+on the system specific details such as building, storing, and applying the index.
 While this example uses a standard min/max index, you can implement any indexing
 strategy you need, such as a bloom filters, a full text index, or a more complex
-multi-dimensional index.
+multidimensional index.
 
 DataFusion also includes several libraries to help with common filtering and
 pruning tasks, such as:
 
 * A full and well documented expression representation ([Expr]) and [APIs for
-  building, visiting, and rewriting] query predicates
+  building, visiting, and rewriting] query predicates.
 
-* Range Based Pruning ([PruningPredicate]) for cases where your index stores min/max values.
+* Range Based Pruning ([PruningPredicate]) for cases where your index stores
+  min/max values.
 
-* Expression simplification ([ExprSimplifier]) for simplifying predicates before applying them to the index.
+* Expression simplification ([ExprSimplifier]) for simplifying predicates before
+  applying them to the index.
 
-* Range analysis for predicates ([cp_solver]) for interval-based range analysis (e.g. `col > 5 AND col < 10`)
+* Range analysis for predicates ([cp_solver]) for interval-based range analysis
+  (e.g. `col > 5 AND col < 10`).
 
 [Expr]: https://docs.rs/datafusion/latest/datafusion/logical_expr/enum.Expr.html
 [APIs for building, visiting, and rewriting]: https://docs.rs/datafusion/latest/datafusion/logical_expr/enum.Expr.html#visiting-and-rewriting-exprs
@@ -443,7 +446,7 @@ metadata to prune unnecessary parts of the file, such as [Data Skipping Indexes
 in ClickHouse]. 
 
 For Parquet-based systems, the most common strategy is using the built-in metadata such
-as [min/max statistics], and [Bloom Filters]). However, it is also possible to use external
+as [min/max statistics] and [Bloom Filters]. However, it is also possible to use external
 indexes for filtering *WITHIN* Parquet files as shown below. 
 
 [Data Skipping Indexes in ClickHouse]: https://clickhouse.com/docs/optimize/skipping-indexes
