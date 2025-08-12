@@ -193,8 +193,8 @@ formats, Parquet is hard to beat.
 
 ## Hierarchical Pruning Overview
 
-The key technique for optimizing query processing systems is quickly skipping as
-much data as quickly as possible. Analytic systems typically use a hierarchical
+The key technique for optimizing query processing systems is skipping as
+much data as possible, as quickly as possible. Analytic systems typically use a hierarchical
 approach to progressively narrow the set of data that needs to be processed. 
 The standard approach is shown in Figure 2:
 
