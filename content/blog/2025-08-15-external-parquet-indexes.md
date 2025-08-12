@@ -304,7 +304,7 @@ indexes, as described in the next sections.**
 ## Pruning Files with External Indexes
 
 The first step in hierarchical pruning is quickly ruling out files that cannot
-match the query.  For example, if a system expects to have see queries that
+match the query.  For example, if a system expects to see queries that
 apply to a time range, it might create an external index to store the minimum
 and maximum `time` values for each file. Then, during query processing, the
 system can quickly rule out files that cannot possibly contain relevant data.
@@ -743,7 +743,7 @@ it out, we would love for you to join us.
 
 <a id="footnote1"></a>`1`: This trend is described in more detail in the [FDAP Stack] blog
 
-<a id="footnote2"></a>`2`: This layout is referred to a [PAX in the
+<a id="footnote2"></a>`2`: This layout is referred to as [PAX in the
 database literature] after the first research paper to describe the technique.
 
 [PAX in the database literature]: https://www.vldb.org/conf/2001/P169.pdf
