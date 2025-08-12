@@ -17,6 +17,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 {% endcomment %}
 --&gt;
+&lt;!-- diagrams source https://docs.google.com/presentation/d/1e_Z_F8nt2rcvlNvhU11khF5lzJJVqNtqtyJ-G3mp4-Q --&gt;
 &lt;p&gt;It is a common misconception that &lt;a href="https://parquet.apache.org/"&gt;Apache Parquet&lt;/a&gt; requires (slow) reparsing of
 metadata and is limited to indexing structures provided by the format. In fact,
 caching parsed metadata and using custom external indexes along with
@@ -40,6 +41,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 {% endcomment %}
 --&gt;
+&lt;!-- diagrams source https://docs.google.com/presentation/d/1e_Z_F8nt2rcvlNvhU11khF5lzJJVqNtqtyJ-G3mp4-Q --&gt;
 &lt;p&gt;It is a common misconception that &lt;a href="https://parquet.apache.org/"&gt;Apache Parquet&lt;/a&gt; requires (slow) reparsing of
 metadata and is limited to indexing structures provided by the format. In fact,
 caching parsed metadata and using custom external indexes along with
@@ -222,22 +224,28 @@ Please refer to the &lt;a href="https://datafusion.apache.org/blog/2025/03/21/pa
 indexes, as described in the next sections.&lt;/strong&gt;&lt;/p&gt;
 &lt;h2&gt;Pruning Files with External Indexes&lt;/h2&gt;
 &lt;p&gt;The first step in hierarchical pruning is quickly ruling out files that cannot
-match the query.  For example, if a system expects to have see queries that
+match the query. For example, if a system expects to see queries that
 apply to a time range, it might create an external index to store the minimum
 and maximum &lt;code&gt;time&lt;/code&gt; values for each file. Then, during query processing, the
-system can quickly rule out files that cannot possibly contain relevant data.
-For example, if the user issues a query that only matches the last 7 days of
+system can quickly rule out files that cannot possibly contain relevant data.&lt;/p&gt;
+&lt;p&gt;For example, if the user issues a query that only matches the last 7 days of
 data:&lt;/p&gt;
 &lt;pre&gt;&lt;code class="language-sql"&gt;WHERE time &amp;gt; now() - interval '7 days'
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;The index can quickly rule out files that only have data older than 7 days.&lt;/p&gt;
-&lt;!-- TODO update the diagram to match the example above -- and have time predicates --&gt;
 &lt;div class="text-center"&gt;
 &lt;img alt="Data Skipping: Pruning Files." class="img-responsive" src="/blog/images/external-parquet-indexes/prune-files.png" width="80%"/&gt;
 &lt;/div&gt;
 &lt;p&gt;&lt;strong&gt;Figure 6&lt;/strong&gt;: Step 1: File Pruning. Given a query predicate, systems use external
 indexes to quickly rule out files that cannot match the query. In this case, by
 consulting the index all but two files can be ruled out.&lt;/p&gt;
+&lt;p&gt;External indexes offer much faster lookups and lower I/O overhead than Parquet's
+built-in file-level indexes by skipping further processing for many data files.
+Without an external index, systems typically fall back to reading each file's
+footer to find files needed for further processing. Skipping per-file processing
+is especially important when reading from remote object stores such as &lt;a href="https://aws.amazon.com/s3/"&gt;S3&lt;/a&gt;,
+&lt;a href="https://cloud.google.com/storage"&gt;GCS&lt;/a&gt; or &lt;a href="https://azure.microsoft.com/en-us/services/storage/blobs/"&gt;Azure Blob Store&lt;/a&gt;, where each request adds [tens to hundreds of
+milliseconds of latency].&lt;/p&gt;
 &lt;p&gt;There are many different systems that use external indexes to find files such as 
 &lt;a href="https://cwiki.apache.org/confluence/display/Hive/Design#Design-Metastore"&gt;Hive Metadata Store&lt;/a&gt;,
 &lt;a href="https://iceberg.apache.org/"&gt;Iceberg&lt;/a&gt;, 
@@ -560,7 +568,7 @@ execution works, help document or improve the DataFusion codebase, or just try
 it out, we would love for you to join us.&lt;/p&gt;
 &lt;h3&gt;Footnotes&lt;/h3&gt;
 &lt;p&gt;&lt;a id="footnote1"&gt;&lt;/a&gt;&lt;code&gt;1&lt;/code&gt;: This trend is described in more detail in the &lt;a href="https://www.influxdata.com/blog/flight-datafusion-arrow-parquet-fdap-architecture-influxdb/"&gt;FDAP Stack&lt;/a&gt; blog&lt;/p&gt;
-&lt;p&gt;&lt;a id="footnote2"&gt;&lt;/a&gt;&lt;code&gt;2&lt;/code&gt;: This layout is referred to a &lt;a href="https://www.vldb.org/conf/2001/P169.pdf"&gt;PAX in the
+&lt;p&gt;&lt;a id="footnote2"&gt;&lt;/a&gt;&lt;code&gt;2&lt;/code&gt;: This layout is referred to as &lt;a href="https://www.vldb.org/conf/2001/P169.pdf"&gt;PAX in the
 database literature&lt;/a&gt; after the first research paper to describe the technique.&lt;/p&gt;
 &lt;p&gt;&lt;a id="footnote3"&gt;&lt;/a&gt;&lt;code&gt;3&lt;/code&gt;: Benchmaxxing (verb): to add specific optimizations that only
 impact benchmark results and are not widely applicable to real world use cases.&lt;/p&gt;

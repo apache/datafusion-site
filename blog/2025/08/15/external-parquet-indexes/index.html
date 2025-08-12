@@ -61,6 +61,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 {% endcomment %}
 -->
+<!-- diagrams source https://docs.google.com/presentation/d/1e_Z_F8nt2rcvlNvhU11khF5lzJJVqNtqtyJ-G3mp4-Q -->
 <p>It is a common misconception that <a href="https://parquet.apache.org/">Apache Parquet</a> requires (slow) reparsing of
 metadata and is limited to indexing structures provided by the format. In fact,
 caching parsed metadata and using custom external indexes along with
@@ -243,22 +244,28 @@ Please refer to the <a href="https://datafusion.apache.org/blog/2025/03/21/parqu
 indexes, as described in the next sections.</strong></p>
 <h2>Pruning Files with External Indexes</h2>
 <p>The first step in hierarchical pruning is quickly ruling out files that cannot
-match the query.  For example, if a system expects to have see queries that
+match the query. For example, if a system expects to see queries that
 apply to a time range, it might create an external index to store the minimum
 and maximum <code>time</code> values for each file. Then, during query processing, the
-system can quickly rule out files that cannot possibly contain relevant data.
-For example, if the user issues a query that only matches the last 7 days of
+system can quickly rule out files that cannot possibly contain relevant data.</p>
+<p>For example, if the user issues a query that only matches the last 7 days of
 data:</p>
 <pre><code class="language-sql">WHERE time &gt; now() - interval '7 days'
 </code></pre>
 <p>The index can quickly rule out files that only have data older than 7 days.</p>
-<!-- TODO update the diagram to match the example above -- and have time predicates -->
 <div class="text-center">
 <img alt="Data Skipping: Pruning Files." class="img-responsive" src="/blog/images/external-parquet-indexes/prune-files.png" width="80%"/>
 </div>
 <p><strong>Figure 6</strong>: Step 1: File Pruning. Given a query predicate, systems use external
 indexes to quickly rule out files that cannot match the query. In this case, by
 consulting the index all but two files can be ruled out.</p>
+<p>External indexes offer much faster lookups and lower I/O overhead than Parquet's
+built-in file-level indexes by skipping further processing for many data files.
+Without an external index, systems typically fall back to reading each file's
+footer to find files needed for further processing. Skipping per-file processing
+is especially important when reading from remote object stores such as <a href="https://aws.amazon.com/s3/">S3</a>,
+<a href="https://cloud.google.com/storage">GCS</a> or <a href="https://azure.microsoft.com/en-us/services/storage/blobs/">Azure Blob Store</a>, where each request adds [tens to hundreds of
+milliseconds of latency].</p>
 <p>There are many different systems that use external indexes to find files such as 
 <a href="https://cwiki.apache.org/confluence/display/Hive/Design#Design-Metastore">Hive Metadata Store</a>,
 <a href="https://iceberg.apache.org/">Iceberg</a>, 
@@ -581,7 +588,7 @@ execution works, help document or improve the DataFusion codebase, or just try
 it out, we would love for you to join us.</p>
 <h3>Footnotes</h3>
 <p><a id="footnote1"></a><code>1</code>: This trend is described in more detail in the <a href="https://www.influxdata.com/blog/flight-datafusion-arrow-parquet-fdap-architecture-influxdb/">FDAP Stack</a> blog</p>
-<p><a id="footnote2"></a><code>2</code>: This layout is referred to a <a href="https://www.vldb.org/conf/2001/P169.pdf">PAX in the
+<p><a id="footnote2"></a><code>2</code>: This layout is referred to as <a href="https://www.vldb.org/conf/2001/P169.pdf">PAX in the
 database literature</a> after the first research paper to describe the technique.</p>
 <p><a id="footnote3"></a><code>3</code>: Benchmaxxing (verb): to add specific optimizations that only
 impact benchmark results and are not widely applicable to real world use cases.</p>
