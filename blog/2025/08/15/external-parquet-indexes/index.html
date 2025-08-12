@@ -101,7 +101,7 @@ parts of the file and returns the results to the user (Step 4).</p>
 <p>In this blog, I use the term <strong>"index"</strong> to mean any structure that helps
 locate relevant data during processing, and a high level overview of how
 external indexes are used to speed up queries is shown in Figure 1.</p>
-<p>All Data Systems typically store both the data itself and additional information
+<p>All data systems typically store both the data itself and additional information
 (metadata) to more quickly find data relevant to a query. Metadata is often
 stored in structures with names like "index," "catalog" and "cache" and the
 terminology varies widely across systems. </p>
@@ -111,7 +111,7 @@ processing. These differences each have their own set of tradeoffs, and thus
 different systems understandably make different choices depending on their use
 case. There is no one-size-fits-all solution for indexing. For example, Hive
 uses the <a href="https://cwiki.apache.org/confluence/display/Hive/Design#Design-Metastore">Hive Metastore</a>, <a href="https://www.vertica.com/">Vertica</a> uses a purpose-built <a href="https://www.vertica.com/docs/latest/HTML/Content/Authoring/AdministratorsGuide/Managing/Metadata/CatalogOverview.htm">Catalog</a>, and open
-data lake systems typically use a table format like <a href="https://iceberg.apache.org/">Apache Iceberg</a> or <a href="https://delta.io/">Delta
+data lake systems typically use a table format such as <a href="https://iceberg.apache.org/">Apache Iceberg</a> or <a href="https://delta.io/">Delta
 Lake</a>.</p>
 <p><strong>External Indexes</strong> store information separately ("external") to the data
 itself. External indexes are flexible and widely used, but require additional
@@ -131,10 +131,10 @@ increased file sizes and the need to update the data files to update the index.<
 </ul>
 <p>Examples of locations where external indexes can be stored include:</p>
 <ul>
-<li><strong>Separate files</strong> such as a <a href="https://www.json.org/">JSON</a> or Parquet file.</li>
-<li><strong>Transactional databases</strong> such as a <a href="https://www.postgresql.org/">PostgreSQL</a> table.</li>
-<li><strong>Distributed key-value store</strong> such as <a href="https://redis.io/">Redis</a> or <a href="https://cassandra.apache.org/">Cassandra</a>.</li>
-<li><strong>Local memory</strong> such as an in memory hash map.</li>
+<li><strong>Separate files</strong> such as <a href="https://www.json.org/">JSON</a> or Parquet files.</li>
+<li><strong>Transactional databases</strong> such as <a href="https://www.postgresql.org/">PostgreSQL</a> tables.</li>
+<li><strong>Distributed key-value stores</strong> such as <a href="https://redis.io/">Redis</a> or <a href="https://cassandra.apache.org/">Cassandra</a>.</li>
+<li><strong>Local memory</strong> such as an in-memory hash map.</li>
 </ul>
 <h2>Using Apache Parquet for Storage</h2>
 <p>While the rest of this blog focuses on building custom external indexes using
@@ -191,7 +191,7 @@ The standard approach is shown in Figure 2:</p>
 <p><strong>Figure 2</strong>: Hierarchical Pruning: The system first rules out files, then
 Row Groups, then Data Pages, and finally reads only the relevant data pages.</p>
 <p>The process is hierarchical because the per-row computation required at the
-earlier stages (e.g. skipping a entire file) is lower than the computation
+earlier stages (e.g. skipping an entire file) is lower than the computation
 required at later stages (apply predicates to the data). 
 As mentioned before, while the details of what metadata is used and how that
 metadata is managed varies substantially across query systems, they almost all
@@ -252,7 +252,8 @@ system can quickly rule out files that cannot possibly contain relevant data.</p
 data:</p>
 <pre><code class="language-sql">WHERE time &gt; now() - interval '7 days'
 </code></pre>
-<p>The index can quickly rule out files that only have data older than 7 days.</p>
+<p>then the index can quickly rule out files that only have data older than the
+most recent 7 days.</p>
 <div class="text-center">
 <img alt="Data Skipping: Pruning Files." class="img-responsive" src="/blog/images/external-parquet-indexes/prune-files.png" width="80%"/>
 </div>
@@ -264,15 +265,15 @@ built-in file-level indexes by skipping further processing for many data files.
 Without an external index, systems typically fall back to reading each file's
 footer to find files needed for further processing. Skipping per-file processing
 is especially important when reading from remote object stores such as <a href="https://aws.amazon.com/s3/">S3</a>,
-<a href="https://cloud.google.com/storage">GCS</a> or <a href="https://azure.microsoft.com/en-us/services/storage/blobs/">Azure Blob Store</a>, where each request adds [tens to hundreds of
-milliseconds of latency].</p>
+<a href="https://cloud.google.com/storage">GCS</a> or <a href="https://azure.microsoft.com/en-us/services/storage/blobs/">Azure Blob Store</a>, where each request adds <a href="https://www.vldb.org/pvldb/vol16/p2769-durner.pdf">tens to hundreds of
+milliseconds of latency</a>.</p>
 <p>There are many different systems that use external indexes to find files such as 
 <a href="https://cwiki.apache.org/confluence/display/Hive/Design#Design-Metastore">Hive Metadata Store</a>,
 <a href="https://iceberg.apache.org/">Iceberg</a>, 
 <a href="https://delta.io/">Delta Lake</a>,
 <a href="https://duckdb.org/2025/05/27/ducklake.html">DuckLake</a>,
 and <a href="https://sparkbyexamples.com/apache-hive/hive-partitions-explained-with-examples/">Hive Style Partitioning</a><sup><a href="#footnote4">4</a></sup>.
-Of course, each of these systems works well for their intended usecases, but
+Of course, each of these systems works well for their intended use cases, but
 if none meets your needs, or you want to experiment with
 different strategies, you can easily build your own external index using
 DataFusion.</p>
@@ -328,10 +329,10 @@ that may contain data matching the predicate as shown below:</p>
 }
 </code></pre>
 <p>DataFusion handles the details of pushing down the filters to the
-<code>TableProvider</code> and the mechanics of reading the parquet files, so you can focus
+<code>TableProvider</code> and the mechanics of reading the Parquet files, so you can focus
 on the system specific details such as building, storing, and applying the index.
 While this example uses a standard min/max index, you can implement any indexing
-strategy you need, such as a bloom filters, a full text index, or a more complex
+strategy you need, such as bloom filters, a full text index, or a more complex
 multidimensional index.</p>
 <p>DataFusion also includes several libraries to help with common filtering and
 pruning tasks, such as:</p>
@@ -451,8 +452,8 @@ clarity):</p>
         let file_source = Arc::new(
             ParquetSource::default()
                 // provide the predicate to the standard DataFusion source as well so
-                // DataFusion's parquet reader will apply row group pruning based on
-                // the built-in parquet metadata (min/max, bloom filters, etc) as well
+                // DataFusion's Parquet reader will apply row group pruning based on
+                // the built-in Parquet metadata (min/max, bloom filters, etc) as well
                 .with_predicate(predicate)
         );
         let file_scan_config =
@@ -539,7 +540,7 @@ for each file:</p>
         // Create the ParquetSource with the predicate and the factory
         let file_source = Arc::new(
             ParquetSource::default()
-                // provide the factory to create parquet reader without re-reading metadata
+                // provide the factory to create Parquet reader without re-reading metadata
                 .with_parquet_file_reader_factory(Arc::new(reader_factory)),
         );
 
