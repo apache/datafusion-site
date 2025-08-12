@@ -763,7 +763,7 @@ topic]). [Ed Seidl] is beginning this effort. See the [ticket] for details.
 such as point lookups, filters of different selectivity, and aggregations.
 
 <a id="footnote7"></a>`7`: For example, [Zhu Qi] was able to speed up reads by over 2x 
-simply by rewriting the Parquet files with Offset Indexes and no compression (see [issue #16149 comment]) for details).
+simply by rewriting the Parquet files with Offset Indexes and no compression (see [issue #16149 comment] for details).
 There is likely significant additional performance available by using Bloom Filters and resorting the data
 to be clustered in a more optimal way for the queries.
 
