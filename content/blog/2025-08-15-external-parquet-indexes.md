@@ -175,7 +175,7 @@ the Row Groups / Data Pages within those files.
 
 [Clickhouse MergeTree]: https://clickhouse.com/docs/engines/table-engines/mergetree-family/mergetree
 [Clickhouse indexing strategy]: https://clickhouse.com/docs/guides/best-practices/sparse-primary-indexes#clickhouse-index-design
-[Parquet Format]: https://parquet.apache.org/documentation/latest/
+[Parquet Format]: https://parquet.apache.org/docs/file-format/
 
 A common criticism of using Parquet is that it is not as performant as some new
 proposal. These criticisms typically cherry-pick a few queries and/or datasets
