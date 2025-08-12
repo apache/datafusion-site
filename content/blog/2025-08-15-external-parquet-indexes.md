@@ -146,10 +146,11 @@ Examples of locations where external indexes can be stored include:
 ## Using Apache Parquet for Storage
 
 While the rest of this blog focuses on building custom external indexes using
-Parquet and DataFusion, I first briefly discuss why Parquet is a good choice
-for modern analytic systems. The research community frequently confuses
-limitations of a particular [implementation of the Parquet format] with the
-[Parquet Format] itself and it is important to clarify this distinction.
+Parquet and DataFusion, I first briefly discuss why Parquet is a good choice for
+modern analytic systems. The research community frequently confuses limitations
+of a particular [implementation of the Parquet format] with the [Parquet Format]
+itself, and this confusion often obscures capabilities that make Parquet a good
+target for external indexes.
 
 [implementation of the Parquet format]: https://parquet.apache.org/docs/file-format/implementationstatus/
 [Parquet Format]: https://parquet.apache.org/docs/file-format/
@@ -159,7 +160,7 @@ open source libraries, and wide ecosystem interoperability make it a compelling
 choice when building new systems. While there are some niche use cases that may
 benefit from specialized formats, Parquet is typically the obvious choice.
 While recent proprietary file formats differ in details, they all use the same
-high level structure<sup>[2](#footnote2)</sup>: 
+high level structure<sup>[2](#footnote2)</sup> as Parquet: 
 
 1. Metadata (typically at the end  of the file)
 2. Data divided into columns and then into horizontal slices (e.g. Parquet Row Groups and/or Data Pages). 
@@ -179,13 +180,13 @@ the Row Groups / Data Pages within those files.
 
 A common criticism of using Parquet is that it is not as performant as some new
 proposal. These criticisms typically cherry-pick a few queries and/or datasets
-and build a specialized index or data layout for that specific cases. However,
+and build a specialized index or data layout for that specific case. However,
 as I explain in the [companion video] of this blog, even for
 [ClickBench]<sup>[6](#footnote6)</sup>, the current
 benchmaxxing<sup>[3](#footnote3)</sup> target of analytics vendors, there is
 less than a factor of two difference in performance between custom file formats
 and Parquet. The difference becomes even lower when using Parquet files that
-actually use the full range of existing Parquet features such Column and Offset
+use the full range of existing Parquet features such Column and Offset
 Indexes and Bloom Filters<sup>[7](#footnote7)</sup>. Compared to the low
 interoperability and expensive transcoding/loading step of alternate file
 formats, Parquet is hard to beat.
