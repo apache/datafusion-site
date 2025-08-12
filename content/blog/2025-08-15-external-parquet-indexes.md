@@ -219,7 +219,6 @@ Row Groups, then Data Pages, and finally reads only the relevant data pages.
 The process is hierarchical because the per-row computation required at the
 earlier stages (e.g. skipping a entire file) is lower than the computation
 required at later stages (apply predicates to the data). 
-
 As mentioned before, while the details of what metadata is used and how that
 metadata is managed varies substantially across query systems, they almost all
 use a hierarchical pruning strategy.
@@ -534,7 +533,7 @@ The rows that are selected by the resulting plan look like this:
 ```
 
 In the `scan` method, you return an `ExecutionPlan` that includes the
-`ParquetAccessPlan` for each file as shows below (again, slightly simplified for
+`ParquetAccessPlan` for each file as shown below (again, slightly simplified for
 clarity):
 
 ```rust
@@ -699,7 +698,7 @@ data platform, it has never been easier to build it with Parquet and DataFusion.
 
 I am a firm believer that data systems of the future will be built on a
 foundation of modular, high quality, open source components such as Parquet,
-Arrow and DataFusion. and we should focus our efforts as a community on
+Arrow, and DataFusion. We should focus our efforts as a community on
 improving these components rather than building new file formats that are
 optimized for narrow use cases.
 
