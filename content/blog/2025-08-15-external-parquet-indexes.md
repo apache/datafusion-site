@@ -292,7 +292,7 @@ The high level mechanics of Parquet predicate pushdown is shown below:
 />
 </div>
 
-**Figure 5**: Filter Pushdown in Parquet: query engines use the the predicate,
+**Figure 5**: Filter Pushdown in Parquet: query engines use the predicate,
 `C > 25`, from the query along with statistics from the metadata, to identify
 pages that may match the predicate which are read for further processing. 
 Please refer to the [Efficient Filter Pushdown] blog for more details.
@@ -308,7 +308,7 @@ The first step in hierarchical pruning is quickly ruling out files that cannot
 match the query.  For example, if a system expects to have see queries that
 apply to a time range, it might create an external index to store the minimum
 and maximum `time` values for each file. Then, during query processing, the
-system can quickly rule out files that can not possible contain relevant data.
+system can quickly rule out files that cannot possibly contain relevant data.
 For example, if the user issues a query that only matches the last 7 days of
 data:
 
@@ -349,7 +349,7 @@ DataFusion.
 To implement file pruning in DataFusion, you implement a custom [TableProvider]
 with the [supports_filter_pushdown] and [scan] methods. The
 `supports_filter_pushdown` method tells DataFusion which predicates can be used
-by the `TableProvider` and the `scan` method uses those predicates with the
+and the `scan` method uses those predicates with the
 external index to find the files that may contain data that matches the query.
 
 [TableProvider]: https://docs.rs/datafusion/latest/datafusion/datasource/trait.TableProvider.html
