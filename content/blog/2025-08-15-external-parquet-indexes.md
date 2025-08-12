@@ -24,6 +24,7 @@ limitations under the License.
 {% endcomment %}
 -->
 
+<!-- diagrams source https://docs.google.com/presentation/d/1e_Z_F8nt2rcvlNvhU11khF5lzJJVqNtqtyJ-G3mp4-Q --> 
 
 It is a common misconception that [Apache Parquet] requires (slow) reparsing of
 metadata and is limited to indexing structures provided by the format. In fact,
@@ -304,10 +305,11 @@ indexes, as described in the next sections.**
 ## Pruning Files with External Indexes
 
 The first step in hierarchical pruning is quickly ruling out files that cannot
-match the query.  For example, if a system expects to see queries that
+match the query. For example, if a system expects to see queries that
 apply to a time range, it might create an external index to store the minimum
 and maximum `time` values for each file. Then, during query processing, the
 system can quickly rule out files that cannot possibly contain relevant data.
+
 For example, if the user issues a query that only matches the last 7 days of
 data:
 
@@ -316,8 +318,6 @@ WHERE time > now() - interval '7 days'
 ```
 
 The index can quickly rule out files that only have data older than 7 days.
-
-<!-- TODO update the diagram to match the example above -- and have time predicates -->
 
 <div class="text-center">
 <img
@@ -331,6 +331,19 @@ The index can quickly rule out files that only have data older than 7 days.
 **Figure 6**: Step 1: File Pruning. Given a query predicate, systems use external
 indexes to quickly rule out files that cannot match the query. In this case, by
 consulting the index all but two files can be ruled out.
+
+External indexes offer much faster lookups and lower I/O overhead than Parquet's
+built-in file-level indexes by skipping further processing for many data files.
+Without an external index, systems typically fall back to reading each file's
+footer to find files needed for further processing. Skipping per-file processing
+is especially important when reading from remote object stores such as [S3],
+[GCS] or [Azure Blob Store], where each request adds [tens to hundreds of
+milliseconds of latency].
+
+[S3]: https://aws.amazon.com/s3/
+[GCS]: https://cloud.google.com/storage
+[Azure Blob Store]: https://azure.microsoft.com/en-us/services/storage/blobs/
+[tens to hundreds of milliseconds latency]: https://www.vldb.org/pvldb/vol16/p2769-durner.pdf
 
 There are many different systems that use external indexes to find files such as 
 [Hive Metadata Store](https://cwiki.apache.org/confluence/display/Hive/Design#Design-Metastore),
