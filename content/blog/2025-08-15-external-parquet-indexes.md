@@ -423,7 +423,7 @@ impl TableProvider for IndexTableProvider {
 ```
 
 DataFusion handles the details of pushing down the filters to the
-`TableProvider` and the mechanics of reading the parquet files, so you can focus
+`TableProvider` and the mechanics of reading the Parquet files, so you can focus
 on the system specific details such as building, storing, and applying the index.
 While this example uses a standard min/max index, you can implement any indexing
 strategy you need, such as bloom filters, a full text index, or a more complex
@@ -575,8 +575,8 @@ impl TableProvider for IndexTableProvider {
         let file_source = Arc::new(
             ParquetSource::default()
                 // provide the predicate to the standard DataFusion source as well so
-                // DataFusion's parquet reader will apply row group pruning based on
-                // the built-in parquet metadata (min/max, bloom filters, etc) as well
+                // DataFusion's Parquet reader will apply row group pruning based on
+                // the built-in Parquet metadata (min/max, bloom filters, etc) as well
                 .with_predicate(predicate)
         );
         let file_scan_config =
@@ -684,7 +684,7 @@ impl TableProvider for IndexTableProvider {
         // Create the ParquetSource with the predicate and the factory
         let file_source = Arc::new(
             ParquetSource::default()
-                // provide the factory to create parquet reader without re-reading metadata
+                // provide the factory to create Parquet reader without re-reading metadata
                 .with_parquet_file_reader_factory(Arc::new(reader_factory)),
         );
       
