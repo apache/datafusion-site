@@ -104,19 +104,19 @@ strategies to keep indexes up to date, and ways to apply indexes during query
 processing. These differences each have their own set of tradeoffs, and thus
 different systems understandably make different choices depending on their use
 case. There is no one-size-fits-all solution for indexing. For example, Hive
-uses the [Hive Metastore], [Vertica] uses a purpose-built [Catalog] and open
+uses the [Hive Metastore], [Vertica] uses a purpose-built [Catalog], and open
 data lake systems typically use a table format like [Apache Iceberg] or [Delta
 Lake].
 
 **External Indexes** store information separately ("external") to the data
 itself. External indexes are flexible and widely used, but require additional
 operational overhead to keep in sync with the data files. For example, if you
-add a new Parquet file to your data lake you must also update the relevant
-external index to include information about the new file. Note, it **is**
-possible to avoid external indexes by only using information from the data files
-themselves, such as embed user-defined indexes directly in Parquet files,
-described in our previous blog [Embedding User-Defined Indexes in Apache Parquet
-Files].
+add a new Parquet file to your data lake, you must also update the relevant
+external index to include information about the new file. Note, you can
+avoid the operational overhead of external indexes by using only the data files
+themselves, including [Embedding User-Defined Indexes in Apache Parquet
+Files]. However, this approach comes with its own set of tradeoffs such as 
+increased file sizes and the need to update the data files to update the index.
 
 Examples of information commonly stored in external indexes include:
 
@@ -124,9 +124,8 @@ Examples of information commonly stored in external indexes include:
 * Bloom filters
 * Inverted indexes / Full Text indexes 
 * Information needed to read the remote file (e.g the schema, or Parquet footer metadata)
-* Use case specific indexes
 
-Examples of locations external indexes can be stored include:
+Examples of locations where external indexes can be stored include:
 
 * **Separate files** such as a [JSON] or Parquet file.
 * **Transactional databases** such as a [PostgreSQL] table.
