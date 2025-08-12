@@ -503,31 +503,34 @@ access_plan.skip(2); // skip row group 2
 The rows that are selected by the resulting plan look like this:
 
 ```text
-┌ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┐
-
-│                   │  SKIP
-
-└ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┘
-Row Group 0
-┌ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┐
- ┌────────────────┐    SCAN ONLY ROWS
-│└────────────────┘ │  100-200
- ┌────────────────┐    350-400
-│└────────────────┘ │
-─ ─ ─ ─ ─ ─ ─ ─ ─ ─
-Row Group 1
-┌ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┐
-       SKIP
-│                   │
-
-└ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┘
-Row Group 2
 ┌───────────────────┐
-│                   │  SCAN ALL ROWS
 │                   │
+│                   │  SKIP
 │                   │
 └───────────────────┘
-Row Group 3
+     Row Group 0
+
+┌───────────────────┐
+│ ┌───────────────┐ │  SCAN ONLY ROWS
+│ └───────────────┘ │  100-200
+│ ┌───────────────┐ │  350-400
+│ └───────────────┘ │
+└───────────────────┘
+     Row Group 1
+
+┌───────────────────┐
+│                   │
+│                   │  SKIP
+│                   │
+└───────────────────┘
+     Row Group 2
+
+┌───────────────────┐
+│                   │
+│                   │  SCAN ALL ROWS
+│                   │
+└───────────────────┘
+     Row Group 3
 ```
 
 In the `scan` method, you return an `ExecutionPlan` that includes the
