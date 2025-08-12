@@ -752,6 +752,13 @@ it out, we would love for you to join us.
 [Apache DataFusion]: https://datafusion.apache.org/
 [DataFusion community]: https://datafusion.apache.org/contributor-guide/communication.html
 
+### Acknowledgements
+
+Thank you to [Qi Zhu], [Adam Reeve], [Jigao Luo], [Oleks V], [Shehab Amin], [Nuno Faria]
+and [Bruce Ritchie] for their insightful feedback on this blog post.
+
+
+
 
 ### Footnotes
 
@@ -776,12 +783,17 @@ topic]). [Ed Seidl] is beginning this effort. See the [ticket] for details.
 <a id="footnote6"></a>`6`: ClickBench includes a wide variety of query patterns
 such as point lookups, filters of different selectivity, and aggregations.
 
-<a id="footnote7"></a>`7`: For example, [Zhu Qi] was able to speed up reads by over 2x 
+<a id="footnote7"></a>`7`: For example, [Qi Zhu] was able to speed up reads by over 2x 
 simply by rewriting the Parquet files with Offset Indexes and no compression (see [issue #16149 comment] for details).
 There is likely significant additional performance available by using Bloom Filters and resorting the data
 to be clustered in a more optimal way for the queries.
 
-[Zhu Qi]: https://github.com/zhuqi-lucas
+[Qi Zhu]: https://github.com/zhuqi-lucas
+[Adam Reeve]: https://github.com/adamreeve
+[Oleks V]: https://github.com/comphead
+[Jigao Luo]: https://github.com/JigaoLuo
+[Bruce Ritchie]: https://github.com/Omega359
+
 [issue #16149 comment]: https://github.com/apache/datafusion/issues/16149#issuecomment-2918761743
 
 [Xiangpeng Hao]: https://xiangpeng.systems/
