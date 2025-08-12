@@ -36,14 +36,13 @@ stores in high performance systems, and demonstrate how to apply these concepts
 to Parquet processing using [Apache DataFusion]. *Note this is an expanded
 version of the [companion video] and [presentation].*
 
-# Motivation
+## Motivation
 
 System designers choose between a pre-configured data system or the often
 daunting task of building their own custom data platform from scratch.
-
 For many users and use cases, one of the existing data systems will
 likely be good enough. However, traditional systems such as [Apache Spark], [DuckDB],
-[ClickHouse], [Hive], [Snowflake] are each optimized for a certain set of
+[ClickHouse], [Hive], or [Snowflake] are each optimized for a certain set of
 tradeoffs between performance, cost, availability, interoperability, deployment
 target, cloud / on-premises, operational ease and many other factors.
 
@@ -72,7 +71,7 @@ needs<sup>[1](#footnote1)</sup>.
 [Snowflake]: https://www.snowflake.com/
 
 
-# Introduction to External Indexes / Catalogs / Metadata Stores / Caches
+## Introduction to External Indexes / Catalogs / Metadata Stores / Caches
 
 <div class="text-center">
 <img
@@ -145,7 +144,7 @@ Examples of locations external indexes can be stored include:
 [Redis]: https://redis.io/
 [Cassandra]: https://cassandra.apache.org/
 
-# Using Apache Parquet for Storage
+## Using Apache Parquet for Storage
 
 While the rest of this blog focuses on building custom external indexes using
 Parquet and DataFusion, I first briefly discuss why Parquet is a good choice
@@ -192,7 +191,7 @@ Indexes and Bloom Filters<sup>[7](#footnote7)</sup>. Compared to the low
 interoperability and expensive transcoding/loading step of alternate file
 formats, Parquet is hard to beat.
 
-# Hierarchical Pruning Overview
+## Hierarchical Pruning Overview
 
 The key technique for optimizing query processing systems is quickly skipping as
 much data as quickly as possible. Analytic systems typically use a hierarchical
@@ -231,7 +230,7 @@ use a hierarchical pruning strategy.
 [ClickBench]: https://clickbench.com/
 [companion video]: https://www.youtube.com/watch?v=74YsJT1-Rdk
 
-# Apache Parquet Overview
+## Apache Parquet Overview
 
 This section provides a brief background on the organization of Apache Parquet
 files which is needed to fully understand the sections on implementing external indexes.
@@ -303,7 +302,7 @@ indexes, as described in the next sections.**
 
 [Efficient Filter Pushdown]: https://datafusion.apache.org/blog/2025/03/21/parquet-pushdown
 
-# Pruning Files with External Indexes
+## Pruning Files with External Indexes
 
 The first step in hierarchical pruning is quickly ruling out files that cannot
 match the query.  For example, if a system expects to have see queries that
@@ -345,7 +344,7 @@ if none meets your needs, or you want to experiment with
 different strategies, you can easily build your own external index using
 DataFusion.
 
-## Pruning Files with External Indexes Using DataFusion
+### Pruning Files with External Indexes Using DataFusion
 
 To implement file pruning in DataFusion, you implement a custom [TableProvider]
 with the [supports_filter_pushdown] and [scan] methods. The
@@ -435,7 +434,7 @@ pruning tasks, such as:
 [ExprSimplifier]: https://docs.rs/datafusion/latest/datafusion/optimizer/simplify_expressions/struct.ExprSimplifier.html#method.simplify
 [cp_solver]: https://docs.rs/datafusion/latest/datafusion/physical_expr/intervals/cp_solver/index.html
 
-# Pruning Parts of Parquet Files with External Indexes
+## Pruning Parts of Parquet Files with External Indexes
 
 Once the set of files to be scanned has been determined, the next step in the
 hierarchical pruning process is to further narrow down the data within each file.
@@ -464,7 +463,7 @@ structures to quickly rule out Row Groups and Data Pages that cannot match the q
 In this case, the index has ruled out all but three data pages which must then be fetched
 for more processing.
 
-# Pruning Parts of Parquet Files with External Indexes using DataFusion
+## Pruning Parts of Parquet Files with External Indexes using DataFusion
 
 To implement pruning within Parquet files, you use the same [`TableProvider`] APIs
 as for pruning files. For each file your provider wants to scan, you provide 
@@ -575,14 +574,14 @@ impl TableProvider for IndexTableProvider {
 }
 ```
 
-# Caching Parquet Metadata
+## Caching Parquet Metadata
 
 It is often said that Parquet is unsuitable for low latency query systems
 because the footer must be read and parsed for each query. This is simply not
 true, and **many systems use Parquet for low latency analytics and cache the parsed
 metadata in memory to avoid re-reading and re-parsing the footer for each query**.
 
-## Caching Parquet Metadata using DataFusion
+### Caching Parquet Metadata using DataFusion
 
 Reusing cached Parquet Metadata is also shown in the [advanced_parquet_index.rs]
 example. The example reads and caches the metadata for each file when the index
@@ -685,7 +684,7 @@ impl TableProvider for IndexTableProvider {
 }
 ```
 
-# Conclusion
+## Conclusion
 
 Parquet has the right structure for high performance analytics via hierarchical
 pruning, and it is straightforward to build external indexes to speed up queries
