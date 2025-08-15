@@ -1,0 +1,651 @@
+<!doctype html>
+<html class="no-js" lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Using External Indexes, Metadata Stores, Catalogs and Caches to Accelerate Queries on Apache Parquet - Apache DataFusion Blog</title>
+<link href="/blog/css/bootstrap.min.css" rel="stylesheet">
+<link href="/blog/css/fontawesome.all.min.css" rel="stylesheet">
+<link href="/blog/css/headerlink.css" rel="stylesheet">
+<link href="/blog/highlight/default.min.css" rel="stylesheet">
+<script src="/blog/highlight/highlight.js"></script>
+<script>hljs.highlightAll();</script>  </head>
+  <body class="d-flex flex-column h-100">
+  <main class="flex-shrink-0">
+<!-- nav bar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark" aria-label="Fifth navbar example">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/blog"><img src="/blog/images/logo_original4x.png" style="height: 32px;"/> Apache DataFusion Blog</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarADP" aria-controls="navbarADP" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarADP">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/about.html">About</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/feed.xml">RSS</a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>    
+
+
+<!-- article contents -->
+<div id="contents">
+    <div class="bg-white p-5 rounded">
+        <div class="col-sm-8 mx-auto">
+          <h1>
+            Using External Indexes, Metadata Stores, Catalogs and Caches to Accelerate Queries on Apache Parquet
+          </h1>
+            <p>Posted on: Fri 15 August 2025 by Andrew Lamb (InfluxData)</p>
+            <!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+-->
+<!-- diagrams source https://docs.google.com/presentation/d/1e_Z_F8nt2rcvlNvhU11khF5lzJJVqNtqtyJ-G3mp4-Q -->
+<p>It is a common misconception that <a href="https://parquet.apache.org/">Apache Parquet</a> requires (slow) reparsing of
+metadata and is limited to indexing structures provided by the format. In fact,
+caching parsed metadata and using custom external indexes along with
+Parquet's hierarchical data organization can significantly speed up query
+processing.</p>
+<p>In this blog, I describe the role of external indexes, caches, and metadata
+stores in high performance systems, and demonstrate how to apply these concepts
+to Parquet processing using <a href="https://datafusion.apache.org/">Apache DataFusion</a>. <em>Note this is an expanded
+version of the <a href="https://www.youtube.com/watch?v=74YsJT1-Rdk">companion video</a> and <a href="https://docs.google.com/presentation/d/1e_Z_F8nt2rcvlNvhU11khF5lzJJVqNtqtyJ-G3mp4-Q/edit">presentation</a>.</em></p>
+<h2>Motivation</h2>
+<p>System designers choose between a pre-configured data system or the often
+daunting task of building their own custom data platform from scratch.
+For many users and use cases, one of the existing data systems will
+likely be good enough. However, traditional systems such as <a href="https://spark.apache.org/">Apache Spark</a>, <a href="https://duckdb.org/">DuckDB</a>,
+<a href="https://clickhouse.com/">ClickHouse</a>, <a href="https://hive.apache.org/">Hive</a>, or <a href="https://www.snowflake.com/">Snowflake</a> are each optimized for a certain set of
+tradeoffs between performance, cost, availability, interoperability, deployment
+target, cloud / on-premises, operational ease and many other factors.</p>
+<p>For new, or especially demanding use cases, where no existing system makes your
+optimal tradeoffs, you can build your own custom data platform. Previously this
+was a long and expensive endeavor, but today, in the era of <a href="https://www.vldb.org/pvldb/vol16/p2679-pedreira.pdf">Composable Data
+Systems</a>, it is increasingly feasible. High quality, open source building blocks
+such as <a href="https://parquet.apache.org/">Apache Parquet</a> for storage, <a href="https://arrow.apache.org/">Apache Arrow</a> for in-memory processing,
+and <a href="https://datafusion.apache.org/">Apache DataFusion</a> for query execution make it possible to quickly build
+custom data platforms optimized for your specific
+needs<sup><a href="#footnote1">1</a></sup>.</p>
+<h2>Introduction to External Indexes / Catalogs / Metadata Stores / Caches</h2>
+<div class="text-center">
+<img alt="Using External Indexes to Accelerate Queries" class="img-responsive" src="/blog/images/external-parquet-indexes/external-index-overview.png" width="80%"/>
+</div>
+<p><strong>Figure 1</strong>: Using external indexes to speed up queries in an analytic system.
+Given a user's query (Step 1), the system uses an external index (one that is not
+stored inline in the data files) to quickly find files that may contain
+relevant data (Step 2). Then, for each file, the system uses the external index
+to further narrow the required data to only those <strong>parts</strong> of each file
+(e.g. data pages) that are relevant (Step 3). Finally, the system reads only those
+parts of the file and returns the results to the user (Step 4).</p>
+<p>In this blog, I use the term <strong>"index"</strong> to mean any structure that helps
+locate relevant data during processing, and a high level overview of how
+external indexes are used to speed up queries is shown in Figure 1.</p>
+<p>All data systems typically store both the data itself and additional information
+(metadata) to more quickly find data relevant to a query. Metadata is often
+stored in structures with names like "index," "catalog" and "cache" and the
+terminology varies widely across systems. </p>
+<p>There are many different types of indexes, types of content stored in indexes,
+strategies to keep indexes up to date, and ways to apply indexes during query
+processing. These differences each have their own set of tradeoffs, and thus
+different systems understandably make different choices depending on their use
+case. There is no one-size-fits-all solution for indexing. For example, Hive
+uses the <a href="https://cwiki.apache.org/confluence/display/Hive/Design#Design-Metastore">Hive Metastore</a>, <a href="https://www.vertica.com/">Vertica</a> uses a purpose-built <a href="https://www.vertica.com/docs/latest/HTML/Content/Authoring/AdministratorsGuide/Managing/Metadata/CatalogOverview.htm">Catalog</a>, and open
+data lake systems typically use a table format such as <a href="https://iceberg.apache.org/">Apache Iceberg</a> or <a href="https://delta.io/">Delta
+Lake</a>.</p>
+<p><strong>External Indexes</strong> store information separately ("external") to the data
+itself. External indexes are flexible and widely used, but require additional
+operational overhead to keep in sync with the data files. For example, if you
+add a new Parquet file to your data lake, you must also update the relevant
+external index to include information about the new file. Note, you can
+avoid the operational overhead of external indexes by using only the data files
+themselves, including <a href="https://datafusion.apache.org/blog/2025/07/14/user-defined-parquet-indexes/">Embedding User-Defined Indexes in Apache Parquet
+Files</a>. However, this approach comes with its own set of tradeoffs such as 
+increased file sizes and the need to update the data files to update the index.</p>
+<p>Examples of information commonly stored in external indexes include:</p>
+<ul>
+<li>Min/Max statistics</li>
+<li>Bloom filters</li>
+<li>Inverted indexes / Full Text indexes </li>
+<li>Information needed to read the remote file (e.g the schema, or Parquet footer metadata)</li>
+</ul>
+<p>Examples of locations where external indexes can be stored include:</p>
+<ul>
+<li><strong>Separate files</strong> such as <a href="https://www.json.org/">JSON</a> or Parquet files.</li>
+<li><strong>Transactional databases</strong> such as <a href="https://www.postgresql.org/">PostgreSQL</a> tables.</li>
+<li><strong>Distributed key-value stores</strong> such as <a href="https://redis.io/">Redis</a> or <a href="https://cassandra.apache.org/">Cassandra</a>.</li>
+<li><strong>Local memory</strong> such as an in-memory hash map.</li>
+</ul>
+<h2>Using Apache Parquet for Storage</h2>
+<p>While the rest of this blog focuses on building custom external indexes using
+Parquet and DataFusion, I first briefly discuss why Parquet is a good choice for
+modern analytic systems. The research community frequently confuses limitations
+of a particular <a href="https://parquet.apache.org/docs/file-format/implementationstatus/">implementation of the Parquet format</a> with the <a href="https://parquet.apache.org/docs/file-format/">Parquet Format</a>
+itself, and this confusion often obscures capabilities that make Parquet a good
+target for external indexes.</p>
+<p>Apache Parquet's combination of good compression, high-performance, high quality
+open source libraries, and wide ecosystem interoperability make it a compelling
+choice when building new systems. While there are some niche use cases that may
+benefit from specialized formats, Parquet is typically the obvious choice.
+While recent proprietary file formats differ in details, they all use the same
+high level structure<sup><a href="#footnote2">2</a></sup> as Parquet: </p>
+<ol>
+<li>Metadata (typically at the end  of the file)</li>
+<li>Data divided into columns and then into horizontal slices (e.g. Parquet Row Groups and/or Data Pages). </li>
+</ol>
+<p>The structure is so widespread because it enables the hierarchical pruning
+approach described in the next section. For example, the native <a href="https://clickhouse.com/docs/engines/table-engines/mergetree-family/mergetree">Clickhouse
+MergeTree</a> format consists of <em>Parts</em> (similar to Parquet files), and <em>Granules</em>
+(similar to Row Groups). The <a href="https://clickhouse.com/docs/guides/best-practices/sparse-primary-indexes#clickhouse-index-design">Clickhouse indexing strategy</a> follows a classic
+hierarchical pruning approach that first locates the Parts and then the Granules
+that may contain relevant data for the query. This is exactly the same pattern
+as Parquet based systems, which first locate the relevant Parquet files and then
+the Row Groups / Data Pages within those files.</p>
+<p>A common criticism of using Parquet is that it is not as performant as some new
+proposal. These criticisms typically cherry-pick a few queries and/or datasets
+and build a specialized index or data layout for that specific case. However,
+as I explain in the <a href="https://www.youtube.com/watch?v=74YsJT1-Rdk">companion video</a> of this blog, even for
+<a href="https://clickbench.com/">ClickBench</a><sup><a href="#footnote6">6</a></sup>, the current
+benchmaxxing<sup><a href="#footnote3">3</a></sup> target of analytics vendors, there is
+less than a factor of two difference in performance between custom file formats
+and Parquet. The difference becomes even lower when using Parquet files that
+use the full range of existing Parquet features such Column and Offset
+Indexes and Bloom Filters<sup><a href="#footnote7">7</a></sup>. Compared to the low
+interoperability and expensive transcoding/loading step of alternate file
+formats, Parquet is hard to beat.</p>
+<h2>Hierarchical Pruning Overview</h2>
+<p>The key technique for optimizing query processing systems is skipping as
+much data as possible, as quickly as possible. Analytic systems typically use a hierarchical
+approach to progressively narrow the set of data that needs to be processed. 
+The standard approach is shown in Figure 2:</p>
+<ol>
+<li>Entire files are ruled out</li>
+<li>Within each file, large sections (e.g. Row Groups) are ruled out</li>
+<li>(Optionally) smaller sections (e.g. Data Pages) are ruled out</li>
+<li>Finally, the system reads only the relevant data pages and applies the query
+   predicate to the data</li>
+</ol>
+<div class="text-center">
+<img alt="Standard Pruning Layers." class="img-responsive" src="/blog/images/external-parquet-indexes/processing-pipeline.png" width="80%"/>
+</div>
+<p><strong>Figure 2</strong>: Hierarchical Pruning: The system first rules out files, then
+Row Groups, then Data Pages, and finally reads only the relevant data pages.</p>
+<p>The process is hierarchical because the per-row computation required at the
+earlier stages (e.g. skipping an entire file) is lower than the computation
+required at later stages (apply predicates to the data). 
+As mentioned before, while the details of what metadata is used and how that
+metadata is managed varies substantially across query systems, they almost all
+use a hierarchical pruning strategy.</p>
+<h2>Apache Parquet Overview</h2>
+<p>This section provides a brief background on the organization of Apache Parquet
+files which is needed to fully understand the sections on implementing external indexes.
+If you are already familiar with Parquet, you can skip this section.</p>
+<p>Logically, Parquet files are organized into  <em>Row Groups</em> and <em>Column Chunks</em> as
+shown below.</p>
+<div class="text-center">
+<img alt="Logical Parquet File layout: Row Groups and Column Chunks." class="img-responsive" src="/blog/images/external-parquet-indexes/parquet-layout.png" width="80%"/>
+</div>
+<p><strong>Figure 3</strong>: Logical Parquet File Layout: Data is first divided in horizontal slices
+called Row Groups. The data is then stored column by column in <em>Column Chunks</em>.
+This arrangement allows efficient access to only the portions of columns needed
+for a query.</p>
+<p>Physically, Parquet data is stored as a series of Data Pages along with metadata
+stored at the end of the file (in the footer), as shown below.</p>
+<div class="text-center">
+<img alt="Physical Parquet File layout: Metadata and Footer." class="img-responsive" src="/blog/images/external-parquet-indexes/parquet-metadata.png" width="80%"/>
+</div>
+<p><strong>Figure 4</strong>: Physical Parquet File Layout: A typical Parquet file is composed
+of many data pages,  which contain the raw encoded data, and a footer that
+stores metadata about the file, including the schema and the location of the
+relevant data pages, and optional statistics such as min/max values for each
+Column Chunk.</p>
+<p>Parquet files are organized to minimize IO and processing using two key mechanisms:</p>
+<ol>
+<li>
+<p><strong>Projection Pushdown</strong>: if a query needs only a subset of columns from a table, it
+   only needs to read the pages for the relevant Column Chunks</p>
+</li>
+<li>
+<p><strong>Filter Pushdown</strong>: Similarly, given a query with a filter predicate such as
+   <code>WHERE C &gt; 25</code>, query engines can use statistics such as (but not limited to)
+   the min/max values stored in the metadata to skip reading and decoding pages that
+   cannot possibly match the predicate.</p>
+</li>
+</ol>
+<p>The high level mechanics of Parquet predicate pushdown is shown below:</p>
+<div class="text-center">
+<img alt="Parquet Filter Pushdown: use filter predicate to skip pages." class="img-responsive" src="/blog/images/external-parquet-indexes/parquet-filter-pushdown.png" width="80%"/>
+</div>
+<p><strong>Figure 5</strong>: Filter Pushdown in Parquet: query engines use the predicate,
+<code>C &gt; 25</code>, from the query along with statistics from the metadata, to identify
+pages that may match the predicate which are read for further processing. 
+Please refer to the <a href="https://datafusion.apache.org/blog/2025/03/21/parquet-pushdown">Efficient Filter Pushdown</a> blog for more details.
+<strong>NOTE the exact same pattern can be applied using information from external
+indexes, as described in the next sections.</strong></p>
+<h2>Pruning Files with External Indexes</h2>
+<p>The first step in hierarchical pruning is quickly ruling out files that cannot
+match the query. For example, if a system expects to see queries that
+apply to a time range, it might create an external index to store the minimum
+and maximum <code>time</code> values for each file. Then, during query processing, the
+system can quickly rule out files that cannot possibly contain relevant data.</p>
+<p>For example, if the user issues a query that only matches the last 7 days of
+data:</p>
+<pre><code class="language-sql">WHERE time &gt; now() - interval '7 days'
+</code></pre>
+<p>then the index can quickly rule out files that only have data older than the
+most recent 7 days.</p>
+<div class="text-center">
+<img alt="Data Skipping: Pruning Files." class="img-responsive" src="/blog/images/external-parquet-indexes/prune-files.png" width="80%"/>
+</div>
+<p><strong>Figure 6</strong>: Step 1: File Pruning. Given a query predicate, systems use external
+indexes to quickly rule out files that cannot match the query. In this case, by
+consulting the index all but two files can be ruled out.</p>
+<p>External indexes offer much faster lookups and lower I/O overhead than Parquet's
+built-in file-level indexes by skipping further processing for many data files.
+Without an external index, systems typically fall back to reading each file's
+footer to find files needed for further processing. Skipping per-file processing
+is especially important when reading from remote object stores such as <a href="https://aws.amazon.com/s3/">S3</a>,
+<a href="https://cloud.google.com/storage">GCS</a> or <a href="https://azure.microsoft.com/en-us/services/storage/blobs/">Azure Blob Store</a>, where each request adds <a href="https://www.vldb.org/pvldb/vol16/p2769-durner.pdf">tens to hundreds of
+milliseconds of latency</a>.</p>
+<p>There are many different systems that use external indexes to find files such as 
+<a href="https://cwiki.apache.org/confluence/display/Hive/Design#Design-Metastore">Hive Metadata Store</a>,
+<a href="https://iceberg.apache.org/">Iceberg</a>, 
+<a href="https://delta.io/">Delta Lake</a>,
+<a href="https://duckdb.org/2025/05/27/ducklake.html">DuckLake</a>,
+and <a href="https://sparkbyexamples.com/apache-hive/hive-partitions-explained-with-examples/">Hive Style Partitioning</a><sup><a href="#footnote4">4</a></sup>.
+Of course, each of these systems works well for their intended use cases, but
+if none meets your needs, or you want to experiment with
+different strategies, you can easily build your own external index using
+DataFusion.</p>
+<h3>Pruning Files with External Indexes Using DataFusion</h3>
+<p>To implement file pruning in DataFusion, you implement a custom <a href="https://docs.rs/datafusion/latest/datafusion/datasource/trait.TableProvider.html">TableProvider</a>
+with the <a href="https://docs.rs/datafusion/latest/datafusion/datasource/trait.TableProvider.html#method.supports_filters_pushdown">supports_filter_pushdown</a> and <a href="https://docs.rs/datafusion/latest/datafusion/datasource/trait.TableProvider.html#tymethod.scan">scan</a> methods. The
+<code>supports_filter_pushdown</code> method tells DataFusion which predicates can be used
+and the <code>scan</code> method uses those predicates with the
+external index to find the files that may contain data that matches the query.</p>
+<p>The DataFusion repository contains a fully working and well-commented example,
+<a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/parquet_index.rs">parquet_index.rs</a>, of this technique that you can use as a starting point. 
+The example creates a simple index that stores the min/max values for a column
+called <code>value</code> along with the file name. Then it runs the following query:</p>
+<pre><code class="language-sql">SELECT file_name, value FROM index_table WHERE value = 150
+</code></pre>
+<p>The custom <code>IndexTableProvider</code>'s <code>scan</code> method uses the index to find files
+that may contain data matching the predicate as shown below:</p>
+<pre><code class="language-rust">impl TableProvider for IndexTableProvider {
+    async fn scan(
+        &amp;self,
+        state: &amp;dyn Session,
+        projection: Option&lt;&amp;Vec&lt;usize&gt;&gt;,
+        filters: &amp;[Expr],
+        limit: Option&lt;usize&gt;,
+    ) -&gt; Result&lt;Arc&lt;dyn ExecutionPlan&gt;&gt; {
+        let df_schema = DFSchema::try_from(self.schema())?;
+        // Combine all the filters into a single ANDed predicate
+        let predicate = conjunction(filters.to_vec());
+
+        // Use the index to find the files that might have data that matches the
+        // predicate. Any file that can not have data that matches the predicate
+        // will not be returned.
+        let files = self.index.get_files(predicate.clone())?;
+
+        let object_store_url = ObjectStoreUrl::parse("file://")?;
+        let source = Arc::new(ParquetSource::default().with_predicate(predicate));
+        let mut file_scan_config_builder =
+            FileScanConfigBuilder::new(object_store_url, self.schema(), source)
+                .with_projection(projection.cloned())
+                .with_limit(limit);
+
+        // Add the files to the scan config
+        for file in files {
+            file_scan_config_builder = file_scan_config_builder.with_file(
+                PartitionedFile::new(file.path(), file_size.size()),
+            );
+        }
+        Ok(DataSourceExec::from_data_source(
+            file_scan_config_builder.build(),
+        ))
+    }
+    ...
+}
+</code></pre>
+<p>DataFusion handles the details of pushing down the filters to the
+<code>TableProvider</code> and the mechanics of reading the Parquet files, so you can focus
+on the system specific details such as building, storing, and applying the index.
+While this example uses a standard min/max index, you can implement any indexing
+strategy you need, such as bloom filters, a full text index, or a more complex
+multidimensional index.</p>
+<p>DataFusion also includes several libraries to help with common filtering and
+pruning tasks, such as:</p>
+<ul>
+<li>
+<p>A full and well documented expression representation (<a href="https://docs.rs/datafusion/latest/datafusion/logical_expr/enum.Expr.html">Expr</a>) and <a href="https://docs.rs/datafusion/latest/datafusion/logical_expr/enum.Expr.html#visiting-and-rewriting-exprs">APIs for
+  building, visiting, and rewriting</a> query predicates.</p>
+</li>
+<li>
+<p>Range Based Pruning (<a href="https://docs.rs/datafusion/latest/datafusion/physical_optimizer/pruning/struct.PruningPredicate.html">PruningPredicate</a>) for cases where your index stores
+  min/max values.</p>
+</li>
+<li>
+<p>Expression simplification (<a href="https://docs.rs/datafusion/latest/datafusion/optimizer/simplify_expressions/struct.ExprSimplifier.html#method.simplify">ExprSimplifier</a>) for simplifying predicates before
+  applying them to the index.</p>
+</li>
+<li>
+<p>Range analysis for predicates (<a href="https://docs.rs/datafusion/latest/datafusion/physical_expr/intervals/cp_solver/index.html">cp_solver</a>) for interval-based range analysis
+  (e.g. <code>col &gt; 5 AND col &lt; 10</code>).</p>
+</li>
+</ul>
+<h2>Pruning Parts of Parquet Files with External Indexes</h2>
+<p>Once the set of files to be scanned has been determined, the next step in the
+hierarchical pruning process is to further narrow down the data within each file.
+Similarly to the previous step, almost all advanced query processing systems use additional
+metadata to prune unnecessary parts of the file, such as <a href="https://clickhouse.com/docs/optimize/skipping-indexes">Data Skipping Indexes
+in ClickHouse</a>. </p>
+<p>For Parquet-based systems, the most common strategy is using the built-in metadata such
+as <a href="https://github.com/apache/parquet-format/blob/1dbc814b97c9307687a2e4bee55545ab6a2ef106/src/main/thrift/parquet.thrift#L267">min/max statistics</a> and <a href="https://parquet.apache.org/docs/file-format/bloomfilter/">Bloom Filters</a>. However, it is also possible to use external
+indexes for filtering <em>WITHIN</em> Parquet files as shown below. </p>
+<p><img alt="Data Skipping: Pruning Row Groups and DataPages" class="img-responsive" src="/blog/images/external-parquet-indexes/prune-row-groups.png" width="80%"/></p>
+<p><strong>Figure 7</strong>: Step 2: Pruning Parquet Row Groups and Data Pages. Given a query predicate,
+systems can use external indexes / metadata stores as well as Parquet's built-in
+structures to quickly rule out Row Groups and Data Pages that cannot match the query.
+In this case, the index has ruled out all but three data pages which must then be fetched
+for more processing.</p>
+<h2>Pruning Parts of Parquet Files with External Indexes using DataFusion</h2>
+<p>To implement pruning within Parquet files, you use the same [<code>TableProvider</code>] APIs
+as for pruning files. For each file your provider wants to scan, you provide 
+an additional <a href="https://docs.rs/datafusion/latest/datafusion/datasource/physical_plan/parquet/struct.ParquetAccessPlan.html">ParquetAccessPlan</a> that tells DataFusion what parts of the file to read. This plan is
+then <a href="https://docs.rs/datafusion/latest/datafusion/datasource/physical_plan/parquet/source/struct.ParquetSource.html#implementing-external-indexes">further refined by the DataFusion Parquet reader</a> using the built-in
+Parquet metadata to potentially prune additional row groups and data pages
+during query execution. You can find a full working example in
+the <a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/advanced_parquet_index.rs">advanced_parquet_index.rs</a> example of the DataFusion repository.</p>
+<p>Here is how you build a <code>ParquetAccessPlan</code> to scan only specific row groups
+and rows within those row groups. </p>
+<pre><code class="language-rust">// Default to scan all (4) row groups
+let mut access_plan = ParquetAccessPlan::new_all(4);
+access_plan.skip(0); // skip row group 0
+// Specify scanning rows 100-200 and 350-400
+// in row group 1 that has 1000 rows
+let row_selection = RowSelection::from(vec![
+   RowSelector::skip(100),
+   RowSelector::select(100),
+   RowSelector::skip(150),
+   RowSelector::select(50),
+   RowSelector::skip(600),  // skip last 600 rows
+]);
+access_plan.scan_selection(1, row_selection);
+access_plan.skip(2); // skip row group 2
+// all of row group 3 is scanned by default
+</code></pre>
+<p>The rows that are selected by the resulting plan look like this:</p>
+<pre><code class="language-text">&boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
+&boxv;                   &boxv;
+&boxv;                   &boxv;  SKIP
+&boxv;                   &boxv;
+&boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul;
+     Row Group 0
+
+&boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
+&boxv; &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl; &boxv;  SCAN ONLY ROWS
+&boxv; &boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul; &boxv;  100-200
+&boxv; &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl; &boxv;  350-400
+&boxv; &boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul; &boxv;
+&boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul;
+     Row Group 1
+
+&boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
+&boxv;                   &boxv;
+&boxv;                   &boxv;  SKIP
+&boxv;                   &boxv;
+&boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul;
+     Row Group 2
+
+&boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
+&boxv;                   &boxv;
+&boxv;                   &boxv;  SCAN ALL ROWS
+&boxv;                   &boxv;
+&boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul;
+     Row Group 3
+</code></pre>
+<p>In the <code>scan</code> method, you return an <code>ExecutionPlan</code> that includes the
+<code>ParquetAccessPlan</code> for each file as shown below (again, slightly simplified for
+clarity):</p>
+<pre><code class="language-rust">impl TableProvider for IndexTableProvider {
+    async fn scan(
+        &amp;self,
+        state: &amp;dyn Session,
+        projection: Option&lt;&amp;Vec&lt;usize&gt;&gt;,
+        filters: &amp;[Expr],
+        limit: Option&lt;usize&gt;,
+    ) -&gt; Result&lt;Arc&lt;dyn ExecutionPlan&gt;&gt; {
+        let indexed_file = &amp;self.indexed_file;
+        let predicate = self.filters_to_predicate(state, filters)?;
+
+        // Use the external index to create a starting ParquetAccessPlan
+        // that determines which row groups to scan based on the predicate
+        let access_plan = self.create_plan(&amp;predicate)?;
+
+        let partitioned_file = indexed_file
+            .partitioned_file()
+            // provide the access plan to the DataSourceExec by
+            // storing it as  "extensions" on PartitionedFile
+            .with_extensions(Arc::new(access_plan) as _);
+
+        let file_source = Arc::new(
+            ParquetSource::default()
+                // provide the predicate to the standard DataFusion source as well so
+                // DataFusion's Parquet reader will apply row group pruning based on
+                // the built-in Parquet metadata (min/max, bloom filters, etc) as well
+                .with_predicate(predicate)
+        );
+        let file_scan_config =
+            FileScanConfigBuilder::new(object_store_url, schema, file_source)
+                .with_limit(limit)
+                .with_projection(projection.cloned())
+                .with_file(partitioned_file)
+                .build();
+
+        // Finally, put it all together into a DataSourceExec
+        Ok(DataSourceExec::from_data_source(file_scan_config))
+    }
+    ...
+}
+</code></pre>
+<h2>Caching Parquet Metadata</h2>
+<p>It is often said that Parquet is unsuitable for low latency query systems
+because the footer must be read and parsed for each query. This is simply not
+true, and <strong>many systems use Parquet for low latency analytics and cache the parsed
+metadata in memory to avoid re-reading and re-parsing the footer for each query</strong>.</p>
+<h3>Caching Parquet Metadata using DataFusion</h3>
+<p>Reusing cached Parquet Metadata is also shown in the <a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/advanced_parquet_index.rs">advanced_parquet_index.rs</a>
+example. The example reads and caches the metadata for each file when the index
+is first built and then uses the cached metadata when reading the files during
+query execution.</p>
+<p>(Note that thanks to <a href="https://nuno-faria.github.io/">Nuno Faria</a>, <a href="https://github.com/jonathanc-n">Jonathan Chen</a>, and <a href="https://github.com/shehabgamin">Shehab Amin</a> the built
+in <a href="https://docs.rs/datafusion/latest/datafusion/datasource/listing/struct.ListingTable.html">ListingTable</a> <code>TableProvider</code> included with DataFusion will cache Parquet
+metadata in the next release of DataFusion (50.0.0). See the <a href="https://github.com/apache/datafusion/issues/17000">mini epic</a> for
+details).</p>
+<p>To avoid reparsing the metadata, first implement a custom
+<a href="https://docs.rs/datafusion/latest/datafusion/datasource/physical_plan/trait.ParquetFileReaderFactory.html">ParquetFileReaderFactory</a> as shown below, again slightly simplified for
+clarity:</p>
+<pre><code class="language-rust">impl ParquetFileReaderFactory for CachedParquetFileReaderFactory {
+    fn create_reader(
+        &amp;self,
+        _partition_index: usize,
+        file_meta: FileMeta,
+        metadata_size_hint: Option&lt;usize&gt;,
+        _metrics: &amp;ExecutionPlanMetricsSet,
+    ) -&gt; Result&lt;Box&lt;dyn AsyncFileReader + Send&gt;&gt; {
+        let filename = file_meta.location();
+
+        // Pass along the information to access the underlying storage
+        // (e.g. S3, GCS, local filesystem, etc)
+        let object_store = Arc::clone(&amp;self.object_store);
+        let mut inner =
+            ParquetObjectReader::new(object_store, file_meta.object_meta.location)
+                .with_file_size(file_meta.object_meta.size);
+
+        // retrieve the pre-parsed metadata from the cache
+        // (which was built when the index was built and is kept in memory)
+        let metadata = self
+            .metadata
+            .get(&amp;filename)
+            .expect("metadata for file not found: {filename}");
+
+        // Return a ParquetReader that uses the cached metadata
+        Ok(Box::new(ParquetReaderWithCache {
+            filename,
+            metadata: Arc::clone(metadata),
+            inner,
+        }))
+    }
+}
+</code></pre>
+<p>Then, in your <a href="https://docs.rs/datafusion/latest/datafusion/datasource/trait.TableProvider.html">TableProvider</a> use the factory to avoid re-reading the metadata
+for each file:</p>
+<pre><code class="language-rust">impl TableProvider for IndexTableProvider {
+    async fn scan(
+        &amp;self,
+        state: &amp;dyn Session,
+        projection: Option&lt;&amp;Vec&lt;usize&gt;&gt;,
+        filters: &amp;[Expr],
+        limit: Option&lt;usize&gt;,
+    ) -&gt; Result&lt;Arc&lt;dyn ExecutionPlan&gt;&gt; {
+        // Configure a factory interface to avoid re-reading the metadata for each file
+        let reader_factory =
+            CachedParquetFileReaderFactory::new(Arc::clone(&amp;self.object_store))
+                .with_file(indexed_file);
+
+        // build the partitioned file (see example above for details)
+        let partitioned_file = ...; 
+
+        // Create the ParquetSource with the predicate and the factory
+        let file_source = Arc::new(
+            ParquetSource::default()
+                // provide the factory to create Parquet reader without re-reading metadata
+                .with_parquet_file_reader_factory(Arc::new(reader_factory)),
+        );
+
+        // Pass along the information needed to read the files
+        let file_scan_config =
+            FileScanConfigBuilder::new(object_store_url, schema, file_source)
+                .with_limit(limit)
+                .with_projection(projection.cloned())
+                .with_file(partitioned_file)
+                .build();
+
+        // Finally, put it all together into a DataSourceExec
+        Ok(DataSourceExec::from_data_source(file_scan_config))
+    }
+    ...
+}
+</code></pre>
+<h2>Conclusion</h2>
+<p>Parquet has the right structure for high performance analytics via hierarchical
+pruning, and it is straightforward to build external indexes to speed up queries
+using DataFusion without changing the file format. If you need to build a custom
+data platform, it has never been easier to build it with Parquet and DataFusion.</p>
+<p>I am a firm believer that data systems of the future will be built on a
+foundation of modular, high quality, open source components such as Parquet,
+Arrow, and DataFusion. We should focus our efforts as a community on
+improving these components rather than building new file formats that are
+optimized for narrow use cases.</p>
+<p>Come Join Us! 🎣 </p>
+<p><a href="https://datafusion.apache.org/contributor-guide/communication.html">
+<img alt="https://datafusion.apache.org/" class="img-responsive" src="/blog/images/logo_original4x.png" width="20%"/>
+</a></p>
+<h2>About the Author</h2>
+<p><a href="https://www.linkedin.com/in/andrewalamb/">Andrew Lamb</a> is a Staff Engineer at
+<a href="https://www.influxdata.com/">InfluxData</a>, and a member of the <a href="https://datafusion.apache.org/">Apache
+DataFusion</a> and <a href="https://arrow.apache.org/">Apache Arrow</a> PMCs. He has been working on
+Databases and related systems more than 20 years.</p>
+<h2>About DataFusion</h2>
+<p><a href="https://datafusion.apache.org/">Apache DataFusion</a> is an extensible query engine toolkit, written
+in Rust, that uses <a href="https://arrow.apache.org/">Apache Arrow</a> as its in-memory format. DataFusion and
+similar technology are part of the next generation &ldquo;Deconstructed Database&rdquo;
+architectures, where new systems are built on a foundation of fast, modular
+components, rather than as a single tightly integrated system.</p>
+<p>The <a href="https://datafusion.apache.org/contributor-guide/communication.html">DataFusion community</a> is always looking for new contributors to help
+improve the project. If you are interested in learning more about how query
+execution works, help document or improve the DataFusion codebase, or just try
+it out, we would love for you to join us.</p>
+<h3>Acknowledgements</h3>
+<p>Thank you to <a href="https://github.com/zhuqi-lucas">Qi Zhu</a>, <a href="https://github.com/adamreeve">Adam Reeve</a>, <a href="https://github.com/JigaoLuo">Jigao Luo</a>, <a href="https://github.com/comphead">Oleks V</a>, <a href="https://github.com/shehabgamin">Shehab Amin</a>, <a href="https://nuno-faria.github.io/">Nuno Faria</a>
+and <a href="https://github.com/Omega359">Bruce Ritchie</a> for their insightful feedback on this blog post.</p>
+<h3>Footnotes</h3>
+<p><a id="footnote1"></a><code>1</code>: This trend is described in more detail in the <a href="https://www.influxdata.com/blog/flight-datafusion-arrow-parquet-fdap-architecture-influxdb/">FDAP Stack</a> blog</p>
+<p><a id="footnote2"></a><code>2</code>: This layout is referred to as <a href="https://www.vldb.org/conf/2001/P169.pdf">PAX in the
+database literature</a> after the first research paper to describe the technique.</p>
+<p><a id="footnote3"></a><code>3</code>: Benchmaxxing (verb): to add specific optimizations that only
+impact benchmark results and are not widely applicable to real world use cases.</p>
+<p><a id="footnote4"></a><code>4</code>: Hive Style Partitioning is a simple and widely used form of indexing based on directory paths, where the directory structure is used to
+store information about the data in the files. For example, a directory structure like <code>year=2025/month=08/day=15/</code> can be used to store data for a specific day
+and the system can quickly rule out directories that do not match the query predicate.</p>
+<p><a id="footnote5"></a><code>5</code>: I am also convinced that we can speed up the process of parsing Parquet footer
+with additional engineering effort (see <a href="https://xiangpeng.systems/">Xiangpeng Hao</a>'s <a href="https://www.influxdata.com/blog/how-good-parquet-wide-tables/">previous blog on the
+topic</a>). <a href="https://github.com/etseidl">Ed Seidl</a> is beginning this effort. See the <a href="https://github.com/apache/arrow-rs/issues/5854">ticket</a> for details.</p>
+<p><a id="footnote6"></a><code>6</code>: ClickBench includes a wide variety of query patterns
+such as point lookups, filters of different selectivity, and aggregations.</p>
+<p><a id="footnote7"></a><code>7</code>: For example, <a href="https://github.com/zhuqi-lucas">Qi Zhu</a> was able to speed up reads by over 2x 
+simply by rewriting the Parquet files with Offset Indexes and no compression (see <a href="https://github.com/apache/datafusion/issues/16149#issuecomment-2918761743">issue #16149 comment</a> for details).
+There is likely significant additional performance available by using Bloom Filters and resorting the data
+to be clustered in a more optimal way for the queries.</p>
+
+    <!--
+        Enable giscuss comments: Allows comments on the blogs posted as
+        https://github.com/apache/datafusion-site/discussions
+
+        More details on https://github.com/apache/datafusion-site/issues/80
+    -->
+    <div id="article_comments">
+        <div id="comment_thread"></div>
+
+        <script src="https://giscus.app/client.js"
+            data-repo="apache/datafusion-site"
+            data-repo-id="R_kgDOL8FTzw"
+            data-category="Announcements"
+            data-category-id="DIC_kwDOL8FTz84Csqua"
+            data-mapping="title"
+            data-strict="1"
+            data-reactions-enabled="1"
+            data-emit-metadata="0"
+            data-input-position="bottom"
+            data-theme="preferred_color_scheme"
+            data-lang="en"
+            data-loading="lazy"
+            crossorigin="anonymous"
+            async>
+        </script>
+    </div>          </div>
+      </div>
+    </div>    
+    <!-- footer -->
+    <div class="row g-0">
+      <div class="col-12">
+        <p style="font-style: italic; font-size: 0.8rem; text-align: center;">
+          Copyright 2025, <a href="https://www.apache.org/">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a>.<br/>
+          Apache&reg; and the Apache feather logo are trademarks of The Apache Software Foundation.
+        </p>
+      </div>
+    </div>
+    <script src="/blog/js/bootstrap.bundle.min.js"></script>  </main>
+  </body>
+</html>
