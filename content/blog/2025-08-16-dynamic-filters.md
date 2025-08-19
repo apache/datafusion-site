@@ -74,7 +74,63 @@ LIMIT 3;
 
 Where `dynamic_filter()` is a structure that initially has the value `true` but will be updated by the TopK operator as the query progresses. Altough I'm showing this example as SQL for illustrative purposes these optimizations are actually done at the physical plan layer - much after SQL is parsed.
 
-## Performance impact
+## Results Summary
 
-Our initial results are very promising but need some analysis to understand.
-Before we made any changes, running [ClickBench Q23](https://github.com/apache/datafusion/blob/main/benchmarks/queries/clickbench/queries/q23.sql) which is very similar to our example takes ~3.7s on an M4 MacBook Pro.
+We've seen upwards of a 10x performance improvement for some queries and no performance regressions.
+The actual numbers depend on a lot of factors which we need to dig into.
+Let's look at some preliminary numbers, using [ClickBench Q23](https://github.com/apache/datafusion/blob/main/benchmarks/queries/clickbench/queries/q23.sql) which is very similar to our earlier examples:
+
+![exeuction-times](../images/dyanmic-filters/execution-time.svg)
+
+Figure 1: Execution times for ClickBench Q23 with and without dynamic filters (DF) and late materialization (LM) for different partitions / core usage. Dynamic filters along show a large improvement but when combined with late materialization we can see up to a 22x improvement in execution time. See appendix for the queries used to generate these results.
+
+Let's go over some of the flags used in the benchmark:
+
+### Dynamic Filters
+
+This is the optimization we spoke about above.
+The TopK operator will generate a filter that is applied to the scan operators, which will first be used to skip rows and then as we open new files (if there are more to open) it will be used to skip entire files that do not match the filter.
+
+### Late Materialization
+
+This optimization has been talked about in the past (see for example [this blog post](./2025-03-21-parquet-pushdown.md)).
+It's particularly effective when combined with dynamic filters because without them there is no tieme based filter to apply during the scan.
+And without late materialization the filter can only be used to prune entire files, which is ineffective for large files or if the order in which files are read is not optimal.
+
+## Appendix
+
+### Queries and Data
+
+#### Figure 1: ClickBench Q23
+
+```sql
+-- Data was downloaded using apache/datafusion -> benchmarks/bench.sh -> ./benchmarks/bench.sh data clickbench_partitioned
+create external table hits stored as parquet location 'benchmarks/data/hits_partitioned';
+
+-- Must set for ClickBench hits_partitioned dataset. See https://github.com/apache/datafusion/issues/16591
+set datafusion.execution.parquet.binary_as_string = true;
+-- Only matters if pushdown_filters is enabled but they don't get enabled together sadly
+set datafusion.execution.parquet.reorder_filters = true;
+
+set datafusion.execution.target_partitions = 1;  -- or set to 12 to use multiple cores
+set datafusion.optimizer.enable_dynamic_filter_pushdown = false;
+set datafusion.execution.parquet.pushdown_filters = false;
+
+explain analyze
+SELECT *
+FROM hits
+WHERE "URL" LIKE '%google%'
+ORDER BY "EventTime"
+LIMIT 10;
+```
+
+| dynamic filters   | late materialization   |   cores |   time (s) |
+|:------------------|:-----------------------|--------:|-----------:|
+| False             | False                  |       1 |     32.039 |
+| False             | True                   |       1 |     16.903 |
+| True              | False                  |       1 |     18.195 |
+| True              | True                   |       1 |      1.42  |
+| False             | False                  |      12 |      5.04  |
+| False             | True                   |      12 |      2.37  |
+| True              | False                  |      12 |      5.055 |
+| True              | True                   |      12 |      0.602 |
