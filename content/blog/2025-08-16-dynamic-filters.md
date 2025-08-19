@@ -112,57 +112,47 @@ TopK operators (a specialization of a sort operator + a limit operator) implemen
 At the query plan level, Q23 looks like this before it is exectuted:
 
 ```text
-+---------------+-------------------------------+
-| plan_type     | plan                          |
-+---------------+-------------------------------+
-| physical_plan | ┌───────────────────────────┐ |
-|               | │       SortExec(TopK)      │ |
-|               | │    --------------------   │ |
-|               | │ EventTime@4 ASC NULLS LAST│ |
-|               | │                           │ |
-|               | │         limit: 10         │ |
-|               | └─────────────┬─────────────┘ |
-|               | ┌─────────────┴─────────────┐ |
-|               | │       DataSourceExec      │ |
-|               | │    --------------------   │ |
-|               | │         files: 100        │ |
-|               | │      format: parquet      │ |
-|               | │                           │ |
-|               | │         predicate:        │ |
-|               | │ CAST(URL AS Utf8View) LIKE│ |
-|               | │      %google% AND true    │ |
-|               | └───────────────────────────┘ |
-|               |                               |
-+---------------+-------------------------------+
+┌───────────────────────────┐
+│       SortExec(TopK)      │
+│    --------------------   │
+│ EventTime@4 ASC NULLS LAST│
+│                           │
+│         limit: 10         │
+└─────────────┬─────────────┘
+┌─────────────┴─────────────┐
+│       DataSourceExec      │
+│    --------------------   │
+│         files: 100        │
+│      format: parquet      │
+│                           │
+│         predicate:        │
+│ CAST(URL AS Utf8View) LIKE│
+│      %google% AND true    │
+└───────────────────────────┘
 ```
 
 You can see the `true` placeholder filter for the dynamic filter in the `predicate` field of the `DataSourceExec` operator. This will be updated by the `SortExec` operator as it processes rows.
 After running the query, the plan looks like this:
 
 ```text
-+---------------+-------------------------------+
-| plan_type     | plan                          |
-+---------------+-------------------------------+
-| physical_plan | ┌───────────────────────────┐ |
-|               | │       SortExec(TopK)      │ |
-|               | │    --------------------   │ |
-|               | │ EventTime@4 ASC NULLS LAST│ |
-|               | │                           │ |
-|               | │         limit: 10         │ |
-|               | └─────────────┬─────────────┘ |
-|               | ┌─────────────┴─────────────┐ |
-|               | │       DataSourceExec      │ |
-|               | │    --------------------   │ |
-|               | │         files: 100        │ |
-|               | │      format: parquet      │ |
-|               | │                           │ |
-|               | │         predicate:        │ |
-|               | │ CAST(URL AS Utf8View) LIKE│ |
-|               | │      %google% AND         │ |
-|               | │ EventTime < 1372713773.0  │ |
-|               | └───────────────────────────┘ |
-|               |                               |
-+---------------+-------------------------------+
+┌───────────────────────────┐
+│       SortExec(TopK)      │
+│    --------------------   │
+│ EventTime@4 ASC NULLS LAST│
+│                           │
+│         limit: 10         │
+└─────────────┬─────────────┘
+┌─────────────┴─────────────┐
+│       DataSourceExec      │
+│    --------------------   │
+│         files: 100        │
+│      format: parquet      │
+│                           │
+│         predicate:        │
+│ CAST(URL AS Utf8View) LIKE│
+│      %google% AND         │
+│ EventTime < 1372713773.0  │
+└───────────────────────────┘
 ```
 
 ## Implementation for Hash Join Operator
@@ -185,50 +175,47 @@ explain select * from small_table join large_table on small_table.k = large_tabl
 ```
 
 ```text
-+---------------+------------------------------------------------------------+
-| physical_plan | ┌───────────────────────────┐                              |
-|               | │    CoalesceBatchesExec    │                              |
-|               | │    --------------------   │                              |
-|               | │     target_batch_size:    │                              |
-|               | │            8192           │                              |
-|               | └─────────────┬─────────────┘                              |
-|               | ┌─────────────┴─────────────┐                              |
-|               | │        HashJoinExec       │                              |
-|               | │    --------------------   ├──────────────┐               |
-|               | │        on: (k = k)        │              │               |
-|               | └─────────────┬─────────────┘              │               |
-|               | ┌─────────────┴─────────────┐┌─────────────┴─────────────┐ |
-|               | │       DataSourceExec      ││    CoalesceBatchesExec    │ |
-|               | │    --------------------   ││    --------------------   │ |
-|               | │          files: 1         ││     target_batch_size:    │ |
-|               | │      format: parquet      ││            8192           │ |
-|               | └───────────────────────────┘└─────────────┬─────────────┘ |
-|               |                              ┌─────────────┴─────────────┐ |
-|               |                              │         FilterExec        │ |
-|               |                              │    --------------------   │ |
-|               |                              │     predicate: v >= 50    │ |
-|               |                              └─────────────┬─────────────┘ |
-|               |                              ┌─────────────┴─────────────┐ |
-|               |                              │      RepartitionExec      │ |
-|               |                              │    --------------------   │ |
-|               |                              │ partition_count(in->out): │ |
-|               |                              │          1 -> 12          │ |
-|               |                              │                           │ |
-|               |                              │    partitioning_scheme:   │ |
-|               |                              │    RoundRobinBatch(12)    │ |
-|               |                              └─────────────┬─────────────┘ |
-|               |                              ┌─────────────┴─────────────┐ |
-|               |                              │       DataSourceExec      │ |
-|               |                              │    --------------------   │ |
-|               |                              │          files: 1         │ |
-|               |                              │      format: parquet      │ |
-|               |                              │                           │ |
-|               |                              │         predicate:        │ |
-|               |                              │      v >= 50 AND.         │ |
-|               |                              │     k >= 1 AND k <= 1000  │ |
-|               |                              └───────────────────────────┘ |
-|               |                                                            |
-+---------------+------------------------------------------------------------+
+┌───────────────────────────┐
+│    CoalesceBatchesExec    │
+│    --------------------   │
+│     target_batch_size:    │
+│            8192           │
+└─────────────┬─────────────┘
+┌─────────────┴─────────────┐
+│        HashJoinExec       │
+│    --------------------   ├──────────────┐
+│        on: (k = k)        │              │
+└─────────────┬─────────────┘              │
+┌─────────────┴─────────────┐┌─────────────┴─────────────┐
+│       DataSourceExec      ││    CoalesceBatchesExec    │
+│    --------------------   ││    --------------------   │
+│          files: 1         ││     target_batch_size:    │
+│      format: parquet      ││            8192           │
+└───────────────────────────┘└─────────────┬─────────────┘
+                              ┌─────────────┴─────────────┐
+                              │         FilterExec        │
+                              │    --------------------   │
+                              │     predicate: v >= 50    │
+                              └─────────────┬─────────────┘
+                              ┌─────────────┴─────────────┐
+                              │      RepartitionExec      │
+                              │    --------------------   │
+                              │ partition_count(in->out): │
+                              │          1 -> 12          │
+                              │                           │
+                              │    partitioning_scheme:   │
+                              │    RoundRobinBatch(12)    │
+                              └─────────────┬─────────────┘
+                              ┌─────────────┴─────────────┐
+                              │       DataSourceExec      │
+                              │    --------------------   │
+                              │          files: 1         │
+                              │      format: parquet      │
+                              │                           │
+                              │         predicate:        │
+                              │      v >= 50 AND.         │
+                              │     k >= 1 AND k <= 1000  │
+                              └───────────────────────────┘
 ```
 
 ## Implementation for Scan Operator
