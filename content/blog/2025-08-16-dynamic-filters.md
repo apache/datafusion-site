@@ -106,6 +106,164 @@ This optimization has been talked about in the past (see for example [this blog 
 It's particularly effective when combined with dynamic filters because without them there is no tieme based filter to apply during the scan.
 And without late materialization the filter can only be used to prune entire files, which is ineffective for large files or if the order in which files are read is not optimal.
 
+## Implementation for TopK Operator
+
+TopK operators (a specialization of a sort operator + a limit operator) implement dynamic filter pushdown by updating a filter each time the heap / topK is updated. The filter is then used to skip rows and files during the scan operator.
+At the query plan level, Q23 looks like this before it is exectuted:
+
+```text
++---------------+-------------------------------+
+| plan_type     | plan                          |
++---------------+-------------------------------+
+| physical_plan | ┌───────────────────────────┐ |
+|               | │       SortExec(TopK)      │ |
+|               | │    --------------------   │ |
+|               | │ EventTime@4 ASC NULLS LAST│ |
+|               | │                           │ |
+|               | │         limit: 10         │ |
+|               | └─────────────┬─────────────┘ |
+|               | ┌─────────────┴─────────────┐ |
+|               | │       DataSourceExec      │ |
+|               | │    --------------------   │ |
+|               | │         files: 100        │ |
+|               | │      format: parquet      │ |
+|               | │                           │ |
+|               | │         predicate:        │ |
+|               | │ CAST(URL AS Utf8View) LIKE│ |
+|               | │      %google% AND true    │ |
+|               | └───────────────────────────┘ |
+|               |                               |
++---------------+-------------------------------+
+```
+
+You can see the `true` placeholder filter for the dynamic filter in the `predicate` field of the `DataSourceExec` operator. This will be updated by the `SortExec` operator as it processes rows.
+After running the query, the plan looks like this:
+
+```text
++---------------+-------------------------------+
+| plan_type     | plan                          |
++---------------+-------------------------------+
+| physical_plan | ┌───────────────────────────┐ |
+|               | │       SortExec(TopK)      │ |
+|               | │    --------------------   │ |
+|               | │ EventTime@4 ASC NULLS LAST│ |
+|               | │                           │ |
+|               | │         limit: 10         │ |
+|               | └─────────────┬─────────────┘ |
+|               | ┌─────────────┴─────────────┐ |
+|               | │       DataSourceExec      │ |
+|               | │    --------------------   │ |
+|               | │         files: 100        │ |
+|               | │      format: parquet      │ |
+|               | │                           │ |
+|               | │         predicate:        │ |
+|               | │ CAST(URL AS Utf8View) LIKE│ |
+|               | │      %google% AND         │ |
+|               | │ EventTime < 1372713773.0  │ |
+|               | └───────────────────────────┘ |
+|               |                               |
++---------------+-------------------------------+
+```
+
+## Implementation for Hash Join Operator
+
+We've also implemented dynamic filters for hash joins, also called "sideways information passing".
+In a Hash Join the query engine picks one side of the join to be the "build" side and the other side to be the "probe" side. The build side is read first and then the probe side is read, using a hash table built from the build side to match rows from the probe side.
+Dynamic filters are used to filter the probe side based on the values from the build side.
+In particular, we take the min/max values from the build side and use them to create a filter that is applied to the probe side.
+This is a very cheap filter to evaluate but when combined with statistics pruning, later materialization and other optimizations it can lead to significant performance improvements (we've observed up to 20x improvements in some queries).
+
+A query plan for a hash join with dynamic filters looks like this after it is executed:
+
+
+```sql
+copy (select i as k from generate_series(1, 1000) t(i)) to 'small_table.parquet';
+copy (select i as k, i as v from generate_series(1, 100000) t(i)) to 'large_table.parquet';
+create external table small_table stored as parquet location 'small_table.parquet';
+create external table large_table stored as parquet location 'large_table.parquet';
+explain select * from small_table join large_table on small_table.k = large_table.k where large_table.v >= 50;
+```
+
+```text
++---------------+------------------------------------------------------------+
+| physical_plan | ┌───────────────────────────┐                              |
+|               | │    CoalesceBatchesExec    │                              |
+|               | │    --------------------   │                              |
+|               | │     target_batch_size:    │                              |
+|               | │            8192           │                              |
+|               | └─────────────┬─────────────┘                              |
+|               | ┌─────────────┴─────────────┐                              |
+|               | │        HashJoinExec       │                              |
+|               | │    --------------------   ├──────────────┐               |
+|               | │        on: (k = k)        │              │               |
+|               | └─────────────┬─────────────┘              │               |
+|               | ┌─────────────┴─────────────┐┌─────────────┴─────────────┐ |
+|               | │       DataSourceExec      ││    CoalesceBatchesExec    │ |
+|               | │    --------------------   ││    --------------------   │ |
+|               | │          files: 1         ││     target_batch_size:    │ |
+|               | │      format: parquet      ││            8192           │ |
+|               | └───────────────────────────┘└─────────────┬─────────────┘ |
+|               |                              ┌─────────────┴─────────────┐ |
+|               |                              │         FilterExec        │ |
+|               |                              │    --------------------   │ |
+|               |                              │     predicate: v >= 50    │ |
+|               |                              └─────────────┬─────────────┘ |
+|               |                              ┌─────────────┴─────────────┐ |
+|               |                              │      RepartitionExec      │ |
+|               |                              │    --------------------   │ |
+|               |                              │ partition_count(in->out): │ |
+|               |                              │          1 -> 12          │ |
+|               |                              │                           │ |
+|               |                              │    partitioning_scheme:   │ |
+|               |                              │    RoundRobinBatch(12)    │ |
+|               |                              └─────────────┬─────────────┘ |
+|               |                              ┌─────────────┴─────────────┐ |
+|               |                              │       DataSourceExec      │ |
+|               |                              │    --------------------   │ |
+|               |                              │          files: 1         │ |
+|               |                              │      format: parquet      │ |
+|               |                              │                           │ |
+|               |                              │         predicate:        │ |
+|               |                              │      v >= 50 AND.         │ |
+|               |                              │     k >= 1 AND k <= 1000  │ |
+|               |                              └───────────────────────────┘ |
+|               |                                                            |
++---------------+------------------------------------------------------------+
+```
+
+## Implementation for Scan Operator
+
+Scan operators do not actually know anything about dynamic filters: we were able to package up dynamic filters as an `Arc<dyn PhysicalExpr>` which is mostly handled by scan operators like any other expression.
+We did however add some new functionality to `PhysicalExpr` to make working with dynamic filters easier:
+
+* `PhysicalExpr::generation() -> u64`: used to track if a tree of filters has changed (e.g. because it has a dynamic filter that has been updated). For example, if we go from `c1 = 'a' AND DynamicFilter [ c2 > 1]` to `c1 = 'a' AND DynamicFilter [ c2 > 2]` the generation value will change so we know if we should re-evaluate the filter against static date like file or row group level statistics. This is used to do early termination of reading a file if the filter is updated mid scan and we can now skip the file, all without needlessly re-evaluating file level statistics all the time.
+* `PhysicalExpr::snapshot() -> Arc<dyn PhysicalExpr>`: used to create a snapshot of the filter at a given point in time. Dynamic filters use this to return the current value of their innner static filter. This can be used to serialize the filter across the wire in the case of distributed queries or to pass to systems that only support more basic filters (e.g. stats pruning rewrites).
+
+This is all encapsulated in the `DynamicFilterPhysicalExpr` struct.
+
+One of the important design decisions was around directionality of information passing and locking: some early designs had the scan polling the source operators on every row / batch, but this causes a lot of overhead.
+Instead we opted for a "push" based model where the read path has minimal locking and the write path (the TopK operator) is responsible for updating the filter.
+Thus `DynamicFilterPhysicalExpr` is essentially an `Arc<RwLock<Arc<dyn PhysicalExpr>>>` which allows the TopK operator to update the filter while the scan operator can read it without blocking.
+
+## Custom `ExectuionPlan` Operators
+
+We went to great efforts to ensure that dynamic filters are not a hardcoded black box that only works for internal operators.
+The DataFusion community is dynamic and the project is used in many different contexts, some with very advanced custom operators specialized for specific use cases.
+To support this we made sure that dynamic filters can be used with custom `ExecutionPlan` operators by implementing a couple of methods in the `ExecutionPlan` trait.
+We've made an extensive library of helper structs and functions that make it only 1-2 lines to implement filter pushdown support or a source of dynamic filters for custom operators.
+
+This approach has already paid off: we've had multiple community members implement support for dynamic filter pushdown in just the first few months of this feature being available.
+
+## Future Work
+
+Although we've made great progress and DataFusion now has one of the most advanced dynamic filter / sideways information passing implementations that we know of we are not done yet!
+
+There's a multitude of areas of future improvement that we are looking into:
+
+* Support for more types of joins: we only implemented support for hash inner joins so far. There's the potential to expand this to other join types both in terms of the physical implementation (nested loop joins, etc.) and join type (e.g. left outer joins, cross joins, etc.).
+* Push down entire hash tables to the scan operator: this could potentially help a lot with join keys that are not naturally ordered or have a lot of skew.
+* Use file level statistics to order files to match the `ORDER BY` clause as best we can: this will help TopK dynamic filters be more effective by skipping more work earlier in the scan.
+
 ## Appendix
 
 ### Queries and Data
