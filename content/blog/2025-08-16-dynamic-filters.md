@@ -82,7 +82,16 @@ Let's look at some preliminary numbers, using [ClickBench Q23](https://github.co
 
 ![exeuction-times](../images/dyanmic-filters/execution-time.svg)
 
-Figure 1: Execution times for ClickBench Q23 with and without dynamic filters (DF) and late materialization (LM) for different partitions / core usage. Dynamic filters along show a large improvement but when combined with late materialization we can see up to a 22x improvement in execution time. See appendix for the queries used to generate these results.
+<div class="text-center">
+<img 
+  src="/blog/images/dyanmic-filters/execution-time.svg" 
+  width="80%" 
+  class="img-responsive" 
+  alt="Q23 Performance Improvement with Dynamic Filters and Late Materialization"
+/>
+</div>
+
+**Figure 1**: Execution times for ClickBench Q23 with and without dynamic filters (DF) and late materialization (LM) for different partitions / core usage. Dynamic filters along show a large improvement but when combined with late materialization we can see up to a 22x improvement in execution time. See appendix for the queries used to generate these results.
 
 Let's go over some of the flags used in the benchmark:
 
