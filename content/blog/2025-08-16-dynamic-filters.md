@@ -72,7 +72,7 @@ ORDER BY start_timestamp DESC
 LIMIT 3;
 ```
 
-Where `dynamic_filter()` is a structure that initially has the value `true` but will be updated by the TopK operator as the query progresses. Altough I'm showing this example as SQL for illustrative purposes these optimizations are actually done at the physical plan layer - much after SQL is parsed.
+Where `dynamic_filter()` is a structure that initially has the value `true` but will be updated by the TopK operator as the query progresses. Although I'm showing this example as SQL for illustrative purposes these optimizations are actually done at the physical plan layer - much after SQL is parsed.
 
 ## Results Summary
 
