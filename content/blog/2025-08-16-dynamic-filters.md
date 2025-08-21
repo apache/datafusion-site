@@ -80,7 +80,7 @@ We've seen upwards of a 10x performance improvement for some queries and no perf
 The actual numbers depend on a lot of factors which we need to dig into.
 Let's look at some preliminary numbers, using [ClickBench Q23](https://github.com/apache/datafusion/blob/main/benchmarks/queries/clickbench/queries/q23.sql) which is very similar to our earlier examples:
 
-![exeuction-times](../images/dyanmic-filters/execution-time.svg)
+![execution-times](../images/dyanmic-filters/execution-time.svg)
 
 <div class="text-center">
 <img 
