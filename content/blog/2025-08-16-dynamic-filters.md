@@ -232,7 +232,7 @@ One of the important design decisions was around directionality of information p
 Instead we opted for a "push" based model where the read path has minimal locking and the write path (the TopK operator) is responsible for updating the filter.
 Thus `DynamicFilterPhysicalExpr` is essentially an `Arc<RwLock<Arc<dyn PhysicalExpr>>>` which allows the TopK operator to update the filter while the scan operator can read it without blocking.
 
-## Custom `ExectuionPlan` Operators
+## Custom `ExecutionPlan` Operators
 
 We went to great efforts to ensure that dynamic filters are not a hardcoded black box that only works for internal operators.
 The DataFusion community is dynamic and the project is used in many different contexts, some with very advanced custom operators specialized for specific use cases.
