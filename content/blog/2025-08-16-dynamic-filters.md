@@ -213,7 +213,7 @@ explain select * from small_table join large_table on small_table.k = large_tabl
                               │      format: parquet      │
                               │                           │
                               │         predicate:        │
-                              │      v >= 50 AND.         │
+                              │      v >= 50 AND          │
                               │     k >= 1 AND k <= 1000  │
                               └───────────────────────────┘
 ```
