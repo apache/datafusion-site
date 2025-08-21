@@ -109,7 +109,7 @@ And without late materialization the filter can only be used to prune entire fil
 ## Implementation for TopK Operator
 
 TopK operators (a specialization of a sort operator + a limit operator) implement dynamic filter pushdown by updating a filter each time the heap / topK is updated. The filter is then used to skip rows and files during the scan operator.
-At the query plan level, Q23 looks like this before it is exectuted:
+At the query plan level, Q23 looks like this before it is executed:
 
 ```text
 ┌───────────────────────────┐
