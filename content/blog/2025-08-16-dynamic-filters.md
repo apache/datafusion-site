@@ -26,7 +26,7 @@ limitations under the License.
 
 <!-- diagrams source https://docs.google.com/presentation/d/1e_Z_F8nt2rcvlNvhU11khF5lzJJVqNtqtyJ-G3mp4-Q -->
 
-This blog posts introduces a powerful query engine optimization technique called dynamic filters or sideways information passing. We implemented this optimization in DataFusion as a community effort with care to support custom operators and distributed usage. These optimizations (and related work) have resulted in order of magnitude imoprovemnts for some query patterns.
+This blog post introduces a powerful query engine optimization technique called dynamic filters or sideways information passing. We implemented this optimization in DataFusion as a community effort with care to support custom operators and distributed usage. These optimizations (and related work) have resulted in order of magnitude improvements for some query patterns.
 
 ## Motivation
 
