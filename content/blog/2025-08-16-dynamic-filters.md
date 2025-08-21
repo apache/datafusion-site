@@ -103,7 +103,7 @@ The TopK operator will generate a filter that is applied to the scan operators, 
 ### Late Materialization
 
 This optimization has been talked about in the past (see for example [this blog post](./2025-03-21-parquet-pushdown.md)).
-It's particularly effective when combined with dynamic filters because without them there is no tieme based filter to apply during the scan.
+It's particularly effective when combined with dynamic filters because without them there is no time based filter to apply during the scan.
 And without late materialization the filter can only be used to prune entire files, which is ineffective for large files or if the order in which files are read is not optimal.
 
 ## Implementation for TopK Operator
