@@ -84,7 +84,7 @@ Let's look at some preliminary numbers, using [ClickBench Q23](https://github.co
 
 <div class="text-center">
 <img 
-  src="/blog/images/dyanmic-filters/execution-time.svg" 
+  src="/blog/images/dynamic-filters/execution-time.svg" 
   width="80%" 
   class="img-responsive" 
   alt="Q23 Performance Improvement with Dynamic Filters and Late Materialization"
