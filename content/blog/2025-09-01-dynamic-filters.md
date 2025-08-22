@@ -46,7 +46,7 @@ Importantly DataFusion had no early termination here: it would read the *entire*
 
 You can see how this is a problem if you have 2 years worth of data: the largest `1000` start timestamps are probably all within the first couple of files read, but even if we have 1000 timestamps on August 16th 2025 we'll keep reading files that have all of their timestamps in 2024 just to make sure.
 
-Looking through the DataFusion issues we found that Influx has a similar issue that they've solved with an operator called [`SortPreservingMerge`](https://github.com/apache/datafusion/issues/15191), but that requires that the data is already sorted and requires some careful analysis of ordering to prove that it can be used. That is not the case for our data (and a lot of other datasets out there): data can tend to be *roughly* sorted (e.g. if you append to files as you receive it) but that does not guarantee that it is fully sorted, including between files. We brought this up with the community which ultimately resulted in us opening [an issue describing a possible solution](https://github.com/apache/datafusion/issues/15037) which we deemed "dynamic filters". The basic idea is to create a link between the state of the `TopK` operator and a filter that is applied when opening files and during scans. For example, let's say our `TopK` heap for an `ORDER BY start_timetsamp LIMIT 3` has the values:
+Looking through the DataFusion issues we found that Influx has a similar issue that they've solved with an operator called [`ProgressiveEvalExec`](https://github.com/apache/datafusion/issues/15191), but that requires that the data is already sorted and requires some careful analysis of ordering to prove that it can be used. That is not the case for our data (and a lot of other datasets out there): data can tend to be *roughly* sorted (e.g. if you append to files as you receive it) but that does not guarantee that it is fully sorted, including between files. We brought this up with the community which ultimately resulted in us opening [an issue describing a possible solution](https://github.com/apache/datafusion/issues/15037) which we deemed "dynamic filters". The basic idea is to create a link between the state of the `TopK` operator and a filter that is applied when opening files and during scans. For example, let's say our `TopK` heap for an `ORDER BY start_timetsamp LIMIT 3` has the values:
 
 | start_timestamp          |
 |--------------------------|
@@ -288,3 +288,28 @@ LIMIT 10;
 | False             | True                   |      12 |      2.37  |
 | True              | False                  |      12 |      5.055 |
 | True              | True                   |      12 |      0.602 |
+
+
+
+## About the Author
+
+[Adrian Garcia Badaracco](https://www.linkedin.com/in/adrian-garcia-badaracco/) is a Founding Engineer at
+[Pydantic](https://pydantic.dev/), and an [Apache
+DataFusion](https://datafusion.apache.org/) committer. 
+
+## About DataFusion
+
+[Apache DataFusion] is an extensible query engine toolkit, written
+in Rust, that uses [Apache Arrow] as its in-memory format. DataFusion and
+similar technology are part of the next generation “Deconstructed Database”
+architectures, where new systems are built on a foundation of fast, modular
+components, rather than as a single tightly integrated system.
+
+The [DataFusion community] is always looking for new contributors to help
+improve the project. If you are interested in learning more about how query
+execution works, help document or improve the DataFusion codebase, or just try
+it out, we would love for you to join us.
+
+[Apache Arrow]: https://arrow.apache.org/
+[Apache DataFusion]: https://datafusion.apache.org/
+[DataFusion community]: https://datafusion.apache.org/contributor-guide/communication.html
