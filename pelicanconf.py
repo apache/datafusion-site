@@ -68,6 +68,7 @@ FEED_RSS = "feed.xml"
 MARKDOWN = {
     'extension_configs': {
         'markdown.extensions.fenced_code': {},
+        'markdown.extensions.tables': {},
     },
     'output_format': 'html5',
 }
