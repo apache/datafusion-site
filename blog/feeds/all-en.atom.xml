@@ -1,5 +1,311 @@
 <?xml version="1.0" encoding="utf-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog</title><link href="https://datafusion.apache.org/blog/" rel="alternate"></link><link href="https://datafusion.apache.org/blog/feeds/all-en.atom.xml" rel="self"></link><id>https://datafusion.apache.org/blog/</id><updated>2025-08-15T00:00:00+00:00</updated><subtitle></subtitle><entry><title>Using External Indexes, Metadata Stores, Catalogs and Caches to Accelerate Queries on Apache Parquet</title><link href="https://datafusion.apache.org/blog/2025/08/15/external-parquet-indexes" rel="alternate"></link><published>2025-08-15T00:00:00+00:00</published><updated>2025-08-15T00:00:00+00:00</updated><author><name>Andrew Lamb (InfluxData)</name></author><id>tag:datafusion.apache.org,2025-08-15:/blog/2025/08/15/external-parquet-indexes</id><summary type="html">&lt;!--
+<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog</title><link href="https://datafusion.apache.org/blog/" rel="alternate"></link><link href="https://datafusion.apache.org/blog/feeds/all-en.atom.xml" rel="self"></link><id>https://datafusion.apache.org/blog/</id><updated>2025-09-01T00:00:00+00:00</updated><subtitle></subtitle><entry><title>Dynamic Filters: Passing Information Between Operators During Execution for 10x Faster Queries</title><link href="https://datafusion.apache.org/blog/2025/09/01/dynamic-filters" rel="alternate"></link><published>2025-09-01T00:00:00+00:00</published><updated>2025-09-01T00:00:00+00:00</updated><author><name>Adrian Garcia Badaracco (Pydantic)</name></author><id>tag:datafusion.apache.org,2025-09-01:/blog/2025/09/01/dynamic-filters</id><summary type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+&lt;!-- 
+diagrams source TODO
+--&gt;
+&lt;p&gt;This blog post introduces a powerful query engine optimization technique called dynamic filters or sideways information passing. We implemented this optimization in DataFusion as a community effort with care to support custom operators and distributed usage. These optimizations (and related work) have resulted in order of magnitude improvements for some …&lt;/p&gt;</summary><content type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+&lt;!-- 
+diagrams source TODO
+--&gt;
+&lt;p&gt;This blog post introduces a powerful query engine optimization technique called dynamic filters or sideways information passing. We implemented this optimization in DataFusion as a community effort with care to support custom operators and distributed usage. These optimizations (and related work) have resulted in order of magnitude improvements for some query patterns.&lt;/p&gt;
+&lt;h2&gt;Motivation&lt;/h2&gt;
+&lt;p&gt;Our main commercial product at &lt;a href="https://pydantic.dev/logfire"&gt;Pydantic&lt;/a&gt; is an observability platform built on DataFusion. One of the most common workflows / queries is "show me the last K traces" which translates to something along the lines of:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT *
+FROM records
+ORDER BY start_timestamp DESC
+LIMIT 1000;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;We noticed this was &lt;em&gt;pretty slow&lt;/em&gt; for us, and came to the finding that DataFusion runs this query by reading the &lt;em&gt;entire&lt;/em&gt; &lt;code&gt;records&lt;/code&gt; table and sorting it. It uses a specialized sort operator called a &lt;code&gt;TopK&lt;/code&gt; that only keeps ~ &lt;code&gt;K&lt;/code&gt; rows in memory: every new batch that gets read is compared against the &lt;code&gt;K&lt;/code&gt; largest (in the case of an &lt;code&gt;DESC&lt;/code&gt; order; compared by the sort key, in this case &lt;code&gt;start_timestamp&lt;/code&gt;) and then those &lt;code&gt;K&lt;/code&gt; rows possibly get replaced with any new rows that were larger.
+Importantly DataFusion had no early termination here: it would read the &lt;em&gt;entire&lt;/em&gt; &lt;code&gt;records&lt;/code&gt; table even if it already had &lt;code&gt;K&lt;/code&gt; rows because it had to verify that there could not possibly be any other rows that are have a larger &lt;code&gt;start_timestamp&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;You can see how this is a problem if you have 2 years worth of data: the largest &lt;code&gt;1000&lt;/code&gt; start timestamps are probably all within the first couple of files read, but even if we have 1000 timestamps on August 16th 2025 we'll keep reading files that have all of their timestamps in 2024 just to make sure.&lt;/p&gt;
+&lt;p&gt;Looking through the DataFusion issues we found that Influx has a similar issue that they've solved with an operator called &lt;a href="https://github.com/apache/datafusion/issues/15191"&gt;&lt;code&gt;SortPreservingMerge&lt;/code&gt;&lt;/a&gt;, but that requires that the data is already sorted and requires some careful analysis of ordering to prove that it can be used. That is not the case for our data (and a lot of other datasets out there): data can tend to be &lt;em&gt;roughly&lt;/em&gt; sorted (e.g. if you append to files as you receive it) but that does not guarantee that it is fully sorted, including between files. We brought this up with the community which ultimately resulted in us opening &lt;a href="https://github.com/apache/datafusion/issues/15037"&gt;an issue describing a possible solution&lt;/a&gt; which we deemed "dynamic filters". The basic idea is to create a link between the state of the &lt;code&gt;TopK&lt;/code&gt; operator and a filter that is applied when opening files and during scans. For example, let's say our &lt;code&gt;TopK&lt;/code&gt; heap for an &lt;code&gt;ORDER BY start_timetsamp LIMIT 3&lt;/code&gt; has the values:&lt;/p&gt;
+&lt;table class="table"&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;start_timestamp&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;2025-08-16T20:35:15.00Z&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;2025-08-16T20:35:14.00Z&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;2025-08-16T20:35:13.00Z&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;We'd generate a filter from these values of the form &lt;code&gt;start_timestamp &amp;gt; '2025-08-16T20:35:13.00Z'&lt;/code&gt;, if that was placed into the query would look like:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT *
+FROM records
+WHERE start_timestamp &amp;gt; '2025-08-16T20:35:13.00Z'
+ORDER BY start_timestamp DESC
+LIMIT 3;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;But obviously when we start running the query we don't have the value &lt;code&gt;'2025-08-16T20:35:13.00Z'&lt;/code&gt; so what we do is put in a placeholder value, you can think of it as:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT *
+FROM records
+WHERE dynamic_filter()
+ORDER BY start_timestamp DESC
+LIMIT 3;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Where &lt;code&gt;dynamic_filter()&lt;/code&gt; is a structure that initially has the value &lt;code&gt;true&lt;/code&gt; but will be updated by the TopK operator as the query progresses. Although I'm showing this example as SQL for illustrative purposes these optimizations are actually done at the physical plan layer - much after SQL is parsed.&lt;/p&gt;
+&lt;h2&gt;Results Summary&lt;/h2&gt;
+&lt;p&gt;We've seen upwards of a 10x performance improvement for some queries and no performance regressions.
+The actual numbers depend on a lot of factors which we need to dig into.
+Let's look at some preliminary numbers, using &lt;a href="https://github.com/apache/datafusion/blob/main/benchmarks/queries/clickbench/queries/q23.sql"&gt;ClickBench Q23&lt;/a&gt; which is very similar to our earlier examples:&lt;/p&gt;
+&lt;div class="text-center"&gt;
+&lt;img alt="Q23 Performance Improvement with Dynamic Filters and Late Materialization" class="img-responsive" src="/blog/images/dynamic-filters/execution-time.svg" width="80%"/&gt;
+&lt;/div&gt;
+&lt;p&gt;&lt;strong&gt;Figure 1&lt;/strong&gt;: Execution times for ClickBench Q23 with and without dynamic filters (DF) and late materialization (LM) for different partitions / core usage. Dynamic filters along show a large improvement but when combined with late materialization we can see up to a 22x improvement in execution time. See appendix for the queries used to generate these results.&lt;/p&gt;
+&lt;p&gt;Let's go over some of the flags used in the benchmark:&lt;/p&gt;
+&lt;h3&gt;Dynamic Filters&lt;/h3&gt;
+&lt;p&gt;This is the optimization we spoke about above.
+The TopK operator will generate a filter that is applied to the scan operators, which will first be used to skip rows and then as we open new files (if there are more to open) it will be used to skip entire files that do not match the filter.&lt;/p&gt;
+&lt;h3&gt;Late Materialization&lt;/h3&gt;
+&lt;p&gt;This optimization has been talked about in the past (see for example &lt;a href="./2025-03-21-parquet-pushdown.md"&gt;this blog post&lt;/a&gt;).
+It's particularly effective when combined with dynamic filters because without them there is no time based filter to apply during the scan.
+And without late materialization the filter can only be used to prune entire files, which is ineffective for large files or if the order in which files are read is not optimal.&lt;/p&gt;
+&lt;h2&gt;Implementation for TopK Operator&lt;/h2&gt;
+&lt;p&gt;TopK operators (a specialization of a sort operator + a limit operator) implement dynamic filter pushdown by updating a filter each time the heap / topK is updated. The filter is then used to skip rows and files during the scan operator.
+At the query plan level, Q23 looks like this before it is executed:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-text"&gt;&amp;boxdr;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxdl;
+&amp;boxv;       SortExec(TopK)      &amp;boxv;
+&amp;boxv;    --------------------   &amp;boxv;
+&amp;boxv; EventTime@4 ASC NULLS LAST&amp;boxv;
+&amp;boxv;                           &amp;boxv;
+&amp;boxv;         limit: 10         &amp;boxv;
+&amp;boxur;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxhd;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxul;
+&amp;boxdr;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxhu;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxdl;
+&amp;boxv;       DataSourceExec      &amp;boxv;
+&amp;boxv;    --------------------   &amp;boxv;
+&amp;boxv;         files: 100        &amp;boxv;
+&amp;boxv;      format: parquet      &amp;boxv;
+&amp;boxv;                           &amp;boxv;
+&amp;boxv;         predicate:        &amp;boxv;
+&amp;boxv; CAST(URL AS Utf8View) LIKE&amp;boxv;
+&amp;boxv;      %google% AND true    &amp;boxv;
+&amp;boxur;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxul;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;You can see the &lt;code&gt;true&lt;/code&gt; placeholder filter for the dynamic filter in the &lt;code&gt;predicate&lt;/code&gt; field of the &lt;code&gt;DataSourceExec&lt;/code&gt; operator. This will be updated by the &lt;code&gt;SortExec&lt;/code&gt; operator as it processes rows.
+After running the query, the plan looks like this:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-text"&gt;&amp;boxdr;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxdl;
+&amp;boxv;       SortExec(TopK)      &amp;boxv;
+&amp;boxv;    --------------------   &amp;boxv;
+&amp;boxv; EventTime@4 ASC NULLS LAST&amp;boxv;
+&amp;boxv;                           &amp;boxv;
+&amp;boxv;         limit: 10         &amp;boxv;
+&amp;boxur;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxhd;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxul;
+&amp;boxdr;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxhu;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxdl;
+&amp;boxv;       DataSourceExec      &amp;boxv;
+&amp;boxv;    --------------------   &amp;boxv;
+&amp;boxv;         files: 100        &amp;boxv;
+&amp;boxv;      format: parquet      &amp;boxv;
+&amp;boxv;                           &amp;boxv;
+&amp;boxv;         predicate:        &amp;boxv;
+&amp;boxv; CAST(URL AS Utf8View) LIKE&amp;boxv;
+&amp;boxv;      %google% AND         &amp;boxv;
+&amp;boxv; EventTime &amp;lt; 1372713773.0  &amp;boxv;
+&amp;boxur;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxul;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2&gt;Implementation for Hash Join Operator&lt;/h2&gt;
+&lt;p&gt;We've also implemented dynamic filters for hash joins, also called "sideways information passing".
+In a Hash Join the query engine picks one side of the join to be the "build" side and the other side to be the "probe" side. The build side is read first and then the probe side is read, using a hash table built from the build side to match rows from the probe side.
+Dynamic filters are used to filter the probe side based on the values from the build side.
+In particular, we take the min/max values from the build side and use them to create a filter that is applied to the probe side.
+This is a very cheap filter to evaluate but when combined with statistics pruning, later materialization and other optimizations it can lead to significant performance improvements (we've observed up to 20x improvements in some queries).&lt;/p&gt;
+&lt;p&gt;A query plan for a hash join with dynamic filters looks like this after it is executed:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;copy (select i as k from generate_series(1, 1000) t(i)) to 'small_table.parquet';
+copy (select i as k, i as v from generate_series(1, 100000) t(i)) to 'large_table.parquet';
+create external table small_table stored as parquet location 'small_table.parquet';
+create external table large_table stored as parquet location 'large_table.parquet';
+explain select * from small_table join large_table on small_table.k = large_table.k where large_table.v &amp;gt;= 50;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;pre&gt;&lt;code class="language-text"&gt;&amp;boxdr;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxdl;
+&amp;boxv;    CoalesceBatchesExec    &amp;boxv;
+&amp;boxv;    --------------------   &amp;boxv;
+&amp;boxv;     target_batch_size:    &amp;boxv;
+&amp;boxv;            8192           &amp;boxv;
+&amp;boxur;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxhd;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxul;
+&amp;boxdr;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxhu;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxdl;
+&amp;boxv;        HashJoinExec       &amp;boxv;
+&amp;boxv;    --------------------   &amp;boxvr;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxdl;
+&amp;boxv;        on: (k = k)        &amp;boxv;              &amp;boxv;
+&amp;boxur;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxhd;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxul;              &amp;boxv;
+&amp;boxdr;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxhu;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxdl;&amp;boxdr;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxhu;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxdl;
+&amp;boxv;       DataSourceExec      &amp;boxv;&amp;boxv;    CoalesceBatchesExec    &amp;boxv;
+&amp;boxv;    --------------------   &amp;boxv;&amp;boxv;    --------------------   &amp;boxv;
+&amp;boxv;          files: 1         &amp;boxv;&amp;boxv;     target_batch_size:    &amp;boxv;
+&amp;boxv;      format: parquet      &amp;boxv;&amp;boxv;            8192           &amp;boxv;
+&amp;boxur;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxul;&amp;boxur;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxhd;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxul;
+                              &amp;boxdr;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxhu;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxdl;
+                              &amp;boxv;         FilterExec        &amp;boxv;
+                              &amp;boxv;    --------------------   &amp;boxv;
+                              &amp;boxv;     predicate: v &amp;gt;= 50    &amp;boxv;
+                              &amp;boxur;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxhd;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxul;
+                              &amp;boxdr;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxhu;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxdl;
+                              &amp;boxv;      RepartitionExec      &amp;boxv;
+                              &amp;boxv;    --------------------   &amp;boxv;
+                              &amp;boxv; partition_count(in-&amp;gt;out): &amp;boxv;
+                              &amp;boxv;          1 -&amp;gt; 12          &amp;boxv;
+                              &amp;boxv;                           &amp;boxv;
+                              &amp;boxv;    partitioning_scheme:   &amp;boxv;
+                              &amp;boxv;    RoundRobinBatch(12)    &amp;boxv;
+                              &amp;boxur;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxhd;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxul;
+                              &amp;boxdr;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxhu;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxdl;
+                              &amp;boxv;       DataSourceExec      &amp;boxv;
+                              &amp;boxv;    --------------------   &amp;boxv;
+                              &amp;boxv;          files: 1         &amp;boxv;
+                              &amp;boxv;      format: parquet      &amp;boxv;
+                              &amp;boxv;                           &amp;boxv;
+                              &amp;boxv;         predicate:        &amp;boxv;
+                              &amp;boxv;      v &amp;gt;= 50 AND.         &amp;boxv;
+                              &amp;boxv;     k &amp;gt;= 1 AND k &amp;lt;= 1000  &amp;boxv;
+                              &amp;boxur;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxul;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2&gt;Implementation for Scan Operator&lt;/h2&gt;
+&lt;p&gt;Scan operators do not actually know anything about dynamic filters: we were able to package up dynamic filters as an &lt;code&gt;Arc&amp;lt;dyn PhysicalExpr&amp;gt;&lt;/code&gt; which is mostly handled by scan operators like any other expression.
+We did however add some new functionality to &lt;code&gt;PhysicalExpr&lt;/code&gt; to make working with dynamic filters easier:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;PhysicalExpr::generation() -&amp;gt; u64&lt;/code&gt;: used to track if a tree of filters has changed (e.g. because it has a dynamic filter that has been updated). For example, if we go from &lt;code&gt;c1 = 'a' AND DynamicFilter [ c2 &amp;gt; 1]&lt;/code&gt; to &lt;code&gt;c1 = 'a' AND DynamicFilter [ c2 &amp;gt; 2]&lt;/code&gt; the generation value will change so we know if we should re-evaluate the filter against static date like file or row group level statistics. This is used to do early termination of reading a file if the filter is updated mid scan and we can now skip the file, all without needlessly re-evaluating file level statistics all the time.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;PhysicalExpr::snapshot() -&amp;gt; Arc&amp;lt;dyn PhysicalExpr&amp;gt;&lt;/code&gt;: used to create a snapshot of the filter at a given point in time. Dynamic filters use this to return the current value of their innner static filter. This can be used to serialize the filter across the wire in the case of distributed queries or to pass to systems that only support more basic filters (e.g. stats pruning rewrites).&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;This is all encapsulated in the &lt;code&gt;DynamicFilterPhysicalExpr&lt;/code&gt; struct.&lt;/p&gt;
+&lt;p&gt;One of the important design decisions was around directionality of information passing and locking: some early designs had the scan polling the source operators on every row / batch, but this causes a lot of overhead.
+Instead we opted for a "push" based model where the read path has minimal locking and the write path (the TopK operator) is responsible for updating the filter.
+Thus &lt;code&gt;DynamicFilterPhysicalExpr&lt;/code&gt; is essentially an &lt;code&gt;Arc&amp;lt;RwLock&amp;lt;Arc&amp;lt;dyn PhysicalExpr&amp;gt;&amp;gt;&amp;gt;&lt;/code&gt; which allows the TopK operator to update the filter while the scan operator can read it without blocking.&lt;/p&gt;
+&lt;h2&gt;Custom &lt;code&gt;ExectuionPlan&lt;/code&gt; Operators&lt;/h2&gt;
+&lt;p&gt;We went to great efforts to ensure that dynamic filters are not a hardcoded black box that only works for internal operators.
+The DataFusion community is dynamic and the project is used in many different contexts, some with very advanced custom operators specialized for specific use cases.
+To support this we made sure that dynamic filters can be used with custom &lt;code&gt;ExecutionPlan&lt;/code&gt; operators by implementing a couple of methods in the &lt;code&gt;ExecutionPlan&lt;/code&gt; trait.
+We've made an extensive library of helper structs and functions that make it only 1-2 lines to implement filter pushdown support or a source of dynamic filters for custom operators.&lt;/p&gt;
+&lt;p&gt;This approach has already paid off: we've had multiple community members implement support for dynamic filter pushdown in just the first few months of this feature being available.&lt;/p&gt;
+&lt;h2&gt;Future Work&lt;/h2&gt;
+&lt;p&gt;Although we've made great progress and DataFusion now has one of the most advanced dynamic filter / sideways information passing implementations that we know of we are not done yet!&lt;/p&gt;
+&lt;p&gt;There's a multitude of areas of future improvement that we are looking into:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Support for more types of joins: we only implemented support for hash inner joins so far. There's the potential to expand this to other join types both in terms of the physical implementation (nested loop joins, etc.) and join type (e.g. left outer joins, cross joins, etc.).&lt;/li&gt;
+&lt;li&gt;Push down entire hash tables to the scan operator: this could potentially help a lot with join keys that are not naturally ordered or have a lot of skew.&lt;/li&gt;
+&lt;li&gt;Use file level statistics to order files to match the &lt;code&gt;ORDER BY&lt;/code&gt; clause as best we can: this will help TopK dynamic filters be more effective by skipping more work earlier in the scan.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;Appendix&lt;/h2&gt;
+&lt;h3&gt;Queries and Data&lt;/h3&gt;
+&lt;h4&gt;Figure 1: ClickBench Q23&lt;/h4&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;-- Data was downloaded using apache/datafusion -&amp;gt; benchmarks/bench.sh -&amp;gt; ./benchmarks/bench.sh data clickbench_partitioned
+create external table hits stored as parquet location 'benchmarks/data/hits_partitioned';
+
+-- Must set for ClickBench hits_partitioned dataset. See https://github.com/apache/datafusion/issues/16591
+set datafusion.execution.parquet.binary_as_string = true;
+-- Only matters if pushdown_filters is enabled but they don't get enabled together sadly
+set datafusion.execution.parquet.reorder_filters = true;
+
+set datafusion.execution.target_partitions = 1;  -- or set to 12 to use multiple cores
+set datafusion.optimizer.enable_dynamic_filter_pushdown = false;
+set datafusion.execution.parquet.pushdown_filters = false;
+
+explain analyze
+SELECT *
+FROM hits
+WHERE "URL" LIKE '%google%'
+ORDER BY "EventTime"
+LIMIT 10;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;table class="table"&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th style="text-align: left;"&gt;dynamic filters&lt;/th&gt;
+&lt;th style="text-align: left;"&gt;late materialization&lt;/th&gt;
+&lt;th style="text-align: right;"&gt;cores&lt;/th&gt;
+&lt;th style="text-align: right;"&gt;time (s)&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td style="text-align: left;"&gt;False&lt;/td&gt;
+&lt;td style="text-align: left;"&gt;False&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;1&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;32.039&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style="text-align: left;"&gt;False&lt;/td&gt;
+&lt;td style="text-align: left;"&gt;True&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;1&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;16.903&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style="text-align: left;"&gt;True&lt;/td&gt;
+&lt;td style="text-align: left;"&gt;False&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;1&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;18.195&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style="text-align: left;"&gt;True&lt;/td&gt;
+&lt;td style="text-align: left;"&gt;True&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;1&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;1.42&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style="text-align: left;"&gt;False&lt;/td&gt;
+&lt;td style="text-align: left;"&gt;False&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;12&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;5.04&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style="text-align: left;"&gt;False&lt;/td&gt;
+&lt;td style="text-align: left;"&gt;True&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;12&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;2.37&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style="text-align: left;"&gt;True&lt;/td&gt;
+&lt;td style="text-align: left;"&gt;False&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;12&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;5.055&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style="text-align: left;"&gt;True&lt;/td&gt;
+&lt;td style="text-align: left;"&gt;True&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;12&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;0.602&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;</content><category term="blog"></category></entry><entry><title>Using External Indexes, Metadata Stores, Catalogs and Caches to Accelerate Queries on Apache Parquet</title><link href="https://datafusion.apache.org/blog/2025/08/15/external-parquet-indexes" rel="alternate"></link><published>2025-08-15T00:00:00+00:00</published><updated>2025-08-15T00:00:00+00:00</updated><author><name>Andrew Lamb (InfluxData)</name></author><id>tag:datafusion.apache.org,2025-08-15:/blog/2025/08/15/external-parquet-indexes</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -1218,7 +1524,7 @@ limitations under the License.
 &lt;hr/&gt;
 &lt;p&gt;A &lt;strong&gt;distinct value index&lt;/strong&gt; stores the unique values of a specific column. This type of index is effective for columns with a small number of distinct values and can be used to quickly skip files that do not match the query. These indexes are popular in several engines, such as the &lt;a href="https://clickhouse.com/docs/optimize/skipping-indexes#set"&gt;"set" Skip Index in ClickHouse&lt;/a&gt; and the &lt;a href="https://docs.influxdata.com/influxdb3/enterprise/admin/distinct-value-cache/"&gt;Distinct Value Cache&lt;/a&gt; in InfluxDB 3.0.&lt;/p&gt;
 &lt;p&gt;For example, if the files contain a column named &lt;code&gt;Category&lt;/code&gt; like this:&lt;/p&gt;
-&lt;table style="border-collapse:collapse;"&gt;
+&lt;table class="table" style="border-collapse:collapse;"&gt;
 &lt;tr&gt;
 &lt;td style="border:1px solid #888;padding:2px 6px;"&gt;&lt;b&gt;&lt;code&gt;Category&lt;/code&gt;&lt;/b&gt;&lt;/td&gt;
 &lt;/tr&gt;
@@ -1921,7 +2227,7 @@ when AQE is enabled.&lt;/p&gt;
     border-top: 2px solid #000;
   }
 &lt;/style&gt;
-&lt;table&gt;
+&lt;table class="table"&gt;
 &lt;thead&gt;
 &lt;tr&gt;
 &lt;th&gt;Module&lt;/th&gt;
@@ -3518,7 +3824,7 @@ bound on the Scale Factor.&lt;/p&gt;
 450|5627|393|4|40|61304.80|0.05|0.03|R|F|1995-03-20|1995-05-25|1995-04-14|NONE|RAIL|ve. asymptote|
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;&lt;strong&gt;Figure 2&lt;/strong&gt;: Example TBL formatted output of &lt;code&gt;dbgen&lt;/code&gt; for the &lt;code&gt;LINEITEM&lt;/code&gt; table&lt;/p&gt;
-&lt;table&gt;
+&lt;table class="table"&gt;
 &lt;tr&gt;
 &lt;td&gt;&lt;strong&gt;Scale Factor&lt;/strong&gt;
 &lt;/td&gt;
@@ -3632,7 +3938,7 @@ slower than the original Java implementation which was ported 😭. This wasn&am
 surprising since the focus of the first version was to get a byte of byte
 compatible port, and knew about the performance shortcomings and how to approach
 them.&lt;/p&gt;
-&lt;table&gt;
+&lt;table class="table"&gt;
 &lt;tr&gt;
 &lt;td&gt;&lt;strong&gt;Scale Factor&lt;/strong&gt;
 &lt;/td&gt;
@@ -3673,7 +3979,7 @@ list of optimizations:&lt;/p&gt;
 &lt;li&gt;&lt;a href="https://github.com/clflushopt/tpchgen-rs/pull/62"&gt;Moving lookups from runtime&lt;/a&gt; to load time&lt;/li&gt;
 &lt;/ul&gt;
 &lt;p&gt;At the time of writing, single threaded performance is now 2.5x-2.7x faster than the initial version, as shown in Table 3.&lt;/p&gt;
-&lt;table&gt;
+&lt;table class="table"&gt;
 &lt;tr&gt;
 &lt;td&gt;&lt;strong&gt;Scale Factor&lt;/strong&gt;
 &lt;/td&gt;
@@ -3718,7 +4024,7 @@ that at SF=100 our generator is actually IO bound (which is not the case for
 &lt;code&gt;dbgen&lt;/code&gt; or &lt;code&gt;duckdb&lt;/code&gt;) &amp;ndash; it creates data &lt;strong&gt;faster than can be written to an SSD&lt;/strong&gt;.
 When writing to &lt;code&gt;/dev/null&lt;/code&gt; tpchgen  generates the entire dataset in 25 seconds
 (4 GB/s).&lt;/p&gt;
-&lt;table&gt;
+&lt;table class="table"&gt;
 &lt;tr&gt;
 &lt;td&gt;&lt;strong&gt;Scale Factor&lt;/strong&gt;
 &lt;/td&gt;
@@ -3800,7 +4106,7 @@ tokio for parallelized but memory bound work.&lt;/p&gt;
 creating Parquet files is significantly more computationally expensive than TBL
 or CSV, tpchgen-cli creates the full SF=100 parquet format dataset in less than
 45 seconds.&lt;/p&gt;
-&lt;table&gt;
+&lt;table class="table"&gt;
 &lt;tr&gt;
 &lt;td&gt;&lt;strong&gt;Scale Factor&lt;/strong&gt;
 &lt;/td&gt;
@@ -4752,7 +5058,7 @@ Being logically streamable does not guarantee that a query will execute in a str
     background-color: #f1f1f1;
   }
 &lt;/style&gt;
-&lt;table&gt;
+&lt;table class="table"&gt;
 &lt;tr&gt;
 &lt;th&gt;amount&lt;/th&gt; &lt;th&gt;price&lt;/th&gt; &lt;th&gt;hostname&lt;/th&gt;&lt;th&gt;currency&lt;/th&gt;&lt;th&gt;time_bin&lt;/th&gt; &lt;th&gt;time&lt;/th&gt; &lt;th&gt;price_cloned&lt;/th&gt; &lt;th&gt;time_cloned&lt;/th&gt;
 &lt;/tr&gt;
@@ -4895,7 +5201,7 @@ after joining, &lt;code&gt;employees.department_id&lt;/code&gt; and &lt;code&gt;
     background-color: #f1f1f1;
   }
 &lt;/style&gt;
-&lt;table&gt;
+&lt;table class="table"&gt;
 &lt;tr&gt;
 &lt;th&gt;amount&lt;/th&gt; &lt;th&gt;price&lt;/th&gt;&lt;th&gt;time_bin&lt;/th&gt; &lt;th&gt;time&lt;/th&gt;
 &lt;/tr&gt;
