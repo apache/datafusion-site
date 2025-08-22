@@ -25,10 +25,14 @@ limitations under the License.
 -->
 
 <!-- 
-diagrams source TODO
+diagrams source: https://docs.google.com/presentation/d/1FFYy27ydZdeFZWWuMjZGnYKUx9QNJfzuVLAH8AE5wlc/edit?slide=id.g364a74cba3d_0_92#slide=id.g364a74cba3d_0_92
+Intended Audience: Query engine / data systems developers who want to learn about topk optimization
+Goal: Introduce TopK and dynamic filters as in general optimization techniques for query engines, and how they were used to improve performance in DataFusion.
 -->
 
-This blog post introduces a powerful query engine optimization technique called dynamic filters or sideways information passing. We implemented this optimization in DataFusion as a community effort with care to support custom operators and distributed usage. These optimizations (and related work) have resulted in order of magnitude improvements for some query patterns.
+This blog post introduces the query engine optimization techniques called TopK and dynamic filters. We describe the motivating use case, how these optimizations work, and how we implemented them with the [Apache DataFusion] community to support advanced use cases like custom operators and distributed usage. These optimizations (and related work) have resulted in order of magnitude improvements for some query patterns.
+
+[Apache DataFusion]: https://datafusion.apache.org/
 
 ## Motivation
 
@@ -41,12 +45,84 @@ ORDER BY start_timestamp DESC
 LIMIT 1000;
 ```
 
-We noticed this was *pretty slow* for us, and came to the finding that DataFusion runs this query by reading the *entire* `records` table and sorting it. It uses a specialized sort operator called a `TopK` that only keeps ~ `K` rows in memory: every new batch that gets read is compared against the `K` largest (in the case of an `DESC` order; compared by the sort key, in this case `start_timestamp`) and then those `K` rows possibly get replaced with any new rows that were larger.
-Importantly DataFusion had no early termination here: it would read the *entire* `records` table even if it already had `K` rows because it had to verify that there could not possibly be any other rows that are have a larger `start_timestamp`.
+We noticed this was *pretty slow* for us, even thought DataFusion already had the `TopK` optimization described below. 
+However, after implementing the generic dynamic filter technique described in this blog, we saw a *10x and higher performance improvement* for this query pattern, and we are applying the optimization to other queries and operators as well.
 
-You can see how this is a problem if you have 2 years worth of data: the largest `1000` start timestamps are probably all within the first couple of files read, but even if we have 1000 timestamps on August 16th 2025 we'll keep reading files that have all of their timestamps in 2024 just to make sure.
+Let's look at some preliminary numbers, using [ClickBench Q23](https://github.com/apache/datafusion/blob/main/benchmarks/queries/clickbench/queries/q23.sql) which is very similar to our earlier examples:
 
-Looking through the DataFusion issues we found that Influx has a similar issue that they've solved with an operator called [`ProgressiveEvalExec`](https://github.com/apache/datafusion/issues/15191), but that requires that the data is already sorted and requires some careful analysis of ordering to prove that it can be used. That is not the case for our data (and a lot of other datasets out there): data can tend to be *roughly* sorted (e.g. if you append to files as you receive it) but that does not guarantee that it is fully sorted, including between files. We brought this up with the community which ultimately resulted in us opening [an issue describing a possible solution](https://github.com/apache/datafusion/issues/15037) which we deemed "dynamic filters". The basic idea is to create a link between the state of the `TopK` operator and a filter that is applied when opening files and during scans. For example, let's say our `TopK` heap for an `ORDER BY start_timetsamp LIMIT 3` has the values:
+<div class="text-center">
+<img 
+  src="/blog/images/dynamic-filters/execution-time.svg" 
+  width="80%" 
+  class="img-responsive" 
+  alt="Q23 Performance Improvement with Dynamic Filters and Late Materialization"
+/>
+</div>
+
+**Figure 1**: Execution times for ClickBench Q23 with and without dynamic filters (DF) and late materialization (LM) for different partitions / core usage. Dynamic filters along show a large improvement but when combined with late materialization we can see up to a 22x improvement in execution time. See appendix for the queries used to generate these results.
+
+
+## Background: TopK Optimization
+
+To understand how dynamic filters can improve query performance we first need to
+understand the TopK optimization. To do so we will use a simplified version of
+[Q23] from the [ClickBench] benchmark suite, which is very similar to the query
+we described above:
+
+```sql
+SELECT * 
+FROM hits 
+ORDER BY "EventTime"
+LIMIT 10
+```
+
+[Q23]: https://github.com/apache/datafusion/blob/main/benchmarks/queries/clickbench/queries/q23.sql
+[ClickBench]: https://benchmark.clickhouse.com/
+
+The straightforward (naive) plan to answer this query is shown in Figure 2.
+
+
+<div class="text-center">
+<img 
+  src="/blog/images/dynamic-filters/query-plan-naive.png" 
+  width="80%" 
+  class="img-responsive" 
+  alt="Naive Query Plan"
+/>
+</div>
+
+**Figure 2**: Naive Query Plan for [ClickBench] [Q23] in DataFusion.  All 100M rows of the `hits` table are read, sort it by `EventTime`, and then return the top 10 rows. This is not very efficient, especially if the `hits` table is large.which reads the entire `hits` table and sorts it to find the top 10 rows by `EventTime`.
+
+<div class="text-center">
+<img 
+  src="/blog/images/dynamic-filters/query-plan-topk.png" 
+  width="80%" 
+  class="img-responsive" 
+  alt="TopK Query Plan"
+/>
+</div>
+
+**Figure 3**: Query plan for Q23 in DataFusion using the specialized TopK Operator. Thanks to [Visualgo](https://visualgo.net/en) for the heap icon
+
+
+<div class="text-center">
+<img 
+  src="/blog/images/dynamic-filters/query-plan-topk-dynamic-filters.png" 
+  width="80%" 
+  class="img-responsive" 
+  alt="TopK Query Plan with Dynamic Filters"
+/>
+</div>
+
+**Figure 4**: Query plan for Q23 in DataFusion with specialized TopK Operator and dynamic filters
+
+
+
+## Topk and Dynamic Filters: Example
+
+
+
+For example, let's say our `TopK` heap for an `ORDER BY start_timetsamp LIMIT 3` has the values:
 
 | start_timestamp          |
 |--------------------------|
@@ -76,22 +152,20 @@ LIMIT 3;
 
 Where `dynamic_filter()` is a structure that initially has the value `true` but will be updated by the TopK operator as the query progresses. Although I'm showing this example as SQL for illustrative purposes these optimizations are actually done at the physical plan layer - much after SQL is parsed.
 
+## Improving TopK in DataFusion
+
+It uses a specialized sort operator called a `TopK` that only keeps ~ `K` rows in memory: every new batch that gets read is compared against the `K` largest (in the case of an `DESC` order; compared by the sort key, in this case `start_timestamp`) and then those `K` rows possibly get replaced with any new rows that were larger.
+Importantly DataFusion had no early termination here: it would read the *entire* `records` table even if it already had `K` rows because it had to verify that there could not possibly be any other rows that are have a larger `start_timestamp`.
+
+You can see how this is a problem if you have 2 years worth of data: the largest `1000` start timestamps are probably all within the first couple of files read, but even if we have 1000 timestamps on August 16th 2025 we'll keep reading files that have all of their timestamps in 2024 just to make sure.
+
+Looking through the DataFusion issues we found that Influx has a similar issue that they've solved with an operator called [`ProgressiveEvalExec`](https://github.com/apache/datafusion/issues/15191), but that requires that the data is already sorted and requires some careful analysis of ordering to prove that it can be used. That is not the case for our data (and a lot of other datasets out there): data can tend to be *roughly* sorted (e.g. if you append to files as you receive it) but that does not guarantee that it is fully sorted, including between files. We brought this up with the community which ultimately resulted in us opening [an issue describing a possible solution](https://github.com/apache/datafusion/issues/15037) which we deemed "dynamic filters". The basic idea is to create a link between the state of the `TopK` operator and a filter that is applied when opening files and during scans.
+
+
 ## Results Summary
 
 We've seen upwards of a 10x performance improvement for some queries and no performance regressions.
 The actual numbers depend on a lot of factors which we need to dig into.
-Let's look at some preliminary numbers, using [ClickBench Q23](https://github.com/apache/datafusion/blob/main/benchmarks/queries/clickbench/queries/q23.sql) which is very similar to our earlier examples:
-
-<div class="text-center">
-<img 
-  src="/blog/images/dynamic-filters/execution-time.svg" 
-  width="80%" 
-  class="img-responsive" 
-  alt="Q23 Performance Improvement with Dynamic Filters and Late Materialization"
-/>
-</div>
-
-**Figure 1**: Execution times for ClickBench Q23 with and without dynamic filters (DF) and late materialization (LM) for different partitions / core usage. Dynamic filters along show a large improvement but when combined with late materialization we can see up to a 22x improvement in execution time. See appendix for the queries used to generate these results.
 
 Let's go over some of the flags used in the benchmark:
 
