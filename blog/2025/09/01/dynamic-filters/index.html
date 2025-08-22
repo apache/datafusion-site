@@ -76,7 +76,7 @@ LIMIT 1000;
 <p>We noticed this was <em>pretty slow</em> for us, and came to the finding that DataFusion runs this query by reading the <em>entire</em> <code>records</code> table and sorting it. It uses a specialized sort operator called a <code>TopK</code> that only keeps ~ <code>K</code> rows in memory: every new batch that gets read is compared against the <code>K</code> largest (in the case of an <code>DESC</code> order; compared by the sort key, in this case <code>start_timestamp</code>) and then those <code>K</code> rows possibly get replaced with any new rows that were larger.
 Importantly DataFusion had no early termination here: it would read the <em>entire</em> <code>records</code> table even if it already had <code>K</code> rows because it had to verify that there could not possibly be any other rows that are have a larger <code>start_timestamp</code>.</p>
 <p>You can see how this is a problem if you have 2 years worth of data: the largest <code>1000</code> start timestamps are probably all within the first couple of files read, but even if we have 1000 timestamps on August 16th 2025 we'll keep reading files that have all of their timestamps in 2024 just to make sure.</p>
-<p>Looking through the DataFusion issues we found that Influx has a similar issue that they've solved with an operator called <a href="https://github.com/apache/datafusion/issues/15191"><code>SortPreservingMerge</code></a>, but that requires that the data is already sorted and requires some careful analysis of ordering to prove that it can be used. That is not the case for our data (and a lot of other datasets out there): data can tend to be <em>roughly</em> sorted (e.g. if you append to files as you receive it) but that does not guarantee that it is fully sorted, including between files. We brought this up with the community which ultimately resulted in us opening <a href="https://github.com/apache/datafusion/issues/15037">an issue describing a possible solution</a> which we deemed "dynamic filters". The basic idea is to create a link between the state of the <code>TopK</code> operator and a filter that is applied when opening files and during scans. For example, let's say our <code>TopK</code> heap for an <code>ORDER BY start_timetsamp LIMIT 3</code> has the values:</p>
+<p>Looking through the DataFusion issues we found that Influx has a similar issue that they've solved with an operator called <a href="https://github.com/apache/datafusion/issues/15191"><code>ProgressiveEvalExec</code></a>, but that requires that the data is already sorted and requires some careful analysis of ordering to prove that it can be used. That is not the case for our data (and a lot of other datasets out there): data can tend to be <em>roughly</em> sorted (e.g. if you append to files as you receive it) but that does not guarantee that it is fully sorted, including between files. We brought this up with the community which ultimately resulted in us opening <a href="https://github.com/apache/datafusion/issues/15037">an issue describing a possible solution</a> which we deemed "dynamic filters". The basic idea is to create a link between the state of the <code>TopK</code> operator and a filter that is applied when opening files and during scans. For example, let's say our <code>TopK</code> heap for an <code>ORDER BY start_timetsamp LIMIT 3</code> has the values:</p>
 <table class="table">
 <thead>
 <tr>
@@ -330,6 +330,20 @@ LIMIT 10;
 </tr>
 </tbody>
 </table>
+<h2>About the Author</h2>
+<p><a href="https://www.linkedin.com/in/adrian-garcia-badaracco/">Adrian Garcia Badaracco</a> is a Founding Engineer at
+<a href="https://pydantic.dev/">Pydantic</a>, and an <a href="https://datafusion.apache.org/">Apache
+DataFusion</a> committer. </p>
+<h2>About DataFusion</h2>
+<p><a href="https://datafusion.apache.org/">Apache DataFusion</a> is an extensible query engine toolkit, written
+in Rust, that uses <a href="https://arrow.apache.org/">Apache Arrow</a> as its in-memory format. DataFusion and
+similar technology are part of the next generation &ldquo;Deconstructed Database&rdquo;
+architectures, where new systems are built on a foundation of fast, modular
+components, rather than as a single tightly integrated system.</p>
+<p>The <a href="https://datafusion.apache.org/contributor-guide/communication.html">DataFusion community</a> is always looking for new contributors to help
+improve the project. If you are interested in learning more about how query
+execution works, help document or improve the DataFusion codebase, or just try
+it out, we would love for you to join us.</p>
 
     <!--
         Enable giscuss comments: Allows comments on the blogs posted as
