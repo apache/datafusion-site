@@ -32,9 +32,10 @@ Goal: Introduce TopK and dynamic filters as in general optimization techniques f
 
 This blog post introduces the query engine optimization techniques called TopK and dynamic filters. We describe the motivating use case, how these optimizations work, and how we implemented them with the [Apache DataFusion] community to support advanced use cases like custom operators and distributed usage. These optimizations (and related work) have resulted in order of magnitude improvements for some query patterns.
 
+
 [Apache DataFusion]: https://datafusion.apache.org/
 
-## Motivation
+## Motivation and Results
 
 Our main commercial product at [Pydantic](https://pydantic.dev/logfire) is an observability platform built on DataFusion. One of the most common workflows / queries is "show me the last K traces" which translates to something along the lines of:
 
@@ -59,7 +60,11 @@ Let's look at some preliminary numbers, using [ClickBench Q23](https://github.co
 />
 </div>
 
-**Figure 1**: Execution times for ClickBench Q23 with and without dynamic filters (DF) and late materialization (LM) for different partitions / core usage. Dynamic filters along show a large improvement but when combined with late materialization we can see up to a 22x improvement in execution time. See appendix for the queries used to generate these results.
+**Figure 1**: Execution times for ClickBench Q23 with and without dynamic
+filters (DF) and late materialization (LM) for different partitions / core
+usage. Dynamic filters along show a large improvement but when combined with
+late materialization we can see up to a 22x improvement in execution time. See
+appendix for the queries used to generate these results.
 
 
 ## Background: TopK Optimization
@@ -81,7 +86,6 @@ LIMIT 10
 
 The straightforward (naive) plan to answer this query is shown in Figure 2.
 
-
 <div class="text-center">
 <img 
   src="/blog/images/dynamic-filters/query-plan-naive.png" 
@@ -91,7 +95,20 @@ The straightforward (naive) plan to answer this query is shown in Figure 2.
 />
 </div>
 
-**Figure 2**: Naive Query Plan for [ClickBench] [Q23] in DataFusion.  All 100M rows of the `hits` table are read, sort it by `EventTime`, and then return the top 10 rows. This is not very efficient, especially if the `hits` table is large.which reads the entire `hits` table and sorts it to find the top 10 rows by `EventTime`.
+**Figure 2**: Naive Query Plan for [ClickBench] [Q23] in DataFusion. Data flows
+in the plan from the scan at the bottom to the top. This plan reads all 100M
+rows of the `hits` table, sorts them by `EventTime`, and then return only the
+top 10 rows.
+
+The naive plan requires substantial effort: all columns from all rows are
+decoded and sorted, only to discard all but the top 10. We can do substantially
+better using a specialized `TopK` operator that only keeps the top K rows in
+memory as it reads the data. This is not a new idea, and is implemented in many
+other query engines. For example the same thing is called [SortWithLimit in
+Snowflake] or [topn in DuckDB]
+
+[SortWithLimit in Snowflake]: https://program.berlinbuzzwords.de/bbuzz24/talk/3DTQJB/
+[topn in DuckDB]: https://duckdb.org/2024/10/25/topn.html#introduction-to-top-n
 
 <div class="text-center">
 <img 
@@ -102,7 +119,12 @@ The straightforward (naive) plan to answer this query is shown in Figure 2.
 />
 </div>
 
-**Figure 3**: Query plan for Q23 in DataFusion using the specialized TopK Operator. Thanks to [Visualgo](https://visualgo.net/en) for the heap icon
+**Figure 3**: Query plan for Q23 in DataFusion using the specialized TopK
+Operator. This plan still reads all 100M rows of the `hits` table, but instead
+of sorting them all by `EventTime`, it uses the special TopK operator, which has
+a Min/Max heap to keep track of the current top 10 rows. Thanks to
+[Visualgo](https://visualgo.net/en) for the heap icon
+
 
 
 <div class="text-center">
@@ -161,6 +183,10 @@ You can see how this is a problem if you have 2 years worth of data: the largest
 
 Looking through the DataFusion issues we found that Influx has a similar issue that they've solved with an operator called [`ProgressiveEvalExec`](https://github.com/apache/datafusion/issues/15191), but that requires that the data is already sorted and requires some careful analysis of ordering to prove that it can be used. That is not the case for our data (and a lot of other datasets out there): data can tend to be *roughly* sorted (e.g. if you append to files as you receive it) but that does not guarantee that it is fully sorted, including between files. We brought this up with the community which ultimately resulted in us opening [an issue describing a possible solution](https://github.com/apache/datafusion/issues/15037) which we deemed "dynamic filters". The basic idea is to create a link between the state of the `TopK` operator and a filter that is applied when opening files and during scans.
 
+This implementation is very similar to recently announced optimizations in commercial systems such as [Accelerating TopK Queries in Snowflake], or [self sharpening runtime filters in Alibaba Cloud's PolarDB] We are excited we can offer similar performance improvements in an open source query engine like DataFusion, and we hope this will help users with similar workloads to ours.
+
+[Accelerating TopK Queries in Snowflake]: https://program.berlinbuzzwords.de/bbuzz24/talk/3DTQJB/
+[self sharpening runtime filters in Alibaba Cloud's PolarDB]: https://www.alibabacloud.com/blog/about-database-kernel-%7C-learn-about-polardb-imci-optimization-techniques_600274
 
 ## Results Summary
 
