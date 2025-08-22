@@ -50,12 +50,9 @@ ASF_GENID = {
  'metadata': False,
  'elements': False,
  'permalinks': False,
- 'tables': False,
+ 'tables': True,
  'headings': False,
-
-
  'toc': False,
-
  'debug': False,
 }
 
