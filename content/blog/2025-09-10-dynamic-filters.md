@@ -271,12 +271,13 @@ files.
 
 
 We [discussed possible solutions] with the community, which ultimately resulted
-in the implementation of "dynamic filters". This implementation is very similar
-to recently announced optimizations in commercial systems such as [Accelerating
-TopK Queries in Snowflake], or [self sharpening runtime filters in Alibaba
-Cloud's PolarDB]. We are excited we can offer similar performance improvements
-in an open source query engine like DataFusion, and we hope this will help all
-users with similar workloads.
+in the implementation of "dynamic filters", and our design is general enough it
+applies to joins as well. We believe our implementation is very similar to
+recently announced optimizations in closed source, commercial systems such as
+[Accelerating TopK Queries in Snowflake], or [self sharpening runtime filters in
+Alibaba Cloud's PolarDB], and we are excited we can offer similar performance
+improvements in an open source query engine like DataFusion. We hope this will
+help all users with similar workloads.
 
 [discussed possible solutions]: https://github.com/apache/datafusion/issues/15037
 [Accelerating TopK Queries in Snowflake]: https://program.berlinbuzzwords.de/bbuzz24/talk/3DTQJB/
@@ -285,8 +286,10 @@ users with similar workloads.
 
 ## Implementation for TopK Operator
 
-TopK operators (a specialization of a sort operator + a limit operator) implement dynamic filter pushdown by updating a filter each time the heap / topK is updated. The filter is then used to skip rows and files during the scan operator.
-At the query plan level, Q23 looks like this before it is executed:
+TopK operators (a specialization of a sort operator + a limit operator)
+implement dynamic filter pushdown by updating a filter each time the heap / topK
+is updated. The filter is then used to skip rows and files during the scan
+operator. At the query plan level, Q23 looks like this before it is executed:
 
 ```text
 ┌───────────────────────────┐
@@ -308,8 +311,10 @@ At the query plan level, Q23 looks like this before it is executed:
 └───────────────────────────┘
 ```
 
-You can see the `true` placeholder filter for the dynamic filter in the `predicate` field of the `DataSourceExec` operator. This will be updated by the `SortExec` operator as it processes rows.
-After running the query, the plan looks like this:
+You can see the `true` placeholder filter for the dynamic filter in the
+`predicate` field of the `DataSourceExec` operator. This will be updated by the
+`SortExec` operator as it processes rows. After running the query, the plan
+looks like this, showing the updated filter:
 
 ```text
 ┌───────────────────────────┐
@@ -335,6 +340,7 @@ After running the query, the plan looks like this:
 ## Implementation for Hash Join Operator
 
 We've also implemented dynamic filters for hash joins, also called "sideways information passing".
+
 In a Hash Join the query engine picks one side of the join to be the "build" side and the other side to be the "probe" side. The build side is read first and then the probe side is read, using a hash table built from the build side to match rows from the probe side.
 Dynamic filters are used to filter the probe side based on the values from the build side.
 In particular, we take the min/max values from the build side and use them to create a filter that is applied to the probe side.
