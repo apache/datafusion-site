@@ -160,7 +160,7 @@ of files. The plan for Q23 with dynamic filters is shown in Figure 4.
 <div class="text-center">
 <img 
   src="/blog/images/dynamic-filters/query-plan-topk-dynamic-filters.png" 
-  width="80%" 
+  width="100%" 
   class="img-responsive" 
   alt="TopK Query Plan with Dynamic Filters"
 />
