@@ -167,7 +167,10 @@ have a table `records` with a column `start_timestamp` and we are running the
 query from the introduction:
 
 ```sql
-SELECT * FROM records ORDER BY start_timestamp DESC LIMIT 3;
+SELECT * 
+FROM records 
+ORDER BY start_timestamp 
+DESC LIMIT 3;
 ```
 
 For example, let's imagine that at some point during execution, the heap in the
