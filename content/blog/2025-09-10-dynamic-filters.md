@@ -37,19 +37,23 @@ This blog post introduces the query engine optimization techniques called TopK a
 
 ## Motivation and Results
 
-Our main commercial product at [Pydantic](https://pydantic.dev/logfire) is an observability platform built on DataFusion. One of the most common workflows / queries is "show me the last K traces" which translates to something along the lines of:
+The main commercial product at [Pydantic](https://pydantic.dev/logfire) is an observability platform built on DataFusion. One of the most common workflows / queries is "show me the last K traces" which translates to a query similar to:
 
 ```sql
-SELECT *
-FROM records
-ORDER BY start_timestamp DESC
-LIMIT 1000;
+SELECT * FROM records ORDER BY start_timestamp DESC LIMIT 1000;
 ```
 
-We noticed this was *pretty slow* for us, even thought DataFusion already had the `TopK` optimization described below. 
-However, after implementing the generic dynamic filter technique described in this blog, we saw a *10x and higher performance improvement* for this query pattern, and we are applying the optimization to other queries and operators as well.
+We noticed this was *pretty slow*, even thought DataFusion has long had the
+classic `TopK` optimization (described below). After implementing the
+dynamic filter techniques described in this blog, we saw *10x and higher
+performance improvement* for this query pattern, and are applying the
+optimization to other queries and operators as well.
 
-Let's look at some preliminary numbers, using [ClickBench Q23](https://github.com/apache/datafusion/blob/main/benchmarks/queries/clickbench/queries/q23.sql) which is very similar to our earlier examples:
+Let's look at some preliminary numbers, using [ClickBench] [Q23] which is very similar to our earlier examples:
+
+```sql
+SELECT * FROM hits WHERE "URL" LIKE '%google%' ORDER BY "EventTime" LIMIT 10;
+```
 
 <div class="text-center">
 <img 
@@ -62,17 +66,17 @@ Let's look at some preliminary numbers, using [ClickBench Q23](https://github.co
 
 **Figure 1**: Execution times for ClickBench Q23 with and without dynamic
 filters (DF) and late materialization (LM) for different partitions / core
-usage. Dynamic filters along show a large improvement but when combined with
-late materialization we can see up to a 22x improvement in execution time. See
-appendix for the queries used to generate these results.
+usage. Both dynamic filters alone (yellow) and late materialization alone (red)
+show a large improvement over the baseline (blue). Combined (green) they show an
+even larger improvement, up to a 22x improvement in execution time. See the
+appendix for reproduction instructions.
 
 
 ## Background: TopK Optimization
 
-To understand how dynamic filters can improve query performance we first need to
-understand the TopK optimization. To do so we will use a simplified version of
-[Q23] from the [ClickBench] benchmark suite, which is very similar to the query
-we described above:
+To explain how dynamic filters improve query performance we first need to
+explain the so called "TopK" optimization. To do so we will use a simplified
+version of ClickBench Q23:
 
 ```sql
 SELECT * 
@@ -84,7 +88,7 @@ LIMIT 10
 [Q23]: https://github.com/apache/datafusion/blob/main/benchmarks/queries/clickbench/queries/q23.sql
 [ClickBench]: https://benchmark.clickhouse.com/
 
-The straightforward (naive) plan to answer this query is shown in Figure 2.
+A straightforward, though slow, plan to answer this query is shown in Figure 2.
 
 <div class="text-center">
 <img 
@@ -95,19 +99,22 @@ The straightforward (naive) plan to answer this query is shown in Figure 2.
 />
 </div>
 
-**Figure 2**: Naive Query Plan for [ClickBench] [Q23] in DataFusion. Data flows
-in the plan from the scan at the bottom to the top. This plan reads all 100M
-rows of the `hits` table, sorts them by `EventTime`, and then return only the
-top 10 rows.
+**Figure 2**: Simple Query Plan for ClickBench Q23. Data flows in plans from the
+scan at the bottom to limit at the top. This plan reads all 100M rows of the
+`hits` table, sorts them by `EventTime`, and then return only the top 10 rows.
 
-The naive plan requires substantial effort: all columns from all rows are
-decoded and sorted, only to discard all but the top 10. We can do substantially
-better using a specialized `TopK` operator that only keeps the top K rows in
-memory as it reads the data. This is not a new idea, and is implemented in many
-other query engines. For example the same thing is called [SortWithLimit in
-Snowflake] or [topn in DuckDB]
+This naive plan requires substantial effort: all columns from all rows are
+decoded and sorted, but then only 10 are returned. 
 
-[SortWithLimit in Snowflake]: https://program.berlinbuzzwords.de/bbuzz24/talk/3DTQJB/
+High performance query engines typically avoid the expensive full sort a
+specialized operator that tracks the current top rows using a [heap], rather
+than sorting the entire data. For example this operator
+is called [TopK in DataFusion], [SortWithLimit in Snowflake] and [topn in
+DuckDB]. The plan for Q23 using this specialized operator is shown in Figure 3.
+
+[heap]: https://en.wikipedia.org/wiki/Heap_(data_structure)
+[TopK in DataFusion]: https://docs.rs/datafusion/latest/datafusion/physical_plan/struct.TopK.html
+[SortWithLimit in Snowflake]: https://docs.snowflake.com/en/user-guide/ui-snowsight-activity
 [topn in DuckDB]: https://duckdb.org/2024/10/25/topn.html#introduction-to-top-n
 
 <div class="text-center">
@@ -119,13 +126,22 @@ Snowflake] or [topn in DuckDB]
 />
 </div>
 
-**Figure 3**: Query plan for Q23 in DataFusion using the specialized TopK
-Operator. This plan still reads all 100M rows of the `hits` table, but instead
-of sorting them all by `EventTime`, it uses the special TopK operator, which has
-a Min/Max heap to keep track of the current top 10 rows. Thanks to
-[Visualgo](https://visualgo.net/en) for the heap icon
+**Figure 3**: Query plan for Q23 in DataFusion using the TopK Operator. This
+plan still reads all 100M rows of the `hits` table, but instead of first sorting
+them all by `EventTime`, the TopK operator keeps track of the current top 10
+rows using a Min/Max heap. Credit to [Visualgo](https://visualgo.net/en) for the
+heap icon
 
+However, this plan still reads and decodes all 100M rows of the `hits` table,
+which is often unnecessary once we have found the top 10 rows. For example,
+while running they query, if the current top 10 rows all have `EventTime` in
+2025, then any subsequent rows with `EventTime` in 2024 or earlier can be
+skipped entirely without reading or decoding them.
 
+Leveraging this insight is the key idea behind dynamic filters, which introduces
+a runtime mechanism for the TopK operator to provide the current top values to
+scan operator, allowing it to skip unnecessary rows, entire files, or portions
+of files. The plan for Q23 with dynamic filters is shown in Figure 4.
 
 <div class="text-center">
 <img 
@@ -136,15 +152,26 @@ a Min/Max heap to keep track of the current top 10 rows. Thanks to
 />
 </div>
 
-**Figure 4**: Query plan for Q23 in DataFusion with specialized TopK Operator and dynamic filters
-
+**Figure 4**: Query plan for Q23 in DataFusion with specialized TopK Operator
+and dynamic filters. The TopK operator provides the minimum `EventTime` of the
+current top 10 rows to the scan operator, allowing it to skip rows with
+`EventTime` earlier than that value. The scan operator uses this dynamic filter
+to skip unnecessary files, and rows, reducing the amount of data that needs to
+be read and
 
 
 ## Topk and Dynamic Filters: Example
 
+To dynamic filters more concrete let's look at a simplified example. Imagine we
+have a table `records` with a column `start_timestamp` and we are running the
+query from the introduction:
 
+```sql
+SELECT * FROM records ORDER BY start_timestamp DESC LIMIT 3;
+```
 
-For example, let's say our `TopK` heap for an `ORDER BY start_timetsamp LIMIT 3` has the values:
+For example, let's imagine that at some point during execution, the heap in the
+`TopK` operator has actual 3 most recent values:
 
 | start_timestamp          |
 |--------------------------|
@@ -152,7 +179,13 @@ For example, let's say our `TopK` heap for an `ORDER BY start_timetsamp LIMIT 3`
 | 2025-08-16T20:35:14.00Z  |
 | 2025-08-16T20:35:13.00Z  |
 
-We'd generate a filter from these values of the form `start_timestamp > '2025-08-16T20:35:13.00Z'`, if that was placed into the query would look like:
+Since `2025-08-16T20:35:13.00Z` is the smallest of these values, we know that
+any subsequent rows with `start_timestamp` less than or equal to this value
+cannot possibly be in the top 3, and can be skipped entirely.
+
+We can express this condition as a filter of the form `start_timestamp >
+'2025-08-16T20:35:13.00Z'`. If we knew the correct timestamp value before
+starting the plan, we could simply write:
 
 ```sql
 SELECT *
@@ -162,7 +195,7 @@ ORDER BY start_timestamp DESC
 LIMIT 3;
 ```
 
-But obviously when we start running the query we don't have the value `'2025-08-16T20:35:13.00Z'` so what we do is put in a placeholder value, you can think of it as:
+However,  obviously when we start running the query we don't have the value `'2025-08-16T20:35:13.00Z'` so what we do is put in a placeholder value, you can think of it as:
 
 ```sql
 SELECT *
