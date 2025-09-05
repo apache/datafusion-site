@@ -30,14 +30,24 @@ Intended Audience: Query engine / data systems developers who want to learn abou
 Goal: Introduce TopK and dynamic filters as in general optimization techniques for query engines, and how they were used to improve performance in DataFusion.
 -->
 
-This blog post introduces the query engine optimization techniques called TopK and dynamic filters. We describe the motivating use case, how these optimizations work, and how we implemented them with the [Apache DataFusion] community to support advanced use cases like custom operators and distributed usage. These optimizations (and related work) have resulted in order of magnitude improvements for some query patterns.
+This blog post introduces the query engine optimization techniques called TopK
+and dynamic filters. We describe the motivating use case, how these
+optimizations work, and how we implemented them with the [Apache DataFusion]
+community to support advanced use cases like custom operators and distributed
+usage. These optimizations (and related work) have resulted in order of
+magnitude improvements for some query patterns.
 
 
 [Apache DataFusion]: https://datafusion.apache.org/
 
 ## Motivation and Results
 
-The main commercial product at [Pydantic](https://pydantic.dev/logfire) is an observability platform built on DataFusion. One of the most common workflows / queries is "show me the last K traces" which translates to a query similar to:
+The main commercial product at [Pydantic], [Logfire] is an observability
+platform built on DataFusion. One of the most common workflows / queries is
+"show me the last K traces" which translates to a query similar to:
+
+[Pydantic]: https://pydantic.dev
+[Logfire]: https://pydantic.dev/logfire
 
 ```sql
 SELECT * FROM records ORDER BY start_timestamp DESC LIMIT 1000;
@@ -136,7 +146,10 @@ However, this plan still reads and decodes all 100M rows of the `hits` table,
 which is often unnecessary once we have found the top 10 rows. For example,
 while running they query, if the current top 10 rows all have `EventTime` in
 2025, then any subsequent rows with `EventTime` in 2024 or earlier can be
-skipped entirely without reading or decoding them.
+skipped entirely without reading or decoding them. This technique is especially
+effective at skipping entire files or row groups if the top 10 values are in the
+first few files read, which is very common with timestamp predicates when the
+data insert order is approximately the same as the timestamp order.
 
 Leveraging this insight is the key idea behind dynamic filters, which introduces
 a runtime mechanism for the TopK operator to provide the current top values to
@@ -193,12 +206,20 @@ starting the plan, we could simply write:
 ```sql
 SELECT *
 FROM records
-WHERE start_timestamp > '2025-08-16T20:35:13.00Z'
+WHERE start_timestamp > '2025-08-16T20:35:13.00Z'  -- Filter to skip rows
 ORDER BY start_timestamp DESC
 LIMIT 3;
 ```
 
-However,  obviously when we start running the query we don't have the value `'2025-08-16T20:35:13.00Z'` so what we do is put in a placeholder value, you can think of it as:
+And DataFusion's sophisticated [multi-level filter pushdown] and pruning would
+ensure that we skip reading unnecessary files and row groups, and only decode
+the necessary rows.
+
+[multi-level filter pushdown]: https://datafusion.apache.org/blog/2025/08/15/external-parquet-indexes/
+
+However, obviously when we start running the query we don't have the value
+`'2025-08-16T20:35:13.00Z'` so what DataFusion does is put in a placeholder in
+the plan, which you can think of as:
 
 ```sql
 SELECT *
@@ -208,16 +229,50 @@ ORDER BY start_timestamp DESC
 LIMIT 3;
 ```
 
-Where `dynamic_filter()` is a structure that initially has the value `true` but will be updated by the TopK operator as the query progresses. Although I'm showing this example as SQL for illustrative purposes these optimizations are actually done at the physical plan layer - much after SQL is parsed.
+In this case, `dynamic_filter()` is a structure that initially has the value
+`true` but will be progressively updated by the TopK operator as the query
+progresses. Note that while we are using SQL for illustrative purposes these
+optimizations are actually done at the physical plan ([`ExecutionPlan`]) layer -
+and they apply to both SQL and DataFrame APIs.
+
+[`ExecutionPlan`]: https://docs.rs/datafusion/latest/datafusion/physical_plan/trait.ExecutionPlan.html
 
 ## Improving TopK in DataFusion
 
-It uses a specialized sort operator called a `TopK` that only keeps ~ `K` rows in memory: every new batch that gets read is compared against the `K` largest (in the case of an `DESC` order; compared by the sort key, in this case `start_timestamp`) and then those `K` rows possibly get replaced with any new rows that were larger.
-Importantly DataFusion had no early termination here: it would read the *entire* `records` table even if it already had `K` rows because it had to verify that there could not possibly be any other rows that are have a larger `start_timestamp`.
+As mentioned above, DataFusion has a specialized sort operator named [`TopK`]
+that only keeps ~ `K` rows in memory. For a `DESC` sort order, each new input
+batch is compared against the current `K` largest values, and then the current
+`K` rows possibly get replaced with any new rows that were larger. The [code is here].
 
-You can see how this is a problem if you have 2 years worth of data: the largest `1000` start timestamps are probably all within the first couple of files read, but even if we have 1000 timestamps on August 16th 2025 we'll keep reading files that have all of their timestamps in 2024 just to make sure.
+[TopK]: https://docs.rs/datafusion/latest/datafusion/physical_plan/struct.TopK.html
+[code is here]: https://github.com/apache/datafusion/blob/b4a8b5ae54d939353b7cbd5ab8aee7d3bedecb66/datafusion/physical-plan/src/topk/mod.rs
 
-Looking through the DataFusion issues we found that Influx has a similar issue that they've solved with an operator called [`ProgressiveEvalExec`](https://github.com/apache/datafusion/issues/15191), but that requires that the data is already sorted and requires some careful analysis of ordering to prove that it can be used. That is not the case for our data (and a lot of other datasets out there): data can tend to be *roughly* sorted (e.g. if you append to files as you receive it) but that does not guarantee that it is fully sorted, including between files. We brought this up with the community which ultimately resulted in us opening [an issue describing a possible solution](https://github.com/apache/datafusion/issues/15037) which we deemed "dynamic filters". The basic idea is to create a link between the state of the `TopK` operator and a filter that is applied when opening files and during scans.
+Prior to dynamic filters, DataFusion had no early termination: it would read the
+*entire* `records` table even if it already had the top `K` rows because it
+still had to check that there were no rows that had larger `start_timestamp`.
+
+You can see how this is a problem if you have 2 years worth of timeseries data:
+the largest `1000` values of `start_timestamp` are likely within the first few
+files read, but even if the TopK operator has seen 1000 timestamps on August
+16th 2025, DataFusion would still read files that have only data in 2024 just to
+make sure.
+
+InfluxData [optimized a similar query pattern in InfluxDB IOx] using another
+operator called [`ProgressiveEvalExec`] but that operator requires that the data
+is already sorted and a careful analysis of ordering to prove that it can be
+used. That is not the case for Logfire data (and a lot of other datasets out there):
+data can tend to be *roughly* sorted (e.g. if you append to files as you receive
+it) but that does not guarantee that it is fully sorted, including between
+files. We brought this up with the community which ultimately resulted in us
+opening [an issue describing a possible
+solution](https://github.com/apache/datafusion/issues/15037) which we deemed
+"dynamic filters". The basic idea is to create a link between the state of the
+`TopK` operator and a filter that is applied when opening files and during
+scans.
+
+
+[optimized a similar query pattern in InfluxDB IOx]: https://www.influxdata.com/blog/making-recent-value-queries-hundreds-times-faster/
+[`ProgressiveEvalExec`]: https://github.com/apache/datafusion/issues/15191
 
 This implementation is very similar to recently announced optimizations in commercial systems such as [Accelerating TopK Queries in Snowflake], or [self sharpening runtime filters in Alibaba Cloud's PolarDB] We are excited we can offer similar performance improvements in an open source query engine like DataFusion, and we hope this will help users with similar workloads to ours.
 
@@ -454,3 +509,4 @@ it out, we would love for you to join us.
 [Apache Arrow]: https://arrow.apache.org/
 [Apache DataFusion]: https://datafusion.apache.org/
 [DataFusion community]: https://datafusion.apache.org/contributor-guide/communication.html
+
