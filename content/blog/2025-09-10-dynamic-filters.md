@@ -75,11 +75,12 @@ SELECT * FROM hits WHERE "URL" LIKE '%google%' ORDER BY "EventTime" LIMIT 10;
 </div>
 
 **Figure 1**: Execution times for ClickBench Q23 with and without dynamic
-filters (DF) and late materialization (LM) for different partitions / core
-usage. Both dynamic filters alone (yellow) and late materialization alone (red)
-show a large improvement over the baseline (blue). Combined (green) they show an
-even larger improvement, up to a 22x improvement in execution time. See the
-appendix for reproduction instructions.
+filters (DF)<sup id="fn1">[1](#footnote1)</sup>, and late materialization
+(LM)<sup id="fn2">[2](#footnote2)</sup> for different partitions / core usage.
+Both dynamic filters alone (yellow) and late materialization alone (red) show a
+large improvement over the baseline (blue). Combined (green) they show an even
+larger improvement, up to a 22x improvement in execution time. See the appendix
+for reproduction instructions.
 
 
 ## Background: TopK Optimization
@@ -260,42 +261,27 @@ make sure.
 InfluxData [optimized a similar query pattern in InfluxDB IOx] using another
 operator called [`ProgressiveEvalExec`] but that operator requires that the data
 is already sorted and a careful analysis of ordering to prove that it can be
-used. That is not the case for Logfire data (and a lot of other datasets out there):
+used. That is not the case for Logfire data (and many other datasets out there):
 data can tend to be *roughly* sorted (e.g. if you append to files as you receive
 it) but that does not guarantee that it is fully sorted, including between
-files. We brought this up with the community which ultimately resulted in us
-opening [an issue describing a possible
-solution](https://github.com/apache/datafusion/issues/15037) which we deemed
-"dynamic filters". The basic idea is to create a link between the state of the
-`TopK` operator and a filter that is applied when opening files and during
-scans.
-
+files. 
 
 [optimized a similar query pattern in InfluxDB IOx]: https://www.influxdata.com/blog/making-recent-value-queries-hundreds-times-faster/
 [`ProgressiveEvalExec`]: https://github.com/apache/datafusion/issues/15191
 
-This implementation is very similar to recently announced optimizations in commercial systems such as [Accelerating TopK Queries in Snowflake], or [self sharpening runtime filters in Alibaba Cloud's PolarDB] We are excited we can offer similar performance improvements in an open source query engine like DataFusion, and we hope this will help users with similar workloads to ours.
 
+We [discussed possible solutions] with the community, which ultimately resulted
+in the implementation of "dynamic filters". This implementation is very similar
+to recently announced optimizations in commercial systems such as [Accelerating
+TopK Queries in Snowflake], or [self sharpening runtime filters in Alibaba
+Cloud's PolarDB]. We are excited we can offer similar performance improvements
+in an open source query engine like DataFusion, and we hope this will help all
+users with similar workloads.
+
+[discussed possible solutions]: https://github.com/apache/datafusion/issues/15037
 [Accelerating TopK Queries in Snowflake]: https://program.berlinbuzzwords.de/bbuzz24/talk/3DTQJB/
 [self sharpening runtime filters in Alibaba Cloud's PolarDB]: https://www.alibabacloud.com/blog/about-database-kernel-%7C-learn-about-polardb-imci-optimization-techniques_600274
 
-## Results Summary
-
-We've seen upwards of a 10x performance improvement for some queries and no performance regressions.
-The actual numbers depend on a lot of factors which we need to dig into.
-
-Let's go over some of the flags used in the benchmark:
-
-### Dynamic Filters
-
-This is the optimization we spoke about above.
-The TopK operator will generate a filter that is applied to the scan operators, which will first be used to skip rows and then as we open new files (if there are more to open) it will be used to skip entire files that do not match the filter.
-
-### Late Materialization
-
-This optimization has been talked about in the past (see for example [this blog post](./2025-03-21-parquet-pushdown.md)).
-It's particularly effective when combined with dynamic filters because without them there is no time based filter to apply during the scan.
-And without late materialization the filter can only be used to prune entire files, which is ineffective for large files or if the order in which files are read is not optimal.
 
 ## Implementation for TopK Operator
 
@@ -510,3 +496,19 @@ it out, we would love for you to join us.
 [Apache DataFusion]: https://datafusion.apache.org/
 [DataFusion community]: https://datafusion.apache.org/contributor-guide/communication.html
 
+## Footnotes
+
+<a id="footnote1"></a><sup>[1](#fn1)</sup> *Dynamic Filters (DF)* refers to the
+optimization described in this blog post. The TopK operator will generate a
+filter that is applied to the scan operators, which will first be used to skip
+rows and then as we open new files (if there are more to open) it will be used
+to skip entire files that do not match the filter.
+
+<a id="footnote2"></a><sup>[2](#fn2)</sup> *Late Materialization (LM)* refers to
+the optimization described in [this blog post]. Late Materialization is
+particularly effective when combined with dynamic filters as it can apply
+filters during a scan. Without late materialization, dynamic filters can only be
+used to prune row groups or entire files, which will be less effective if the 
+files themselves are large or the top values are not in the first few files read.
+
+[this blog post]: https://datafusion.apache.org/blog/2025/03/21/parquet-pushdown/
