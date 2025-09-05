@@ -1,8 +1,8 @@
 ---
 layout: post
 title: Dynamic Filters: Passing Information Between Operators During Execution for 10x Faster Queries
-date: 2025-09-01
-author: Adrian Garcia Badaracco (Pydantic)
+date: 2025-09-10
+author: Adrian Garcia Badaracco (Pydantic), Andrew Lamb (InfluxData)
 categories: [features]
 ---
 <!--
@@ -391,11 +391,16 @@ LIMIT 10;
 
 
 
-## About the Author
+## About the Authors
 
 [Adrian Garcia Badaracco](https://www.linkedin.com/in/adrian-garcia-badaracco/) is a Founding Engineer at
 [Pydantic](https://pydantic.dev/), and an [Apache
 DataFusion](https://datafusion.apache.org/) committer. 
+
+[Andrew Lamb](https://www.linkedin.com/in/andrewalamb/) is a Staff Engineer at
+[InfluxData](https://www.influxdata.com/), and a member of the [Apache
+DataFusion](https://datafusion.apache.org/) and [Apache Arrow](https://arrow.apache.org/) PMCs. He has been working on
+Databases and related systems more than 20 years.
 
 ## About DataFusion
 
