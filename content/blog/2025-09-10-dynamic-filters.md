@@ -301,10 +301,12 @@ At the query plan level, Q23 looks like this before it is executed:
 └───────────────────────────┘
 ```
 
-You can see the `true` placeholder filter for the dynamic filter in the
-`predicate` field of the `DataSourceExec` operator. This will be updated by the
-`SortExec(TopK)` operator as it processes rows. When displayed after running the query, you can see the 
-the filter has been updated to `EventTime < 1372713773`:
+**Figure 5**: Physical plan for ClickBench Q23 prior to execution. The dynamic
+filter shown as `true` in the `predicate` field of the `DataSourceExec`
+operator.
+
+The dynamic filter is updated by the `SortExec(TopK)` operator during execution
+as it processes rows, as shown in Figure 6.
 
 ```text
 ┌───────────────────────────┐
@@ -326,6 +328,9 @@ the filter has been updated to `EventTime < 1372713773`:
 │ EventTime < 1372713773.0  │
 └───────────────────────────┘
 ```
+**Figure 6**: Physical plan for ClickBench Q23 after to execution. The dynamic filter has been
+updated to `EventTime < 1372713773.0` which allows the `DataSourceExec` operator to skip
+files and rows that do not match the filter.
 
 ## Hash Join + Dynamic Filters
 
@@ -349,13 +354,10 @@ Many hash joins are very selective (only a small number of rows are matched), so
 we used the same dynamic filter technique to create filters on the probe side
 scan based on the values that were seen on the build side.
 
-Currently, DataFusion uses min/max values from the build side to create the
-filter that is applied to the probe side. This is a very cheap filter to
-evaluate, but when combined with statistics pruning, late materialization, and
-other optimizations it can lead to significant performance improvements. We are
-also exploring more advanced filter types such as Bloom filters or using the
-hash table itself, which both fit easily into the dynamic filter framework.
-
+Currently, DataFusion filters using min/max join key values from the build side.
+This simple approach is fast to evaluate and improves performance significantly
+when applied to statistics pruning, late materialization, and other
+optimizations as shown in Figure 7. 
 <div class="text-center">
 <img 
   src="/blog/images/dynamic-filters/join-performance.png" 
@@ -365,7 +367,7 @@ hash table itself, which both fit easily into the dynamic filter framework.
 />
 </div>
 
-**Figure 5**: Join performance with and without dynamic filters. In DataFusion
+**Figure 7**: Join performance with and without dynamic filters. In DataFusion
 49.0.2 the join takes 2.5s, even with late materialization enabled. In
 DataFusion 50.0.0 with dynamic filters enabled the join takes only 0.7s, a 5x
 improvement, and with both dynamic filters and late materialization it takes
@@ -373,8 +375,7 @@ only 0.1s, a 25x improvement. See this [discussion] for more details.
 
 [discussion]: https://github.com/apache/datafusion-site/pull/103#issuecomment-3262612288
 
-You can see dynamic filters in action when joining two tables. For example,
-consider this simple join:
+You can see dynamic join filters in action by running the following example. 
 
 ```sql
 -- create two tables: small_table with 1K rows and large_table with 100K rows
@@ -391,7 +392,8 @@ WHERE small_table.v >= 50;
 ```
 
 A dynamic filter is created on the `large_table` scan which is updated as the
-`small_table` is read and the hash table is built. Before execution, the plan looks like this:
+`small_table` is read and the hash table is built. Before execution, the plan
+looks like this:
 
 
 ```text
@@ -450,22 +452,33 @@ A dynamic filter is created on the `large_table` scan which is updated as the
 +---------------+------------------------------------------------------------+
 ```
 
-In this plan:
-1. The build size is the left input, which scans small_table and applies the filter `v >= 50`:
-2. The probe side is the right input, which scans large_table and has the dynamic filter placeholder `true`
+**Figure 8**: Physical plan for the join query before execution. The left input
+to the join is the build side, which scans small_table and applies the filter 
+`v >= 50`. The right input to the join is the probe side, which scans `large_table`
+and has the dynamic filter placeholder `true`
 
-There are several other improvements we can make to join filtering performance,
-such as [#17171], which we expect to land in a future release.
-
-[#17171]:https://github.com/apache/datafusion/issues/17171
 
 ## Design of Scan Operator Integration
 
-Scan operators do not actually know anything about dynamic filters: we were able to package up dynamic filters as an `Arc<dyn PhysicalExpr>`, which is mostly handled by scan operators like any other expression.
-We did, however, add some new functionality to `PhysicalExpr` to make working with dynamic filters easier:
+Scan operators do not actually know anything about dynamic filters: we were able
+to package up dynamic filters as an `Arc<dyn PhysicalExpr>`, which is mostly
+handled by scan operators like any other expression. We did, however, add some
+new functionality to `PhysicalExpr` to make working with dynamic filters easier:
 
-* `PhysicalExpr::generation() -> u64`: used to track if a tree of filters has changed (e.g. because it has a dynamic filter that has been updated). For example, if we go from `c1 = 'a' AND DynamicFilter [ c2 > 1]` to `c1 = 'a' AND DynamicFilter [ c2 > 2]` the generation value will change so we know if we should re-evaluate the filter against static data like file or row group level statistics. This is used to do early termination of reading a file if the filter is updated mid scan and we can now skip the file, all without needlessly re-evaluating file level statistics all the time.
-* `PhysicalExpr::snapshot() -> Arc<dyn PhysicalExpr>`: used to create a snapshot of the filter at a given point in time. Dynamic filters use this to return the current value of their inner static filter. This can be used to serialize the filter across the wire in the case of distributed queries or to pass to systems that only support more basic filters (e.g. stats pruning rewrites).
+* `PhysicalExpr::generation() -> u64`: used to track if a tree of filters has
+  changed (e.g. because it has a dynamic filter that has been updated). For
+  example, if we go from `c1 = 'a' AND DynamicFilter [ c2 > 1]` to `c1 = 'a' AND
+  DynamicFilter [ c2 > 2]` the generation value will change so we know if we
+  should re-evaluate the filter against static data like file or row group level
+  statistics. This is used to do early termination of reading a file if the
+  filter is updated mid scan and we can now skip the file, all without
+  needlessly re-evaluating file level statistics all the time.
+
+* `PhysicalExpr::snapshot() -> Arc<dyn PhysicalExpr>`: used to create a snapshot
+  of the filter at a given point in time. Dynamic filters use this to return the
+  current value of their inner static filter. This can be used to serialize the
+  filter across the wire in the case of distributed queries or to pass to
+  systems that only support more basic filters (e.g. stats pruning rewrites).
 
 This is all encapsulated in the `DynamicFilterPhysicalExpr` struct.
 
@@ -473,24 +486,47 @@ One of the important design decisions was around directionality of information p
 Instead, we opted for a "push" based model where the read path has minimal locking and the write path (the TopK operator) is responsible for updating the filter.
 Thus, `DynamicFilterPhysicalExpr` is essentially an `Arc<RwLock<Arc<dyn PhysicalExpr>>>` which allows the TopK operator to update the filter while the scan operator can read it without blocking.
 
-## Custom `ExecutionPlan` Operators and Dynamic Filters
+## Dynamic Filter Extensibility: Custom `ExecutionPlan` Operators
 
-We went to great efforts to ensure that dynamic filters are not a hardcoded black box that only works for internal operators.
-The DataFusion community is dynamic and the project is used in many different contexts, some with very advanced custom operators specialized for specific use cases.
-To support this, we made sure that dynamic filters can be used with custom `ExecutionPlan` operators by implementing a couple of methods in the `ExecutionPlan` trait.
-We've made an extensive library of helper structs and functions that make it only 1-2 lines to implement filter pushdown support or a source of dynamic filters for custom operators.
+We went to great efforts to ensure that dynamic filters are not a hardcoded
+black box that only works for internal operators.
 
-This approach has already paid off: we've had multiple community members implement support for dynamic filter pushdown in just the first few months of this feature being available.
+The DataFusion community is dynamic and the project is used in many different
+contexts, some with very advanced custom operators specialized for specific use
+cases.
+
+To support this, we made sure that dynamic filters can be used with custom
+`ExecutionPlan` operators by implementing a couple of methods in the
+`ExecutionPlan` trait. We've made an extensive library of helper structs and
+functions that make it only 1-2 lines to implement filter pushdown support or a
+source of dynamic filters for custom operators.
+
+This approach has already paid off: we've had multiple community members
+implement support for dynamic filter pushdown in just the first few months of
+this feature being available.
 
 ## Future Work
 
-Although we've made great progress and DataFusion now has one of the most advanced dynamic filter / sideways information passing implementations that we know of, we are not done yet!
+Although we've made great progress and DataFusion now has one of the most
+advanced open source dynamic filter / sideways information passing
+implementations that we know of, there are many of areas of future improvement
+such as:
 
-There's a multitude of areas of future improvement that we are looking into:
+* [Support for more types of joins]: we only implemented support for hash inner
+  joins so far. There's the potential to expand this to other join types both in
+  terms of the physical implementation (nested loop joins, etc.) and join type
+  (e.g. left outer joins, cross joins, etc.).
 
-* Support for more types of joins: we only implemented support for hash inner joins so far. There's the potential to expand this to other join types both in terms of the physical implementation (nested loop joins, etc.) and join type (e.g. left outer joins, cross joins, etc.).
-* Push down entire hash tables to the scan operator: this could potentially help a lot with join keys that are not naturally ordered or have a lot of skew.
-* Use file level statistics to order files to match the `ORDER BY` clause as best we can: this will help TopK dynamic filters be more effective by skipping more work earlier in the scan.
+* [Push down entire hash tables to the scan operator]: this could potentially help
+  a lot with join keys that are not naturally ordered or have a lot of skew.
+
+* [Use file level statistics to order files] to match the `ORDER BY` clause as
+  best we can: this will help TopK dynamic filters be more effective by skipping
+  more work earlier in the scan.
+
+[Support for more types of joins]: https://github.com/apache/datafusion/issues/16973
+[Push down entire hash tables to the scan operator]: https://github.com/apache/datafusion/issues/17171
+[Use file level statistics to order files]: https://github.com/apache/datafusion/issues/17348
 
 ## Appendix
 
