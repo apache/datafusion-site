@@ -53,7 +53,7 @@ SELECT * FROM records ORDER BY start_timestamp DESC LIMIT 1000;
 
 We noticed this was *pretty slow*, even though DataFusion has long had the
 classic `TopK` optimization (described below). After implementing the dynamic
-filter techniques described in this blog, we saw performance improve *over 10x*
+filter techniques described in this blog, we saw performance improve *by over 10x*
 for this query pattern, and are applying the optimization to other queries and
 operators as well.
 
@@ -77,7 +77,7 @@ SELECT * FROM hits WHERE "URL" LIKE '%google%' ORDER BY "EventTime" LIMIT 10;
 filters (DF)<sup id="fn1">[1](#footnote1)</sup>, and late materialization
 (LM)<sup id="fn2">[2](#footnote2)</sup> for different partitions / core usage.
 Dynamic filters alone (yellow) and late materialization alone (red) show a large
-improvement over the baseline (blue). When both optimizations enabled (green)
+improvement over the baseline (blue). When both optimizations are enabled (green)
 performance improves by up to 22x. See the appendix for more measurement details.
 
 
@@ -208,7 +208,7 @@ ORDER BY start_timestamp DESC
 LIMIT 3;
 ```
 
-And DataFusion's existing hierarchical pruning (described in [this blog])  would
+And DataFusion's existing hierarchical pruning (described in [this blog]) would
 skip reading unnecessary files and row groups, and only decode
 the necessary rows.
 
@@ -241,7 +241,7 @@ APIs, and custom query languages built with DataFusion.
 As mentioned above, DataFusion has a specialized sort operator named [TopK] that
 only keeps `K` rows in memory. For a `DESC` sort order, each new input batch is
 compared against the current `K` largest values, and then the current `K` rows
-possibly get replaced with any new input rows that were larger. The [code is
+possibly get replaced with any new input rows that are larger. The [code is
 here].
 
 [TopK]: https://docs.rs/datafusion/latest/datafusion/physical_plan/struct.TopK.html
@@ -260,17 +260,17 @@ InfluxData [optimized a similar query pattern in InfluxDB IOx] using another
 operator called `ProgressiveEvalExec`. However, `ProgressiveEvalExec` requires that the data
 is already sorted and a careful analysis of ordering to prove that it can be
 used and still produce correct results. That is not the case for Logfire data (and many other datasets):
-data tend to be *roughly* sorted (e.g. if you append to files as you receive
+data tends to be *roughly* sorted (e.g. if you append to files as you receive
 it) but that does not guarantee that it is fully sorted, either within or between
 files. 
 
-We [discussed possible solutions] with the community, and ultimately decided
-implemented a generic "dynamic filters", which is general enough to be used in
+We [discussed possible solutions] with the community, and ultimately decided to
+implement a generic "dynamic filters", which is general enough to be used in
 joins as well (see next section). Our implementation appears very similar to
 recently announced optimizations in closed-source, commercial systems such as
 [Accelerating TopK Queries in Snowflake], or [self-sharpening runtime filters in
-Alibaba Cloud's PolarDB], and we are excited we can offer similar features and
-in an open source query engine like DataFusion. 
+Alibaba Cloud's PolarDB], and we are excited we can offer similar features
+in an open source query engine like DataFusion.
 
 [optimized a similar query pattern in InfluxDB IOx]:  https://www.influxdata.com/blog/making-recent-value-queries-hundreds-times-faster/
 [discussed possible solutions]: https://github.com/apache/datafusion/issues/15037
@@ -391,7 +391,7 @@ FROM small_table JOIN large_table ON small_table.k = large_table.k
 WHERE small_table.v >= 50;
 ```
 
-Note there are no filters on the `large_table` in the initial query, but a 
+Note there are no filters on the `large_table` in the initial query, but a
 dynamic filter is introduced by DataFusion on the `large_table` scan. As the
 `small_table` is read and the hash table is built, the dynamic filter is updated 
 to become more and more effective. Before execution, the plan
@@ -638,4 +638,5 @@ LIMIT 10;
 | False             | True                   |      12 |      2.37  |
 | True              | False                  |      12 |      5.055 |
 | True              | True                   |      12 |      0.602 |
+
 
