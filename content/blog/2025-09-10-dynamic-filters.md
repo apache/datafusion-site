@@ -265,11 +265,11 @@ it) but that does not guarantee that it is fully sorted, either within or betwee
 files. 
 
 We [discussed possible solutions] with the community, and ultimately decided to
-implement a generic "dynamic filters", which is general enough to be used in
+implement generic "dynamic filters", which are general enough to be used in
 joins as well (see next section). Our implementation appears very similar to
 recently announced optimizations in closed-source, commercial systems such as
 [Accelerating TopK Queries in Snowflake], or [self-sharpening runtime filters in
-Alibaba Cloud's PolarDB], and we are excited we can offer similar features
+Alibaba Cloud's PolarDB], and we are excited that we can offer similar features
 in an open source query engine like DataFusion.
 
 [optimized a similar query pattern in InfluxDB IOx]:  https://www.influxdata.com/blog/making-recent-value-queries-hundreds-times-faster/
@@ -304,7 +304,7 @@ filter is shown as `true` in the `predicate` field of the `DataSourceExec`
 operator.
 
 The dynamic filter is updated by the `SortExec(TopK)` operator during execution
-as it processes rows, as shown in Figure 6.
+as shown in Figure 6.
 
 ```text
 ┌───────────────────────────┐
@@ -504,7 +504,7 @@ make working with dynamic filters more performant for specific use cases:
   filter across the network for distributed engines or pass to systems that
   support specific static filter patterns (e.g. stats pruning rewrites).
 
-This is all implementing in the `DynamicFilterPhysicalExpr` struct.
+This is all implemented in the `DynamicFilterPhysicalExpr` struct.
 
 Another important design point was handling concurrency and information
 flow. In early designs, the scan polled the source operators on every row /
@@ -519,11 +519,11 @@ operator.
 
 Although we've made great progress and DataFusion now has one of the most
 advanced open-source dynamic filter / sideways information passing
-implementations that we know of, we seemany areas of future improvement such as:
+implementations that we know of, we see many areas of future improvement such as:
 
 * [Support for more types of joins]: This optimization is only implemented for
   `INNER` hash joins so far, but it could be implemented for other join algorithms
-  (e.g. nested loop joins, ) and join types (e.g. `LEFT OUTER JOIN`).
+  (e.g. nested loop joins) and join types (e.g. `LEFT OUTER JOIN`).
 
 * [Push down entire hash tables to the scan operator]: Improve the representation
   of the dynamic filter beyond min/max values to improve performance for joins with many
@@ -638,5 +638,6 @@ LIMIT 10;
 | False             | True                   |      12 |      2.37  |
 | True              | False                  |      12 |      5.055 |
 | True              | True                   |      12 |      0.602 |
+
 
 
