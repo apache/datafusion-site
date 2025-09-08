@@ -57,7 +57,8 @@ filter techniques described in this blog, we saw performance improve *over 10x*
 for this query pattern, and are applying the optimization to other queries and
 operators as well.
 
-Let's look at some preliminary numbers, using [ClickBench] [Q23], which is very similar to our earlier examples:
+Let's look at some preliminary numbers, using [ClickBench] [Q23], which has 
+the same pattern as our motivating example:
 
 ```sql
 SELECT * FROM hits WHERE "URL" LIKE '%google%' ORDER BY "EventTime" LIMIT 10;
@@ -249,7 +250,7 @@ Prior to dynamic filters, DataFusion had no early termination: it would read the
 *entire* `records` table even if it already had the top `K` rows because it
 still had to check that there were no rows that had larger `start_timestamp`.
 
-You can see how this is a problem if you have 2 years' worth of timeseries data:
+You can see how this is a problem if you have 2 years' worth of time-series data:
 the largest `1000` values of `start_timestamp` are likely within the first few
 files read, but even if the `TopK` operator has seen 1000 timestamps on August
 16th, 2025, DataFusion would still read files that have only data in 2024 just to
@@ -266,7 +267,7 @@ files.
 We [discussed possible solutions] with the community, which ultimately resulted
 in the implementation of "dynamic filters", and our design is general enough that it
 applies to joins as well. We believe our implementation is very similar to
-recently announced optimizations in closed source, commercial systems such as
+recently announced optimizations in closed-source, commercial systems such as
 [Accelerating TopK Queries in Snowflake], or [self-sharpening runtime filters in
 Alibaba Cloud's PolarDB], and we are excited we can offer similar performance
 improvements in an open source query engine like DataFusion. We hope this will
@@ -299,11 +300,11 @@ At the query plan level, Q23 looks like this before it is executed:
 ```
 
 **Figure 5**: Physical plan for ClickBench Q23 prior to execution. The dynamic
-filter shown as `true` in the `predicate` field of the `DataSourceExec`
+filter is shown as `true` in the `predicate` field of the `DataSourceExec`
 operator.
 
 The dynamic filter is updated by the `SortExec(TopK)` operator during execution
-as shown in Figure 6.
+as it processes rows, as shown in Figure 6.
 
 ```text
 ┌───────────────────────────┐
@@ -325,13 +326,13 @@ as shown in Figure 6.
 │ EventTime < 1372713773.0  │
 └───────────────────────────┘
 ```
-**Figure 6**: Physical plan for ClickBench Q23 after to execution. The dynamic filter has been
-updated to `EventTime < 1372713773.0` which allows the `DataSourceExec` operator to skip
+**Figure 6**: Physical plan for ClickBench Q23 after execution. The dynamic filter has been
+updated to `EventTime < 1372713773.0`, which allows the `DataSourceExec` operator to skip
 files and rows that do not match the filter.
 
 ## Hash Join + Dynamic Filters
 
-We spent significant effort to make dynamic filters a general purpose
+We spent significant effort to make dynamic filters a general-purpose
 optimization (see the Extensibility section below for more details). Instead of
 a one-off optimization for TopK queries, we created a general mechanism for
 passing information between operators during execution that can be used in many
@@ -353,7 +354,7 @@ act as a filter, so it is natural to use the same dynamic filter technique to
 create filters on the probe side scan based on the values that were seen on the
 build side.
 
-DataFusion 50.0.0 adds a dynamic filters to the proble input using min/max join
+DataFusion 50.0.0 adds dynamic filters to the probe input using min/max join
 key values from the build side. This simple approach is fast to evaluate and the
 filter improves performance significantly when used with statistics pruning,
 late materialization, and other optimizations as shown in Figure 7.
@@ -391,7 +392,7 @@ FROM small_table JOIN large_table ON small_table.k = large_table.k
 WHERE small_table.v >= 50;
 ```
 
-A dynamic filter is created on the `large_table` scan which is updated as the
+A dynamic filter is created on the `large_table` scan, which is updated as the
 `small_table` is read and the hash table is built. Before execution, the plan
 looks like this:
 
@@ -464,8 +465,8 @@ software maintainability, but also because DataFusion is used in many different
 contexts, some with very advanced custom operators specialized for specific use
 cases.
 
-Dynamic filters creation and pushdown are implemented as methods on the
-[ExecutionPlan trait]. Thus, it is possible for user defined, custom
+Dynamic filter creation and pushdown are implemented as methods on the
+[ExecutionPlan trait]. Thus, it is possible for user-defined, custom
 `ExecutionPlan`s to use dynamic filters with little to no modification. We also
 provide an extensive library of helper structs and functions, so it often
 takes only 1-2 lines to implement filter pushdown support or a source of dynamic
@@ -479,21 +480,21 @@ DataFusion 50.0.0.
 
 <!-- AAL Who else has done this? -->
 
-###  Design of Scan Operator Integration
+### Design of Scan Operator Integration
 
 A core design decision is that dynamic filters are represented as `Arc<dyn
-PhysicalExpr>` which is the same interface as all other expressions in
+PhysicalExpr>`, which is the same interface as all other expressions in
 DataFusion. This means that `DataSourceExec` and other scan operators do not
 handle dynamic filters specially and existing filter pushdown logic works as
-expected. We did, add some new functionality to `PhysicalExpr` to make working
+expected. We did add some new functionality to `PhysicalExpr` to make working
 with dynamic filters more performant for specific use cases:
 
 * `PhysicalExpr::generation() -> u64`: to track if a tree of filters has
   changed (e.g. because it has a dynamic filter that has been updated). For
   example, if we go from `c1 = 'a' AND DynamicFilter [ c2 > 1]` to `c1 = 'a' AND
   DynamicFilter [ c2 > 2]` the generation value will change so operators know if they
-  should re-evaluate the filter against static data like file or row group level
-  statistics. This is used to do early termination of reading a file if the
+  should re-evaluate the filter against static data like file or row group
+  level statistics. This is used to do early termination of reading a file if the
   filter is updated mid scan and we can now skip the file, without
   needlessly re-evaluating file level statistics all the time.
 
@@ -505,29 +506,29 @@ with dynamic filters more performant for specific use cases:
 
 This is all encapsulated in the `DynamicFilterPhysicalExpr` struct.
 
-Another important design decisions was how to handle concurrency and information
+Another important design decision was how to handle concurrency and information
 flow. In early designs, the scan polled the source operators on every row /
 batch, which had significant overhead. The final design is a "push" model where
-the scan requires has minimal locking and the write path (e.g. the TopK
+the scan path has minimal locking and the write path (e.g. the TopK
 operator) is responsible for updating the filter. You can think of
-`DynamicFilterPhysicalExpr` as an `Arc<RwLock<Arc<dyn PhysicalExpr>>>` which
+`DynamicFilterPhysicalExpr` as an `Arc<RwLock<Arc<dyn PhysicalExpr>>>`, which
 allows the TopK operator to update the filter without blocking the scan
 operator.
 
 ## Future Work
 
 Although we've made great progress and DataFusion now has one of the most
-advanced open source dynamic filter / sideways information passing
-implementations that we know of, there are many of areas of future improvement
+advanced open-source dynamic filter / sideways information passing
+implementations that we know of, there are many areas of future improvement
 such as:
 
 * [Support for more types of joins]: This optimization is only implemented for
   `INNER` hash joins so far, but it could be implemented for other join algorithms
-   (nested loop joins, etc.) and join type (e.g. `LEFT OUTER JOIN`, etc).
+  (nested loop joins, etc.) and join types (e.g. `LEFT OUTER JOIN`, etc.).
 
-* [Push down entire hash tables to the scan operator]: We could improve the representation
-  of the dynamic filter from min/max values to improve performance for joins with many
-  distinct matching keys that are not naturally ordered or have a lot of skew.
+* [Push down entire hash tables to the scan operator]: Improve the representation
+  of the dynamic filter beyond min/max values to improve performance for joins with many
+  distinct matching keys that are not naturally ordered or have significant skew.
 
 * [Use file level statistics to order files] to match the `ORDER BY` clause as
   much as possible. This can help TopK dynamic filters be more effective at
@@ -542,7 +543,7 @@ such as:
 
 Thank you to [Pydantic] and [InfluxData] for supporting our work on DataFusion
 and open source in general. Thank you to [zhuqi-lucas], [xudong963],
-[Dandandan],  and [LiaCastaneda], for helping with the dynamic join filter
+[Dandandan], and [LiaCastaneda], for helping with the dynamic join filter
 implementation and testing. Thank you to [nuno-faria] for providing performance
 results with joins.
 
