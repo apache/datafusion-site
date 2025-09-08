@@ -230,11 +230,11 @@ data tends to be <em>roughly</em> sorted (e.g. if you append to files as you rec
 it) but that does not guarantee that it is fully sorted, either within or between
 files. </p>
 <p>We <a href="https://github.com/apache/datafusion/issues/15037">discussed possible solutions</a> with the community, and ultimately decided to
-implement a generic "dynamic filters", which is general enough to be used in
+implement generic "dynamic filters", which are general enough to be used in
 joins as well (see next section). Our implementation appears very similar to
 recently announced optimizations in closed-source, commercial systems such as
 <a href="https://program.berlinbuzzwords.de/bbuzz24/talk/3DTQJB/">Accelerating TopK Queries in Snowflake</a>, or <a href="https://www.alibabacloud.com/blog/about-database-kernel-%7C-learn-about-polardb-imci-optimization-techniques_600274">self-sharpening runtime filters in
-Alibaba Cloud's PolarDB</a>, and we are excited we can offer similar features
+Alibaba Cloud's PolarDB</a>, and we are excited that we can offer similar features
 in an open source query engine like DataFusion.</p>
 <p>At the query plan level, Q23 looks like this before it is executed:</p>
 <pre><code class="language-text">&boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
@@ -259,7 +259,7 @@ in an open source query engine like DataFusion.</p>
 filter is shown as <code>true</code> in the <code>predicate</code> field of the <code>DataSourceExec</code>
 operator.</p>
 <p>The dynamic filter is updated by the <code>SortExec(TopK)</code> operator during execution
-as it processes rows, as shown in Figure 6.</p>
+as shown in Figure 6.</p>
 <pre><code class="language-text">&boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
 &boxv;       SortExec(TopK)      &boxv;
 &boxv;    --------------------   &boxv;
@@ -427,7 +427,7 @@ make working with dynamic filters more performant for specific use cases:</p>
   support specific static filter patterns (e.g. stats pruning rewrites).</p>
 </li>
 </ul>
-<p>This is all implementing in the <code>DynamicFilterPhysicalExpr</code> struct.</p>
+<p>This is all implemented in the <code>DynamicFilterPhysicalExpr</code> struct.</p>
 <p>Another important design point was handling concurrency and information
 flow. In early designs, the scan polled the source operators on every row /
 batch, which had significant overhead. The final design is a "push" model where
@@ -439,12 +439,12 @@ operator.</p>
 <h2>Future Work</h2>
 <p>Although we've made great progress and DataFusion now has one of the most
 advanced open-source dynamic filter / sideways information passing
-implementations that we know of, we seemany areas of future improvement such as:</p>
+implementations that we know of, we see many areas of future improvement such as:</p>
 <ul>
 <li>
 <p><a href="https://github.com/apache/datafusion/issues/16973">Support for more types of joins</a>: This optimization is only implemented for
   <code>INNER</code> hash joins so far, but it could be implemented for other join algorithms
-  (e.g. nested loop joins, ) and join types (e.g. <code>LEFT OUTER JOIN</code>).</p>
+  (e.g. nested loop joins) and join types (e.g. <code>LEFT OUTER JOIN</code>).</p>
 </li>
 <li>
 <p><a href="https://github.com/apache/datafusion/issues/17171">Push down entire hash tables to the scan operator</a>: Improve the representation
