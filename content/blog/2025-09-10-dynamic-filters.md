@@ -390,13 +390,9 @@ FROM small_table JOIN large_table ON small_table.k = large_table.k
 WHERE small_table.v >= 50;
 ```
 
-
-
 A dynamic filter is created on the `large_table` scan which is updated as the
 `small_table` is read and the hash table is built. Before execution, the plan looks like this:
 
-1. The build size is the left input, which scans small_table and applies the filter `v >= 50`:
-2. The probe side is the right input, which scans large_table and has the dynamic filter placeholder `true`
 
 ```text
 +---------------+------------------------------------------------------------+
@@ -453,6 +449,15 @@ A dynamic filter is created on the `large_table` scan which is updated as the
 |               |                                                            |
 +---------------+------------------------------------------------------------+
 ```
+
+In this plan:
+1. The build size is the left input, which scans small_table and applies the filter `v >= 50`:
+2. The probe side is the right input, which scans large_table and has the dynamic filter placeholder `true`
+
+There are several other improvements we can make to join filtering performance,
+such as [#17171], which we expect to land in a future release.
+
+[#17171]:https://github.com/apache/datafusion/issues/17171
 
 ## Design of Scan Operator Integration
 
@@ -525,6 +530,22 @@ LIMIT 10;
 | True              | False                  |      12 |      5.055 |
 | True              | True                   |      12 |      0.602 |
 
+
+## Acknowledgements
+
+Thank you to [Pydantic] and [InfluxData] for supporting our work on DataFusion
+and open source in general. Thank you to [zhuqi-lucas], [xudong963],
+[Dandandan],  and [LiaCastaneda], for helping with the dynamic join filter
+implementation and testing. Thank you to [nuno-faria] for providing performance
+results with joins.
+
+[Pydantic]: https://pydantic.dev
+[InfluxData]: https://www.influxdata.com/
+[zhuqi-lucas]: https://github.com/zhuqi-lucas
+[xudong963]: https://github.com/xudong963
+[Dandandan]: https://github.com/Dandandan
+[LiaCastaneda]: https://github.com/LiaCastaneda
+[nuno-faria]: https://github.com/nuno-faria
 
 
 ## About the Authors
