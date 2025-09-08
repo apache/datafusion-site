@@ -64,7 +64,7 @@ platform built on DataFusion. One of the most common workflows / queries is
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;We noticed this was &lt;em&gt;pretty slow&lt;/em&gt;, even though DataFusion has long had the
 classic &lt;code&gt;TopK&lt;/code&gt; optimization (described below). After implementing the dynamic
-filter techniques described in this blog, we saw performance improve &lt;em&gt;over 10x&lt;/em&gt;
+filter techniques described in this blog, we saw performance improve &lt;em&gt;by over 10x&lt;/em&gt;
 for this query pattern, and are applying the optimization to other queries and
 operators as well.&lt;/p&gt;
 &lt;p&gt;Let's look at some preliminary numbers, using &lt;a href="https://github.com/apache/datafusion/blob/main/benchmarks/queries/clickbench/queries/q23.sql"&gt;ClickBench&lt;/a&gt;, which has 
@@ -78,7 +78,7 @@ the same pattern as our motivating example:&lt;/p&gt;
 filters (DF)&lt;sup id="fn1"&gt;&lt;a href="#footnote1"&gt;1&lt;/a&gt;&lt;/sup&gt;, and late materialization
 (LM)&lt;sup id="fn2"&gt;&lt;a href="#footnote2"&gt;2&lt;/a&gt;&lt;/sup&gt; for different partitions / core usage.
 Dynamic filters alone (yellow) and late materialization alone (red) show a large
-improvement over the baseline (blue). When both optimizations enabled (green)
+improvement over the baseline (blue). When both optimizations are enabled (green)
 performance improves by up to 22x. See the appendix for more measurement details.&lt;/p&gt;
 &lt;h2&gt;Background: TopK and Dynamic Filters&lt;/h2&gt;
 &lt;p&gt;To explain how dynamic filters improve query performance we first need to
@@ -173,7 +173,7 @@ WHERE start_timestamp &amp;gt; '2025-08-16T20:35:13.00Z'  -- Filter to skip rows
 ORDER BY start_timestamp DESC
 LIMIT 3;
 &lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;And DataFusion's existing hierarchical pruning (described in &lt;a href="https://datafusion.apache.org/blog/2025/08/15/external-parquet-indexes/"&gt;this blog&lt;/a&gt;)  would
+&lt;p&gt;And DataFusion's existing hierarchical pruning (described in &lt;a href="https://datafusion.apache.org/blog/2025/08/15/external-parquet-indexes/"&gt;this blog&lt;/a&gt;) would
 skip reading unnecessary files and row groups, and only decode
 the necessary rows.&lt;/p&gt;
 &lt;p&gt;However, obviously when we start running the query we don't have the value
@@ -196,7 +196,7 @@ APIs, and custom query languages built with DataFusion.&lt;/p&gt;
 &lt;p&gt;As mentioned above, DataFusion has a specialized sort operator named &lt;a href="https://docs.rs/datafusion/latest/datafusion/physical_plan/struct.TopK.html"&gt;TopK&lt;/a&gt; that
 only keeps &lt;code&gt;K&lt;/code&gt; rows in memory. For a &lt;code&gt;DESC&lt;/code&gt; sort order, each new input batch is
 compared against the current &lt;code&gt;K&lt;/code&gt; largest values, and then the current &lt;code&gt;K&lt;/code&gt; rows
-possibly get replaced with any new input rows that were larger. The &lt;a href="https://github.com/apache/datafusion/blob/b4a8b5ae54d939353b7cbd5ab8aee7d3bedecb66/datafusion/physical-plan/src/topk/mod.rs"&gt;code is
+possibly get replaced with any new input rows that are larger. The &lt;a href="https://github.com/apache/datafusion/blob/b4a8b5ae54d939353b7cbd5ab8aee7d3bedecb66/datafusion/physical-plan/src/topk/mod.rs"&gt;code is
 here&lt;/a&gt;.&lt;/p&gt;
 &lt;p&gt;Prior to dynamic filters, DataFusion had no early termination: it would read the
 &lt;em&gt;entire&lt;/em&gt; &lt;code&gt;records&lt;/code&gt; table even if it already had the top &lt;code&gt;K&lt;/code&gt; rows because it
@@ -210,16 +210,16 @@ those that contain data only from 2024) just to make sure.&lt;/p&gt;
 operator called &lt;code&gt;ProgressiveEvalExec&lt;/code&gt;. However, &lt;code&gt;ProgressiveEvalExec&lt;/code&gt; requires that the data
 is already sorted and a careful analysis of ordering to prove that it can be
 used and still produce correct results. That is not the case for Logfire data (and many other datasets):
-data tend to be &lt;em&gt;roughly&lt;/em&gt; sorted (e.g. if you append to files as you receive
+data tends to be &lt;em&gt;roughly&lt;/em&gt; sorted (e.g. if you append to files as you receive
 it) but that does not guarantee that it is fully sorted, either within or between
 files. &lt;/p&gt;
-&lt;p&gt;We &lt;a href="https://github.com/apache/datafusion/issues/15037"&gt;discussed possible solutions&lt;/a&gt; with the community, and ultimately decided
-implemented a generic "dynamic filters", which is general enough to be used in
+&lt;p&gt;We &lt;a href="https://github.com/apache/datafusion/issues/15037"&gt;discussed possible solutions&lt;/a&gt; with the community, and ultimately decided to
+implement a generic "dynamic filters", which is general enough to be used in
 joins as well (see next section). Our implementation appears very similar to
 recently announced optimizations in closed-source, commercial systems such as
 &lt;a href="https://program.berlinbuzzwords.de/bbuzz24/talk/3DTQJB/"&gt;Accelerating TopK Queries in Snowflake&lt;/a&gt;, or &lt;a href="https://www.alibabacloud.com/blog/about-database-kernel-%7C-learn-about-polardb-imci-optimization-techniques_600274"&gt;self-sharpening runtime filters in
-Alibaba Cloud's PolarDB&lt;/a&gt;, and we are excited we can offer similar features and
-in an open source query engine like DataFusion. &lt;/p&gt;
+Alibaba Cloud's PolarDB&lt;/a&gt;, and we are excited we can offer similar features
+in an open source query engine like DataFusion.&lt;/p&gt;
 &lt;p&gt;At the query plan level, Q23 looks like this before it is executed:&lt;/p&gt;
 &lt;pre&gt;&lt;code class="language-text"&gt;&amp;boxdr;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxdl;
 &amp;boxv;       SortExec(TopK)      &amp;boxv;
@@ -307,7 +307,7 @@ SELECT *
 FROM small_table JOIN large_table ON small_table.k = large_table.k 
 WHERE small_table.v &amp;gt;= 50;
 &lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;Note there are no filters on the &lt;code&gt;large_table&lt;/code&gt; in the initial query, but a 
+&lt;p&gt;Note there are no filters on the &lt;code&gt;large_table&lt;/code&gt; in the initial query, but a
 dynamic filter is introduced by DataFusion on the &lt;code&gt;large_table&lt;/code&gt; scan. As the
 &lt;code&gt;small_table&lt;/code&gt; is read and the hash table is built, the dynamic filter is updated 
 to become more and more effective. Before execution, the plan
