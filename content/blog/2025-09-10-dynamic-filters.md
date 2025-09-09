@@ -368,7 +368,7 @@ late materialization, and other optimizations as shown in Figure 7.
 </div>
 
 **Figure 7**: Join performance with and without dynamic filters. In DataFusion
-49.0.2 the join takes 2.5s, even with late materialization enabled. In
+49.0.2 the join takes 2.5s, even with late materialization (LM) enabled. In
 DataFusion 50.0.0 with dynamic filters enabled (the default), the join takes
 only 0.7s, a 5x improvement. With both dynamic filters and late materialization,
 DataFusion 50.0.0 takes 0.1s, a 25x improvement. See this [discussion] for more
@@ -380,10 +380,10 @@ You can see dynamic join filters in action with the following example.
 
 ```sql
 -- create two tables: small_table with 1K rows and large_table with 100K rows
-copy (select i as k, i as v from generate_series(1, 1000) t(i)) to 'small_table.parquet';
-create external table small_table stored as parquet location 'small_table.parquet';
-copy (select i as k from generate_series(1, 100000) t(i)) to 'large_table.parquet';
-create external table large_table stored as parquet location 'large_table.parquet';
+COPY (SELECT i as k, i as v FROM generate_series(1, 1000) t(i)) TO 'small_table.parquet';
+CREATE EXTERNAL TABLE small_table STORED AS PARQUET LOCATION 'small_table.parquet';
+COPY (SELECT i as k FROM generate_series(1, 100000) t(i)) TO 'large_table.parquet';
+CREATE EXTERNAL TABLE large_table STORED AS PARQUET LOCATION 'large_table.parquet';
 
 -- Join the two tables, with a filter on small_table
 EXPLAIN 
