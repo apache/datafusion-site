@@ -27,7 +27,7 @@ limitations under the License.
 <!-- 
 diagrams source: https://docs.google.com/presentation/d/1FFYy27ydZdeFZWWuMjZGnYKUx9QNJfzuVLAH8AE5wlc/edit?slide=id.g364a74cba3d_0_92#slide=id.g364a74cba3d_0_92
 Intended Audience: Query engine / data systems developers who want to learn about topk optimization
-Goal: Introduce TopK and dynamic filters as in general optimization techniques for query engines, and how they were used to improve performance in DataFusion.
+Goal: Introduce TopK and dynamic filters as general optimization techniques for query engines, and how they were used to improve performance in DataFusion.
 -->
 
 This blog post introduces the query engine optimization techniques called TopK
@@ -83,8 +83,8 @@ performance improves by up to 22x. See the appendix for more measurement details
 
 ## Background: TopK and Dynamic Filters
 
-To explain how dynamic filters improve query performance we first need to
-explain the so-called "TopK" optimization. To do so we will use a simplified
+To explain how dynamic filters improve query performance, we first need to
+explain the so-called "TopK" optimization. To do so, we will use a simplified
 version of ClickBench Q23:
 
 ```sql
@@ -454,7 +454,7 @@ looks like this:
 ```
 
 **Figure 8**: Physical plan for the join query before execution. The left input
-to the join is the build side, which scans small_table and applies the filter
+to the join is the build side, which scans `small_table` and applies the filter
 `v >= 50`. The right input to the join is the probe side, which scans `large_table`
 and has the dynamic filter (shown here as the placeholder `true`).
 
@@ -638,6 +638,3 @@ LIMIT 10;
 | False             | True                   |      12 |      2.37  |
 | True              | False                  |      12 |      5.055 |
 | True              | True                   |      12 |      0.602 |
-
-
-
