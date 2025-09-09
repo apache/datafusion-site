@@ -551,8 +551,8 @@ implementations that we know of, we see many areas of future improvement such as
 Thank you to [Pydantic] and [InfluxData] for supporting our work on DataFusion
 and open source in general. Thank you to [zhuqi-lucas], [xudong963],
 [Dandandan], and [LiaCastaneda], for helping with the dynamic join filter
-implementation and testing. Thank you to [nuno-faria] for providing performance
-results with joins.
+implementation and testing. Thank you to [nuno-faria] for providing join performance
+results and [djanderson] for their helpful review comments. 
 
 [Pydantic]: https://pydantic.dev
 [InfluxData]: https://www.influxdata.com/
@@ -561,6 +561,7 @@ results with joins.
 [Dandandan]: https://github.com/Dandandan
 [LiaCastaneda]: https://github.com/LiaCastaneda
 [nuno-faria]: https://github.com/nuno-faria
+[djanderson]: https://github.com/djanderson
 
 
 ## About the Authors
