@@ -360,7 +360,7 @@ late materialization, and other optimizations as shown in Figure 7.
 
 <div class="text-center">
 <img 
-  src="/blog/images/dynamic-filters/join-performance.png" 
+  src="/blog/images/dynamic-filters/join-performance.svg" 
   width="80%" 
   class="img-responsive" 
   alt="Join Performance Improvements with Dynamic Filters"
@@ -369,9 +369,10 @@ late materialization, and other optimizations as shown in Figure 7.
 
 **Figure 7**: Join performance with and without dynamic filters. In DataFusion
 49.0.2 the join takes 2.5s, even with late materialization enabled. In
-DataFusion 50.0.0 with dynamic filters enabled the join takes only 0.7s, a 5x
-improvement, and with both dynamic filters and late materialization it takes
-only 0.1s, a 25x improvement. See this [discussion] for more details.
+DataFusion 50.0.0 with dynamic filters enabled (the default), the join takes
+only 0.7s, a 5x improvement. With both dynamic filters and late materialization,
+DataFusion 50.0.0 takes 0.1s, a 25x improvement. See this [discussion] for more
+details.
 
 [discussion]: https://github.com/apache/datafusion-site/pull/103#issuecomment-3262612288
 
