@@ -276,31 +276,41 @@ improve hash joins by implementing a technique called &lt;a href="https://15721.
 passing&lt;/a&gt;, which is similar to &lt;a href="https://issues.apache.org/jira/browse/SPARK-32268"&gt;Bloom filter joins&lt;/a&gt; in Apache Spark. See 
 &lt;a href="https://github.com/apache/datafusion/issues/7955"&gt;issue #7955&lt;/a&gt; for more details.&lt;/p&gt;
 &lt;p&gt;In a Hash Join, the query engine picks one input of the join to be the "build"
-input and the other input to be the "probe" side. A hash join first &lt;em&gt;builds&lt;/em&gt; a
-hash table by reading the build input into memory, and then it reads the probe
-input, using the hash table to find matching rows from the probe side. Many hash
-joins are very selective (only a small number of rows are matched) and act as
-filters, so it is natural to use the same dynamic filter technique to create
-filters on the probe side scan with the values seen on the build side.&lt;/p&gt;
-&lt;p&gt;DataFusion 50.0.0 adds dynamic filters to the probe input using min/max join
-key values from the build side. This simple approach is fast to evaluate and the
-filter improves performance significantly when combined with statistics pruning,
-late materialization, and other optimizations as shown in Figure 7.&lt;/p&gt;
+input and the other input to be the "probe" side.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;First, the &lt;strong&gt;build side&lt;/strong&gt; is loaded into memory, and turned into a hash table.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Then, the &lt;strong&gt;probe side&lt;/strong&gt; is scanned, and matching rows are found by looking 
+  in the hash table. Non-matching rows are discarded and thus joins often act as
+  filters.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Many hash joins are very selective (only a small number of rows are matched), so
+it is natural to use the same dynamic filter technique. DataFusion 50.0.0 pushes
+down knowledge of what keys exist on the build side into the scan of the probe
+side with a dynamic filter based on min/max join key values. For example, if the
+build side only has keys in the range &lt;code&gt;[100, 200]&lt;/code&gt;, then DataFusion will filter
+all probe rows with keys outside that range during the scan.&lt;/p&gt;
+&lt;p&gt;This simple approach is fast to evaluate and the filter improves performance
+significantly when combined with statistics pruning, late materialization, and
+other optimizations as shown in Figure 7.&lt;/p&gt;
 &lt;div class="text-center"&gt;
 &lt;img alt="Join Performance Improvements with Dynamic Filters" class="img-responsive" src="/blog/images/dynamic-filters/join-performance.svg" width="80%"/&gt;
 &lt;/div&gt;
 &lt;p&gt;&lt;strong&gt;Figure 7&lt;/strong&gt;: Join performance with and without dynamic filters. In DataFusion
-49.0.2 the join takes 2.5s, even with late materialization enabled. In
+49.0.2 the join takes 2.5s, even with late materialization (LM) enabled. In
 DataFusion 50.0.0 with dynamic filters enabled (the default), the join takes
 only 0.7s, a 5x improvement. With both dynamic filters and late materialization,
 DataFusion 50.0.0 takes 0.1s, a 25x improvement. See this &lt;a href="https://github.com/apache/datafusion-site/pull/103#issuecomment-3262612288"&gt;discussion&lt;/a&gt; for more
 details.&lt;/p&gt;
 &lt;p&gt;You can see dynamic join filters in action with the following example. &lt;/p&gt;
 &lt;pre&gt;&lt;code class="language-sql"&gt;-- create two tables: small_table with 1K rows and large_table with 100K rows
-copy (select i as k, i as v from generate_series(1, 1000) t(i)) to 'small_table.parquet';
-create external table small_table stored as parquet location 'small_table.parquet';
-copy (select i as k from generate_series(1, 100000) t(i)) to 'large_table.parquet';
-create external table large_table stored as parquet location 'large_table.parquet';
+COPY (SELECT i as k, i as v FROM generate_series(1, 1000) t(i)) TO 'small_table.parquet';
+CREATE EXTERNAL TABLE small_table STORED AS PARQUET LOCATION 'small_table.parquet';
+COPY (SELECT i as k FROM generate_series(1, 100000) t(i)) TO 'large_table.parquet';
+CREATE EXTERNAL TABLE large_table STORED AS PARQUET LOCATION 'large_table.parquet';
 
 -- Join the two tables, with a filter on small_table
 EXPLAIN 
