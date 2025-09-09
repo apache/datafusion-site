@@ -346,17 +346,24 @@ passing], which is similar to [Bloom filter joins] in Apache Spark. See
 [issue #7955]: https://github.com/apache/datafusion/issues/7955
 
 In a Hash Join, the query engine picks one input of the join to be the "build"
-input and the other input to be the "probe" side. A hash join first *builds* a
-hash table by reading the build input into memory, and then it reads the probe
-input, using the hash table to find matching rows from the probe side. Many hash
-joins are very selective (only a small number of rows are matched) and act as
-filters, so it is natural to use the same dynamic filter technique to create
-filters on the probe side scan with the values seen on the build side.
+input and the other input to be the "probe" side.
 
-DataFusion 50.0.0 adds dynamic filters to the probe input using min/max join
-key values from the build side. This simple approach is fast to evaluate and the
-filter improves performance significantly when combined with statistics pruning,
-late materialization, and other optimizations as shown in Figure 7.
+* First, the **build side** is loaded into memory, and turned into a hash table.
+
+* Then, the **probe side** is scanned, and matching rows are found by looking 
+  in the hash table. Non-matching rows are discarded and thus joins often act as
+  filters.
+
+Many hash joins are very selective (only a small number of rows are matched), so
+it is natural to use the same dynamic filter technique. DataFusion 50.0.0 pushes
+down knowledge of what keys exist on the build side into the scan of the probe
+side with a dynamic filter based on min/max join key values. For example, if the
+build side only has keys in the range `[100, 200]`, then DataFusion will filter
+all probe rows with keys outside that range during the scan.
+
+This simple approach is fast to evaluate and the filter improves performance
+significantly when combined with statistics pruning, late materialization, and
+other optimizations as shown in Figure 7.
 
 <div class="text-center">
 <img 
