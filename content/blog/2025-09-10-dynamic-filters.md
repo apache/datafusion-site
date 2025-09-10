@@ -354,12 +354,13 @@ input and the other input to be the "probe" side.
   in the hash table. Non-matching rows are discarded and thus joins often act as
   filters.
 
-Many hash joins are very selective (only a small number of rows are matched), so
-it is natural to use the same dynamic filter technique. DataFusion 50.0.0 pushes
-down knowledge of what keys exist on the build side into the scan of the probe
-side with a dynamic filter based on min/max join key values. For example, if the
-build side only has keys in the range `[100, 200]`, then DataFusion will filter
-all probe rows with keys outside that range during the scan.
+Many hash joins act as selective filters for rows from the probe side (when only
+a small number of rows are matched), so it is natural to use the same dynamic
+filter technique. DataFusion 50.0.0 pushes down knowledge of what keys exist on
+the build side into the scan of the probe side with a dynamic filter based on
+min/max join key values. For example, if the build side only has keys in the
+range `[100, 200]`, then DataFusion will filter out all probe rows with keys
+outside that range during the scan.
 
 This simple approach is fast to evaluate and the filter improves performance
 significantly when combined with statistics pruning, late materialization, and
