@@ -50,12 +50,9 @@ ASF_GENID = {
  'metadata': False,
  'elements': False,
  'permalinks': False,
- 'tables': False,
+ 'tables': True,
  'headings': False,
-
-
  'toc': False,
-
  'debug': False,
 }
 
@@ -68,6 +65,7 @@ FEED_RSS = "feed.xml"
 MARKDOWN = {
     'extension_configs': {
         'markdown.extensions.fenced_code': {},
+        'markdown.extensions.tables': {},
     },
     'output_format': 'html5',
 }
