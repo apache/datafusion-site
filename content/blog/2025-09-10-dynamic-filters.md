@@ -1,6 +1,6 @@
 ---
 layout: post
-title: Dynamic Filters: Passing Information Between Operators During Execution for 10x Faster Queries
+title: Dynamic Filters: Passing Information Between Operators During Execution for 25x Faster Queries
 date: 2025-09-10
 author: Adrian Garcia Badaracco (Pydantic), Andrew Lamb (InfluxData)
 categories: [features]
