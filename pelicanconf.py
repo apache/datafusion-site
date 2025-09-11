@@ -50,12 +50,9 @@ ASF_GENID = {
  'metadata': False,
  'elements': False,
  'permalinks': False,
- 'tables': False,
+ 'tables': True,
  'headings': False,
-
-
  'toc': False,
-
  'debug': False,
 }
 
@@ -72,6 +69,7 @@ MARKDOWN = {
             'title': 'Contents',
             'permalink': True,
         },
+        'markdown.extensions.tables': {},
     },
     'output_format': 'html5',
 }
