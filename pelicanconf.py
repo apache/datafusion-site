@@ -16,7 +16,7 @@ PLUGIN_PATHS = [ 'plugins',  ]
 # If the website uses any *.ezmd files, include the 'asfreader' plugin
 # PLUGINS = [ 'toc', 'gfm', 'asfgenid',  ]
 # PLUGINS = ['asfgenid', 'asfdata', 'pelican-gfm', 'asfreader', 'sitemap']
-PLUGINS = ['asfgenid', 'extract_date_from_filename']
+PLUGINS = ['asfgenid', 'extract_date_from_filename', 'extract_toc']
 # All content is located at '.' (aka content/ )
 PAGE_PATHS = [ 'pages' ]
 STATIC_PATHS = [ '.',  ]
@@ -65,6 +65,10 @@ FEED_RSS = "feed.xml"
 MARKDOWN = {
     'extension_configs': {
         'markdown.extensions.fenced_code': {},
+        'markdown.extensions.toc': {
+            'title': 'Contents',
+            'permalink': True,
+        },
         'markdown.extensions.tables': {},
     },
     'output_format': 'html5',

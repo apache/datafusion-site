@@ -26,6 +26,8 @@ limitations under the License.
 
 <!-- diagrams source https://docs.google.com/presentation/d/1e_Z_F8nt2rcvlNvhU11khF5lzJJVqNtqtyJ-G3mp4-Q --> 
 
+[TOC]
+
 It is a common misconception that [Apache Parquet] requires (slow) reparsing of
 metadata and is limited to indexing structures provided by the format. In fact,
 caching parsed metadata and using custom external indexes along with
