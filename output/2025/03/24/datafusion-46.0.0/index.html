@@ -34,17 +34,18 @@
         </div>
     </div>
 </nav>    
-
-
 <!-- article contents -->
 <div id="contents">
-    <div class="bg-white p-5 rounded">
-        <div class="col-md-10 col-lg-8 mx-auto main-content">
-          <h1>
-            Apache DataFusion 46.0.0 Released
-          </h1>
-            <p>Posted on: Mon 24 March 2025 by Oznur Hanci and Berkay Sahin on behalf of the PMC</p>
-            <!--
+  <div class="bg-white p-4 p-md-5 rounded">
+    <div class="row justify-content-center">
+      <div class="col-12 col-md-8 main-content">
+        <h1>
+          Apache DataFusion 46.0.0 Released
+        </h1>
+        <p>Posted on: Mon 24 March 2025 by Oznur Hanci and Berkay Sahin on behalf of the PMC</p>
+
+
+        <!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -61,13 +62,13 @@ limitations under the License.
 {% endcomment %}
 -->
 <p>We&rsquo;re excited to announce the release of&nbsp;<strong>Apache DataFusion 46.0.0</strong>! This new version represents a significant milestone for the project, packing in a wide range of improvements and fixes. You can find the complete details in the&nbsp;full <a href="https://github.com/apache/datafusion/blob/branch-46/dev/changelog/46.0.0.md">changelog</a>. We&rsquo;ll highlight the most important changes below and guide you through upgrading.</p>
-<h2>Breaking Changes</h2>
+<h2 id="breaking-changes">Breaking Changes<a class="headerlink" href="#breaking-changes" title="Permanent link">&para;</a></h2>
 <p>DataFusion 46.0.0 brings a few&nbsp;<strong>breaking changes</strong>&nbsp;that may require adjustments to your code as described in the <a href="https://datafusion.apache.org/library-user-guide/upgrading.html">Upgrade Guide</a>. Here are the most notable ones:</p>
 <ul>
 <li><a href="https://github.com/apache/datafusion/pull/14224#">Unified <code>DataSourceExec</code> Execution Plan</a><strong>:</strong>&nbsp;DataFusion 46.0.0 introduces a major refactor of scan operators. The separate file-format-specific execution plan nodes (<code>ParquetExec</code>,&nbsp;<code>CsvExec</code>,&nbsp;<code>JsonExec</code>,&nbsp;<code>AvroExec</code>, etc.) have been&nbsp;<strong>deprecated and merged into a single <code>DataSourceExec</code>&nbsp;plan</strong>. Format-specific logic is now encapsulated in new&nbsp;<code>DataSource</code>&nbsp;and&nbsp;<code>FileSource</code>&nbsp;traits. This change simplifies the execution model, but if you have code that directly references the old plan nodes, you&rsquo;ll need to update it to use&nbsp;<code>DataSourceExec</code>&nbsp;(see the&nbsp;<a href="https://datafusion.apache.org/library-user-guide/upgrading.html">Upgrade Guide</a>&nbsp;for examples of the new API).</li>
 <li><a href="https://github.com/apache/arrow-datafusion/issues/7360#:~:text=2">**Error Handling Improvements</a> (<code>DataFusionError::Collection</code>):**&nbsp;We began overhauling DataFusion&rsquo;s approach to error handling. In this release, a new error variant&nbsp;<code>DataFusionError::Collection</code>&nbsp;(and related mechanisms) has been introduced to aggregate multiple errors into one. This is part of a broader effort to provide richer error context and reduce internal panics. As a result, some error types or messages have changed. Downstream code that matches on specific&nbsp;<code>DataFusionError</code>&nbsp;variants might need adjustment.</li>
 </ul>
-<h2>Performance Improvements</h2>
+<h2 id="performance-improvements">Performance Improvements<a class="headerlink" href="#performance-improvements" title="Permanent link">&para;</a></h2>
 <p>DataFusion 46.0.0 comes with a slew of performance enhancements across the board. Here are some of the noteworthy optimizations in this release:</p>
 <ul>
 <li><strong>Faster&nbsp;<code>median()</code>&nbsp;(no grouping):</strong>&nbsp;The&nbsp;<code>median()</code>&nbsp;aggregate function got a special fast path when used without a&nbsp;<code>GROUP BY</code>. By optimizing its accumulator, median calculation is about&nbsp;<strong>2&times; faster</strong>&nbsp;in the single-group case. If you use&nbsp;<code>MEDIAN()</code>&nbsp;on large datasets (especially as a single value), you should notice reduced query times (PR <a href="https://github.com/apache/datafusion/pull/14399">#14399</a> by <a href="https://github.com/2010YOUY01">@2010YOUY01</a>).</li>
@@ -78,25 +79,25 @@ limitations under the License.
 <li><strong>No More RowConverter in Grouped Ordering:</strong>&nbsp;We removed an inefficient step in the&nbsp;<em>partial grouping</em>&nbsp;algorithm. The&nbsp;<code>GroupOrderingPartial</code>&nbsp;operator no longer converts data to &ldquo;row format&rdquo; for each batch (via&nbsp;<code>RowConverter</code>). Instead, it uses a direct arrow-based approach to detect sort key changes. This eliminated overhead and yields a nice speedup for certain aggregation queries. (PR <a href="https://github.com/apache/datafusion/pull/14566">#14566</a> by <a href="https://github.com/ctsk">@ctsk</a>).</li>
 <li><strong>Predicate Pruning for&nbsp;<code>NOT LIKE</code>:</strong>&nbsp;DataFusion&rsquo;s parquet reader can now prune row groups using&nbsp;<code>NOT LIKE</code>&nbsp;filters, similar to how it handles&nbsp;<code>LIKE</code>. This means if you have a filter such as&nbsp;<code>column NOT LIKE 'prefix%'</code>, DataFusion can use min/max statistics to skip reading files/parts that can be determined to either entirely match or not match the predicate. In particular, a pattern like&nbsp;<code>NOT LIKE 'X%'</code>&nbsp;can skip data ranges that definitely start with "X". While a niche case, it contributes to query efficiency in those scenarios (PR <a href="https://github.com/apache/datafusion/pull/14567">#14567</a> by <a href="https://github.com/UBarney">@UBarney</a>).</li>
 </ul>
-<h2>Google Summer of Code 2025</h2>
+<h2 id="google-summer-of-code-2025">Google Summer of Code 2025<a class="headerlink" href="#google-summer-of-code-2025" title="Permanent link">&para;</a></h2>
 <p>Another exciting development:&nbsp;<strong>Apache DataFusion has been accepted as a mentoring organization for Google Summer of Code (GSoC) 2025</strong>! 🎉 This means that this summer, students from around the world will have the opportunity to contribute to DataFusion under the guidance of our committers. We have put together <a href="https://datafusion.apache.org/contributor-guide/gsoc_project_ideas.html">a list of project ideas</a> that candidates can choose from.</p>
 <p>If you&rsquo;re interested, check out our&nbsp;<a href="https://datafusion.apache.org/contributor-guide/gsoc_application_guidelines.html">GSoC Application Guidelines</a>. We encourage students to reach out, discuss ideas with us, and apply.</p>
-<h2>Highlighted New Features</h2>
-<h3>Improved Diagnostics</h3>
+<h2 id="highlighted-new-features">Highlighted New Features<a class="headerlink" href="#highlighted-new-features" title="Permanent link">&para;</a></h2>
+<h3 id="improved-diagnostics">Improved Diagnostics<a class="headerlink" href="#improved-diagnostics" title="Permanent link">&para;</a></h3>
 <p>DataFusion 46.0.0 introduces a new&nbsp;<a href="https://github.com/apache/datafusion/issues/14429"><strong>SQL Diagnostics framework</strong></a>&nbsp;to make error messages more understandable. This comes in the form of new&nbsp;<code>Diagnostic</code>&nbsp;and&nbsp;<code>DiagnosticEntry</code>&nbsp;types, which allow the system to attach rich context (like source query text spans) to error messages. In practical terms, certain planner errors will now point to the exact location in your SQL query that caused the issue. </p>
 <p>For example, if you reference an unknown table or miss a column in <code>GROUP BY</code> the error message will include the query snippet causing the error. These diagnostics are meant for end-users of applications built on DataFusion, providing clearer messages instead of generic errors. Here&rsquo;s an example:</p>
 <p><img alt="diagnostic-example" class="img-responsive" src="/blog/images/datafusion-46.0.0/diagnostic-example.png" width="80%"/></p>
 <p>Currently, diagnostics cover unresolved table/column references, missing <code>GROUP BY</code> columns, ambiguous references, wrong number of UNION columns, type mismatches, and a few others. Future releases will extend this to more error types. This feature should greatly ease debugging of complex SQL by pinpointing errors directly in the query text. We thank <a href="https://github.com/eliaperantoni">@eliaperantoni</a> for his contributions in this project.</p>
-<h3>Unified&nbsp;<code>DataSourceExec</code>&nbsp;for Table Providers</h3>
+<h3 id="unified-datasourceexec-for-table-providers">Unified&nbsp;<code>DataSourceExec</code>&nbsp;for Table Providers<a class="headerlink" href="#unified-datasourceexec-for-table-providers" title="Permanent link">&para;</a></h3>
 <p>As mentioned, DataFusion now uses a unified&nbsp;<code>DataSourceExec</code>&nbsp;for reading tables, which is both a breaking change and a feature.&nbsp;<em>Why is this important?</em>&nbsp;The new approach simplifies how custom table providers are integrated and optimized. Namely, the optimizer can treat file scans uniformly and push down filters/limits more consistently when there is one execution plan that handles all data sources. The new&nbsp;<code>DataSourceExec</code>&nbsp;is paired with a&nbsp;<code>DataSource</code>&nbsp;trait that encapsulates format-specific behaviors (Parquet, CSV, JSON, Avro, etc.) in a pluggable way.</p>
 <p>All built-in sources (Parquet, CSV, Avro, Arrow, JSON, etc.) have been migrated to this framework. This unification makes the codebase cleaner and sets the stage for future enhancements (like consistent metadata handling and limit pushdown across all formats). Check out PR <a href="https://github.com/apache/datafusion/pull/14224">#14224</a> for design details. We thank <a href="https://github.com/mertak-synnada">@mertak-synnada</a> and <a href="https://github.com/ozankabak">@ozankabak</a> for their contributions.</p>
-<h3>FFI Support for Scalar UDFs</h3>
+<h3 id="ffi-support-for-scalar-udfs">FFI Support for Scalar UDFs<a class="headerlink" href="#ffi-support-for-scalar-udfs" title="Permanent link">&para;</a></h3>
 <p>DataFusion&rsquo;s Foreign Function Interface (FFI) has been extended to support&nbsp;<a href="https://github.com/apache/datafusion/pull/14579"><strong>user-defined scalar functions</strong></a>&nbsp;defined in external languages. In 46.0.0, you can now expose a custom scalar UDF through the FFI layer and use it in DataFusion as if it were built-in. This is particularly exciting for the <strong>Python bindings</strong> and other language integrations &ndash; it means you could define a function in Python (or C, etc.) and register it with DataFusion&rsquo;s Rust core via the FFI crate. Thanks, <a href="https://github.com/timsaucer">@timsaucer</a>!</p>
-<h3>New Statistics/Distribution Framework</h3>
+<h3 id="new-statisticsdistribution-framework">New Statistics/Distribution Framework<a class="headerlink" href="#new-statisticsdistribution-framework" title="Permanent link">&para;</a></h3>
 <p>This release, thanks mainly to <a href="https://github.com/Fly-Style">@Fly-Style</a> with contributions from <a href="https://github.com/ozankabak">@ozankabak</a> and <a href="https://github.com/berkaysynnada">@berkaysynnada</a>, includes the initial pieces of a&nbsp;<a href="https://github.com/apache/datafusion/pull/14699">**redesigned statistics framework</a>.<strong> DataFusion&rsquo;s optimizer can now represent column data distributions using a new&nbsp;<code>Distribution</code>&nbsp;enum, instead of the old precision or range estimations. The supported distribution types currently include&nbsp;</strong>Uniform, Gaussian (normal), Exponential, Bernoulli<strong>, and a&nbsp;</strong>Generic**&nbsp;catch-all.</p>
 <p>For example, if a filter expression is applied to a column with a known uniform distribution range, the optimizer can propagate that to estimate result selectivity more accurately. Similarly, comparisons (<code>=</code>, <code>&gt;</code>, etc.) on columns yield Bernoulli distributions (with true/false probabilities) in this model.</p>
 <p>This is a foundational change with many follow-on PRs underway. Even though the immediate user-visible effect is limited (the optimizer didn't magically improve by an order of magnitude overnight), but it lays groundwork for more advanced query planning in the future. Over time, as statistics information encapsulated in <code>Distribution</code>s get integrated, DataFusion will be able to make smarter decisions like more aggressive parquet pruning, better join orderings, and so on based on data distribution information. The core framework is now in place and is being hooked up to column and table level statistics.</p>
-<h3>Aggregate Monotonicity and Window Ordering</h3>
+<h3 id="aggregate-monotonicity-and-window-ordering">Aggregate Monotonicity and Window Ordering<a class="headerlink" href="#aggregate-monotonicity-and-window-ordering" title="Permanent link">&para;</a></h3>
 <p>DataFusion 46.0.0 adds a new concept of <a href="https://github.com/apache/datafusion/pull/14271"><strong>set-monotonicity</strong></a> for certain transformations, which helps avoid unnecessary sort operations. In particular, the planner now understands when a <strong>window function introduces new orderings of data</strong>.</p>
 <p>For example, DataFusion now recognizes that a window-aggregate like <code>MAX</code> on a column can produce a result that is <strong>monotonically increasing</strong>, even if the input column is unordered &mdash; depending on the window frame used.</p>
 <p>Consider the following query:</p>
@@ -110,7 +111,7 @@ ORDER BY max_c1;
 <p>PR <a href="https://github.com/apache/datafusion/pull/14271">#14271</a> introduced the core monotonicity tracking for aggregates and window functions.
 PR <a href="https://github.com/apache/datafusion/pull/14813">#14813</a> improved ordering preservation within various window frame types, and brought an extensive test coverage.
 Huge thanks to <a href="https://github.com/berkaysynnada">@berkaysynnada</a> and <a href="https://github.com/mertak-synnada">@mertak-synnada</a> for designing and implementing this optimizer enhancement!</p>
-<h3>UNION [ALL | DISTINCT] BY NAME Support</h3>
+<h3 id="union-all-distinct-by-name-support">UNION [ALL | DISTINCT] BY NAME Support<a class="headerlink" href="#union-all-distinct-by-name-support" title="Permanent link">&para;</a></h3>
 <p>DataFusion now supports UNION BY NAME and UNION ALL BY NAME, which align columns by name instead of position. This matches functionality found in systems like Spark and DuckDB and simplifies combining heterogeneously ordered result sets.</p>
 <p>You no longer need to rewrite column order manually &mdash; just write:</p>
 <pre><code class="language-sql">SELECT col1, col2 FROM t1
@@ -119,16 +120,16 @@ SELECT col2, col1 FROM t2;
 </code></pre>
 <p>Under the hood, this is supported by the new union_by_name() and union_by_name_distinct() plan builder methods.</p>
 <p>Thanks to <a href="https://github.com/rkrishn7">@rkrishn7</a> for PR <a href="https://github.com/apache/datafusion/pull/14538">#14538</a>.</p>
-<h3>New range() Table Function</h3>
+<h3 id="new-range-table-function">New range() Table Function<a class="headerlink" href="#new-range-table-function" title="Permanent link">&para;</a></h3>
 <p>A new table-valued function range(start, stop, step) has been added to make it easy to generate integer sequences &mdash; similar to PostgreSQL&rsquo;s generate_series() or Spark&rsquo;s range().</p>
 <p>Example:</p>
 <pre><code class="language-sql">SELECT * FROM range(1, 10, 2);
 </code></pre>
 <p>This returns: 1, 3, 5, 7, 9. It&rsquo;s great for testing, cross joins, surrogate keys, and more.</p>
 <p>Thanks to <a href="https://github.com/simonvandel">@simonvandel</a> for PR <a href="https://github.com/apache/datafusion/pull/14830">#14830</a>.</p>
-<h2>Upgrade Guide and Changelog</h2>
+<h2 id="upgrade-guide-and-changelog">Upgrade Guide and Changelog<a class="headerlink" href="#upgrade-guide-and-changelog" title="Permanent link">&para;</a></h2>
 <p>Upgrading to 46.0.0 should be straightforward for most users, but do review the&nbsp;<a href="https://datafusion.apache.org/library-user-guide/upgrading.html">Upgrade Guide for DataFusion 46.0.0</a>&nbsp;for detailed steps and code changes. The upgrade guide covers the breaking changes mentioned (like replacing old exec nodes with&nbsp;<code>DataSourceExec</code>, updating UDF invocation to&nbsp;<code>invoke_with_args</code>, etc.) and provides code snippets to help with the transition. For a comprehensive list of all changes, please refer to the&nbsp;<strong>changelog</strong>&nbsp;for 46.0.0 (linked above and in the repository). The changelog enumerates every merged PR in this release, including many smaller fixes and improvements that we couldn&rsquo;t cover in this post.</p>
-<h2>Get Involved</h2>
+<h2 id="get-involved">Get Involved<a class="headerlink" href="#get-involved" title="Permanent link">&para;</a></h2>
 <p>Apache DataFusion is an open-source project, and we welcome involvement from anyone interested. Now is a great time to take 46.0.0 for a spin: try it out on your workloads, and let us know if you encounter any issues or have suggestions. You can report bugs or request features on our&nbsp;GitHub issue tracker, or better yet, submit a pull request. Join our community discussions &ndash; whether you have questions, want to share how you&rsquo;re using DataFusion, or are looking to contribute, we&rsquo;d love to hear from you. A list of open issues suitable for beginners is&nbsp;<a href="https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22">here</a>&nbsp;and you can find how to reach us on the&nbsp;<a href="https://datafusion.apache.org/contributor-guide/communication.html">communication doc</a>.</p>
 <p>Happy querying!</p>
 
@@ -161,9 +162,10 @@ SELECT col2, col1 FROM t2;
 
   <!-- Container where Giscus will render -->
   <div id="comment-thread"></div>
-</div>          </div>
-      </div>
-    </div>    
+</div>      </div>
+    </div>
+  </div>
+</div>    
     <!-- footer -->
     <div class="row g-0">
       <div class="col-12">

@@ -34,17 +34,18 @@
         </div>
     </div>
 </nav>    
-
-
 <!-- article contents -->
 <div id="contents">
-    <div class="bg-white p-5 rounded">
-        <div class="col-md-10 col-lg-8 mx-auto main-content">
-          <h1>
-            Using Ordering for Better Plans in Apache DataFusion
-          </h1>
-            <p>Posted on: Tue 11 March 2025 by Mustafa Akur, Andrew Lamb</p>
-            <!--
+  <div class="bg-white p-4 p-md-5 rounded">
+    <div class="row justify-content-center">
+      <div class="col-12 col-md-8 main-content">
+        <h1>
+          Using Ordering for Better Plans in Apache DataFusion
+        </h1>
+        <p>Posted on: Tue 11 March 2025 by Mustafa Akur, Andrew Lamb</p>
+
+
+        <!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -63,13 +64,13 @@ limitations under the License.
 {% endcomment %}
 -->
 <!-- see https://github.com/apache/datafusion/issues/11631 for details -->
-<h2>Introduction</h2>
+<h2 id="introduction">Introduction<a class="headerlink" href="#introduction" title="Permanent link">&para;</a></h2>
 <p>In this blog post, we explain when an ordering requirement of an operator is satisfied by its input data. This analysis is essential for order-based optimizations and is often more complex than one might initially think.</p>
 <blockquote style="border-left: 4px solid #007bff; padding: 10px; background-color: #f8f9fa;">
 <strong>Ordering Requirement</strong> for an operator describes how the input data to that operator must be sorted for the operator to compute the correct result. It is the job of the planner to make sure that these requirements are satisfied during execution (See DataFusion <a href="https://docs.rs/datafusion/latest/datafusion/physical_optimizer/enforce_sorting/struct.EnforceSorting.html" target="_blank">EnforceSorting</a> for an implementation of such a rule).
 </blockquote>
 <p>There are various use cases where this type of analysis can be useful such as the following examples.</p>
-<h3>Removing Unnecessary Sorts</h3>
+<h3 id="removing-unnecessary-sorts">Removing Unnecessary Sorts<a class="headerlink" href="#removing-unnecessary-sorts" title="Permanent link">&para;</a></h3>
 <p>Imagine a user wants to execute the following query:</p>
 <pre><code class="language-SQL">SELECT hostname, log_line 
 FROM telemetry ORDER BY time ASC limit 10
@@ -80,13 +81,13 @@ FROM telemetry ORDER BY time ASC limit 10
 FROM telemetry WHERE hostname = 'app.example.com' ORDER BY time ASC;
 </code></pre>
 <p>In this case a sort still isn't needed, but the analysis must reason about the sortedness of the stream when it knows <code>hostname</code> has a single value.</p>
-<h3>Optimized Operator Implementations</h3>
+<h3 id="optimized-operator-implementations">Optimized Operator Implementations<a class="headerlink" href="#optimized-operator-implementations" title="Permanent link">&para;</a></h3>
 <p>As another use case, some operators can utilize the ordering information to change its underlying algorithm to execute more efficiently. Consider the following query:</p>
 <pre><code class="language-SQL">SELECT COUNT(log_line) 
 FROM telemetry GROUP BY hostname;
 </code></pre>
 <p>Most analytic systems, including DataFusion, by default implement such a query using a hash table keyed on values of <code>hostname</code> to store the counts. However, if the <code>telemetry</code> table is sorted by <code>hostname</code>,  there are much more efficient algorithms for grouping on <code>hostname</code> values than hashing every value and storing it in memory. However, the more efficient algorithm can only be used when the input is sorted correctly. To see this in practice, check out the <a href="https://github.com/apache/datafusion/tree/main/datafusion/physical-plan/src/aggregates/order">source</a> for ordered variant of the <code>Aggregation</code> in <code>DataFusion</code>.</p>
-<h3>Streaming-Friendly Execution</h3>
+<h3 id="streaming-friendly-execution">Streaming-Friendly Execution<a class="headerlink" href="#streaming-friendly-execution" title="Permanent link">&para;</a></h3>
 <p>Stream processing aims to produce results immediately as they become available ensuring minimal latency for real-time workloads. However, some operators need to consume all input data before producing any output. Consider the <code>Sort</code> operation: before it can start generating output, the algorithm must first process all input data. As a result, data flow halts whenever such an operator is encountered until all input is consumed. When a physical query plan contains such an operator (<code>Sort</code>, <code>CrossJoin</code>, ..) we refer to this as pipeline breaking, meaning the query cannot be executed in a streaming fashion.</p>
 <p>For a query to be executed in a streaming fashion we need to satisfy 2 conditions:</p>
 <p><strong>Logically Streamable</strong><br/>
@@ -97,9 +98,9 @@ FROM orders
 <p>Here, the user wants to compute the sum of all amounts in the orders table. By the nature of the query this requires scanning the entire table to generate a result making it impossible to execute in a streaming fashion.</p>
 <p><strong>Streaming Aware Planner</strong><br/>
 Being logically streamable does not guarantee that a query will execute in a streaming fashion. SQL is a declarative language, meaning it specifies 'WHAT' user wants. It is up to the planner 'HOW' to generate the result. In most cases there are many ways to compute the correct result for a given query. The query planner is responsible for choosing "a way" (ideally the best<sup id="optimal1"><a href="#optimal">*</a></sup> one) among the all alternatives to generate what user asks for. If a plan contains a pipeline-breaking operator the execution will not be streaming&mdash;even if the query is logically streamable. To generate truly streaming plans from logically streamable queries the planner must carefully analyze the existing orderings in the source tables to ensure that the final plan does not contain any pipeline-breaking operators.</p>
-<h2>Analysis</h2>
+<h2 id="analysis">Analysis<a class="headerlink" href="#analysis" title="Permanent link">&para;</a></h2>
 <p>Let's start by creating an example table that we will refer throughout the post. This table models the input data of an operator for the analysis:</p>
-<h3>Example Virtual Table</h3>
+<h3 id="example-virtual-table">Example Virtual Table<a class="headerlink" href="#example-virtual-table" title="Permanent link">&para;</a></h3>
 <style>
   table {
     border-collapse: collapse;
@@ -200,7 +201,7 @@ DataFusion leverages these functional dependencies to infer new orderings as dat
 <li>Using expressions that are exact copies of each other is redundant.</li>
 <li>Ordering expressions shouldn't contain any constant expression.</li>
 </ul>
-<h2>Key Concepts for Analyzing Orderings</h2>
+<h2 id="key-concepts-for-analyzing-orderings">Key Concepts for Analyzing Orderings<a class="headerlink" href="#key-concepts-for-analyzing-orderings" title="Permanent link">&para;</a></h2>
 <p>To solve the shortcomings above DataFusion needs to track of following properties for the table:</p>
 <ul>
 <li>Constant Expressions  </li>
@@ -211,7 +212,7 @@ DataFusion leverages these functional dependencies to infer new orderings as dat
 <strong>Note:</strong> These properties are implemented in the <code>EquivalenceProperties</code> structure in <code>DataFusion</code>, please see the <a href="https://github.com/apache/datafusion/blob/f47ea73b87eec4af044f9b9923baf042682615b2/datafusion/physical-expr/src/equivalence/properties/mod.rs#L134" target="_blank">source</a> for more details<br/>
 </blockquote>
 <p>These properties allow us to analyze whether the ordering requirement is satisfied by the data already.</p>
-<h3>1. Constant Expressions</h3>
+<h3 id="1-constant-expressions">1. Constant Expressions<a class="headerlink" href="#1-constant-expressions" title="Permanent link">&para;</a></h3>
 <p>Constant expressions are those where each row in the expression has the same value across all rows. Although constant expressions may seem odd in a table they can arise after operations like <code>Filter</code> or <code>Join</code> occur. </p>
 <p>For instance in the example table:</p>
 <ul>
@@ -222,7 +223,7 @@ DataFusion leverages these functional dependencies to infer new orderings as dat
 <code>SELECT hostname FROM logs</code><br/><code>WHERE hostname='app.example.com'</code> <br/>
     after filtering is done, for subsequent operators the <code>hostname</code> column will be constant.
 </blockquote>
-<h3>2. Equivalent Expression Groups</h3>
+<h3 id="2-equivalent-expression-groups">2. Equivalent Expression Groups<a class="headerlink" href="#2-equivalent-expression-groups" title="Permanent link">&para;</a></h3>
 <p>Equivalent expression groups are expressions that always hold the same value across rows. These expressions can be thought of as clones of each other and may arise from operations like <code>Filter</code>, <code>Join</code>, or <code>Projection</code>.</p>
 <p>In the example table, the expressions <code>price</code> and <code>price_cloned</code> form one equivalence group, and <code>time</code> and <code>time_cloned</code> form another equivalence group.</p>
 <blockquote style="border-left: 4px solid #007bff; padding: 10px; background-color: #f8f9fa;">
@@ -234,7 +235,7 @@ DataFusion leverages these functional dependencies to infer new orderings as dat
 <code>JOIN departments ON employees.department_id = departments.id;</code> <br/>
 after joining, <code>employees.department_id</code> and <code>departments.id</code> will form an equivalence group.
 </blockquote>
-<h3>3. Succinct Encoding of Valid Orderings</h3>
+<h3 id="3-succinct-encoding-of-valid-orderings">3. Succinct Encoding of Valid Orderings<a class="headerlink" href="#3-succinct-encoding-of-valid-orderings" title="Permanent link">&para;</a></h3>
 <p>Valid orderings are the orderings that the table already satisfies. However, naively listing them requires exponential space as the number of columns grows as discussed before. Instead, we list all valid orderings after following constraints are applied:</p>
 <ul>
 <li>Do not use any constant expressions in the valid ordering construction</li>
@@ -333,14 +334,14 @@ using the orderings of the query intermediates.<br/>
 <figcaption><strong>Figure 1:</strong> DataFusion analyzes orderings of the sources and query intermediates to generate efficient plans</figcaption>
 </figure>
 </blockquote>
-<h3>Table Properties</h3>
+<h3 id="table-properties">Table Properties<a class="headerlink" href="#table-properties" title="Permanent link">&para;</a></h3>
 <p>In summary, for the example table, the following properties correctly describe the sort properties:</p>
 <ul>
 <li><strong>Constant Expressions</strong> = <code>hostname, currency</code> </li>
 <li><strong>Equivalent Expression Groups</strong> = <code>[price, price_cloned], [time, time_cloned]</code> </li>
 <li><strong>Valid Orderings</strong> = <code>[amount ASC, price ASC], [time_bin ASC], [time ASC]</code> </li>
 </ul>
-<h3>Algorithm for Analyzing Ordering Requirements</h3>
+<h3 id="algorithm-for-analyzing-ordering-requirements">Algorithm for Analyzing Ordering Requirements<a class="headerlink" href="#algorithm-for-analyzing-ordering-requirements" title="Permanent link">&para;</a></h3>
 <p>After deriving these properties for the data, following algorithm can be used to check whether an ordering requirement is satisfied by the table:</p>
 <ol>
 <li><strong>Prune constant expressions</strong>: Remove any constant expressions from the ordering requirement.</li>
@@ -354,7 +355,7 @@ using the orderings of the query intermediates.<br/>
 <li><strong>Iterate through the remaining expressions</strong>: Go back to step 4 until ordering requirement is empty or leading ordering requirement is not found among the leading valid orderings of table.</li>
 </ol>
 <p>If, at the end of the procedure above, the ordering requirement is an empty list, we can conclude that the requirement is satisfied by the table.</p>
-<h3>Example Walkthrough</h3>
+<h3 id="example-walkthrough">Example Walkthrough<a class="headerlink" href="#example-walkthrough" title="Permanent link">&para;</a></h3>
 <p>Let's say the user provided a query such as the following:</p>
 <pre><code class="language-sql">SELECT * FROM table
 ORDER BY hostname DESC, amount ASC, time_bin ASC, price_cloned ASC, time ASC, currency ASC, price DESC;
@@ -366,7 +367,7 @@ ORDER BY hostname DESC, amount ASC, time_bin ASC, price_cloned ASC, time ASC, cu
 <li><strong>Succinct Valid Orderings</strong> = <code>[amount ASC, price ASC], [time_bin ASC], [time ASC]</code></li>
 </ul>
 <p>In order to remove a sort the optimizer must check if the ordering requirement <code>[hostname DESC, amount ASC, time_bin ASC, price_cloned ASC, time ASC, currency ASC, price DESC]</code> is satisfied by the properties.</p>
-<h3>Algorithm Steps</h3>
+<h3 id="algorithm-steps">Algorithm Steps<a class="headerlink" href="#algorithm-steps" title="Permanent link">&para;</a></h3>
 <ol>
 <li>
 <p><strong>Prune constant expressions</strong>:<br/>
@@ -395,7 +396,7 @@ into<br/>
 We go back to step 4 until the ordering requirement list is exhausted or its length no longer decreases.</li>
 </ol>
 <p>At the end of stages above we end up with an empty ordering requirement list. Given this, we can conclude that the table satisfies the ordering requirement and thus no sort is required. </p>
-<h2>Conclusion</h2>
+<h2 id="conclusion">Conclusion<a class="headerlink" href="#conclusion" title="Permanent link">&para;</a></h2>
 <p>In this post, we described the conditions under which an ordering requirement is satisfied based on the properties of a table. We introduced key concepts such as constant expressions, equivalence groups, and valid orderings, and used them to determine whether a given ordering requirement are satisfied by an input table.</p>
 <p>This analysis plays a crucial role in:</p>
 <ul>
@@ -403,7 +404,7 @@ We go back to step 4 until the ordering requirement list is exhausted or its len
 <li>Generating streaming-friendly plans</li>
 </ul>
 <p>The <code>DataFusion</code> query engine employs this analysis (and many more) during its planning stage to ensure correct and efficient query execution. We <a href="https://datafusion.apache.org/contributor-guide/index.html">welcome you</a> to come and join the project.</p>
-<h2>Appendix</h2>
+<h2 id="appendix">Appendix<a class="headerlink" href="#appendix" title="Permanent link">&para;</a></h2>
 <!--
 <p id="footnote1"><sup>[1]</sup>The ordering requirement refers to the condition that input data must be sorted in a certain way for a specific operator to function as intended.</p>
 -->
@@ -444,9 +445,10 @@ We go back to step 4 until the ordering requirement list is exhausted or its len
 
   <!-- Container where Giscus will render -->
   <div id="comment-thread"></div>
-</div>          </div>
-      </div>
-    </div>    
+</div>      </div>
+    </div>
+  </div>
+</div>    
     <!-- footer -->
     <div class="row g-0">
       <div class="col-12">

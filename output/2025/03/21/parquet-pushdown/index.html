@@ -34,17 +34,18 @@
         </div>
     </div>
 </nav>    
-
-
 <!-- article contents -->
 <div id="contents">
-    <div class="bg-white p-5 rounded">
-        <div class="col-md-10 col-lg-8 mx-auto main-content">
-          <h1>
-            Efficient Filter Pushdown in Parquet
-          </h1>
-            <p>Posted on: Fri 21 March 2025 by Xiangpeng Hao</p>
-            <style>
+  <div class="bg-white p-4 p-md-5 rounded">
+    <div class="row justify-content-center">
+      <div class="col-12 col-md-8 main-content">
+        <h1>
+          Efficient Filter Pushdown in Parquet
+        </h1>
+        <p>Posted on: Fri 21 March 2025 by Xiangpeng Hao</p>
+
+
+        <style>
 figure {
   margin: 20px 0;
 }
@@ -86,7 +87,7 @@ limitations under the License.
 <p>This post discusses how Parquet readers skip irrelevant <strong>rows</strong> while scanning data,
 leveraging Parquet's columnar layout by first reading only filter columns,
 and then selectively reading other columns only for matching rows.</p>
-<h2>Why filter pushdown in Parquet?</h2>
+<h2 id="why-filter-pushdown-in-parquet">Why filter pushdown in Parquet?<a class="headerlink" href="#why-filter-pushdown-in-parquet" title="Permanent link">&para;</a></h2>
 <p>Below is an example query that reads sensor data with filters on <code>date_time</code> and <code>location</code>.
 Without filter pushdown, all rows from <code>location</code>, <code>val</code>, and <code>date_time</code> columns are decoded before <code>location='office'</code> is evaluated. Filter pushdown is especially useful when the filter is selective, i.e., removes many rows.</p>
 <pre><code class="language-sql">SELECT val, location 
@@ -106,7 +107,7 @@ At planning time, DataFusion prunes the unneeded Parquet files, i.e., <code>2025
 In practice, this works by first processing only the filter columns (<code>date_time</code> and <code>location</code>), building a boolean mask of rows that satisfy our conditions, then using this mask to selectively decode only the relevant rows from other columns (<code>sensor_id</code>, <code>val</code>). 
 This eliminates the waste of decoding rows that will be immediately filtered out.</p>
 <p>While simple in theory, practical implementations often make performance worse.</p>
-<h2>How can filter pushdown be slower?</h2>
+<h2 id="how-can-filter-pushdown-be-slower">How can filter pushdown be slower?<a class="headerlink" href="#how-can-filter-pushdown-be-slower" title="Permanent link">&para;</a></h2>
 <p>At a high level, the Parquet reader first builds a filter mask -- essentially a boolean array indicating which rows meet the filter criteria -- and then uses this mask to selectively decode only the needed rows from the remaining columns in the projection.</p>
 <p>Let's dig into details of <a href="https://github.com/apache/arrow-rs/blob/d5339f31a60a4bd8a4256e7120fe32603249d88e/parquet/src/arrow/async_reader/mod.rs#L618-L712">how filter pushdown is implemented</a> in the current Rust Parquet reader implementation, illustrated in the following figure.</p>
 <figure>
@@ -150,7 +151,7 @@ This explains why filter pushdown is slower in some cases.</p>
 <blockquote>
 <p><strong>Note:</strong> Highly selective filters may skip the entire page; but as long as it reads one row from the page, it needs to decompress and often decode the entire page.</p>
 </blockquote>
-<h2>Attempt: cache filter columns</h2>
+<h2 id="attempt-cache-filter-columns">Attempt: cache filter columns<a class="headerlink" href="#attempt-cache-filter-columns" title="Permanent link">&para;</a></h2>
 <p>Intuitively, caching the filter columns and reusing them later could help.</p>
 <p>But naively caching decoded pages consumes prohibitively high memory:</p>
 <ol>
@@ -168,7 +169,7 @@ This explains why filter pushdown is slower in some cases.</p>
 <blockquote>
 <p><strong>Feel the complexity:</strong> consider building a cache that properly handles nested columns, multiple filters, and filters with multiple columns.</p>
 </blockquote>
-<h2>Real solution</h2>
+<h2 id="real-solution">Real solution<a class="headerlink" href="#real-solution" title="Permanent link">&para;</a></h2>
 <p>We need a solution that:</p>
 <ol>
 <li>
@@ -195,7 +196,7 @@ This explains why filter pushdown is slower in some cases.</p>
 </li>
 </ol>
 <p>This allows the cache to only hold 1 page at a time, and to immediately discard the previous page after it's used, significantly reducing the memory requirement for caching.</p>
-<h3>What pages are cached?</h3>
+<h3 id="what-pages-are-cached">What pages are cached?<a class="headerlink" href="#what-pages-are-cached" title="Permanent link">&para;</a></h3>
 <p>You may have noticed that only <code>location</code> is cached, not <code>val</code>, because <code>val</code> is only used for output.
 More generally, only columns that appear both in the filter and output are cached, and at most 1 page is cached for each such column.</p>
 <p>More examples:</p>
@@ -209,7 +210,7 @@ FROM sensor_data
 WHERE date_time &gt; '2025-03-11' AND location = 'office';
 </code></pre>
 <p>In this case, again, no columns are cached, because the output projection is empty after query plan optimization.</p>
-<h3>Then why cache 2 pages per column instead of 1?</h3>
+<h3 id="then-why-cache-2-pages-per-column-instead-of-1">Then why cache 2 pages per column instead of 1?<a class="headerlink" href="#then-why-cache-2-pages-per-column-instead-of-1" title="Permanent link">&para;</a></h3>
 <p>This is another real-world nuance regarding how Parquet layouts the pages.</p>
 <p>Parquet by default encodes data using <a href="https://parquet.apache.org/docs/file-format/data-pages/encodings/">dictionary encoding</a>, which writes a dictionary page as the first page of a column chunk, followed by the keys referencing the dictionary.</p>
 <p>You can see this in action using <a href="https://parquet-viewer.xiangpeng.systems">parquet-viewer</a>:</p>
@@ -228,7 +229,7 @@ The data page slot will move forward as it reads the data; but the dictionary pa
     Cached two pages, one for dictionary (pinned), one for data (moves as it reads the data)
   </figcaption>
 </figure>
-<h2>How does it perform?</h2>
+<h2 id="how-does-it-perform">How does it perform?<a class="headerlink" href="#how-does-it-perform" title="Permanent link">&para;</a></h2>
 <p>Here are my results on <a href="https://github.com/apache/datafusion/tree/main/benchmarks#clickbench">ClickBench</a> on my AMD 9900X machine. The total time is reduced by 15%, with Q23 being 2.24x faster,
 and queries that get slower are likely due to noise.</p>
 <pre><code>┏━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┓
@@ -290,7 +291,7 @@ and queries that get slower are likely due to noise.</p>
 &boxv; Queries with No Change      &boxv;         25 &boxv;
 &boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxhu;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul;
 </code></pre>
-<h2>Conclusion</h2>
+<h2 id="conclusion">Conclusion<a class="headerlink" href="#conclusion" title="Permanent link">&para;</a></h2>
 <p>Despite being simple in theory, filter pushdown in Parquet is non-trivial to implement.
 It requires understanding both the Parquet format and reader implementation details. 
 The challenge lies in efficiently navigating through the dynamics of decoding, filter evaluation, and memory management.</p>
@@ -325,9 +326,10 @@ The challenge lies in efficiently navigating through the dynamics of decoding, f
 
   <!-- Container where Giscus will render -->
   <div id="comment-thread"></div>
-</div>          </div>
-      </div>
-    </div>    
+</div>      </div>
+    </div>
+  </div>
+</div>    
     <!-- footer -->
     <div class="row g-0">
       <div class="col-12">

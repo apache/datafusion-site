@@ -34,17 +34,18 @@
         </div>
     </div>
 </nav>    
-
-
 <!-- article contents -->
 <div id="contents">
-    <div class="bg-white p-5 rounded">
-        <div class="col-md-10 col-lg-8 mx-auto main-content">
-          <h1>
-            Apache DataFusion is now the fastest single node engine for querying Apache Parquet files
-          </h1>
-            <p>Posted on: Mon 18 November 2024 by Andrew Lamb, Staff Engineer at InfluxData</p>
-            <!--
+  <div class="bg-white p-4 p-md-5 rounded">
+    <div class="row justify-content-center">
+      <div class="col-12 col-md-8 main-content">
+        <h1>
+          Apache DataFusion is now the fastest single node engine for querying Apache Parquet files
+        </h1>
+        <p>Posted on: Mon 18 November 2024 by Andrew Lamb, Staff Engineer at InfluxData</p>
+
+
+        <!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -86,7 +87,7 @@ less important than open formats (though the idea of use case specific formats
 is interesting[^2]).</p>
 <p>This blog post highlights some of the techniques we used to achieve this
 performance, and celebrates the teamwork involved.</p>
-<h1>A Strong History of Performance Improvements</h1>
+<h1 id="a-strong-history-of-performance-improvements">A Strong History of Performance Improvements<a class="headerlink" href="#a-strong-history-of-performance-improvements" title="Permanent link">&para;</a></h1>
 <p>Performance has long been a core focus for DataFusion's community, and 
 speed attracts users and contributors. Recently, we seem to have been
 even more focused on performance, including in July, 2024 when <a href="https://www.linkedin.com/in/mehmet-ozan-kabak/">Mehmet Ozan
@@ -109,7 +110,7 @@ Photon</a>, or
 <a href="https://www.snowflake.com/en/">Snowflake</a> or in tightly integrated open source
 systems such as <a href="https://duckdb.org/">DuckDB</a> or
 <a href="https://clickhouse.com/">ClickHouse</a> which were not designed to be extended.</p>
-<h2>StringView</h2>
+<h2 id="stringview">StringView<a class="headerlink" href="#stringview" title="Permanent link">&para;</a></h2>
 <p>Performance improved for all queries when DataFusion switched to using Arrow
 <code>StringView</code>. Using <code>StringView</code> &ldquo;just&rdquo; saves some copies and avoids one memory
 access for certain comparisons. However, these copies and comparisons happen to
@@ -134,7 +135,7 @@ pull requests linked to the epic in arrow-rs
 <li><strong>DataFusion</strong>:  <a href="https://github.com/XiangpengHao">Xiangpeng Hao</a>, again charted the initial path and <a href="https://github.com/Weijun-H">Weijun Huang</a>, <a href="https://github.com/dharanad">Dharan Aditya</a> <a href="https://github.com/Lordworms">Lordworms</a>, <a href="https://github.com/goldmedal">Jax Liu</a>,  <a href="https://github.com/wiedld">wiedld</a>, <a href="https://github.com/tlm365">Tai Le Manh</a>, <a href="https://github.com/my-vegetable-has-exploded">yi wang</a>, <a href="https://github.com/doupache">doupache</a>, <a href="https://github.com/jayzhan211">Jay Zhan</a> , <a href="https://github.com/xinlifoobar">Xin Li</a>  and <a href="https://github.com/Kev1n8">Kaifeng Zheng</a> made it real.</li>
 <li><strong>DataFusion String Function Migration</strong>:  <a href="https://github.com/tshauck">Trent Hauck</a> organized the effort and set the patterns, <a href="https://github.com/goldmedal">Jax Liu</a> made a clever testing framework, and <a href="https://github.com/austin362667">Austin Liu</a>, <a href="https://github.com/demetribu">Dmitrii Bu</a>, <a href="https://github.com/tlm365">Tai Le Manh</a>, <a href="https://github.com/PsiACE">Chojan Shang</a>, <a href="https://github.com/devanbenz">WeblWabl</a>, <a href="https://github.com/Lordworms">Lordworms</a>, <a href="https://github.com/thinh2">iamthinh</a>, <a href="https://github.com/Omega359">Bruce Ritchie</a>, <a href="https://github.com/Kev1n8">Kaifeng Zheng</a>, and <a href="https://github.com/xinlifoobar">Xin Li</a> bashed out the conversions.</li>
 </ul>
-<h2>Parquet</h2>
+<h2 id="parquet">Parquet<a class="headerlink" href="#parquet" title="Permanent link">&para;</a></h2>
 <p>Part of the reason for DataFusion's speed in ClickBench is reading Parquet files (really) quickly,
 which reflects invested effort in the Parquet reading system (see <a href="https://www.influxdata.com/blog/querying-parquet-millisecond-latency/">Querying
 Parquet with Millisecond Latency</a> )</p>
@@ -147,7 +148,7 @@ by default). Some recent work from <a href="https://github.com/itsjunetime">June
 <a href="https://github.com/apache/datafusion/pull/12135">recently unblocked a remaining hurdle</a> for enabling late materialized
 filtering, and conveniently <a href="https://github.com/XiangpengHao">Xiangpeng Hao</a> is
 working on the <a href="https://github.com/apache/arrow-datafusion/issues/3463">final piece</a> (no pressure😅)</p>
-<h2>Skipping Partial Aggregation When It Doesn't Help</h2>
+<h2 id="skipping-partial-aggregation-when-it-doesnt-help">Skipping Partial Aggregation When It Doesn't Help<a class="headerlink" href="#skipping-partial-aggregation-when-it-doesnt-help" title="Permanent link">&para;</a></h2>
 <p>Many ClickBench queries are aggregations that summarize millions of rows, a
 common task for reporting and dashboarding. DataFusion uses state of the art
 <a href="https://docs.rs/datafusion/latest/datafusion/physical_plan/trait.Accumulator.html#tymethod.state">two phase aggregation</a> plans. Normally, two phase aggregation works well as the
@@ -170,7 +171,7 @@ bypass the first phase when it is not working efficiently, shown in Figure 4.</p
 <p><img alt="Two phase aggregation diagram from DataFusion API docs annotated to show first phase not helping" class="img-responsive" src="/blog/images/clickbench-datafusion-43/skipping-partial-aggregation.png" width="100%"/></p>
 <p><strong>Figure 4</strong>: Diagram from <a href="https://docs.rs/datafusion/latest/datafusion/physical_plan/trait.Accumulator.html#tymethod.state">DataFusion API docs</a> showing when the multi-phase
 grouping is not effective</p>
-<h2>Optimized Multi-Column Grouping</h2>
+<h2 id="optimized-multi-column-grouping">Optimized Multi-Column Grouping<a class="headerlink" href="#optimized-multi-column-grouping" title="Permanent link">&para;</a></h2>
 <p>Another method for improving analytic database performance is specialized (aka
 highly optimized) versions of operations for different data types, which the
 system picks at runtime based on the query. Like other systems, DataFusion has
@@ -207,7 +208,7 @@ contributing a faster <a href="https://github.com/apache/datafusion/pull/12996">
 will be released in DataFusion 44. The discussion on <a href="https://github.com/apache/datafusion/issues/9403">the ticket</a> is another
 great example of the power of the DataFusion community working together to build
 great software.</p>
-<h1>What&rsquo;s Next 🚀</h1>
+<h1 id="whats-next">What&rsquo;s Next 🚀<a class="headerlink" href="#whats-next" title="Permanent link">&para;</a></h1>
 <p>Just as I expect the performance of other engines to improve, DataFusion has
 several more performance improvements lined up itself:</p>
 <ol>
@@ -219,13 +220,13 @@ months</a> and are always
 looking for people to help! If you want to geek out (obsess??) about performance
 and other features with engineers from around the world, <a href="https://datafusion.apache.org/contributor-guide/communication.html">we would love you to
 join us</a>.</p>
-<h1>Additional Thanks</h1>
+<h1 id="additional-thanks">Additional Thanks<a class="headerlink" href="#additional-thanks" title="Permanent link">&para;</a></h1>
 <p>In addition to the people called out above, thanks:</p>
 <ol>
 <li><a href="https://github.com/pmcgleenon">Patrick McGleenon</a> for running ClickBench and gathering this data (<a href="https://github.com/apache/datafusion/issues/13099#issuecomment-2478314793">source</a>).</li>
 <li>Everyone I missed in the shoutouts &ndash; there are so many of you. We appreciate everyone.</li>
 </ol>
-<h1>Conclusion</h1>
+<h1 id="conclusion">Conclusion<a class="headerlink" href="#conclusion" title="Permanent link">&para;</a></h1>
 <p>I have dreamed about DataFusion being on top of the ClickBench leaderboard for
 several years. I often watched with envy improvements in systems backed by large
 VC investments, internet companies, or world class research institutions, and
@@ -241,7 +242,7 @@ interactions and the results we have achieved together far surpass my
 expectations as well as most of my other software development experiences. I
 can&rsquo;t wait to see what people will build next, and hope to <a href="https://github.com/apache/datafusion">see you
 online</a>.</p>
-<h2>Notes</h2>
+<h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
 <p>[^1]: Note that DuckDB is slightly faster on the &lsquo;cold&rsquo; run.</p>
 <p>[^2]: Want to try your hand at a custom format for ClickBench fame / glory?: <a href="https://github.com/apache/datafusion/issues/13448">Make DataFusion the fastest engine in ClickBench with custom file format</a></p>
 <p>[^3]: We have contributors from North America, South American, Europe, Asia, Africa and Australia</p>
@@ -277,9 +278,10 @@ online</a>.</p>
 
   <!-- Container where Giscus will render -->
   <div id="comment-thread"></div>
-</div>          </div>
-      </div>
-    </div>    
+</div>      </div>
+    </div>
+  </div>
+</div>    
     <!-- footer -->
     <div class="row g-0">
       <div class="col-12">
