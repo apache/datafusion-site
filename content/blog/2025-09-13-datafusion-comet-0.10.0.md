@@ -53,19 +53,23 @@ Comet will now use the `native_iceberg_compat` scan for Spark 4.0.0 in most case
 
 ### New Functionality
 
-- The following SQL functions are now supported:
- - `array_min`
- - `map_entries`
- - `map_from_array`
- - `randn`
- - `from_unixtime`
- - `monotonically_increasing_id`
- - `spark_partition_id`
- - `try_add`
- - `try_divide`
- - `try_mod`
- - `try_multiply`
- - `try_subtract`
+The following SQL functions are now supported:
+ 
+- `array_min`
+- `map_entries`
+- `map_from_array`
+- `randn`
+- `from_unixtime`
+- `monotonically_increasing_id`
+- `spark_partition_id`
+- `try_add`
+- `try_divide`
+- `try_mod`
+- `try_multiply`
+- `try_subtract`
+
+Other new features include:
+
 - Support for array literals
 - Support for limit with offset
 
