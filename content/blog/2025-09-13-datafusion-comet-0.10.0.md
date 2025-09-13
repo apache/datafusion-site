@@ -47,36 +47,43 @@ Comet no longer falls back to Spark for all queries when ANSI mode is enabled (w
 Instead, Comet will now only fall back to Spark for arithmetic and aggregates expressions that support ANSI mode.
 
 Setting `spark.comet.ansi.ignore=true` will override this behavior and force these expressions to continue to be 
-accelerated by Comet.
+accelerated by Comet. Full support for ANSI mode will be available in a future release.
 
 Comet will now use the `native_iceberg_compat` scan for Spark 4.0.0 in most cases, which supports reading complex types.
 
 ### New Functionality
 
-- New Scalar Functions
-  - `array_min`
-  - `map_entries`
-  - `map_from_array`
-  - `randn`
-  - `from_unixtime`
+- The following SQL functions are now supported:
+ - `array_min`
+ - `map_entries`
+ - `map_from_array`
+ - `randn`
+ - `from_unixtime`
+ - `monotonically_increasing_id`
+ - `spark_partition_id`
+ - `try_add`
+ - `try_divide`
+ - `try_mod`
+ - `try_multiply`
+ - `try_subtract`
 - Support for array literals
-- Support for `monotonically_increasing_id` and `spark_partition_id`
 - Support for limit with offset
-- Support for `try_add`, `try_divide`, `try_mod`, `try_multiply`, `try_subtract`
 
 ### UX Improvements
 
 - Improved reporting of reasons why Comet cannot accelerate some operators and expressions
-- New config for logging all fallback reasons
-- CometScan nodes in physical plan now show which scan implementation is being used
+- New `spark.comet.logFallbackReasons.enabled` configuration setting for logging all fallback reasons
+- CometScan nodes in the physical plan now show which scan implementation is being used (`native_comet`, 
+`native_datafusion`, or `native_iceberg_compat`)
 
 ### Bug Fixes
 
 - Improved memory safety for FFI transfers
 - Fixed a double-free issue in the shuffle unified memory pool
 - Non zero offset FFI issue
-- HDFS buffer read issue
-- Benchmarking
+- Fixed HDFS buffer read issue 
+
+### Benchmarking
 
 Benchmarking scripts for benchmarks based on TPC-H and TPS-DS are now available in the repository under `dev/benchmarks`.
 
