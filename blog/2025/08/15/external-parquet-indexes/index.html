@@ -34,17 +34,45 @@
         </div>
     </div>
 </nav>    
-
-
 <!-- article contents -->
 <div id="contents">
-    <div class="bg-white p-5 rounded">
-        <div class="col-md-10 col-lg-8 mx-auto main-content">
-          <h1>
-            Using External Indexes, Metadata Stores, Catalogs and Caches to Accelerate Queries on Apache Parquet
-          </h1>
-            <p>Posted on: Fri 15 August 2025 by Andrew Lamb (InfluxData)</p>
-            <!--
+  <div class="bg-white p-4 p-md-5 rounded">
+    <div class="row justify-content-center">
+      <div class="col-12 col-md-8 main-content">
+        <h1>
+          Using External Indexes, Metadata Stores, Catalogs and Caches to Accelerate Queries on Apache Parquet
+        </h1>
+        <p>Posted on: Fri 15 August 2025 by Andrew Lamb (InfluxData)</p>
+
+        <aside class="d-md-none mb-2">
+          <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#motivation">Motivation</a></li>
+<li><a href="#introduction-to-external-indexes-catalogs-metadata-stores-caches">Introduction to External Indexes / Catalogs / Metadata Stores / Caches</a></li>
+<li><a href="#using-apache-parquet-for-storage">Using Apache Parquet for Storage</a></li>
+<li><a href="#hierarchical-pruning-overview">Hierarchical Pruning Overview</a></li>
+<li><a href="#apache-parquet-overview">Apache Parquet Overview</a></li>
+<li><a href="#pruning-files-with-external-indexes">Pruning Files with External Indexes</a><ul>
+<li><a href="#pruning-files-with-external-indexes-using-datafusion">Pruning Files with External Indexes Using DataFusion</a></li>
+</ul>
+</li>
+<li><a href="#pruning-parts-of-parquet-files-with-external-indexes">Pruning Parts of Parquet Files with External Indexes</a></li>
+<li><a href="#pruning-parts-of-parquet-files-with-external-indexes-using-datafusion">Pruning Parts of Parquet Files with External Indexes using DataFusion</a></li>
+<li><a href="#caching-parquet-metadata">Caching Parquet Metadata</a><ul>
+<li><a href="#caching-parquet-metadata-using-datafusion">Caching Parquet Metadata using DataFusion</a></li>
+</ul>
+</li>
+<li><a href="#conclusion">Conclusion</a></li>
+<li><a href="#about-the-author">About the Author</a></li>
+<li><a href="#about-datafusion">About DataFusion</a><ul>
+<li><a href="#acknowledgements">Acknowledgements</a></li>
+<li><a href="#footnotes">Footnotes</a></li>
+</ul>
+</li>
+</ul>
+</div>
+        </aside>
+
+        <!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -63,6 +91,7 @@ limitations under the License.
 {% endcomment %}
 -->
 <!-- diagrams source https://docs.google.com/presentation/d/1e_Z_F8nt2rcvlNvhU11khF5lzJJVqNtqtyJ-G3mp4-Q -->
+
 <p>It is a common misconception that <a href="https://parquet.apache.org/">Apache Parquet</a> requires (slow) reparsing of
 metadata and is limited to indexing structures provided by the format. In fact,
 caching parsed metadata and using custom external indexes along with
@@ -72,7 +101,7 @@ processing.</p>
 stores in high performance systems, and demonstrate how to apply these concepts
 to Parquet processing using <a href="https://datafusion.apache.org/">Apache DataFusion</a>. <em>Note this is an expanded
 version of the <a href="https://www.youtube.com/watch?v=74YsJT1-Rdk">companion video</a> and <a href="https://docs.google.com/presentation/d/1e_Z_F8nt2rcvlNvhU11khF5lzJJVqNtqtyJ-G3mp4-Q/edit">presentation</a>.</em></p>
-<h2>Motivation</h2>
+<h2 id="motivation">Motivation<a class="headerlink" href="#motivation" title="Permanent link">¶</a></h2>
 <p>System designers choose between a pre-configured data system or the often
 daunting task of building their own custom data platform from scratch.
 For many users and use cases, one of the existing data systems will
@@ -88,7 +117,7 @@ such as <a href="https://parquet.apache.org/">Apache Parquet</a> for storage, <a
 and <a href="https://datafusion.apache.org/">Apache DataFusion</a> for query execution make it possible to quickly build
 custom data platforms optimized for your specific
 needs<sup><a href="#footnote1">1</a></sup>.</p>
-<h2>Introduction to External Indexes / Catalogs / Metadata Stores / Caches</h2>
+<h2 id="introduction-to-external-indexes-catalogs-metadata-stores-caches">Introduction to External Indexes / Catalogs / Metadata Stores / Caches<a class="headerlink" href="#introduction-to-external-indexes-catalogs-metadata-stores-caches" title="Permanent link">¶</a></h2>
 <div class="text-center">
 <img alt="Using External Indexes to Accelerate Queries" class="img-responsive" src="/blog/images/external-parquet-indexes/external-index-overview.png" width="80%"/>
 </div>
@@ -137,7 +166,7 @@ increased file sizes and the need to update the data files to update the index.<
 <li><strong>Distributed key-value stores</strong> such as <a href="https://redis.io/">Redis</a> or <a href="https://cassandra.apache.org/">Cassandra</a>.</li>
 <li><strong>Local memory</strong> such as an in-memory hash map.</li>
 </ul>
-<h2>Using Apache Parquet for Storage</h2>
+<h2 id="using-apache-parquet-for-storage">Using Apache Parquet for Storage<a class="headerlink" href="#using-apache-parquet-for-storage" title="Permanent link">¶</a></h2>
 <p>While the rest of this blog focuses on building custom external indexes using
 Parquet and DataFusion, I first briefly discuss why Parquet is a good choice for
 modern analytic systems. The research community frequently confuses limitations
@@ -174,7 +203,7 @@ use the full range of existing Parquet features such Column and Offset
 Indexes and Bloom Filters<sup><a href="#footnote7">7</a></sup>. Compared to the low
 interoperability and expensive transcoding/loading step of alternate file
 formats, Parquet is hard to beat.</p>
-<h2>Hierarchical Pruning Overview</h2>
+<h2 id="hierarchical-pruning-overview">Hierarchical Pruning Overview<a class="headerlink" href="#hierarchical-pruning-overview" title="Permanent link">¶</a></h2>
 <p>The key technique for optimizing query processing systems is skipping as
 much data as possible, as quickly as possible. Analytic systems typically use a hierarchical
 approach to progressively narrow the set of data that needs to be processed. 
@@ -197,7 +226,7 @@ required at later stages (apply predicates to the data).
 As mentioned before, while the details of what metadata is used and how that
 metadata is managed varies substantially across query systems, they almost all
 use a hierarchical pruning strategy.</p>
-<h2>Apache Parquet Overview</h2>
+<h2 id="apache-parquet-overview">Apache Parquet Overview<a class="headerlink" href="#apache-parquet-overview" title="Permanent link">¶</a></h2>
 <p>This section provides a brief background on the organization of Apache Parquet
 files which is needed to fully understand the sections on implementing external indexes.
 If you are already familiar with Parquet, you can skip this section.</p>
@@ -243,7 +272,7 @@ pages that may match the predicate which are read for further processing.
 Please refer to the <a href="https://datafusion.apache.org/blog/2025/03/21/parquet-pushdown">Efficient Filter Pushdown</a> blog for more details.
 <strong>NOTE the exact same pattern can be applied using information from external
 indexes, as described in the next sections.</strong></p>
-<h2>Pruning Files with External Indexes</h2>
+<h2 id="pruning-files-with-external-indexes">Pruning Files with External Indexes<a class="headerlink" href="#pruning-files-with-external-indexes" title="Permanent link">¶</a></h2>
 <p>The first step in hierarchical pruning is quickly ruling out files that cannot
 match the query. For example, if a system expects to see queries that
 apply to a time range, it might create an external index to store the minimum
@@ -278,7 +307,7 @@ Of course, each of these systems works well for their intended use cases, but
 if none meets your needs, or you want to experiment with
 different strategies, you can easily build your own external index using
 DataFusion.</p>
-<h3>Pruning Files with External Indexes Using DataFusion</h3>
+<h3 id="pruning-files-with-external-indexes-using-datafusion">Pruning Files with External Indexes Using DataFusion<a class="headerlink" href="#pruning-files-with-external-indexes-using-datafusion" title="Permanent link">¶</a></h3>
 <p>To implement file pruning in DataFusion, you implement a custom <a href="https://docs.rs/datafusion/latest/datafusion/datasource/trait.TableProvider.html">TableProvider</a>
 with the <a href="https://docs.rs/datafusion/latest/datafusion/datasource/trait.TableProvider.html#method.supports_filters_pushdown">supports_filter_pushdown</a> and <a href="https://docs.rs/datafusion/latest/datafusion/datasource/trait.TableProvider.html#tymethod.scan">scan</a> methods. The
 <code>supports_filter_pushdown</code> method tells DataFusion which predicates can be used
@@ -355,7 +384,7 @@ pruning tasks, such as:</p>
   (e.g. <code>col &gt; 5 AND col &lt; 10</code>).</p>
 </li>
 </ul>
-<h2>Pruning Parts of Parquet Files with External Indexes</h2>
+<h2 id="pruning-parts-of-parquet-files-with-external-indexes">Pruning Parts of Parquet Files with External Indexes<a class="headerlink" href="#pruning-parts-of-parquet-files-with-external-indexes" title="Permanent link">¶</a></h2>
 <p>Once the set of files to be scanned has been determined, the next step in the
 hierarchical pruning process is to further narrow down the data within each file.
 Similarly to the previous step, almost all advanced query processing systems use additional
@@ -370,7 +399,7 @@ systems can use external indexes / metadata stores as well as Parquet's built-in
 structures to quickly rule out Row Groups and Data Pages that cannot match the query.
 In this case, the index has ruled out all but three data pages which must then be fetched
 for more processing.</p>
-<h2>Pruning Parts of Parquet Files with External Indexes using DataFusion</h2>
+<h2 id="pruning-parts-of-parquet-files-with-external-indexes-using-datafusion">Pruning Parts of Parquet Files with External Indexes using DataFusion<a class="headerlink" href="#pruning-parts-of-parquet-files-with-external-indexes-using-datafusion" title="Permanent link">¶</a></h2>
 <p>To implement pruning within Parquet files, you use the same [<code>TableProvider</code>] APIs
 as for pruning files. For each file your provider wants to scan, you provide 
 an additional <a href="https://docs.rs/datafusion/latest/datafusion/datasource/physical_plan/parquet/struct.ParquetAccessPlan.html">ParquetAccessPlan</a> that tells DataFusion what parts of the file to read. This plan is
@@ -397,33 +426,33 @@ access_plan.skip(2); // skip row group 2
 // all of row group 3 is scanned by default
 </code></pre>
 <p>The rows that are selected by the resulting plan look like this:</p>
-<pre><code class="language-text">&boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
-&boxv;                   &boxv;
-&boxv;                   &boxv;  SKIP
-&boxv;                   &boxv;
-&boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul;
+<pre><code class="language-text">┌───────────────────┐
+│                   │
+│                   │  SKIP
+│                   │
+└───────────────────┘
      Row Group 0
 
-&boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
-&boxv; &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl; &boxv;  SCAN ONLY ROWS
-&boxv; &boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul; &boxv;  100-200
-&boxv; &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl; &boxv;  350-400
-&boxv; &boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul; &boxv;
-&boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul;
+┌───────────────────┐
+│ ┌───────────────┐ │  SCAN ONLY ROWS
+│ └───────────────┘ │  100-200
+│ ┌───────────────┐ │  350-400
+│ └───────────────┘ │
+└───────────────────┘
      Row Group 1
 
-&boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
-&boxv;                   &boxv;
-&boxv;                   &boxv;  SKIP
-&boxv;                   &boxv;
-&boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul;
+┌───────────────────┐
+│                   │
+│                   │  SKIP
+│                   │
+└───────────────────┘
      Row Group 2
 
-&boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
-&boxv;                   &boxv;
-&boxv;                   &boxv;  SCAN ALL ROWS
-&boxv;                   &boxv;
-&boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul;
+┌───────────────────┐
+│                   │
+│                   │  SCAN ALL ROWS
+│                   │
+└───────────────────┘
      Row Group 3
 </code></pre>
 <p>In the <code>scan</code> method, you return an <code>ExecutionPlan</code> that includes the
@@ -470,12 +499,12 @@ clarity):</p>
     ...
 }
 </code></pre>
-<h2>Caching Parquet Metadata</h2>
+<h2 id="caching-parquet-metadata">Caching Parquet Metadata<a class="headerlink" href="#caching-parquet-metadata" title="Permanent link">¶</a></h2>
 <p>It is often said that Parquet is unsuitable for low latency query systems
 because the footer must be read and parsed for each query. This is simply not
 true, and <strong>many systems use Parquet for low latency analytics and cache the parsed
 metadata in memory to avoid re-reading and re-parsing the footer for each query</strong>.</p>
-<h3>Caching Parquet Metadata using DataFusion</h3>
+<h3 id="caching-parquet-metadata-using-datafusion">Caching Parquet Metadata using DataFusion<a class="headerlink" href="#caching-parquet-metadata-using-datafusion" title="Permanent link">¶</a></h3>
 <p>Reusing cached Parquet Metadata is also shown in the <a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/advanced_parquet_index.rs">advanced_parquet_index.rs</a>
 example. The example reads and caches the metadata for each file when the index
 is first built and then uses the cached metadata when reading the files during
@@ -559,7 +588,7 @@ for each file:</p>
     ...
 }
 </code></pre>
-<h2>Conclusion</h2>
+<h2 id="conclusion">Conclusion<a class="headerlink" href="#conclusion" title="Permanent link">¶</a></h2>
 <p>Parquet has the right structure for high performance analytics via hierarchical
 pruning, and it is straightforward to build external indexes to speed up queries
 using DataFusion without changing the file format. If you need to build a custom
@@ -573,25 +602,25 @@ optimized for narrow use cases.</p>
 <p><a href="https://datafusion.apache.org/contributor-guide/communication.html">
 <img alt="https://datafusion.apache.org/" class="img-responsive" src="/blog/images/logo_original4x.png" width="20%"/>
 </a></p>
-<h2>About the Author</h2>
+<h2 id="about-the-author">About the Author<a class="headerlink" href="#about-the-author" title="Permanent link">¶</a></h2>
 <p><a href="https://www.linkedin.com/in/andrewalamb/">Andrew Lamb</a> is a Staff Engineer at
 <a href="https://www.influxdata.com/">InfluxData</a>, and a member of the <a href="https://datafusion.apache.org/">Apache
 DataFusion</a> and <a href="https://arrow.apache.org/">Apache Arrow</a> PMCs. He has been working on
 Databases and related systems more than 20 years.</p>
-<h2>About DataFusion</h2>
+<h2 id="about-datafusion">About DataFusion<a class="headerlink" href="#about-datafusion" title="Permanent link">¶</a></h2>
 <p><a href="https://datafusion.apache.org/">Apache DataFusion</a> is an extensible query engine toolkit, written
 in Rust, that uses <a href="https://arrow.apache.org/">Apache Arrow</a> as its in-memory format. DataFusion and
-similar technology are part of the next generation &ldquo;Deconstructed Database&rdquo;
+similar technology are part of the next generation “Deconstructed Database”
 architectures, where new systems are built on a foundation of fast, modular
 components, rather than as a single tightly integrated system.</p>
 <p>The <a href="https://datafusion.apache.org/contributor-guide/communication.html">DataFusion community</a> is always looking for new contributors to help
 improve the project. If you are interested in learning more about how query
 execution works, help document or improve the DataFusion codebase, or just try
 it out, we would love for you to join us.</p>
-<h3>Acknowledgements</h3>
+<h3 id="acknowledgements">Acknowledgements<a class="headerlink" href="#acknowledgements" title="Permanent link">¶</a></h3>
 <p>Thank you to <a href="https://github.com/zhuqi-lucas">Qi Zhu</a>, <a href="https://github.com/adamreeve">Adam Reeve</a>, <a href="https://github.com/JigaoLuo">Jigao Luo</a>, <a href="https://github.com/comphead">Oleks V</a>, <a href="https://github.com/shehabgamin">Shehab Amin</a>, <a href="https://nuno-faria.github.io/">Nuno Faria</a>
 and <a href="https://github.com/Omega359">Bruce Ritchie</a> for their insightful feedback on this blog post.</p>
-<h3>Footnotes</h3>
+<h3 id="footnotes">Footnotes<a class="headerlink" href="#footnotes" title="Permanent link">¶</a></h3>
 <p><a id="footnote1"></a><code>1</code>: This trend is described in more detail in the <a href="https://www.influxdata.com/blog/flight-datafusion-arrow-parquet-fdap-architecture-influxdb/">FDAP Stack</a> blog</p>
 <p><a id="footnote2"></a><code>2</code>: This layout is referred to as <a href="https://www.vldb.org/conf/2001/P169.pdf">PAX in the
 database literature</a> after the first research paper to describe the technique.</p>
@@ -639,9 +668,37 @@ to be clustered in a more optimal way for the queries.</p>
 
   <!-- Container where Giscus will render -->
   <div id="comment-thread"></div>
-</div>          </div>
-      </div>
-    </div>    
+</div>      </div>
+      <aside class="d-none d-md-block col-md-4 col-xl-3 ms-xl-2">
+        <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#motivation">Motivation</a></li>
+<li><a href="#introduction-to-external-indexes-catalogs-metadata-stores-caches">Introduction to External Indexes / Catalogs / Metadata Stores / Caches</a></li>
+<li><a href="#using-apache-parquet-for-storage">Using Apache Parquet for Storage</a></li>
+<li><a href="#hierarchical-pruning-overview">Hierarchical Pruning Overview</a></li>
+<li><a href="#apache-parquet-overview">Apache Parquet Overview</a></li>
+<li><a href="#pruning-files-with-external-indexes">Pruning Files with External Indexes</a><ul>
+<li><a href="#pruning-files-with-external-indexes-using-datafusion">Pruning Files with External Indexes Using DataFusion</a></li>
+</ul>
+</li>
+<li><a href="#pruning-parts-of-parquet-files-with-external-indexes">Pruning Parts of Parquet Files with External Indexes</a></li>
+<li><a href="#pruning-parts-of-parquet-files-with-external-indexes-using-datafusion">Pruning Parts of Parquet Files with External Indexes using DataFusion</a></li>
+<li><a href="#caching-parquet-metadata">Caching Parquet Metadata</a><ul>
+<li><a href="#caching-parquet-metadata-using-datafusion">Caching Parquet Metadata using DataFusion</a></li>
+</ul>
+</li>
+<li><a href="#conclusion">Conclusion</a></li>
+<li><a href="#about-the-author">About the Author</a></li>
+<li><a href="#about-datafusion">About DataFusion</a><ul>
+<li><a href="#acknowledgements">Acknowledgements</a></li>
+<li><a href="#footnotes">Footnotes</a></li>
+</ul>
+</li>
+</ul>
+</div>
+      </aside>
+    </div>
+  </div>
+</div>    
     <!-- footer -->
     <div class="row g-0">
       <div class="col-12">

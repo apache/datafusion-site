@@ -43,7 +43,7 @@ brings in all of the new features of the core &lt;a href="https://datafusion.apa
 blog post for &lt;a href="https://datafusion.apache.org/blog/2024/12/14/datafusion-python-43.1.0/"&gt;datafusion-python 43.1.0&lt;/a&gt;, a large number of improvements have been made
 that can be found in the &lt;a href="https://github.com/apache/datafusion-python/tree/main/dev/changelog"&gt;changelogs&lt;/a&gt;.&lt;/p&gt;
 &lt;p&gt;We highly recommend reviewing the upstream &lt;a href="https://datafusion.apache.org/blog/2025/03/24/datafusion-46.0.0"&gt;DataFusion 46.0.0&lt;/a&gt; announcement.&lt;/p&gt;
-&lt;h2&gt;Easier file reading&lt;/h2&gt;
+&lt;h2 id="easier-file-reading"&gt;Easier file reading&lt;a class="headerlink" href="#easier-file-reading" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;In these releases we have introduced two new ways to more easily read files into
 DataFrames.&lt;/p&gt;
 &lt;p&gt;PR &lt;a href="https://github.com/apache/datafusion-python/pull/982"&gt;#982&lt;/a&gt; introduced a series of easier read functions for Parquet, JSON, CSV, and
@@ -62,7 +62,7 @@ of how to use this is demonstrated in the following snippet.&lt;/p&gt;
 ctx = datafusion.SessionContext().enable_url_table()
 df = ctx.table("./examples/tpch/data/customer.parquet")
 &lt;/code&gt;&lt;/pre&gt;
-&lt;h2&gt;Registering Table Views&lt;/h2&gt;
+&lt;h2 id="registering-table-views"&gt;Registering Table Views&lt;a class="headerlink" href="#registering-table-views" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;DataFusion supports registering a logical plan as a view with a session context. This
 allows creating views in one part of your work flow and passinng the session
 context to other places where that logical plan can be reused. This is an useful
@@ -76,19 +76,19 @@ to register the view and then use it in another place:&lt;/p&gt;
 you can retrive the DataFrame with:&lt;/p&gt;
 &lt;pre&gt;&lt;code&gt;df2 = ctx.table("view1")
 &lt;/code&gt;&lt;/pre&gt;
-&lt;h2&gt;Asynchronous Iteration of Record Batches&lt;/h2&gt;
+&lt;h2 id="asynchronous-iteration-of-record-batches"&gt;Asynchronous Iteration of Record Batches&lt;a class="headerlink" href="#asynchronous-iteration-of-record-batches" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;Retrieving a &lt;code&gt;RecordBatch&lt;/code&gt; from a &lt;code&gt;RecordBatchStream&lt;/code&gt; was a synchronous call, which would
 require the end user's code to wait for the data retrieval. This is described in
 &lt;a href="https://github.com/apache/datafusion-python/issues/974"&gt;Issue 974&lt;/a&gt;. We continue to support this as a synchronous iterator, but we have also added
 in the ability to retrieve the &lt;code&gt;RecordBatch&lt;/code&gt; using the Python asynchronous &lt;code&gt;anext&lt;/code&gt;
 function.&lt;/p&gt;
-&lt;h2&gt;Default ZSTD Compression for Parquet files&lt;/h2&gt;
+&lt;h2 id="default-zstd-compression-for-parquet-files"&gt;Default ZSTD Compression for Parquet files&lt;a class="headerlink" href="#default-zstd-compression-for-parquet-files" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;With PR &lt;a href="https://github.com/apache/datafusion-python/pull/981"&gt;#981&lt;/a&gt;, we change the saving of Parquet files to use zstd compression by default.
 Previously the default was uncompressed, causing excessive disk storage. Zstd is an
 excellent compression scheme that balances speed and compression ratio. Users can still
 save their Parquet files uncompressed by passing in the appropriate value to the
 &lt;code&gt;compression&lt;/code&gt; argument when calling &lt;code&gt;DataFrame.write_parquet&lt;/code&gt;.&lt;/p&gt;
-&lt;h2&gt;UDF Decorators&lt;/h2&gt;
+&lt;h2 id="udf-decorators"&gt;UDF Decorators&lt;a class="headerlink" href="#udf-decorators" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;In PRs &lt;a href="https://github.com/apache/datafusion-python/pull/1040"&gt;#1040&lt;/a&gt; and &lt;a href="https://github.com/apache/datafusion-python/pull/1061"&gt;#1061&lt;/a&gt; we add methods to make creating user defined functions
 easier and take advantage of Python decorators. With these PRs you can save a step
 from defining a method and then defining a udf of that method. Instead you can
@@ -101,19 +101,19 @@ def my_custom_function(
 ) -&amp;gt; pa.Array:
     pass
 &lt;/code&gt;&lt;/pre&gt;
-&lt;h2&gt;&lt;code&gt;uv&lt;/code&gt; package management&lt;/h2&gt;
+&lt;h2 id="uv-package-management"&gt;&lt;code&gt;uv&lt;/code&gt; package management&lt;a class="headerlink" href="#uv-package-management" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;&lt;a href="https://github.com/astral-sh/uv"&gt;uv&lt;/a&gt; is an extremely fast Python package manager, written in Rust. In the previous version
 of &lt;code&gt;datafusion-python&lt;/code&gt; we had a combination of settings of PyPi and Conda. Instead, we
 switch to using &lt;a href="https://github.com/astral-sh/uv"&gt;uv&lt;/a&gt; is our primary method for dependency management.&lt;/p&gt;
 &lt;p&gt;For most users of DataFusion, this change will be transparent. You can still install
 via &lt;code&gt;pip&lt;/code&gt; or &lt;code&gt;conda&lt;/code&gt;. For developers, the instructions in the repository have been updated.&lt;/p&gt;
-&lt;h2&gt;Code cleanup&lt;/h2&gt;
+&lt;h2 id="code-cleanup"&gt;Code cleanup&lt;a class="headerlink" href="#code-cleanup" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;In an effort to improve our code cleanliness and ensure we are following Python best
 practices, we use &lt;a href="https://docs.astral.sh/ruff/"&gt;ruff&lt;/a&gt; to perform Python linting. Until now we enabled only a portion
 of the available linters available. In PRs &lt;a href="https://github.com/apache/datafusion-python/pull/1055"&gt;#1055&lt;/a&gt; and &lt;a href="https://github.com/apache/datafusion-python/pull/1062"&gt;#1062&lt;/a&gt;, we enable many more
 of these linters and made code improvements to ensure we are following these
 recommendations.&lt;/p&gt;
-&lt;h2&gt;Improved Jupyter Notebook rendering&lt;/h2&gt;
+&lt;h2 id="improved-jupyter-notebook-rendering"&gt;Improved Jupyter Notebook rendering&lt;a class="headerlink" href="#improved-jupyter-notebook-rendering" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;Since PR &lt;a href="https://github.com/apache/datafusion-python/pull/839"&gt;#839&lt;/a&gt; in DataFusion 41.0.0 we have been able to render DataFrames using html in
 &lt;a href="https://jupyter.org/"&gt;jupyter&lt;/a&gt; notebooks. This is a big improvement over the &lt;code&gt;show&lt;/code&gt; command when we have the
 ability to render tables. In PR &lt;a href="https://github.com/apache/datafusion-python/pull/1036"&gt;#1036&lt;/a&gt; we went a step further and added in a variety
@@ -139,13 +139,13 @@ expandable text and scroll bars.&lt;/p&gt;
    viewable in jupyter notebooks.
 &lt;/figcaption&gt;
 &lt;/figure&gt;
-&lt;h2&gt;Extension Documentation&lt;/h2&gt;
+&lt;h2 id="extension-documentation"&gt;Extension Documentation&lt;a class="headerlink" href="#extension-documentation" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;We have recently added &lt;a href="https://datafusion.apache.org/python/contributor-guide/ffi.html"&gt;Extension Documentation&lt;/a&gt; to the DataFusion in Python website. We
 have received many requests about how to better understand how to integrate DataFusion
 in Python with other Rust libraries. To address these questions we wrote an article about
 some of the difficulties that we encounter when using Rust libraries in Python and our
 approach to addressing them.&lt;/p&gt;
-&lt;h2&gt;Migration Guide&lt;/h2&gt;
+&lt;h2 id="migration-guide"&gt;Migration Guide&lt;a class="headerlink" href="#migration-guide" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;During the upgrade from &lt;a href="https://github.com/apache/datafusion/blob/main/dev/changelog/43.0.0.md"&gt;DataFusion 43.0.0&lt;/a&gt; to &lt;a href="https://github.com/apache/datafusion/blob/main/dev/changelog/44.0.0.md"&gt;DataFusion 44.0.0&lt;/a&gt; as our upstream core
 dependency, we discovered a few changes were necessary within our repository and our
 unit tests. These notes serve to help guide users who may encounter similar issues when
@@ -164,7 +164,7 @@ only impactful to unit tests.&lt;/li&gt;
 &lt;li&gt;We have upgraded the Python minimum version to 3.9 since 3.8 is no longer officially
 supported.&lt;/li&gt;
 &lt;/ul&gt;
-&lt;h2&gt;Coming Soon&lt;/h2&gt;
+&lt;h2 id="coming-soon"&gt;Coming Soon&lt;a class="headerlink" href="#coming-soon" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;There is a lot of excitement around the upcoming work. This list is not comprehensive, but
 a glimpse into some of the upcoming work includes:&lt;/p&gt;
 &lt;ul&gt;
@@ -191,14 +191,14 @@ providers above.&lt;/li&gt;
 &lt;/ul&gt;
 &lt;p&gt;This is only a sample of the great work that is being done. If there are features you would
 love to see, we encourage you to open an issue and join us as we build something wonderful.&lt;/p&gt;
-&lt;h2&gt;Appreciation&lt;/h2&gt;
+&lt;h2 id="appreciation"&gt;Appreciation&lt;a class="headerlink" href="#appreciation" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;We would like to thank everyone who has helped with these releases through their helpful
 conversations, code review, issue descriptions, and code authoring. We would especially
 like to thank the following authors of PRs who made these releases possible, listed in
 alphabetical order by username: &lt;a href="https://github.com/chenkovsky"&gt;@chenkovsky&lt;/a&gt;, &lt;a href="https://github.com/CrystalZhou0529"&gt;@CrystalZhou0529&lt;/a&gt;, &lt;a href="https://github.com/ion-elgreco"&gt;@ion-elgreco&lt;/a&gt;,
 &lt;a href="https://github.com/jsai28"&gt;@jsai28&lt;/a&gt;, &lt;a href="https://github.com/kevinjqliu"&gt;@kevinjqliu&lt;/a&gt;, &lt;a href="https://github.com/kylebarron"&gt;@kylebarron&lt;/a&gt;, &lt;a href="https://github.com/kosiew"&gt;@kosiew&lt;/a&gt;, &lt;a href="https://github.com/nirnayroy"&gt;@nirnayroy&lt;/a&gt;, and &lt;a href="https://github.com/Spaarsh"&gt;@Spaarsh&lt;/a&gt;.&lt;/p&gt;
 &lt;p&gt;Thank you!&lt;/p&gt;
-&lt;h2&gt;Get Involved&lt;/h2&gt;
+&lt;h2 id="get-involved"&gt;Get Involved&lt;a class="headerlink" href="#get-involved" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;The DataFusion Python team is an active and engaging community and we would love
 to have you join us and help the project.&lt;/p&gt;
 &lt;p&gt;Here are some ways to get involved:&lt;/p&gt;
@@ -262,7 +262,7 @@ that can be found in the &lt;a href="https://github.com/apache/datafusion-python
 &lt;li&gt;Foreign Table Providers&lt;/li&gt;
 &lt;li&gt;String View performance enhancements&lt;/li&gt;
 &lt;/ul&gt;
-&lt;h2&gt;Arrow PyCapsule import and export&lt;/h2&gt;
+&lt;h2 id="arrow-pycapsule-import-and-export"&gt;Arrow PyCapsule import and export&lt;a class="headerlink" href="#arrow-pycapsule-import-and-export" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;Arrow has stable C interface for moving data between different libraries, but difficulties
 sometimes arise when different Python libraries expose this interface through different
 methods, requiring developers to write function calls for each library they are attempting
@@ -288,13 +288,13 @@ to convert a DataFrame to a PyArrow table, it is simply&lt;/p&gt;
 &lt;pre&gt;&lt;code class="language-python"&gt;import pyarrow as pa
 table = pa.table(df)
 &lt;/code&gt;&lt;/pre&gt;
-&lt;h2&gt;User-Defined Window Functions&lt;/h2&gt;
+&lt;h2 id="user-defined-window-functions"&gt;User-Defined Window Functions&lt;a class="headerlink" href="#user-defined-window-functions" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;In &lt;code&gt;datafusion-python 42.0.0&lt;/code&gt; we released User-Defined Window Support in &lt;a href="https://github.com/apache/datafusion-python/pull/880"&gt;PR #880&lt;/a&gt;.
 For a detailed description of how these work please see the online documentation for
 all &lt;a href="https://datafusion.apache.org/python/user-guide/common-operations/udf-and-udfa.html"&gt;user-defined functions&lt;/a&gt;. Additionally the &lt;a href="https://github.com/apache/datafusion-python/tree/main/examples"&gt;examples folder&lt;/a&gt; contains a complete
 example demonstrating the four different modes of operation of window functions
 within DataFusion.&lt;/p&gt;
-&lt;h2&gt;Foreign Table Providers&lt;/h2&gt;
+&lt;h2 id="foreign-table-providers"&gt;Foreign Table Providers&lt;a class="headerlink" href="#foreign-table-providers" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;In the core &lt;a href="https://github.com/apache/datafusion/blob/main/dev/changelog/43.0.0.md"&gt;DataFusion 43.0.0&lt;/a&gt; release, support was added for a Foreign Function
 Interface to table providers. This creates a stable way for sharing functionality
 across different libraries, similar to the &lt;a href="https://arrow.apache.org/docs/format/CDataInterface.html"&gt;Arrow C data interface&lt;/a&gt; operates. This
@@ -322,7 +322,7 @@ Python function via &lt;a href="https://pyo3.rs/"&gt;pyo3&lt;/a&gt;:&lt;/p&gt;
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;That's it! All of the work of converting the table provider to use the FFI interface
 is performed by the core library.&lt;/p&gt;
-&lt;h2&gt;String View performance enhancements&lt;/h2&gt;
+&lt;h2 id="string-view-performance-enhancements"&gt;String View performance enhancements&lt;a class="headerlink" href="#string-view-performance-enhancements" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;In the core &lt;a href="https://github.com/apache/datafusion/blob/main/dev/changelog/43.0.0.md"&gt;DataFusion 43.0.0&lt;/a&gt; release, the option to enable StringView by default
 was turned on. This leads to some significant performance enhancements, but it &lt;em&gt;may&lt;/em&gt;
 require some changes to users of &lt;code&gt;datafusion-python&lt;/code&gt;.&lt;/p&gt;
@@ -344,14 +344,14 @@ from datafusion import SessionConfig
 config = SessionConfig({"datafusion.execution.parquet.schema_force_view_types": "false"})
 ctx = SessionContext(config=config)
 &lt;/code&gt;&lt;/pre&gt;
-&lt;h2&gt;Appreciation&lt;/h2&gt;
+&lt;h2 id="appreciation"&gt;Appreciation&lt;a class="headerlink" href="#appreciation" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;We would like to thank everyone who has helped with these releases through their helpful
 conversations, code review, issue descriptions, and code authoring. We would especially
 like to thank the following authors of PRs who made these releases possible, listed in
 alphabetical order by username: &lt;a href="https://github.com/andygrove"&gt;@andygrove&lt;/a&gt;, &lt;a href="https://github.com/drauschenbach"&gt;@drauschenbach&lt;/a&gt;, &lt;a href="https://github.com/emgeee"&gt;@emgeee&lt;/a&gt;, &lt;a href="https://github.com/ion-elgreco"&gt;@ion-elgreco&lt;/a&gt;,
 &lt;a href="https://github.com/jcrist"&gt;@jcrist&lt;/a&gt;, &lt;a href="https://github.com/kosiew"&gt;@kosiew&lt;/a&gt;, &lt;a href="https://github.com/mesejo"&gt;@mesejo&lt;/a&gt;, &lt;a href="https://github.com/Michael-J-Ward"&gt;@Michael-J-Ward&lt;/a&gt;, and &lt;a href="https://github.com/sir-sigurd"&gt;@sir-sigurd&lt;/a&gt;.&lt;/p&gt;
 &lt;p&gt;Thank you!&lt;/p&gt;
-&lt;h2&gt;Get Involved&lt;/h2&gt;
+&lt;h2 id="get-involved"&gt;Get Involved&lt;a class="headerlink" href="#get-involved" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;The DataFusion Python team is an active and engaging community and we would love
 to have you join us and help the project.&lt;/p&gt;
 &lt;p&gt;Here are some ways to get involved:&lt;/p&gt;
@@ -381,7 +381,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 {% endcomment %}
 --&gt;
-&lt;h2&gt;Personal Context&lt;/h2&gt;
+&lt;h2 id="personal-context"&gt;Personal Context&lt;a class="headerlink" href="#personal-context" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;For a few months now I&amp;rsquo;ve been working with &lt;a href="https://datafusion.apache.org/"&gt;Apache DataFusion&lt;/a&gt;, a
 fast query engine written in Rust. From my experience the language that nearly all data scientists
 are working in is Python. In general, data scientists often use &lt;a href="https://pandas.pydata.org/"&gt;Pandas&lt;/a&gt;
@@ -403,7 +403,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 {% endcomment %}
 --&gt;
-&lt;h2&gt;Personal Context&lt;/h2&gt;
+&lt;h2 id="personal-context"&gt;Personal Context&lt;a class="headerlink" href="#personal-context" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;For a few months now I&amp;rsquo;ve been working with &lt;a href="https://datafusion.apache.org/"&gt;Apache DataFusion&lt;/a&gt;, a
 fast query engine written in Rust. From my experience the language that nearly all data scientists
 are working in is Python. In general, data scientists often use &lt;a href="https://pandas.pydata.org/"&gt;Pandas&lt;/a&gt;
@@ -424,7 +424,7 @@ DataFusion library. This wrapper gives you the speed advantages of keeping all o
 Rust implementation and the ergonomics of working in Python. Personally, I would prefer to work
 purely in Rust, but I also recognize that since the industry works in Python we should meet the
 people where they are.&lt;/p&gt;
-&lt;h2&gt;User-Defined Functions&lt;/h2&gt;
+&lt;h2 id="user-defined-functions"&gt;User-Defined Functions&lt;a class="headerlink" href="#user-defined-functions" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;The focus of this post is User-Defined Functions (UDFs). The DataFusion library gives a lot of
 useful functions already for doing DataFrame manipulation. These are going to be similar to those
 you find in other DataFrame libraries. You&amp;rsquo;ll be able to do simple arithmetic, create substrings of
@@ -447,7 +447,7 @@ PyArrow library approach to simplify understanding how to connect the Rust code 
 second version we will do the iteration through the input arrays ourselves to give even greater
 flexibility to the user.&lt;/p&gt;
 &lt;p&gt;Here are the two example use cases, taken from my own work but generalized.&lt;/p&gt;
-&lt;h3&gt;Use Case 1: Scalar Function&lt;/h3&gt;
+&lt;h3 id="use-case-1-scalar-function"&gt;Use Case 1: Scalar Function&lt;a class="headerlink" href="#use-case-1-scalar-function" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;I have a DataFrame and a list of tuples that I&amp;rsquo;m interested in. I want to filter out the DataFrame
 to only have values that match those tuples from certain columns in the DataFrame.&lt;/p&gt;
 &lt;p&gt;To give a concrete example, we will use data generated for the &lt;a href="https://www.tpc.org/tpch/"&gt;TPC-H benchmarks&lt;/a&gt;.
@@ -462,7 +462,7 @@ DataFrame itself, perform a join, and select the columns from the original DataF
 working in PySpark we would probably broadcast join the DataFrame created from the tuple list since
 it is tiny. In practice, I have found that with some DataFrame libraries performing a filter rather
 than a join can be significantly faster. This is worth profiling for your specific use case.&lt;/p&gt;
-&lt;h3&gt;Use Case 2: Aggregate Function&lt;/h3&gt;
+&lt;h3 id="use-case-2-aggregate-function"&gt;Use Case 2: Aggregate Function&lt;a class="headerlink" href="#use-case-2-aggregate-function" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;I have a DataFrame with many values that I want to aggregate. I have already analyzed it and
 determined there is a noise level below which I do not want to include in my analysis. I want to
 compute a sum of only values that are above my noise threshold.&lt;/p&gt;
@@ -470,7 +470,7 @@ compute a sum of only values that are above my noise threshold.&lt;/p&gt;
 simply filter the DataFrame and then aggregate using the built-in &lt;code&gt;sum&lt;/code&gt; function. Here, we
 demonstrate doing this as a UDF primarily as an example of how to write UDAFs. We will use the
 PyArrow compute approach.&lt;/p&gt;
-&lt;h2&gt;Pure Python approach&lt;/h2&gt;
+&lt;h2 id="pure-python-approach"&gt;Pure Python approach&lt;a class="headerlink" href="#pure-python-approach" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;The fastest way (developer time, not code time) for me to implement the scalar problem solution
 was to do something along the lines of &amp;ldquo;for each row, check the values of interest contains that
 tuple&amp;rdquo;. I&amp;rsquo;ve published this as
@@ -529,7 +529,7 @@ through the array in Python rather than Rust native. These will &lt;strong&gt;si
 code. Any time you have to cross the barrier where you change values inside the Rust arrays into
 Python objects or vice versa you will pay &lt;strong&gt;heavy&lt;/strong&gt; cost in that transformation. You will want to
 design your UDFs to avoid this as much as possible.&lt;/p&gt;
-&lt;h2&gt;Python approach using PyArrow compute&lt;/h2&gt;
+&lt;h2 id="python-approach-using-pyarrow-compute"&gt;Python approach using PyArrow compute&lt;a class="headerlink" href="#python-approach-using-pyarrow-compute" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;DataFusion uses &lt;a href="https://arrow.apache.org/"&gt;Apache Arrow&lt;/a&gt; as its in-memory data format. This can
 be seen in the way that Arrow Arrays are passed into the UDFs. We can take advantage of the fact
 that &lt;a href="https://arrow.apache.org/docs/python/"&gt;PyArrow&lt;/a&gt;, the canonical Python Arrow implementation,
@@ -586,7 +586,7 @@ simple problem.&lt;/p&gt;
 &lt;p&gt;It&amp;rsquo;s worth noting that almost all of the PyArrow compute functions expect to take one or two arrays
 as their arguments. If you need to write a UDF that is evaluating three or more columns, you&amp;rsquo;ll
 need to do something akin to what we&amp;rsquo;ve shown here.&lt;/p&gt;
-&lt;h2&gt;Rust UDF with Python wrapper&lt;/h2&gt;
+&lt;h2 id="rust-udf-with-python-wrapper"&gt;Rust UDF with Python wrapper&lt;a class="headerlink" href="#rust-udf-with-python-wrapper" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;This is the most complicated approach, but has the potential to be the most performant. What we
 will do here is write a Rust function to perform our computation and then expose that function to
 Python. I know of two use cases where I would recommend this approach. The first is the case when
@@ -691,7 +691,7 @@ udf_using_custom_rust_fn = udf(
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;That's it! We've now got a third party Rust UDF with Python wrappers working with DataFusion's
 Python bindings!&lt;/p&gt;
-&lt;h3&gt;Rust UDF with initialization&lt;/h3&gt;
+&lt;h3 id="rust-udf-with-initialization"&gt;Rust UDF with initialization&lt;a class="headerlink" href="#rust-udf-with-initialization" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;Looking at the code above, you can see that it is hard coding the values we're interested in. There
 are many types of UDFs that don't require any additional data provided to them before they start
 the computation. The code above is sloppy, so let's clean it up.&lt;/p&gt;
@@ -776,7 +776,7 @@ udf_using_custom_rust_fn_with_data = udf(
 &lt;p&gt;When you use this approach you will need to provide a &lt;code&gt;name&lt;/code&gt; argument to &lt;code&gt;udf&lt;/code&gt;. This is because our
 class/struct does not get the &lt;code&gt;__qualname__&lt;/code&gt; attribute that the &lt;code&gt;udf&lt;/code&gt; function is looking for. You
 can give this udf any name you choose.&lt;/p&gt;
-&lt;h3&gt;Rust UDF with direct iteration&lt;/h3&gt;
+&lt;h3 id="rust-udf-with-direct-iteration"&gt;Rust UDF with direct iteration&lt;a class="headerlink" href="#rust-udf-with-direct-iteration" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;The final version of our scalar UDF is one where we implement it in Rust and iterate through all of
 the arrays ourselves. If you are iterating through more than 3 arrays at a time I recommend looking
 at &lt;a href="https://docs.rs/itertools/latest/itertools/macro.izip.html"&gt;izip&lt;/a&gt; in the
@@ -832,7 +832,7 @@ but that memory allocation is unnecessary. After that we use two &lt;code&gt;zip
 iterate over all three columns in a single pass. Since each &lt;code&gt;zip&lt;/code&gt; will return a tuple of two
 elements, a quick &lt;code&gt;map&lt;/code&gt; turns them into the tuple format we need. Also, &lt;code&gt;StringArray&lt;/code&gt; is a little
 different in the buffer it uses, so it is treated slightly differently from the others.&lt;/p&gt;
-&lt;h2&gt;User Defined Aggregate Function&lt;/h2&gt;
+&lt;h2 id="user-defined-aggregate-function"&gt;User Defined Aggregate Function&lt;a class="headerlink" href="#user-defined-aggregate-function" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;Writing a user defined aggregate function or user defined window function is slightly more complex
 than scalar functions. This is because we must accumulate values and there is no guarantee that one
 batch will contain all the values we are aggregating over. For this we need to define an
@@ -885,13 +885,13 @@ our example they are very similar.&lt;/p&gt;
 operations are different is computing an average. In &lt;code&gt;update()&lt;/code&gt; we would create a state that is both
 a sum and a count. &lt;code&gt;state()&lt;/code&gt; would return a list of these two values, and &lt;code&gt;merge()&lt;/code&gt; would compute
 the final result.&lt;/p&gt;
-&lt;h2&gt;User Defined Window Functions&lt;/h2&gt;
+&lt;h2 id="user-defined-window-functions"&gt;User Defined Window Functions&lt;a class="headerlink" href="#user-defined-window-functions" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;Writing a user defined window function is slightly more complex than an aggregate function due
 to the variety of ways that window functions are called. I recommend reviewing the
 &lt;a href="https://datafusion.apache.org/python/user-guide/common-operations/udf-and-udfa.html"&gt;online documentation&lt;/a&gt;
 for a description of which functions need to be implemented. The details of how to implement
 these generally follow the same patterns as described above for aggregate functions.&lt;/p&gt;
-&lt;h2&gt;Performance Comparison&lt;/h2&gt;
+&lt;h2 id="performance-comparison"&gt;Performance Comparison&lt;a class="headerlink" href="#performance-comparison" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;For the scalar functions above, we performed a timing evaluation, repeating the operation 100
 times. For this simple example these are our results.&lt;/p&gt;
 &lt;pre&gt;&lt;code&gt;+-----------------------------+--------------+---------+
@@ -911,7 +911,7 @@ into using any functions that keep the data entirely on the Native (Rust or C/C+
 near 10x speed improvement. Then as we increase our complexity from using PyArrow compute functions
 to implementing the UDF in Rust we see incremental improvements. Our fastest approach - iterating
 through the arrays ourselves does operate nearly 10% faster than the PyArrow compute approach.&lt;/p&gt;
-&lt;h2&gt;Final Thoughts and Recommendations&lt;/h2&gt;
+&lt;h2 id="final-thoughts-and-recommendations"&gt;Final Thoughts and Recommendations&lt;a class="headerlink" href="#final-thoughts-and-recommendations" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;For anyone who is curious about &lt;a href="https://datafusion.apache.org/"&gt;DataFusion&lt;/a&gt; I highly recommend
 giving it a try. This post was designed to make it easier for new users to the Python implementation
 to work with User Defined Functions by giving a few examples of how one might implement these.&lt;/p&gt;
@@ -943,7 +943,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 {% endcomment %}
 --&gt;
-&lt;h2&gt;Introduction&lt;/h2&gt;
+&lt;h2 id="introduction"&gt;Introduction&lt;a class="headerlink" href="#introduction" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;We are happy to announce that &lt;a href="https://pypi.org/project/datafusion/40.1.0/"&gt;DataFusion in Python 40.1.0&lt;/a&gt; has been released. In addition to
 bringing in all of the new features of the core &lt;a href="https://datafusion.apache.org/blog/2024/07/24/datafusion-40.0.0/"&gt;DataFusion 40.0.0&lt;/a&gt; package, this release
 contains &lt;em&gt;significant&lt;/em&gt; updates to the user interface and documentation. We listened to the python …&lt;/p&gt;</summary><content type="html">&lt;!--
@@ -964,13 +964,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 {% endcomment %}
 --&gt;
-&lt;h2&gt;Introduction&lt;/h2&gt;
+&lt;h2 id="introduction"&gt;Introduction&lt;a class="headerlink" href="#introduction" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;We are happy to announce that &lt;a href="https://pypi.org/project/datafusion/40.1.0/"&gt;DataFusion in Python 40.1.0&lt;/a&gt; has been released. In addition to
 bringing in all of the new features of the core &lt;a href="https://datafusion.apache.org/blog/2024/07/24/datafusion-40.0.0/"&gt;DataFusion 40.0.0&lt;/a&gt; package, this release
 contains &lt;em&gt;significant&lt;/em&gt; updates to the user interface and documentation. We listened to the python
 user community to create a more &lt;em&gt;pythonic&lt;/em&gt; experience. If you have not used the python interface to
 DataFusion before, this is an excellent time to give it a try!&lt;/p&gt;
-&lt;h2&gt;Background&lt;/h2&gt;
+&lt;h2 id="background"&gt;Background&lt;a class="headerlink" href="#background" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;Until now, the python bindings for DataFusion have primarily been a thin layer to expose the
 underlying Rust functionality. This has been worked well for early adopters to use DataFusion
 within their Python projects, but some users have found it difficult to work with. As compared to
@@ -984,7 +984,7 @@ tools for rapid testing and development.&lt;/li&gt;
 to their Rust counterparts.&lt;/li&gt;
 &lt;/ol&gt;
 &lt;p&gt;This release aims to bring a better user experience to the DataFusion Python community.&lt;/p&gt;
-&lt;h2&gt;What's Changed&lt;/h2&gt;
+&lt;h2 id="whats-changed"&gt;What's Changed&lt;a class="headerlink" href="#whats-changed" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;The most significant difference is that we have added wrapper functions and classes for most of the
 user facing interface. These wrappers, written in Python, contain both documentation and type
 annotations.&lt;/p&gt;
@@ -1013,14 +1013,14 @@ used a function's arguments as shown in Figure 2.&lt;/p&gt;
 &lt;/figure&gt;
 &lt;p&gt;In addition to these wrapper libraries, we have enhancements to some of the functions to feel more
 easy to use.&lt;/p&gt;
-&lt;h3&gt;Improved DataFrame filter arguments&lt;/h3&gt;
+&lt;h3 id="improved-dataframe-filter-arguments"&gt;Improved DataFrame filter arguments&lt;a class="headerlink" href="#improved-dataframe-filter-arguments" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;You can now apply multiple &lt;code&gt;filter&lt;/code&gt; statements in a single step. When using &lt;code&gt;DataFrame.filter&lt;/code&gt; you
 can pass in multiple arguments, separated by a comma. These will act as a logical &lt;code&gt;AND&lt;/code&gt; of all of
 the filter arguments. The following two statements are equivalent:&lt;/p&gt;
 &lt;pre&gt;&lt;code class="language-python"&gt;df.filter(col("size") &amp;lt; col("max_size")).filter(col("color") == lit("green"))
 df.filter(col("size") &amp;lt; col("max_size"), col("color") == lit("green"))
 &lt;/code&gt;&lt;/pre&gt;
-&lt;h3&gt;Comparison against literal values&lt;/h3&gt;
+&lt;h3 id="comparison-against-literal-values"&gt;Comparison against literal values&lt;a class="headerlink" href="#comparison-against-literal-values" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;It is very common to write DataFrame operations that compare an expression to some fixed value.
 For example, filtering a DataFrame might have an operation such as &lt;code&gt;df.filter(col("size") &amp;lt; lit(16))&lt;/code&gt;.
 To make these common operations more ergonomic, you can now simply use &lt;code&gt;df.filter(col("size") &amp;lt; 16)&lt;/code&gt;.&lt;/p&gt;
@@ -1046,7 +1046,7 @@ now accepts a variable number of arguments and filters on all such arguments (bo
     col("l_quantity") &amp;lt; QUANTITY,
 )
 &lt;/code&gt;&lt;/pre&gt;
-&lt;h3&gt;Select columns by name&lt;/h3&gt;
+&lt;h3 id="select-columns-by-name"&gt;Select columns by name&lt;a class="headerlink" href="#select-columns-by-name" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;It is very common for users to perform &lt;code&gt;DataFrame&lt;/code&gt; selection where they simply want a column. For
 this we have had the function &lt;code&gt;select_columns("a", "b")&lt;/code&gt; or the user could perform
 &lt;code&gt;select(col("a"), col("b"))&lt;/code&gt;. In the new release, we accept either full expressions in &lt;code&gt;select()&lt;/code&gt;
@@ -1057,7 +1057,7 @@ or strings of the column names. You can mix these as well.&lt;/p&gt;
 &lt;p&gt;You can now simplify this to&lt;/p&gt;
 &lt;pre&gt;&lt;code class="language-python"&gt;df_subset = df.select("a", "b", f.abs(col("c")))
 &lt;/code&gt;&lt;/pre&gt;
-&lt;h3&gt;Creating named structs&lt;/h3&gt;
+&lt;h3 id="creating-named-structs"&gt;Creating named structs&lt;a class="headerlink" href="#creating-named-structs" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;Creating a &lt;code&gt;struct&lt;/code&gt; with named fields was previously difficult to use and allowed for potential
 user errors when specifying the name of each field. Now we have a cleaner interface where the
 user passes a list of tuples containing the name of the field and the expression to create.&lt;/p&gt;
@@ -1066,7 +1066,7 @@ user passes a list of tuples containing the name of the field and the expression
   ("b", col("b"))
 ]))
 &lt;/code&gt;&lt;/pre&gt;
-&lt;h2&gt;Next Steps&lt;/h2&gt;
+&lt;h2 id="next-steps"&gt;Next Steps&lt;a class="headerlink" href="#next-steps" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;While most of the user facing classes and functions have been exposed, there are a few that require
 exposure. Namely the classes in &lt;code&gt;datafusion.object_store&lt;/code&gt; and the logical plans used by
 &lt;code&gt;datafusion.substrait&lt;/code&gt;. The team is working on
@@ -1074,7 +1074,7 @@ exposure. Namely the classes in &lt;code&gt;datafusion.object_store&lt;/code&gt;
 &lt;p&gt;Additionally, in the next release of DataFusion there have been improvements made to the user-defined
 aggregate and window functions to make them easier to use. We plan on
 &lt;a href="https://github.com/apache/datafusion-python/issues/780"&gt;bringing these enhancements&lt;/a&gt; to this project.&lt;/p&gt;
-&lt;h2&gt;Thank You&lt;/h2&gt;
+&lt;h2 id="thank-you"&gt;Thank You&lt;a class="headerlink" href="#thank-you" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;We would like to thank the following members for their very helpful discussions regarding these
 updates: &lt;a href="https://github.com/andygrove"&gt;@andygrove&lt;/a&gt;, &lt;a href="https://github.com/max-muoto"&gt;@max-muoto&lt;/a&gt;, &lt;a href="https://github.com/slyons"&gt;@slyons&lt;/a&gt;, &lt;a href="https://github.com/Throne3d"&gt;@Throne3d&lt;/a&gt;, &lt;a href="https://github.com/Michael-J-Ward"&gt;@Michael-J-Ward&lt;/a&gt;, &lt;a href="https://github.com/datapythonista"&gt;@datapythonista&lt;/a&gt;,
 &lt;a href="https://github.com/austin362667"&gt;@austin362667&lt;/a&gt;, &lt;a href="https://github.com/kylebarron"&gt;@kylebarron&lt;/a&gt;, &lt;a href="https://github.com/simicd"&gt;@simicd&lt;/a&gt;. The &lt;a href="https://github.com/apache/datafusion-python/pull/750"&gt;primary PR (#750)&lt;/a&gt; that includes these updates
@@ -1083,7 +1083,7 @@ to all who provided input!&lt;/p&gt;
 &lt;p&gt;We would like to give an special thank you to &lt;a href="https://github.com/3ok"&gt;@3ok&lt;/a&gt; who created the initial version of the wrapper
 definitions. The work they did was time consuming and required exceptional attention to detail. It
 provided enormous value to starting this project. Thank you!&lt;/p&gt;
-&lt;h2&gt;Get Involved&lt;/h2&gt;
+&lt;h2 id="get-involved"&gt;Get Involved&lt;a class="headerlink" href="#get-involved" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;The DataFusion Python team is an active and engaging community and we would love
 to have you join us and help the project.&lt;/p&gt;
 &lt;p&gt;Here are some ways to get involved:&lt;/p&gt;

@@ -18,6 +18,7 @@ limitations under the License.
 {% endcomment %}
 --&gt;
 &lt;!-- diagrams source https://docs.google.com/presentation/d/1e_Z_F8nt2rcvlNvhU11khF5lzJJVqNtqtyJ-G3mp4-Q --&gt;
+
 &lt;p&gt;It is a common misconception that &lt;a href="https://parquet.apache.org/"&gt;Apache Parquet&lt;/a&gt; requires (slow) reparsing of
 metadata and is limited to indexing structures provided by the format. In fact,
 caching parsed metadata and using custom external indexes along with
@@ -42,6 +43,7 @@ limitations under the License.
 {% endcomment %}
 --&gt;
 &lt;!-- diagrams source https://docs.google.com/presentation/d/1e_Z_F8nt2rcvlNvhU11khF5lzJJVqNtqtyJ-G3mp4-Q --&gt;
+
 &lt;p&gt;It is a common misconception that &lt;a href="https://parquet.apache.org/"&gt;Apache Parquet&lt;/a&gt; requires (slow) reparsing of
 metadata and is limited to indexing structures provided by the format. In fact,
 caching parsed metadata and using custom external indexes along with
@@ -51,7 +53,7 @@ processing.&lt;/p&gt;
 stores in high performance systems, and demonstrate how to apply these concepts
 to Parquet processing using &lt;a href="https://datafusion.apache.org/"&gt;Apache DataFusion&lt;/a&gt;. &lt;em&gt;Note this is an expanded
 version of the &lt;a href="https://www.youtube.com/watch?v=74YsJT1-Rdk"&gt;companion video&lt;/a&gt; and &lt;a href="https://docs.google.com/presentation/d/1e_Z_F8nt2rcvlNvhU11khF5lzJJVqNtqtyJ-G3mp4-Q/edit"&gt;presentation&lt;/a&gt;.&lt;/em&gt;&lt;/p&gt;
-&lt;h2&gt;Motivation&lt;/h2&gt;
+&lt;h2 id="motivation"&gt;Motivation&lt;a class="headerlink" href="#motivation" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;System designers choose between a pre-configured data system or the often
 daunting task of building their own custom data platform from scratch.
 For many users and use cases, one of the existing data systems will
@@ -67,7 +69,7 @@ such as &lt;a href="https://parquet.apache.org/"&gt;Apache Parquet&lt;/a&gt; for
 and &lt;a href="https://datafusion.apache.org/"&gt;Apache DataFusion&lt;/a&gt; for query execution make it possible to quickly build
 custom data platforms optimized for your specific
 needs&lt;sup&gt;&lt;a href="#footnote1"&gt;1&lt;/a&gt;&lt;/sup&gt;.&lt;/p&gt;
-&lt;h2&gt;Introduction to External Indexes / Catalogs / Metadata Stores / Caches&lt;/h2&gt;
+&lt;h2 id="introduction-to-external-indexes-catalogs-metadata-stores-caches"&gt;Introduction to External Indexes / Catalogs / Metadata Stores / Caches&lt;a class="headerlink" href="#introduction-to-external-indexes-catalogs-metadata-stores-caches" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;div class="text-center"&gt;
 &lt;img alt="Using External Indexes to Accelerate Queries" class="img-responsive" src="/blog/images/external-parquet-indexes/external-index-overview.png" width="80%"/&gt;
 &lt;/div&gt;
@@ -116,7 +118,7 @@ increased file sizes and the need to update the data files to update the index.&
 &lt;li&gt;&lt;strong&gt;Distributed key-value stores&lt;/strong&gt; such as &lt;a href="https://redis.io/"&gt;Redis&lt;/a&gt; or &lt;a href="https://cassandra.apache.org/"&gt;Cassandra&lt;/a&gt;.&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;Local memory&lt;/strong&gt; such as an in-memory hash map.&lt;/li&gt;
 &lt;/ul&gt;
-&lt;h2&gt;Using Apache Parquet for Storage&lt;/h2&gt;
+&lt;h2 id="using-apache-parquet-for-storage"&gt;Using Apache Parquet for Storage&lt;a class="headerlink" href="#using-apache-parquet-for-storage" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;While the rest of this blog focuses on building custom external indexes using
 Parquet and DataFusion, I first briefly discuss why Parquet is a good choice for
 modern analytic systems. The research community frequently confuses limitations
@@ -153,7 +155,7 @@ use the full range of existing Parquet features such Column and Offset
 Indexes and Bloom Filters&lt;sup&gt;&lt;a href="#footnote7"&gt;7&lt;/a&gt;&lt;/sup&gt;. Compared to the low
 interoperability and expensive transcoding/loading step of alternate file
 formats, Parquet is hard to beat.&lt;/p&gt;
-&lt;h2&gt;Hierarchical Pruning Overview&lt;/h2&gt;
+&lt;h2 id="hierarchical-pruning-overview"&gt;Hierarchical Pruning Overview&lt;a class="headerlink" href="#hierarchical-pruning-overview" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;The key technique for optimizing query processing systems is skipping as
 much data as possible, as quickly as possible. Analytic systems typically use a hierarchical
 approach to progressively narrow the set of data that needs to be processed. 
@@ -176,7 +178,7 @@ required at later stages (apply predicates to the data).
 As mentioned before, while the details of what metadata is used and how that
 metadata is managed varies substantially across query systems, they almost all
 use a hierarchical pruning strategy.&lt;/p&gt;
-&lt;h2&gt;Apache Parquet Overview&lt;/h2&gt;
+&lt;h2 id="apache-parquet-overview"&gt;Apache Parquet Overview&lt;a class="headerlink" href="#apache-parquet-overview" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;This section provides a brief background on the organization of Apache Parquet
 files which is needed to fully understand the sections on implementing external indexes.
 If you are already familiar with Parquet, you can skip this section.&lt;/p&gt;
@@ -222,7 +224,7 @@ pages that may match the predicate which are read for further processing.
 Please refer to the &lt;a href="https://datafusion.apache.org/blog/2025/03/21/parquet-pushdown"&gt;Efficient Filter Pushdown&lt;/a&gt; blog for more details.
 &lt;strong&gt;NOTE the exact same pattern can be applied using information from external
 indexes, as described in the next sections.&lt;/strong&gt;&lt;/p&gt;
-&lt;h2&gt;Pruning Files with External Indexes&lt;/h2&gt;
+&lt;h2 id="pruning-files-with-external-indexes"&gt;Pruning Files with External Indexes&lt;a class="headerlink" href="#pruning-files-with-external-indexes" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;The first step in hierarchical pruning is quickly ruling out files that cannot
 match the query. For example, if a system expects to see queries that
 apply to a time range, it might create an external index to store the minimum
@@ -257,7 +259,7 @@ Of course, each of these systems works well for their intended use cases, but
 if none meets your needs, or you want to experiment with
 different strategies, you can easily build your own external index using
 DataFusion.&lt;/p&gt;
-&lt;h3&gt;Pruning Files with External Indexes Using DataFusion&lt;/h3&gt;
+&lt;h3 id="pruning-files-with-external-indexes-using-datafusion"&gt;Pruning Files with External Indexes Using DataFusion&lt;a class="headerlink" href="#pruning-files-with-external-indexes-using-datafusion" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;To implement file pruning in DataFusion, you implement a custom &lt;a href="https://docs.rs/datafusion/latest/datafusion/datasource/trait.TableProvider.html"&gt;TableProvider&lt;/a&gt;
 with the &lt;a href="https://docs.rs/datafusion/latest/datafusion/datasource/trait.TableProvider.html#method.supports_filters_pushdown"&gt;supports_filter_pushdown&lt;/a&gt; and &lt;a href="https://docs.rs/datafusion/latest/datafusion/datasource/trait.TableProvider.html#tymethod.scan"&gt;scan&lt;/a&gt; methods. The
 &lt;code&gt;supports_filter_pushdown&lt;/code&gt; method tells DataFusion which predicates can be used
@@ -334,7 +336,7 @@ pruning tasks, such as:&lt;/p&gt;
   (e.g. &lt;code&gt;col &amp;gt; 5 AND col &amp;lt; 10&lt;/code&gt;).&lt;/p&gt;
 &lt;/li&gt;
 &lt;/ul&gt;
-&lt;h2&gt;Pruning Parts of Parquet Files with External Indexes&lt;/h2&gt;
+&lt;h2 id="pruning-parts-of-parquet-files-with-external-indexes"&gt;Pruning Parts of Parquet Files with External Indexes&lt;a class="headerlink" href="#pruning-parts-of-parquet-files-with-external-indexes" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;Once the set of files to be scanned has been determined, the next step in the
 hierarchical pruning process is to further narrow down the data within each file.
 Similarly to the previous step, almost all advanced query processing systems use additional
@@ -349,7 +351,7 @@ systems can use external indexes / metadata stores as well as Parquet's built-in
 structures to quickly rule out Row Groups and Data Pages that cannot match the query.
 In this case, the index has ruled out all but three data pages which must then be fetched
 for more processing.&lt;/p&gt;
-&lt;h2&gt;Pruning Parts of Parquet Files with External Indexes using DataFusion&lt;/h2&gt;
+&lt;h2 id="pruning-parts-of-parquet-files-with-external-indexes-using-datafusion"&gt;Pruning Parts of Parquet Files with External Indexes using DataFusion&lt;a class="headerlink" href="#pruning-parts-of-parquet-files-with-external-indexes-using-datafusion" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;To implement pruning within Parquet files, you use the same [&lt;code&gt;TableProvider&lt;/code&gt;] APIs
 as for pruning files. For each file your provider wants to scan, you provide 
 an additional &lt;a href="https://docs.rs/datafusion/latest/datafusion/datasource/physical_plan/parquet/struct.ParquetAccessPlan.html"&gt;ParquetAccessPlan&lt;/a&gt; that tells DataFusion what parts of the file to read. This plan is
@@ -376,33 +378,33 @@ access_plan.skip(2); // skip row group 2
 // all of row group 3 is scanned by default
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;The rows that are selected by the resulting plan look like this:&lt;/p&gt;
-&lt;pre&gt;&lt;code class="language-text"&gt;&amp;boxdr;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxdl;
-&amp;boxv;                   &amp;boxv;
-&amp;boxv;                   &amp;boxv;  SKIP
-&amp;boxv;                   &amp;boxv;
-&amp;boxur;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxul;
+&lt;pre&gt;&lt;code class="language-text"&gt;┌───────────────────┐
+│                   │
+│                   │  SKIP
+│                   │
+└───────────────────┘
      Row Group 0
 
-&amp;boxdr;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxdl;
-&amp;boxv; &amp;boxdr;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxdl; &amp;boxv;  SCAN ONLY ROWS
-&amp;boxv; &amp;boxur;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxul; &amp;boxv;  100-200
-&amp;boxv; &amp;boxdr;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxdl; &amp;boxv;  350-400
-&amp;boxv; &amp;boxur;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxul; &amp;boxv;
-&amp;boxur;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxul;
+┌───────────────────┐
+│ ┌───────────────┐ │  SCAN ONLY ROWS
+│ └───────────────┘ │  100-200
+│ ┌───────────────┐ │  350-400
+│ └───────────────┘ │
+└───────────────────┘
      Row Group 1
 
-&amp;boxdr;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxdl;
-&amp;boxv;                   &amp;boxv;
-&amp;boxv;                   &amp;boxv;  SKIP
-&amp;boxv;                   &amp;boxv;
-&amp;boxur;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxul;
+┌───────────────────┐
+│                   │
+│                   │  SKIP
+│                   │
+└───────────────────┘
      Row Group 2
 
-&amp;boxdr;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxdl;
-&amp;boxv;                   &amp;boxv;
-&amp;boxv;                   &amp;boxv;  SCAN ALL ROWS
-&amp;boxv;                   &amp;boxv;
-&amp;boxur;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxul;
+┌───────────────────┐
+│                   │
+│                   │  SCAN ALL ROWS
+│                   │
+└───────────────────┘
      Row Group 3
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;In the &lt;code&gt;scan&lt;/code&gt; method, you return an &lt;code&gt;ExecutionPlan&lt;/code&gt; that includes the
@@ -449,12 +451,12 @@ clarity):&lt;/p&gt;
     ...
 }
 &lt;/code&gt;&lt;/pre&gt;
-&lt;h2&gt;Caching Parquet Metadata&lt;/h2&gt;
+&lt;h2 id="caching-parquet-metadata"&gt;Caching Parquet Metadata&lt;a class="headerlink" href="#caching-parquet-metadata" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;It is often said that Parquet is unsuitable for low latency query systems
 because the footer must be read and parsed for each query. This is simply not
 true, and &lt;strong&gt;many systems use Parquet for low latency analytics and cache the parsed
 metadata in memory to avoid re-reading and re-parsing the footer for each query&lt;/strong&gt;.&lt;/p&gt;
-&lt;h3&gt;Caching Parquet Metadata using DataFusion&lt;/h3&gt;
+&lt;h3 id="caching-parquet-metadata-using-datafusion"&gt;Caching Parquet Metadata using DataFusion&lt;a class="headerlink" href="#caching-parquet-metadata-using-datafusion" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;Reusing cached Parquet Metadata is also shown in the &lt;a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/advanced_parquet_index.rs"&gt;advanced_parquet_index.rs&lt;/a&gt;
 example. The example reads and caches the metadata for each file when the index
 is first built and then uses the cached metadata when reading the files during
@@ -538,7 +540,7 @@ for each file:&lt;/p&gt;
     ...
 }
 &lt;/code&gt;&lt;/pre&gt;
-&lt;h2&gt;Conclusion&lt;/h2&gt;
+&lt;h2 id="conclusion"&gt;Conclusion&lt;a class="headerlink" href="#conclusion" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;Parquet has the right structure for high performance analytics via hierarchical
 pruning, and it is straightforward to build external indexes to speed up queries
 using DataFusion without changing the file format. If you need to build a custom
@@ -552,25 +554,25 @@ optimized for narrow use cases.&lt;/p&gt;
 &lt;p&gt;&lt;a href="https://datafusion.apache.org/contributor-guide/communication.html"&gt;
 &lt;img alt="https://datafusion.apache.org/" class="img-responsive" src="/blog/images/logo_original4x.png" width="20%"/&gt;
 &lt;/a&gt;&lt;/p&gt;
-&lt;h2&gt;About the Author&lt;/h2&gt;
+&lt;h2 id="about-the-author"&gt;About the Author&lt;a class="headerlink" href="#about-the-author" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;&lt;a href="https://www.linkedin.com/in/andrewalamb/"&gt;Andrew Lamb&lt;/a&gt; is a Staff Engineer at
 &lt;a href="https://www.influxdata.com/"&gt;InfluxData&lt;/a&gt;, and a member of the &lt;a href="https://datafusion.apache.org/"&gt;Apache
 DataFusion&lt;/a&gt; and &lt;a href="https://arrow.apache.org/"&gt;Apache Arrow&lt;/a&gt; PMCs. He has been working on
 Databases and related systems more than 20 years.&lt;/p&gt;
-&lt;h2&gt;About DataFusion&lt;/h2&gt;
+&lt;h2 id="about-datafusion"&gt;About DataFusion&lt;a class="headerlink" href="#about-datafusion" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;&lt;a href="https://datafusion.apache.org/"&gt;Apache DataFusion&lt;/a&gt; is an extensible query engine toolkit, written
 in Rust, that uses &lt;a href="https://arrow.apache.org/"&gt;Apache Arrow&lt;/a&gt; as its in-memory format. DataFusion and
-similar technology are part of the next generation &amp;ldquo;Deconstructed Database&amp;rdquo;
+similar technology are part of the next generation “Deconstructed Database”
 architectures, where new systems are built on a foundation of fast, modular
 components, rather than as a single tightly integrated system.&lt;/p&gt;
 &lt;p&gt;The &lt;a href="https://datafusion.apache.org/contributor-guide/communication.html"&gt;DataFusion community&lt;/a&gt; is always looking for new contributors to help
 improve the project. If you are interested in learning more about how query
 execution works, help document or improve the DataFusion codebase, or just try
 it out, we would love for you to join us.&lt;/p&gt;
-&lt;h3&gt;Acknowledgements&lt;/h3&gt;
+&lt;h3 id="acknowledgements"&gt;Acknowledgements&lt;a class="headerlink" href="#acknowledgements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;Thank you to &lt;a href="https://github.com/zhuqi-lucas"&gt;Qi Zhu&lt;/a&gt;, &lt;a href="https://github.com/adamreeve"&gt;Adam Reeve&lt;/a&gt;, &lt;a href="https://github.com/JigaoLuo"&gt;Jigao Luo&lt;/a&gt;, &lt;a href="https://github.com/comphead"&gt;Oleks V&lt;/a&gt;, &lt;a href="https://github.com/shehabgamin"&gt;Shehab Amin&lt;/a&gt;, &lt;a href="https://nuno-faria.github.io/"&gt;Nuno Faria&lt;/a&gt;
 and &lt;a href="https://github.com/Omega359"&gt;Bruce Ritchie&lt;/a&gt; for their insightful feedback on this blog post.&lt;/p&gt;
-&lt;h3&gt;Footnotes&lt;/h3&gt;
+&lt;h3 id="footnotes"&gt;Footnotes&lt;a class="headerlink" href="#footnotes" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;&lt;a id="footnote1"&gt;&lt;/a&gt;&lt;code&gt;1&lt;/code&gt;: This trend is described in more detail in the &lt;a href="https://www.influxdata.com/blog/flight-datafusion-arrow-parquet-fdap-architecture-influxdb/"&gt;FDAP Stack&lt;/a&gt; blog&lt;/p&gt;
 &lt;p&gt;&lt;a id="footnote2"&gt;&lt;/a&gt;&lt;code&gt;2&lt;/code&gt;: This layout is referred to as &lt;a href="https://www.vldb.org/conf/2001/P169.pdf"&gt;PAX in the
 database literature&lt;/a&gt; after the first research paper to describe the technique.&lt;/p&gt;
