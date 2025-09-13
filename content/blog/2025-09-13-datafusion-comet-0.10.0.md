@@ -89,10 +89,15 @@ Benchmarking scripts for benchmarks based on TPC-H and TPS-DS are now available 
 
 ### Documentation Updates
 
-- Lists of supported operators and expressions is more complete, and Spark-compatibility status per operator/expression is now documented.
-- New Roadap section
+- The documentation for supported [operators] and [expressions] is now more complete, and Spark-compatibility status 
+  per operator/expression is now documented.
+- The documentation now contains a [roadmap] section.
 - New guide comparing Comet with Apache Gluten (incubating) + Velox
 - User guides are now available for multiple Comet versions
+
+[operators]: https://datafusion.apache.org/comet/user-guide/latest/operators.html
+[expressions]: https://datafusion.apache.org/comet/user-guide/latest/expressions.html
+[roadmap]: https://datafusion.apache.org/comet/contributor-guide/roadmap.html
 
 ### Spark Compatibility
 
