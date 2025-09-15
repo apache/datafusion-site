@@ -25,7 +25,7 @@ limitations under the License.
 {% endcomment %}
 -->
 
-
+[TOC]
 
 _Editor's Note: This is the first of a [two part] blog series that was first published on the [InfluxData blog]. Thanks to InfluxData for sponsoring this work as [Xiangpeng Hao]'s summer intern project_
 

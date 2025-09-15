@@ -24,6 +24,8 @@ limitations under the License.
 {% endcomment %}
 -->
 
+[TOC]
+
 It’s a common misconception that [Apache Parquet] files are limited to basic Min/Max/Null Count statistics and Bloom filters, and that adding more advanced indexes requires changing the specification or creating a new file format. In fact, footer metadata and offset-based addressing already provide everything needed to embed user-defined index structures within Parquet files without breaking compatibility with other Parquet readers.
 
 **Motivating Example:** Imagine your data has a `Nation` column with dozens of distinct values across thousands of Parquet files. You execute:

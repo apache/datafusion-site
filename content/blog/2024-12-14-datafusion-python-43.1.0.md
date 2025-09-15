@@ -24,6 +24,8 @@ limitations under the License.
 {% endcomment %}
 -->
 
+[TOC]
+
 We are happy to announce that [datafusion-python 43.1.0] has been released. This release
 brings in all of the new features of the core [DataFusion 43.0.0] library. Since the last
 blog post for [datafusion-python 40.1.0], a large number of improvements have been made

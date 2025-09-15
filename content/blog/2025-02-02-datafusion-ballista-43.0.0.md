@@ -24,6 +24,8 @@ limitations under the License.
 {% endcomment %}
 -->
 
+[TOC]
+
 We are  pleased to announce version [43.0.0] of the [DataFusion Ballista]. Ballista allows existing [DataFusion] applications to be scaled out on a cluster for use cases that are not practical to run on a single node.
 
 [43.0.0]: <https://github.com/apache/datafusion-ballista/blob/main/CHANGELOG.md#4300-2025-01-07>

@@ -25,6 +25,8 @@ limitations under the License.
 {% endcomment %}
 -->
 
+[TOC]
+
 ## Personal Context
 
 For a few months now I’ve been working with [Apache DataFusion](https://datafusion.apache.org/), a

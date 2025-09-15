@@ -25,6 +25,8 @@ limitations under the License.
 {% endcomment %}
 -->
 
+[TOC]
+
 <!-- Converted from Google Docs using https://www.buymeacoffee.com/docstomarkdown -->
 
 ## Aggregating Millions of Groups Fast in Apache Arrow DataFusion
@@ -237,12 +239,12 @@ As shown in Figure 3, DataFusion `27.0.0` stores the data in a [`GroupState`](ht
                            │                  ...                 │
                            │ ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓ │
                            │ ┃                                  ┃ │
-    ┌─────────┐            │ ┃ ┌──────────────────────────────┐ ┃ │
+    ┌─────────┐            │ ┃ ┌───────────────���──────────────┐ ┃ │
     │         │            │ ┃ │group values: OwnedRow        │ ┃ │
     │ ┌─────┐ │            │ ┃ └──────────────────────────────┘ ┃ │
-    │ │  5  │ │            │ ┃ ┌──────────────────────────────┐ ┃ │
+    │ │  5  │ │            │ ��� ┌──────────────────────────────┐ ┃ │
     │ ├─────┤ │            │ ┃ │Row accumulator:              │ ┃ │
-    │ │  9  │─┼────┐       │ ┃ │Vec<u8>                       │ ┃ │
+    │ │  9  │─┼────┐       ��� ┃ │Vec<u8>                       │ ┃ │
     │ ├─────┤ │    │       │ ┃ └──────────────────────────────┘ ┃ │
     │ │ ... │ │    │       │ ┃ ┌──────────────────────┐         ┃ │
     │ ├─────┤ │    │       │ ┃ │┌──────────────┐      │         ┃ │

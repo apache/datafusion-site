@@ -6,6 +6,8 @@ author: alamb, akurmustafa
 categories: [core]
 ---
 
+[TOC]
+
 <!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
