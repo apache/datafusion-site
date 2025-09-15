@@ -285,7 +285,7 @@ and queries that get slower are likely due to noise.
 │ QQuery 41    │     58.75ms │      67.85ms │  1.15x slower │
 │ QQuery 42    │     65.49ms │      68.11ms │     no change │
 └──────────────┴─────────────┴──────────────┴───────────────┘
-┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━���━━━━━┓
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┓
 ┃ Benchmark Summary           ┃            ┃
 ┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━┩
 │ Total Time (no-pushdown)    │ 38344.79ms │
@@ -307,3 +307,8 @@ The challenge lies in efficiently navigating through the dynamics of decoding, f
 If you are interested in this level of optimization and want to help test, document and implement this type of optimization, come find us in the [DataFusion Community]. We would love to have you. 
 
 [DataFusion Community]: https://datafusion.apache.org/contributor-guide/communication.html
+
+
+
+
+

@@ -67,3 +67,4 @@ datasets and file bug reports for any issues that you find. You could also check
 The [Arrow Rust Community](https://github.com/apache/arrow/blob/master/rust/README.md#arrow-rust-community)
 section of the Rust README provides information on other ways to interact with the Ballista contributors and 
 maintainers.
+

@@ -25,7 +25,6 @@ limitations under the License.
 
 [TOC]
 
-
 <style>
 /* Table borders */
 table, th, td {
