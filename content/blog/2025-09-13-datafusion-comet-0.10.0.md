@@ -39,7 +39,12 @@ contributors. See the [change log] for more information.
 
 ### Improved Support for Apache Iceberg
 
-It is now possible to use Comet with Apache Iceberg 1.8.1 to accelerate reads of Iceberg Parquet tables.
+It is now possible to use Comet with Apache Iceberg 1.8.1 to accelerate reads of Iceberg Parquet tables. It is
+currently necessary to build Iceberg from source with a patch applied, but the Comet community is working on
+contributing changes to Iceberg to avoid the need to apply a patch with future versions. Refer to
+Comet's [Iceberg Guide] for more information.
+
+[Iceberg Guide]: https://datafusion.apache.org/comet/user-guide/latest/iceberg.html
 
 ### Improved Spark 4.0.0 Support
 
@@ -84,8 +89,8 @@ Other new features include:
 
 - Improved memory safety for FFI transfers
 - Fixed a double-free issue in the shuffle unified memory pool
-- Non zero offset FFI issue
-- Fixed HDFS buffer read issue 
+- Fixed an FFI issue with non-zero offsets
+- Fixed an issue with buffered reads from HDFS 
 
 ### Benchmarking
 
@@ -96,12 +101,13 @@ Benchmarking scripts for benchmarks based on TPC-H and TPS-DS are now available 
 - The documentation for supported [operators] and [expressions] is now more complete, and Spark-compatibility status 
   per operator/expression is now documented.
 - The documentation now contains a [roadmap] section.
-- New guide comparing Comet with Apache Gluten (incubating) + Velox
+- New [guide] comparing Comet with Apache Gluten (incubating) + Velox
 - User guides are now available for multiple Comet versions
 
 [operators]: https://datafusion.apache.org/comet/user-guide/latest/operators.html
 [expressions]: https://datafusion.apache.org/comet/user-guide/latest/expressions.html
 [roadmap]: https://datafusion.apache.org/comet/contributor-guide/roadmap.html
+[guide]: https://datafusion.apache.org/comet/gluten_comparison.html
 
 ### Spark Compatibility
 
