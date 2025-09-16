@@ -41,10 +41,7 @@ contributors. See the [change log] for more information.
 
 ### Improved Support for Apache Iceberg
 
-It is now possible to use Comet with Apache Iceberg 1.8.1 to accelerate reads of Iceberg Parquet tables. It is
-currently necessary to build Iceberg from source with a patch applied, but the Comet community is working on
-contributing changes to Iceberg to avoid the need to apply a patch with future versions. Refer to
-Comet's [Iceberg Guide] for more information.
+It is now possible to use Comet with Apache Iceberg 1.8.1 to accelerate reads of Iceberg Parquet tables. Please refer to Comet's [Iceberg Guide] for information on building Iceberg with Comet.
 
 [Iceberg Guide]: https://datafusion.apache.org/comet/user-guide/latest/iceberg.html
 
