@@ -14,34 +14,43 @@ There are a couple of important impacts on the publishing:
 
 ## Testing
 
-There are two ways to preview your blog post before publishing the site. You can
-either locally build and test the site or you can use the auto staging feature
-of the CI system. To locally build the site on your machine, follow the instructions below.
+There are two ways to preview your blog post before publishing it:
 
-To use the staging feature of the CI system, push a branch that starts with
-`site/` and create a PR to merge this branch into `main`. When you do so, it
-will trigger a CI process that will build the site and push it to the branch
-`asf-staging`. Once this completes, the ASF infrastructure will auto publish
-this staged branch to https://datafusion.staged.apache.org/ It is important
-to note that this staging feature only works for branches on the main repo.
-If you are working on a forked repo, you will need to use the local approach
-below.
+1. **Local preview** - Build and test the site on your own machine.
+2. **CI auto-staging** - Use the ASF CI system to automatically build and stage the site for preview.
 
-The most recently run staging CI pipeline will be published to this site. If you
-need to republish any branch, simply rerun the `Stage Site` workflow.
+### Local Preview
 
-## Local Setup
+To locally build and preview the site on your computer:
 
-To locally build and preview the site on your computer, run
 ```shell
 make
 ```
 
 This will build the site using the [`ASF-Pelican`](https://github.com/apache/infrastructure-actions/tree/main/pelican) docker container.
 
-Navigate in your web browser to [http://localhost:8000/blog](http://localhost:8000/blog) to view the live
-website. In your terminal you can press Ctrl+C and rerun the last two commands
-to rebuild and publish the site.
+Once the site is built, open your browser and navigate to:
+[http://localhost:8000/blog](http://localhost:8000/blog)
+
+You'll see a live preview of the site. If you make changes, stop the server with `Ctrl+C` and rerun `make` to rebuild and preview again.
+
+### CI Auto-Staging
+
+To use the auto-staging feature, push your changes to a branch that starts with `site/` (e.g., `site/my-post`).
+
+This will trigger the CI system to:
+
+1. Build the site from your `site/*` branch.
+2. Output the result to a branch named `site/<name>-staging`.
+3. Push that staging branch to the main repository.
+4. ASF infrastructure will then publish the content to:
+`https://datafusion-<branch>.staged.apache.org`
+
+For example, pushing `site/blog-redesign` will result in:
+https://datafusion-blog-redesign.staged.apache.org
+
+Note that CI auto-staging only works on branches in the main `apache` repository.
+If you're working in a fork, use the local preview method instead.
 
 ## Publish site
 
@@ -49,11 +58,7 @@ The site publishes using a GitHub action provided by the ASF Infrastructure team
 See the [ASF-Pelican](https://infra.apache.org/asf-pelican.html) site for most details
 on how this process works.
 
-To preview your site live, create a branch named `site/my-feature-x`. This should
-auto-publish to https://datafusion.staged.apache.org/
-
-When you are satisfied with the staged branch, merging into `main` should cause
-the site to build via github actions and publish.
+Merging into `main` should cause the site to build via github actions and publish.
 
 #### Check site status
 
