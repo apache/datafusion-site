@@ -25,10 +25,9 @@ limitations under the License.
 {% endcomment %}
 -->
 
-
+[TOC]
 
 *Note: this blog was originally published [on the InfluxData blog](https://www.influxdata.com/blog/optimizing-sql-dataframes-part-one/)*
-
 
 ## Introduction
 

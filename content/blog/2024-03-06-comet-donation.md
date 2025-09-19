@@ -24,6 +24,8 @@ limitations under the License.
 {% endcomment %}
 -->
 
+[TOC]
+
 # Introduction
 The Apache Arrow PMC is pleased to announce the donation of the [Comet project],
 a native Spark SQL Accelerator built on [Apache Arrow DataFusion].

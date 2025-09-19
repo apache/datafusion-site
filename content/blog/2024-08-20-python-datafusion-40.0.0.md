@@ -24,6 +24,8 @@ limitations under the License.
 {% endcomment %}
 -->
 
+[TOC]
+
 ## Introduction
 
 We are happy to announce that [DataFusion in Python 40.1.0] has been released. In addition to

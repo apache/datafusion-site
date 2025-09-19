@@ -25,6 +25,7 @@ limitations under the License.
 {% endcomment %}
 -->
 
+[TOC]
 
 Window functions are a powerful feature in SQL, allowing for complex analytical computations over a subset of data. However, efficiently implementing them, especially sliding windows, can be quite challenging. With [Apache DataFusion]'s user-defined window functions, developers can easily take advantage of all the effort put into DataFusion's implementation.
 

@@ -25,6 +25,8 @@ limitations under the License.
 {% endcomment %}
 -->
 
+[TOC]
+
 The Apache DataFusion PMC is pleased to announce version 0.5.0 of the [Comet](https://datafusion.apache.org/comet/) subproject.
 
 Comet is an accelerator for Apache Spark that translates Spark physical plans to DataFusion physical plans for

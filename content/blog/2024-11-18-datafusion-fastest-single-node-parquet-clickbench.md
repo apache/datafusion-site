@@ -25,6 +25,8 @@ limitations under the License.
 {% endcomment %}
 -->
 
+[TOC]
+
 I am extremely excited to announce that [Apache DataFusion] [43.0.0]  is the
 fastest engine for querying Apache Parquet files in [ClickBench]. It is faster
 than [DuckDB], [chDB] and [Clickhouse] using the same hardware. It also marks

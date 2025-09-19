@@ -25,6 +25,8 @@ limitations under the License.
 {% endcomment %}
 -->
 
+[TOC]
+
 We are excited to announce that [Ballista](https://github.com/apache/arrow-datafusion/tree/master/ballista) has been donated 
 to the Apache Arrow project. 
 

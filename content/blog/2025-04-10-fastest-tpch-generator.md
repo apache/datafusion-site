@@ -23,6 +23,8 @@ limitations under the License.
 {% endcomment %}x
 -->
 
+[TOC]
+
 <style>
 /* Table borders */
 table, th, td {

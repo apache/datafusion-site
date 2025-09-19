@@ -25,6 +25,8 @@ limitations under the License.
 {% endcomment %}
 -->
 
+[TOC]
+
 <!-- Converted from Google Docs using https://www.buymeacoffee.com/docstomarkdown -->
 
 ## Aggregating Millions of Groups Fast in Apache Arrow DataFusion

@@ -24,6 +24,8 @@ limitations under the License.
 {% endcomment %}
 -->
 
+[TOC]
+
 # Introduction
 
 [DataFusion](https://arrow.apache.org/datafusion/) is an extensible query execution framework, written in Rust, that

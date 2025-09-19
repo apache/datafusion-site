@@ -24,6 +24,7 @@ limitations under the License.
 {% endcomment %}
 -->
 
+[TOC]
 
 We are happy to announce that [datafusion-python 46.0.0] has been released. This release
 brings in all of the new features of the core [DataFusion 46.0.0] library. Since the last

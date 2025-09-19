@@ -24,6 +24,8 @@ limitations under the License.
 {% endcomment %}
 -->
 
+[TOC]
+
 <!-- 
 diagrams source: https://docs.google.com/presentation/d/1FFYy27ydZdeFZWWuMjZGnYKUx9QNJfzuVLAH8AE5wlc/edit?slide=id.g364a74cba3d_0_92#slide=id.g364a74cba3d_0_92
 Intended Audience: Query engine / data systems developers who want to learn about topk optimization

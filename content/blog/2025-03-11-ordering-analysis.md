@@ -25,6 +25,8 @@ limitations under the License.
 {% endcomment %}
 -->
 
+[TOC]
+
 <!-- see https://github.com/apache/datafusion/issues/11631 for details -->
 
 ## Introduction
