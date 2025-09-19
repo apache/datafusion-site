@@ -44,8 +44,39 @@
         </h1>
         <p>Posted on: Sun 15 June 2025 by alamb, akurmustafa</p>
 
+        <aside class="d-md-none mb-2">
+          <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#always-optimizations">Always Optimizations</a><ul>
+<li><a href="#predicatefilter-pushdown">Predicate/Filter Pushdown</a></li>
+<li><a href="#projection-pushdown">Projection Pushdown</a></li>
+<li><a href="#limit-pushdown">Limit Pushdown</a></li>
+<li><a href="#expression-simplification-constant-folding">Expression Simplification / Constant Folding</a></li>
+<li><a href="#rewriting-outer-join-inner-join">Rewriting OUTER JOIN → INNER JOIN</a></li>
+</ul>
+</li>
+<li><a href="#engine-specific-optimizations">Engine Specific Optimizations</a><ul>
+<li><a href="#subquery-rewrites">Subquery Rewrites</a></li>
+<li><a href="#optimized-expression-evaluation">Optimized Expression Evaluation</a></li>
+<li><a href="#algorithm-selection">Algorithm Selection</a></li>
+<li><a href="#using-statistics-directly">Using Statistics Directly</a></li>
+</ul>
+</li>
+<li><a href="#access-path-and-join-order-selection">Access Path and Join Order Selection</a><ul>
+<li><a href="#overview">Overview</a></li>
+<li><a href="#heuristics-and-cost-based-optimization">Heuristics and Cost-Based Optimization</a></li>
+<li><a href="#join-ordering-in-datafusion">Join Ordering in DataFusion</a></li>
+</ul>
+</li>
+<li><a href="#conclusion">Conclusion</a><ul>
+<li><a href="#notes">Notes</a></li>
+</ul>
+</li>
+</ul>
+</div>
+        </aside>
 
-        <!--
+        
+<!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -83,13 +114,13 @@ in InfluxDB 3.0,
 in <a href="https://greptime.com/">Greptime</a>, and
 <a href="https://github.com/vega/vegafusion/tree/dc15c1b9fc7d297f12bea919795d58cda1c88fcf/vegafusion-core/src/planning">vega</a>
 in <a href="https://vegafusion.io/">VegaFusion</a>.</p>
-<h2 id="always-optimizations">Always Optimizations<a class="headerlink" href="#always-optimizations" title="Permanent link">&para;</a></h2>
+<h2 id="always-optimizations">Always Optimizations<a class="headerlink" href="#always-optimizations" title="Permanent link">¶</a></h2>
 <p>Some optimizations are so important they are found in almost all query engines
 and are typically the first implemented as they provide the largest cost /
 benefit ratio (and performance is terrible without them).</p>
-<h3 id="predicatefilter-pushdown">Predicate/Filter Pushdown<a class="headerlink" href="#predicatefilter-pushdown" title="Permanent link">&para;</a></h3>
+<h3 id="predicatefilter-pushdown">Predicate/Filter Pushdown<a class="headerlink" href="#predicatefilter-pushdown" title="Permanent link">¶</a></h3>
 <p><strong>Why</strong>: Avoid carrying unneeded <em>rows </em>as soon as possible</p>
-<p><strong>What</strong>: Moves filters &ldquo;down&rdquo; in the plan so they run earlier during execution, as shown in Figure 1.</p>
+<p><strong>What</strong>: Moves filters “down” in the plan so they run earlier during execution, as shown in Figure 1.</p>
 <p><strong>Example Implementations</strong>: <a href="https://github.com/apache/datafusion/blob/main/datafusion/optimizer/src/push_down_filter.rs">DataFusion</a>, <a href="https://github.com/duckdb/duckdb/blob/main/src/optimizer/filter_pushdown.cpp">DuckDB</a>, <a href="https://github.com/ClickHouse/ClickHouse/blob/master/src/Processors/QueryPlan/Optimizations/filterPushDown.cpp">ClickHouse</a></p>
 <p>The earlier data is filtered out in the plan, the less work the rest of the plan
 has to do. Most mature databases aggressively use filter pushdown / early
@@ -107,9 +138,9 @@ Optimizers will evaluate the filter before the aggregation.</p>
 processes more rows, reducing efficiency. In (<strong>B</strong>) with filter pushdown, the
 operator receives fewer rows, resulting in less overall work and leading to a
 faster and more efficient query.</p>
-<h3 id="projection-pushdown">Projection Pushdown<a class="headerlink" href="#projection-pushdown" title="Permanent link">&para;</a></h3>
+<h3 id="projection-pushdown">Projection Pushdown<a class="headerlink" href="#projection-pushdown" title="Permanent link">¶</a></h3>
 <p><strong>Why</strong>: Avoid carrying unneeded <em>columns </em>as soon as possible</p>
-<p><strong>What: </strong>Pushes &ldquo;projection&rdquo; (keeping only certain columns) earlier in the plan, as shown in Figure 2.</p>
+<p><strong>What: </strong>Pushes “projection” (keeping only certain columns) earlier in the plan, as shown in Figure 2.</p>
 <p><strong>Example Implementations: </strong>Implementations: <a href="https://github.com/apache/datafusion/blob/main/datafusion/physical-optimizer/src/projection_pushdown.rs">DataFusion</a>, <a href="https://github.com/duckdb/duckdb/blob/a8a6a080c8809d5d4b3c955e9f113574f6f0bfe0/src/optimizer/pushdown/pushdown_projection.cpp">DuckDB</a>, <a href="https://github.com/ClickHouse/ClickHouse/blob/master/src/Processors/QueryPlan/Optimizations/optimizeUseNormalProjection.cpp">ClickHouse</a></p>
 <p>Similarly to the motivation for <em>Filter Pushdown</em>, the earlier the plan stops
 doing something, the less work it does overall and thus the faster it runs. For
@@ -128,7 +159,7 @@ each column in each row must be parsed even if it is not used in the plan.</p>
 <p><strong>Figure 2:</strong> In (<strong>A</strong>) without projection pushdown, the operator receives more
 columns, reducing efficiency. In (<strong>B</strong>) with projection pushdown, the operator
 receives fewer columns, leading to optimized execution.</p>
-<h3 id="limit-pushdown">Limit Pushdown<a class="headerlink" href="#limit-pushdown" title="Permanent link">&para;</a></h3>
+<h3 id="limit-pushdown">Limit Pushdown<a class="headerlink" href="#limit-pushdown" title="Permanent link">¶</a></h3>
 <p><strong>Why</strong>: The earlier the plan stops generating data, the less overall work it
 does, and some operators have more efficient limited implementations.</p>
 <p><strong>What: </strong>Pushes limits (maximum row counts) down in a plan as early as possible.</p>
@@ -139,29 +170,29 @@ will execute.</p>
 <p>In addition, DataFusion and other systems have more efficient implementations of
 some operators that can be used if there is a limit. The classic example is
 replacing a full sort + limit with a <a href="https://docs.rs/datafusion/latest/datafusion/physical_plan/struct.TopK.html">TopK</a> operator that only tracks the top
-values using a heap. Similarly,  DataFusion&rsquo;s Parquet reader stops fetching and
+values using a heap. Similarly,  DataFusion’s Parquet reader stops fetching and
 opening additional files once the limit has been hit.</p>
 <p><img alt="Fig 3: Limit Pushdown." class="img-responsive" src="/blog/images/optimizing-sql-dataframes/limit-pushdown.png" width="80%"/></p>
 <p><strong>Figure 3</strong>: In (<strong>A</strong>), without limit pushdown all data is sorted and
 everything except the first few rows are discarded. In (<strong>B</strong>), with limit
 pushdown, Sort is replaced with TopK operator which does much less work.</p>
-<h3 id="expression-simplification-constant-folding">Expression Simplification / Constant Folding<a class="headerlink" href="#expression-simplification-constant-folding" title="Permanent link">&para;</a></h3>
-<p><strong>Why</strong>: Evaluating the same expression for each row when the value doesn&rsquo;t change is wasteful.</p>
+<h3 id="expression-simplification-constant-folding">Expression Simplification / Constant Folding<a class="headerlink" href="#expression-simplification-constant-folding" title="Permanent link">¶</a></h3>
+<p><strong>Why</strong>: Evaluating the same expression for each row when the value doesn’t change is wasteful.</p>
 <p><strong>What</strong>: Partially evaluates and/or algebraically simplify expressions.</p>
 <p><strong>Example Implementations:</strong> <a href="https://github.com/apache/datafusion/tree/main/datafusion/optimizer/src/simplify_expressions">DataFusion</a>, DuckDB (has several <a href="https://github.com/duckdb/duckdb/tree/7b18f0f3691c1b6367cf68ed2598d7034e14f41b/src/optimizer/rule">rules</a> such as <a href="https://github.com/duckdb/duckdb/blob/7b18f0f3691c1b6367cf68ed2598d7034e14f41b/src/optimizer/rule/constant_folding.cpp">constant folding</a>, and <a href="https://github.com/duckdb/duckdb/blob/7b18f0f3691c1b6367cf68ed2598d7034e14f41b/src/optimizer/rule/comparison_simplification.cpp">comparison simplification</a>), <a href="https://github.com/apache/spark/blob/7bc8e99cde424c59b98fe915e3fdaaa30beadb76/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/optimizer/expressions.scala">Spark</a></p>
-<p>If an expression doesn&rsquo;t change from row to row, it is better to evaluate the
+<p>If an expression doesn’t change from row to row, it is better to evaluate the
 expression <strong>once</strong> during planning. This is a classic compiler technique and is
 also used in database systems</p>
 <p>For example, given a query that finds all values from the current year</p>
-<pre><code class="language-sql">SELECT &hellip; WHERE extract(year from time_column) = extract(year from now())
+<pre><code class="language-sql">SELECT … WHERE extract(year from time_column) = extract(year from now())
 </code></pre>
 <p>Evaluating <code>extract(year from now())</code> on every row is much more expensive than
 evaluating it once during planning time so that the query becomes comparison to
 a constant</p>
-<pre><code class="language-sql">SELECT &hellip; WHERE extract(year from time_column) = 2025
+<pre><code class="language-sql">SELECT … WHERE extract(year from time_column) = 2025
 </code></pre>
 <p>Furthermore, it is often possible to push such predicates <strong>into</strong> scans.</p>
-<h3 id="rewriting-outer-join-inner-join">Rewriting <code>OUTER JOIN</code> &rarr; <code>INNER JOIN</code><a class="headerlink" href="#rewriting-outer-join-inner-join" title="Permanent link">&para;</a></h3>
+<h3 id="rewriting-outer-join-inner-join">Rewriting <code>OUTER JOIN</code> → <code>INNER JOIN</code><a class="headerlink" href="#rewriting-outer-join-inner-join" title="Permanent link">¶</a></h3>
 <p><strong>Why:</strong> <code>INNER JOIN</code>  implementations are almost always faster (as they are
 simpler) than <code>OUTER JOIN</code> implementations, and <code>INNER JOIN</code> s impose fewer
 restrictions on other optimizer passes (such as join reordering and additional
@@ -171,11 +202,11 @@ JOIN</code> will not appear in the results, it can be rewritten to an <code>INNE
 JOIN</code>.</p>
 <p><strong>Example Implementations:</strong> <a href="https://github.com/apache/datafusion/blob/6028474969f0bfead96eb7f413791470afb6bf82/datafusion/optimizer/src/eliminate_outer_join.rs">DataFusion</a>, <a href="https://github.com/apache/spark/blob/7bc8e99cde424c59b98fe915e3fdaaa30beadb76/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/optimizer/joins.scala#L124-L158">Spark</a>, <a href="https://github.com/ClickHouse/ClickHouse/blob/master/src/Processors/QueryPlan/Optimizations/convertOuterJoinToInnerJoin.cpp">ClickHouse</a>.</p>
 <p>For example, given a query such as the following</p>
-<pre><code class="language-SQL">SELECT &hellip;
+<pre><code class="language-SQL">SELECT …
 FROM orders LEFT OUTER JOIN customer ON (orders.cid = customer.id)
 WHERE customer.last_name = 'Lamb'
 </code></pre>
-<p>The <code>LEFT OUTER JOIN</code> keeps all rows in <code>orders</code>  that don&rsquo;t have a matching
+<p>The <code>LEFT OUTER JOIN</code> keeps all rows in <code>orders</code>  that don’t have a matching
 customer, but fills in the fields with <code>null</code>. All such rows will be filtered
 out by <code>customer.last_name = 'Lamb'</code>, and thus an INNER JOIN produces the same
 answer. This is illustrated in Figure 4.</p>
@@ -185,11 +216,11 @@ contains an <code>OUTER JOIN</code> but also a filter on <code>customer.last_nam
 filters out all rows that might be introduced by the <code>OUTER JOIN</code>. In (B) the
 <code>OUTER JOIN</code> is converted to inner join, a more efficient implementation can be
 used.</p>
-<h2 id="engine-specific-optimizations">Engine Specific Optimizations<a class="headerlink" href="#engine-specific-optimizations" title="Permanent link">&para;</a></h2>
+<h2 id="engine-specific-optimizations">Engine Specific Optimizations<a class="headerlink" href="#engine-specific-optimizations" title="Permanent link">¶</a></h2>
 <p>As discussed in Part 1 of this blog, optimizers also contain a set of passes
 that are still always good to do, but are closely tied to the specifics of the
 query engine. This section describes some common types</p>
-<h3 id="subquery-rewrites">Subquery Rewrites<a class="headerlink" href="#subquery-rewrites" title="Permanent link">&para;</a></h3>
+<h3 id="subquery-rewrites">Subquery Rewrites<a class="headerlink" href="#subquery-rewrites" title="Permanent link">¶</a></h3>
 <p><strong>Why</strong>: Actually implementing subqueries by running a query for each row of the outer query is very expensive.</p>
 <p><strong>What</strong>: It is possible to rewrite subqueries as joins which often perform much better.</p>
 <p><strong>Example Implementations:</strong> DataFusion (<a href="https://github.com/apache/datafusion/blob/main/datafusion/optimizer/src/decorrelate.rs">one</a>, <a href="https://github.com/apache/datafusion/blob/main/datafusion/optimizer/src/decorrelate_predicate_subquery.rs">two</a>, <a href="https://github.com/apache/datafusion/blob/main/datafusion/optimizer/src/scalar_subquery_to_join.rs">three</a>), <a href="https://github.com/apache/spark/blob/7bc8e99cde424c59b98fe915e3fdaaa30beadb76/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/optimizer/subquery.scala">Spark</a></p>
@@ -198,7 +229,7 @@ high performance analytic systems such as DataFusion and <a href="https://vertic
 support row-at-a-time evaluation given how terrible the performance would be. 
 Instead, analytic systems rewrite such queries into joins which can perform 100s
 or 1000s of times faster for large datasets. However, transforming subqueries to
-joins requires &ldquo;exotic&rdquo; join semantics such as <code>SEMI JOIN</code>, <code>ANTI JOIN</code>  and
+joins requires “exotic” join semantics such as <code>SEMI JOIN</code>, <code>ANTI JOIN</code>  and
 variations on how to treat equality with null<sup id="fn7"><a href="#footnote7">7</a>.</sup></p>
 <p>For a simple example, consider that a query like this:</p>
 <pre><code class="language-sql">SELECT customer.name 
@@ -216,14 +247,14 @@ JOIN (
   GROUP BY customer.id
  ) ON (customer.id = cid_inner AND s &gt; 10);
 </code></pre>
-<p>We don&rsquo;t have space to detail this transformation or why it is so much faster to
+<p>We don’t have space to detail this transformation or why it is so much faster to
 run, but using this and many other transformations allow efficient subquery
 evaluation.</p>
-<h3 id="optimized-expression-evaluation">Optimized Expression Evaluation<a class="headerlink" href="#optimized-expression-evaluation" title="Permanent link">&para;</a></h3>
+<h3 id="optimized-expression-evaluation">Optimized Expression Evaluation<a class="headerlink" href="#optimized-expression-evaluation" title="Permanent link">¶</a></h3>
 <p><strong>Why</strong>: The capabilities of expression evaluation vary from system to system.</p>
 <p><strong>What</strong>: Optimize expression evaluation for the particular execution environment.</p>
 <p><strong>Example Implementations</strong>: There are many examples of this type of
-optimization, including DataFusion&rsquo;s <a href="https://github.com/apache/datafusion/blob/main/datafusion/optimizer/src/common_subexpr_eliminate.rs">Common Subexpression
+optimization, including DataFusion’s <a href="https://github.com/apache/datafusion/blob/main/datafusion/optimizer/src/common_subexpr_eliminate.rs">Common Subexpression
 Elimination</a>,
 <a href="https://github.com/apache/datafusion/blob/8f3f70877febaa79be3349875e979d3a6e65c30e/datafusion/optimizer/src/simplify_expressions/unwrap_cast.rs#L70">unwrap_cast</a>,
 and <a href="https://github.com/apache/datafusion/blob/main/datafusion/optimizer/src/extract_equijoin_predicate.rs">identifying equality join
@@ -236,7 +267,7 @@ Spark also <a href="https://github.com/apache/spark/blob/7bc8e99cde424c59b98fe91
 comparisons</a>,
 and <a href="https://github.com/apache/spark/blob/7bc8e99cde424c59b98fe915e3fdaaa30beadb76/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/optimizer/InjectRuntimeFilter.scala">adds special runtime
 filters</a>.</p>
-<p>To give a specific example of what DataFusion&rsquo;s common subexpression elimination
+<p>To give a specific example of what DataFusion’s common subexpression elimination
 does, consider this query that refers to a complex expression multiple times:</p>
 <pre><code class="language-sql">SELECT date_bin('1 hour', time, '1970-01-01') 
 FROM table 
@@ -260,19 +291,19 @@ ORDER BY time_chunk
 <p><img alt="Fig 5: Common Subquery Elimination." class="img-responsive" src="/blog/images/optimizing-sql-dataframes/common-subexpression-elimination.png" width="80%"/></p>
 <p><strong>Figure 5:</strong> Adding a Projection to evaluate common complex sub expression
 decreases complexity for later stages.</p>
-<h3 id="algorithm-selection">Algorithm Selection<a class="headerlink" href="#algorithm-selection" title="Permanent link">&para;</a></h3>
+<h3 id="algorithm-selection">Algorithm Selection<a class="headerlink" href="#algorithm-selection" title="Permanent link">¶</a></h3>
 <p><strong>Why</strong>: Different engines have different specialized operators for certain
 operations.</p>
 <p><strong>What: </strong>Selects specific implementations from the available operators, based
 on properties of the query.</p>
-<p><strong>Example Implementations:</strong> DataFusion&rsquo;s <a href="https://github.com/apache/datafusion/blob/8f3f70877febaa79be3349875e979d3a6e65c30e/datafusion/physical-optimizer/src/enforce_sorting/mod.rs">EnforceSorting</a> pass uses sort optimized implementations, Spark&rsquo;s <a href="https://github.com/apache/spark/blob/7bc8e99cde424c59b98fe915e3fdaaa30beadb76/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/optimizer/RewriteAsOfJoin.scala">rewrite to use a special operator for ASOF joins</a>, and ClickHouse&rsquo;s<a href="https://github.com/ClickHouse/ClickHouse/blob/7d15deda4b33282f356bb3e40a190d005acf72f2/src/Interpreters/ExpressionAnalyzer.cpp#L1066-L1080"> join algorithm selection </a> such as <a href="https://github.com/ClickHouse/ClickHouse/blob/7d15deda4b33282f356bb3e40a190d005acf72f2/src/Interpreters/ExpressionAnalyzer.cpp#L1022">when to use MergeJoin</a></p>
+<p><strong>Example Implementations:</strong> DataFusion’s <a href="https://github.com/apache/datafusion/blob/8f3f70877febaa79be3349875e979d3a6e65c30e/datafusion/physical-optimizer/src/enforce_sorting/mod.rs">EnforceSorting</a> pass uses sort optimized implementations, Spark’s <a href="https://github.com/apache/spark/blob/7bc8e99cde424c59b98fe915e3fdaaa30beadb76/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/optimizer/RewriteAsOfJoin.scala">rewrite to use a special operator for ASOF joins</a>, and ClickHouse’s<a href="https://github.com/ClickHouse/ClickHouse/blob/7d15deda4b33282f356bb3e40a190d005acf72f2/src/Interpreters/ExpressionAnalyzer.cpp#L1066-L1080"> join algorithm selection </a> such as <a href="https://github.com/ClickHouse/ClickHouse/blob/7d15deda4b33282f356bb3e40a190d005acf72f2/src/Interpreters/ExpressionAnalyzer.cpp#L1022">when to use MergeJoin</a></p>
 <p>For example, DataFusion uses a <code>TopK</code> (<a href="https://docs.rs/datafusion/latest/datafusion/physical_plan/struct.TopK.html">source</a>) operator rather than a full
 <code>Sort</code> if there is also a limit on the query. Similarly, it may choose to use the
 more efficient <code>PartialOrdered</code> grouping operation when the data is sorted on
 group keys or a <code>MergeJoin</code></p>
 <p><img alt="Fig 6: Specialized Grouping." class="img-responsive" src="/blog/images/optimizing-sql-dataframes/specialized-grouping.png" width="80%"/></p>
 <p><strong>Figure 6: </strong>An example of specialized operation for grouping. In (<strong>A</strong>), input data has no specified ordering and DataFusion uses a hashing-based grouping operator (<a href="https://github.com/apache/datafusion/blob/main/datafusion/physical-plan/src/aggregates/row_hash.rs">source</a>) to determine distinct groups. In (<strong>B</strong>), when the input data is ordered by the group keys, DataFusion uses a specialized grouping operator (<a href="https://github.com/apache/datafusion/tree/main/datafusion/physical-plan/src/aggregates/order">source</a>) to find boundaries that separate groups.</p>
-<h3 id="using-statistics-directly">Using Statistics Directly<a class="headerlink" href="#using-statistics-directly" title="Permanent link">&para;</a></h3>
+<h3 id="using-statistics-directly">Using Statistics Directly<a class="headerlink" href="#using-statistics-directly" title="Permanent link">¶</a></h3>
 <p><strong>Why</strong>: Using pre-computed statistics from a table, without actually reading or
 opening files, is much faster than processing data.</p>
 <p><strong>What</strong>: Replace calculations on data with the value from statistics.</p>
@@ -287,14 +318,14 @@ and statistics are commonly stored in analytic file formats. For example, the
 the query can be evaluated using the values from statistics without looking at
 any compressed data. The optimizer replaces the Aggregation operation with
 values from statistics.</p>
-<h2 id="access-path-and-join-order-selection">Access Path and Join Order Selection<a class="headerlink" href="#access-path-and-join-order-selection" title="Permanent link">&para;</a></h2>
-<h3 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h3>
+<h2 id="access-path-and-join-order-selection">Access Path and Join Order Selection<a class="headerlink" href="#access-path-and-join-order-selection" title="Permanent link">¶</a></h2>
+<h3 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">¶</a></h3>
 <p>Last, but certainly not least, are optimizations that choose between plans with
 potentially (very) different performance. The major options in this category are</p>
 <ol>
 <li><strong>Join Order:</strong> In what order to combine tables using JOINs?</li>
 <li><strong>Access Paths:</strong> Which copy of the data or index should be read to find matching tuples?</li>
-<li><strong><a href="https://en.wikipedia.org/wiki/Materialized_view">Materialized View</a></strong>: Can the query can be rewritten to use a materialized view (partially computed query results)? This topic deserves its own blog (or book) and we don&rsquo;t discuss further here.</li>
+<li><strong><a href="https://en.wikipedia.org/wiki/Materialized_view">Materialized View</a></strong>: Can the query can be rewritten to use a materialized view (partially computed query results)? This topic deserves its own blog (or book) and we don’t discuss further here.</li>
 </ol>
 <p><img alt="Fig 8: Access Path and Join Order." class="img-responsive" src="/blog/images/optimizing-sql-dataframes/access-path-and-join-order.png" width="80%"/></p>
 <p><strong>Figure 8:</strong> Access Path and Join Order Selection in Query Optimizers. Optimizers use heuristics to enumerate some subset of potential join orders (shape) and access paths (color). The plan with the smallest estimated cost according to some cost model is chosen. In this case, Plan 2 with a cost of 180,000 is chosen for execution as it has the lowest estimated cost.</p>
@@ -317,7 +348,7 @@ potentially (very) different performance. The major options in this category are
    as few as 3 joins often have large cardinality estimation errors.</p>
 </li>
 </ol>
-<h3 id="heuristics-and-cost-based-optimization">Heuristics and Cost-Based Optimization<a class="headerlink" href="#heuristics-and-cost-based-optimization" title="Permanent link">&para;</a></h3>
+<h3 id="heuristics-and-cost-based-optimization">Heuristics and Cost-Based Optimization<a class="headerlink" href="#heuristics-and-cost-based-optimization" title="Permanent link">¶</a></h3>
 <p>Industrial optimizers handle these problems using a combination of</p>
 <ol>
 <li>
@@ -331,8 +362,8 @@ potentially (very) different performance. The major options in this category are
    estimates their cost and picks the one using the lowest cost.</p>
 </li>
 </ol>
-<p>For some examples, you can read about <a href="https://docs.databricks.com/aws/en/optimizations/cbo">Spark&rsquo;s cost-based optimizer</a> or look at
-the code for <a href="https://github.com/apache/datafusion/blob/main/datafusion/physical-optimizer/src/join_selection.rs">DataFusion&rsquo;s join selection</a> and <a href="https://github.com/duckdb/duckdb/blob/main/src/optimizer/join_order/cost_model.cpp">DuckDB&rsquo;s cost model</a> and <a href="https://github.com/duckdb/duckdb/blob/84c87b12fa9554a8775dc243b4d0afd5b407321a/src/optimizer/join_order/plan_enumerator.cpp#L469-L472">join
+<p>For some examples, you can read about <a href="https://docs.databricks.com/aws/en/optimizations/cbo">Spark’s cost-based optimizer</a> or look at
+the code for <a href="https://github.com/apache/datafusion/blob/main/datafusion/physical-optimizer/src/join_selection.rs">DataFusion’s join selection</a> and <a href="https://github.com/duckdb/duckdb/blob/main/src/optimizer/join_order/cost_model.cpp">DuckDB’s cost model</a> and <a href="https://github.com/duckdb/duckdb/blob/84c87b12fa9554a8775dc243b4d0afd5b407321a/src/optimizer/join_order/plan_enumerator.cpp#L469-L472">join
 order enumeration</a>.</p>
 <p>However, the use of heuristics and (imprecise) cost models means optimizers must</p>
 <ol>
@@ -357,13 +388,13 @@ order enumeration</a>.</p>
    datasets</p>
 </li>
 </ol>
-<h3 id="join-ordering-in-datafusion">Join Ordering in DataFusion<a class="headerlink" href="#join-ordering-in-datafusion" title="Permanent link">&para;</a></h3>
+<h3 id="join-ordering-in-datafusion">Join Ordering in DataFusion<a class="headerlink" href="#join-ordering-in-datafusion" title="Permanent link">¶</a></h3>
 <p>DataFusion purposely does not include a sophisticated cost based optimizer.
 Instead, keeping with its <a href="https://docs.rs/datafusion/latest/datafusion/#design-goals">design goals</a> it provides a reasonable default
 implementation along with extension points to customize behavior.</p>
 <p>Specifically, DataFusion includes</p>
 <ol>
-<li>&ldquo;Syntactic Optimizer&rdquo; (joins in the order they are listed in the query<sup id="fn8"><a href="#footnote8">8</a>) with basic join re-ordering (<a href="https://github.com/apache/datafusion/blob/main/datafusion/physical-optimizer/src/join_selection.rs">source</a>) to prevent join disasters.</sup></li>
+<li>“Syntactic Optimizer” (joins in the order they are listed in the query<sup id="fn8"><a href="#footnote8">8</a>) with basic join re-ordering (<a href="https://github.com/apache/datafusion/blob/main/datafusion/physical-optimizer/src/join_selection.rs">source</a>) to prevent join disasters.</sup></li>
 <li>Support for <a href="https://docs.rs/datafusion/latest/datafusion/common/struct.ColumnStatistics.html">ColumnStatistics</a> and <a href="https://docs.rs/datafusion/latest/datafusion/common/struct.Statistics.html">Table Statistics</a></li>
 <li>The framework for <a href="https://docs.rs/datafusion/latest/datafusion/physical_expr/struct.AnalysisContext.html#structfield.selectivity">filter selectivity</a> + join cardinality estimation.</li>
 <li>APIs for easily rewriting plans, such as the <a href="https://docs.rs/datafusion/latest/datafusion/common/tree_node/trait.TreeNode.html#overview">TreeNode API</a> and <a href="https://docs.rs/datafusion/latest/datafusion/physical_plan/joins/struct.HashJoinExec.html#method.swap_inputs">reordering joins</a></li>
@@ -384,11 +415,11 @@ specialized optimizers</a> in a more academic paper, and the topic comes up
 regularly in the DataFusion community, (e.g. <a href="https://github.com/apache/datafusion/issues/9846#issuecomment-2566568654">this recent comment</a>).</p>
 <p>Note: We are <a href="https://github.com/apache/datafusion/issues/3929">actively improving</a> this part of the code to help people write
 their own optimizers (🎣 come help us define and implement it!)</p>
-<h1 id="conclusion">Conclusion<a class="headerlink" href="#conclusion" title="Permanent link">&para;</a></h1>
+<h1 id="conclusion">Conclusion<a class="headerlink" href="#conclusion" title="Permanent link">¶</a></h1>
 <p>Optimizers are awesome, and we hope these two posts have demystified what they
 are and how they are implemented in industrial systems. Like many modern query
 engine designs, the common techniques are well known, though require substantial
-effort to get right.  DataFusion&rsquo;s industrial strength optimizers can and do
+effort to get right.  DataFusion’s industrial strength optimizers can and do
 serve many real world systems well and we expect that number to grow over time.</p>
 <p>We also think DataFusion provides interesting opportunities for optimizer
 research. As we discussed, there are still unsolved problems such as optimal
@@ -396,15 +427,15 @@ join ordering. Experiments in papers often use academic systems or modify
 optimizers in tightly integrated open source systems (for example, the recent
 <a href="https://www.vldb.org/pvldb/vol17/p1350-justen.pdf">POLARs paper</a> uses DuckDB). However, using a tightly integrated system
 constrains the research to the set of heuristics and structure provided by that
-system. Hopefully DataFusion&rsquo;s documentation, <a href="https://dl.acm.org/doi/10.1145/3626246.3653368">newly citeable SIGMOD paper</a>, and
+system. Hopefully DataFusion’s documentation, <a href="https://dl.acm.org/doi/10.1145/3626246.3653368">newly citeable SIGMOD paper</a>, and
 modular design will encourage more broadly applicable research in this area.</p>
 <p>And finally, as always, if you are interested in working on query engines and
 learning more about how they are designed and implemented, please <a href="https://datafusion.apache.org/contributor-guide/communication.html">join our
 community</a>. We welcome first time contributors as well as long time participants
 to the fun of building a database together.</p>
-<h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
+<h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">¶</a></h2>
 <p><a id="footnote7"></a><sup>[7]</sup> See <a href="https://btw-2015.informatik.uni-hamburg.de/res/proceedings/Hauptband/Wiss/Neumann-Unnesting_Arbitrary_Querie.pdf">Unnesting Arbitrary Queries</a> from Neumann and Kemper for a more academic treatment.</p>
-<p><a id="footnote8"></a><sup>[8]</sup> One of my favorite terms I learned from Andy Pavlo&rsquo;s CMU online lectures</p>
+<p><a id="footnote8"></a><sup>[8]</sup> One of my favorite terms I learned from Andy Pavlo’s CMU online lectures</p>
 
 <!--
   Comments Section
@@ -436,6 +467,36 @@ to the fun of building a database together.</p>
   <!-- Container where Giscus will render -->
   <div id="comment-thread"></div>
 </div>      </div>
+      <aside class="d-none d-md-block col-md-4 col-xl-3 ms-xl-2">
+        <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#always-optimizations">Always Optimizations</a><ul>
+<li><a href="#predicatefilter-pushdown">Predicate/Filter Pushdown</a></li>
+<li><a href="#projection-pushdown">Projection Pushdown</a></li>
+<li><a href="#limit-pushdown">Limit Pushdown</a></li>
+<li><a href="#expression-simplification-constant-folding">Expression Simplification / Constant Folding</a></li>
+<li><a href="#rewriting-outer-join-inner-join">Rewriting OUTER JOIN → INNER JOIN</a></li>
+</ul>
+</li>
+<li><a href="#engine-specific-optimizations">Engine Specific Optimizations</a><ul>
+<li><a href="#subquery-rewrites">Subquery Rewrites</a></li>
+<li><a href="#optimized-expression-evaluation">Optimized Expression Evaluation</a></li>
+<li><a href="#algorithm-selection">Algorithm Selection</a></li>
+<li><a href="#using-statistics-directly">Using Statistics Directly</a></li>
+</ul>
+</li>
+<li><a href="#access-path-and-join-order-selection">Access Path and Join Order Selection</a><ul>
+<li><a href="#overview">Overview</a></li>
+<li><a href="#heuristics-and-cost-based-optimization">Heuristics and Cost-Based Optimization</a></li>
+<li><a href="#join-ordering-in-datafusion">Join Ordering in DataFusion</a></li>
+</ul>
+</li>
+<li><a href="#conclusion">Conclusion</a><ul>
+<li><a href="#notes">Notes</a></li>
+</ul>
+</li>
+</ul>
+</div>
+      </aside>
     </div>
   </div>
 </div>    

@@ -44,6 +44,21 @@
         </h1>
         <p>Posted on: Fri 21 March 2025 by Xiangpeng Hao</p>
 
+        <aside class="d-md-none mb-2">
+          <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#why-filter-pushdown-in-parquet">Why filter pushdown in Parquet?</a></li>
+<li><a href="#how-can-filter-pushdown-be-slower">How can filter pushdown be slower?</a></li>
+<li><a href="#attempt-cache-filter-columns">Attempt: cache filter columns</a></li>
+<li><a href="#real-solution">Real solution</a><ul>
+<li><a href="#what-pages-are-cached">What pages are cached?</a></li>
+<li><a href="#then-why-cache-2-pages-per-column-instead-of-1">Then why cache 2 pages per column instead of 1?</a></li>
+</ul>
+</li>
+<li><a href="#how-does-it-perform">How does it perform?</a></li>
+<li><a href="#conclusion">Conclusion</a></li>
+</ul>
+</div>
+        </aside>
 
         <style>
 figure {
@@ -81,13 +96,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 {% endcomment %}
 -->
+
 <p><em>Editor's Note: This blog was first published on <a href="https://blog.xiangpeng.systems/posts/parquet-pushdown/">Xiangpeng Hao's blog</a>. Thanks to <a href="https://www.influxdata.com/">InfluxData</a> for sponsoring this work as part of his PhD funding.</em></p>
 <hr/>
 <p>In the <a href="https://datafusion.apache.org/blog/2025/03/20/parquet-pruning">previous post</a>, we discussed how <a href="https://datafusion.apache.org/">Apache DataFusion</a> prunes <a href="https://parquet.apache.org/">Apache Parquet</a> files to skip irrelevant <strong>files/row_groups</strong> (sometimes also <a href="https://parquet.apache.org/docs/file-format/pageindex/">pages</a>).</p>
 <p>This post discusses how Parquet readers skip irrelevant <strong>rows</strong> while scanning data,
 leveraging Parquet's columnar layout by first reading only filter columns,
 and then selectively reading other columns only for matching rows.</p>
-<h2 id="why-filter-pushdown-in-parquet">Why filter pushdown in Parquet?<a class="headerlink" href="#why-filter-pushdown-in-parquet" title="Permanent link">&para;</a></h2>
+<h2 id="why-filter-pushdown-in-parquet">Why filter pushdown in Parquet?<a class="headerlink" href="#why-filter-pushdown-in-parquet" title="Permanent link">¶</a></h2>
 <p>Below is an example query that reads sensor data with filters on <code>date_time</code> and <code>location</code>.
 Without filter pushdown, all rows from <code>location</code>, <code>val</code>, and <code>date_time</code> columns are decoded before <code>location='office'</code> is evaluated. Filter pushdown is especially useful when the filter is selective, i.e., removes many rows.</p>
 <pre><code class="language-sql">SELECT val, location 
@@ -100,14 +116,14 @@ WHERE date_time &gt; '2025-03-11' AND location = 'office';
     Parquet pruning skips irrelevant files/row_groups, while filter pushdown skips irrelevant rows. Without filter pushdown, all rows from location, val, and date_time columns are decoded before `location='office'` is evaluated. Filter pushdown is especially useful when the filter is selective, i.e., removes many rows.
   </figcaption>
 </figure>
-<p>In our setup, sensor data is aggregated by date &mdash; each day has its own Parquet file.
+<p>In our setup, sensor data is aggregated by date — each day has its own Parquet file.
 At planning time, DataFusion prunes the unneeded Parquet files, i.e., <code>2025-03-10.parquet</code> and <code>2025-03-11.parquet</code>.</p>
 <p>Once the files to read are located, the <a href="https://github.com/apache/datafusion/issues/3463"><em>DataFusion's current default implementation</em></a> reads all the projected columns (<code>sensor_id</code>, <code>val</code>, and <code>location</code>) into Arrow RecordBatches, then applies the filters over <code>location</code> to get the final set of rows.</p>
 <p>A better approach is called <strong>filter pushdown</strong> with <strong>late materialization</strong>, which evaluates filter conditions first and only decodes data that passes these conditions.
 In practice, this works by first processing only the filter columns (<code>date_time</code> and <code>location</code>), building a boolean mask of rows that satisfy our conditions, then using this mask to selectively decode only the relevant rows from other columns (<code>sensor_id</code>, <code>val</code>). 
 This eliminates the waste of decoding rows that will be immediately filtered out.</p>
 <p>While simple in theory, practical implementations often make performance worse.</p>
-<h2 id="how-can-filter-pushdown-be-slower">How can filter pushdown be slower?<a class="headerlink" href="#how-can-filter-pushdown-be-slower" title="Permanent link">&para;</a></h2>
+<h2 id="how-can-filter-pushdown-be-slower">How can filter pushdown be slower?<a class="headerlink" href="#how-can-filter-pushdown-be-slower" title="Permanent link">¶</a></h2>
 <p>At a high level, the Parquet reader first builds a filter mask -- essentially a boolean array indicating which rows meet the filter criteria -- and then uses this mask to selectively decode only the needed rows from the remaining columns in the projection.</p>
 <p>Let's dig into details of <a href="https://github.com/apache/arrow-rs/blob/d5339f31a60a4bd8a4256e7120fe32603249d88e/parquet/src/arrow/async_reader/mod.rs#L618-L712">how filter pushdown is implemented</a> in the current Rust Parquet reader implementation, illustrated in the following figure.</p>
 <figure>
@@ -151,7 +167,7 @@ This explains why filter pushdown is slower in some cases.</p>
 <blockquote>
 <p><strong>Note:</strong> Highly selective filters may skip the entire page; but as long as it reads one row from the page, it needs to decompress and often decode the entire page.</p>
 </blockquote>
-<h2 id="attempt-cache-filter-columns">Attempt: cache filter columns<a class="headerlink" href="#attempt-cache-filter-columns" title="Permanent link">&para;</a></h2>
+<h2 id="attempt-cache-filter-columns">Attempt: cache filter columns<a class="headerlink" href="#attempt-cache-filter-columns" title="Permanent link">¶</a></h2>
 <p>Intuitively, caching the filter columns and reusing them later could help.</p>
 <p>But naively caching decoded pages consumes prohibitively high memory:</p>
 <ol>
@@ -169,7 +185,7 @@ This explains why filter pushdown is slower in some cases.</p>
 <blockquote>
 <p><strong>Feel the complexity:</strong> consider building a cache that properly handles nested columns, multiple filters, and filters with multiple columns.</p>
 </blockquote>
-<h2 id="real-solution">Real solution<a class="headerlink" href="#real-solution" title="Permanent link">&para;</a></h2>
+<h2 id="real-solution">Real solution<a class="headerlink" href="#real-solution" title="Permanent link">¶</a></h2>
 <p>We need a solution that:</p>
 <ol>
 <li>
@@ -196,7 +212,7 @@ This explains why filter pushdown is slower in some cases.</p>
 </li>
 </ol>
 <p>This allows the cache to only hold 1 page at a time, and to immediately discard the previous page after it's used, significantly reducing the memory requirement for caching.</p>
-<h3 id="what-pages-are-cached">What pages are cached?<a class="headerlink" href="#what-pages-are-cached" title="Permanent link">&para;</a></h3>
+<h3 id="what-pages-are-cached">What pages are cached?<a class="headerlink" href="#what-pages-are-cached" title="Permanent link">¶</a></h3>
 <p>You may have noticed that only <code>location</code> is cached, not <code>val</code>, because <code>val</code> is only used for output.
 More generally, only columns that appear both in the filter and output are cached, and at most 1 page is cached for each such column.</p>
 <p>More examples:</p>
@@ -210,7 +226,7 @@ FROM sensor_data
 WHERE date_time &gt; '2025-03-11' AND location = 'office';
 </code></pre>
 <p>In this case, again, no columns are cached, because the output projection is empty after query plan optimization.</p>
-<h3 id="then-why-cache-2-pages-per-column-instead-of-1">Then why cache 2 pages per column instead of 1?<a class="headerlink" href="#then-why-cache-2-pages-per-column-instead-of-1" title="Permanent link">&para;</a></h3>
+<h3 id="then-why-cache-2-pages-per-column-instead-of-1">Then why cache 2 pages per column instead of 1?<a class="headerlink" href="#then-why-cache-2-pages-per-column-instead-of-1" title="Permanent link">¶</a></h3>
 <p>This is another real-world nuance regarding how Parquet layouts the pages.</p>
 <p>Parquet by default encodes data using <a href="https://parquet.apache.org/docs/file-format/data-pages/encodings/">dictionary encoding</a>, which writes a dictionary page as the first page of a column chunk, followed by the keys referencing the dictionary.</p>
 <p>You can see this in action using <a href="https://parquet-viewer.xiangpeng.systems">parquet-viewer</a>:</p>
@@ -229,69 +245,69 @@ The data page slot will move forward as it reads the data; but the dictionary pa
     Cached two pages, one for dictionary (pinned), one for data (moves as it reads the data)
   </figcaption>
 </figure>
-<h2 id="how-does-it-perform">How does it perform?<a class="headerlink" href="#how-does-it-perform" title="Permanent link">&para;</a></h2>
+<h2 id="how-does-it-perform">How does it perform?<a class="headerlink" href="#how-does-it-perform" title="Permanent link">¶</a></h2>
 <p>Here are my results on <a href="https://github.com/apache/datafusion/tree/main/benchmarks#clickbench">ClickBench</a> on my AMD 9900X machine. The total time is reduced by 15%, with Q23 being 2.24x faster,
 and queries that get slower are likely due to noise.</p>
 <pre><code>┏━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┓
 ┃ Query        ┃ no-pushdown ┃ new-pushdown ┃        Change ┃
 ┡━━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━┩
-&boxv; QQuery 0     &boxv;      0.47ms &boxv;       0.43ms &boxv; +1.10x faster &boxv;
-&boxv; QQuery 1     &boxv;     51.10ms &boxv;      50.10ms &boxv;     no change &boxv;
-&boxv; QQuery 2     &boxv;     68.23ms &boxv;      64.49ms &boxv; +1.06x faster &boxv;
-&boxv; QQuery 3     &boxv;     90.68ms &boxv;      86.73ms &boxv;     no change &boxv;
-&boxv; QQuery 4     &boxv;    458.93ms &boxv;     458.59ms &boxv;     no change &boxv;
-&boxv; QQuery 5     &boxv;    522.06ms &boxv;     478.50ms &boxv; +1.09x faster &boxv;
-&boxv; QQuery 6     &boxv;     49.84ms &boxv;      49.94ms &boxv;     no change &boxv;
-&boxv; QQuery 7     &boxv;     55.09ms &boxv;      55.77ms &boxv;     no change &boxv;
-&boxv; QQuery 8     &boxv;    565.26ms &boxv;     556.95ms &boxv;     no change &boxv;
-&boxv; QQuery 9     &boxv;    575.83ms &boxv;     575.05ms &boxv;     no change &boxv;
-&boxv; QQuery 10    &boxv;    164.56ms &boxv;     178.23ms &boxv;  1.08x slower &boxv;
-&boxv; QQuery 11    &boxv;    177.20ms &boxv;     191.32ms &boxv;  1.08x slower &boxv;
-&boxv; QQuery 12    &boxv;    591.05ms &boxv;     569.92ms &boxv;     no change &boxv;
-&boxv; QQuery 13    &boxv;    861.06ms &boxv;     848.59ms &boxv;     no change &boxv;
-&boxv; QQuery 14    &boxv;    596.20ms &boxv;     580.73ms &boxv;     no change &boxv;
-&boxv; QQuery 15    &boxv;    554.96ms &boxv;     548.77ms &boxv;     no change &boxv;
-&boxv; QQuery 16    &boxv;   1175.08ms &boxv;    1146.07ms &boxv;     no change &boxv;
-&boxv; QQuery 17    &boxv;   1150.45ms &boxv;    1121.49ms &boxv;     no change &boxv;
-&boxv; QQuery 18    &boxv;   2634.75ms &boxv;    2494.07ms &boxv; +1.06x faster &boxv;
-&boxv; QQuery 19    &boxv;     90.15ms &boxv;      89.24ms &boxv;     no change &boxv;
-&boxv; QQuery 20    &boxv;    620.15ms &boxv;     591.67ms &boxv;     no change &boxv;
-&boxv; QQuery 21    &boxv;    782.38ms &boxv;     703.15ms &boxv; +1.11x faster &boxv;
-&boxv; QQuery 22    &boxv;   1927.94ms &boxv;    1404.35ms &boxv; +1.37x faster &boxv;
-&boxv; QQuery 23    &boxv;   8104.11ms &boxv;    3610.76ms &boxv; +2.24x faster &boxv;
-&boxv; QQuery 24    &boxv;    360.79ms &boxv;     330.55ms &boxv; +1.09x faster &boxv;
-&boxv; QQuery 25    &boxv;    290.61ms &boxv;     252.54ms &boxv; +1.15x faster &boxv;
-&boxv; QQuery 26    &boxv;    395.18ms &boxv;     362.72ms &boxv; +1.09x faster &boxv;
-&boxv; QQuery 27    &boxv;    891.76ms &boxv;     959.39ms &boxv;  1.08x slower &boxv;
-&boxv; QQuery 28    &boxv;   4059.54ms &boxv;    4137.37ms &boxv;     no change &boxv;
-&boxv; QQuery 29    &boxv;    235.88ms &boxv;     228.99ms &boxv;     no change &boxv;
-&boxv; QQuery 30    &boxv;    564.22ms &boxv;     584.65ms &boxv;     no change &boxv;
-&boxv; QQuery 31    &boxv;    741.20ms &boxv;     757.87ms &boxv;     no change &boxv;
-&boxv; QQuery 32    &boxv;   2652.48ms &boxv;    2574.19ms &boxv;     no change &boxv;
-&boxv; QQuery 33    &boxv;   2373.71ms &boxv;    2327.10ms &boxv;     no change &boxv;
-&boxv; QQuery 34    &boxv;   2391.00ms &boxv;    2342.15ms &boxv;     no change &boxv;
-&boxv; QQuery 35    &boxv;    700.79ms &boxv;     694.51ms &boxv;     no change &boxv;
-&boxv; QQuery 36    &boxv;    151.51ms &boxv;     152.93ms &boxv;     no change &boxv;
-&boxv; QQuery 37    &boxv;    108.18ms &boxv;      86.03ms &boxv; +1.26x faster &boxv;
-&boxv; QQuery 38    &boxv;    114.64ms &boxv;     106.22ms &boxv; +1.08x faster &boxv;
-&boxv; QQuery 39    &boxv;    260.80ms &boxv;     239.13ms &boxv; +1.09x faster &boxv;
-&boxv; QQuery 40    &boxv;     60.74ms &boxv;      73.29ms &boxv;  1.21x slower &boxv;
-&boxv; QQuery 41    &boxv;     58.75ms &boxv;      67.85ms &boxv;  1.15x slower &boxv;
-&boxv; QQuery 42    &boxv;     65.49ms &boxv;      68.11ms &boxv;     no change &boxv;
-&boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxhu;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxhu;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxhu;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul;
+│ QQuery 0     │      0.47ms │       0.43ms │ +1.10x faster │
+│ QQuery 1     │     51.10ms │      50.10ms │     no change │
+│ QQuery 2     │     68.23ms │      64.49ms │ +1.06x faster │
+│ QQuery 3     │     90.68ms │      86.73ms │     no change │
+│ QQuery 4     │    458.93ms │     458.59ms │     no change │
+│ QQuery 5     │    522.06ms │     478.50ms │ +1.09x faster │
+│ QQuery 6     │     49.84ms │      49.94ms │     no change │
+│ QQuery 7     │     55.09ms │      55.77ms │     no change │
+│ QQuery 8     │    565.26ms │     556.95ms │     no change │
+│ QQuery 9     │    575.83ms │     575.05ms │     no change │
+│ QQuery 10    │    164.56ms │     178.23ms │  1.08x slower │
+│ QQuery 11    │    177.20ms │     191.32ms │  1.08x slower │
+│ QQuery 12    │    591.05ms │     569.92ms │     no change │
+│ QQuery 13    │    861.06ms │     848.59ms │     no change │
+│ QQuery 14    │    596.20ms │     580.73ms │     no change │
+│ QQuery 15    │    554.96ms │     548.77ms │     no change │
+│ QQuery 16    │   1175.08ms │    1146.07ms │     no change │
+│ QQuery 17    │   1150.45ms │    1121.49ms │     no change │
+│ QQuery 18    │   2634.75ms │    2494.07ms │ +1.06x faster │
+│ QQuery 19    │     90.15ms │      89.24ms │     no change │
+│ QQuery 20    │    620.15ms │     591.67ms │     no change │
+│ QQuery 21    │    782.38ms │     703.15ms │ +1.11x faster │
+│ QQuery 22    │   1927.94ms │    1404.35ms │ +1.37x faster │
+│ QQuery 23    │   8104.11ms │    3610.76ms │ +2.24x faster │
+│ QQuery 24    │    360.79ms │     330.55ms │ +1.09x faster │
+│ QQuery 25    │    290.61ms │     252.54ms │ +1.15x faster │
+│ QQuery 26    │    395.18ms │     362.72ms │ +1.09x faster │
+│ QQuery 27    │    891.76ms │     959.39ms │  1.08x slower │
+│ QQuery 28    │   4059.54ms │    4137.37ms │     no change │
+│ QQuery 29    │    235.88ms │     228.99ms │     no change │
+│ QQuery 30    │    564.22ms │     584.65ms │     no change │
+│ QQuery 31    │    741.20ms │     757.87ms │     no change │
+│ QQuery 32    │   2652.48ms │    2574.19ms │     no change │
+│ QQuery 33    │   2373.71ms │    2327.10ms │     no change │
+│ QQuery 34    │   2391.00ms │    2342.15ms │     no change │
+│ QQuery 35    │    700.79ms │     694.51ms │     no change │
+│ QQuery 36    │    151.51ms │     152.93ms │     no change │
+│ QQuery 37    │    108.18ms │      86.03ms │ +1.26x faster │
+│ QQuery 38    │    114.64ms │     106.22ms │ +1.08x faster │
+│ QQuery 39    │    260.80ms │     239.13ms │ +1.09x faster │
+│ QQuery 40    │     60.74ms │      73.29ms │  1.21x slower │
+│ QQuery 41    │     58.75ms │      67.85ms │  1.15x slower │
+│ QQuery 42    │     65.49ms │      68.11ms │     no change │
+└──────────────┴─────────────┴──────────────┴───────────────┘
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┓
 ┃ Benchmark Summary           ┃            ┃
 ┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━┩
-&boxv; Total Time (no-pushdown)    &boxv; 38344.79ms &boxv;
-&boxv; Total Time (new-pushdown)   &boxv; 32800.50ms &boxv;
-&boxv; Average Time (no-pushdown)  &boxv;   891.74ms &boxv;
-&boxv; Average Time (new-pushdown) &boxv;   762.80ms &boxv;
-&boxv; Queries Faster              &boxv;         13 &boxv;
-&boxv; Queries Slower              &boxv;          5 &boxv;
-&boxv; Queries with No Change      &boxv;         25 &boxv;
-&boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxhu;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul;
+│ Total Time (no-pushdown)    │ 38344.79ms │
+│ Total Time (new-pushdown)   │ 32800.50ms │
+│ Average Time (no-pushdown)  │   891.74ms │
+│ Average Time (new-pushdown) │   762.80ms │
+│ Queries Faster              │         13 │
+│ Queries Slower              │          5 │
+│ Queries with No Change      │         25 │
+└─────────────────────────────┴────────────┘
 </code></pre>
-<h2 id="conclusion">Conclusion<a class="headerlink" href="#conclusion" title="Permanent link">&para;</a></h2>
+<h2 id="conclusion">Conclusion<a class="headerlink" href="#conclusion" title="Permanent link">¶</a></h2>
 <p>Despite being simple in theory, filter pushdown in Parquet is non-trivial to implement.
 It requires understanding both the Parquet format and reader implementation details. 
 The challenge lies in efficiently navigating through the dynamics of decoding, filter evaluation, and memory management.</p>
@@ -327,6 +343,21 @@ The challenge lies in efficiently navigating through the dynamics of decoding, f
   <!-- Container where Giscus will render -->
   <div id="comment-thread"></div>
 </div>      </div>
+      <aside class="d-none d-md-block col-md-4 col-xl-3 ms-xl-2">
+        <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#why-filter-pushdown-in-parquet">Why filter pushdown in Parquet?</a></li>
+<li><a href="#how-can-filter-pushdown-be-slower">How can filter pushdown be slower?</a></li>
+<li><a href="#attempt-cache-filter-columns">Attempt: cache filter columns</a></li>
+<li><a href="#real-solution">Real solution</a><ul>
+<li><a href="#what-pages-are-cached">What pages are cached?</a></li>
+<li><a href="#then-why-cache-2-pages-per-column-instead-of-1">Then why cache 2 pages per column instead of 1?</a></li>
+</ul>
+</li>
+<li><a href="#how-does-it-perform">How does it perform?</a></li>
+<li><a href="#conclusion">Conclusion</a></li>
+</ul>
+</div>
+      </aside>
     </div>
   </div>
 </div>    

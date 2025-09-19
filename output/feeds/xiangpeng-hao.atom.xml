@@ -35,6 +35,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 {% endcomment %}
 --&gt;
+
 &lt;p&gt;&lt;em&gt;Editor's Note: This blog was first published on &lt;a href="https://blog.xiangpeng.systems/posts/parquet-pushdown/"&gt;Xiangpeng Hao's blog&lt;/a&gt;. Thanks to &lt;a href="https://www.influxdata.com/"&gt;InfluxData&lt;/a&gt; for sponsoring this work as part of his PhD funding.&lt;/em&gt;&lt;/p&gt;
 &lt;hr/&gt;
 &lt;p&gt;In the &lt;a href="https://datafusion.apache.org/blog/2025/03/20/parquet-pruning"&gt;previous post …&lt;/a&gt;&lt;/p&gt;</summary><content type="html">&lt;style&gt;
@@ -73,13 +74,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 {% endcomment %}
 --&gt;
+
 &lt;p&gt;&lt;em&gt;Editor's Note: This blog was first published on &lt;a href="https://blog.xiangpeng.systems/posts/parquet-pushdown/"&gt;Xiangpeng Hao's blog&lt;/a&gt;. Thanks to &lt;a href="https://www.influxdata.com/"&gt;InfluxData&lt;/a&gt; for sponsoring this work as part of his PhD funding.&lt;/em&gt;&lt;/p&gt;
 &lt;hr/&gt;
 &lt;p&gt;In the &lt;a href="https://datafusion.apache.org/blog/2025/03/20/parquet-pruning"&gt;previous post&lt;/a&gt;, we discussed how &lt;a href="https://datafusion.apache.org/"&gt;Apache DataFusion&lt;/a&gt; prunes &lt;a href="https://parquet.apache.org/"&gt;Apache Parquet&lt;/a&gt; files to skip irrelevant &lt;strong&gt;files/row_groups&lt;/strong&gt; (sometimes also &lt;a href="https://parquet.apache.org/docs/file-format/pageindex/"&gt;pages&lt;/a&gt;).&lt;/p&gt;
 &lt;p&gt;This post discusses how Parquet readers skip irrelevant &lt;strong&gt;rows&lt;/strong&gt; while scanning data,
 leveraging Parquet's columnar layout by first reading only filter columns,
 and then selectively reading other columns only for matching rows.&lt;/p&gt;
-&lt;h2 id="why-filter-pushdown-in-parquet"&gt;Why filter pushdown in Parquet?&lt;a class="headerlink" href="#why-filter-pushdown-in-parquet" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
+&lt;h2 id="why-filter-pushdown-in-parquet"&gt;Why filter pushdown in Parquet?&lt;a class="headerlink" href="#why-filter-pushdown-in-parquet" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;Below is an example query that reads sensor data with filters on &lt;code&gt;date_time&lt;/code&gt; and &lt;code&gt;location&lt;/code&gt;.
 Without filter pushdown, all rows from &lt;code&gt;location&lt;/code&gt;, &lt;code&gt;val&lt;/code&gt;, and &lt;code&gt;date_time&lt;/code&gt; columns are decoded before &lt;code&gt;location='office'&lt;/code&gt; is evaluated. Filter pushdown is especially useful when the filter is selective, i.e., removes many rows.&lt;/p&gt;
 &lt;pre&gt;&lt;code class="language-sql"&gt;SELECT val, location 
@@ -92,14 +94,14 @@ WHERE date_time &amp;gt; '2025-03-11' AND location = 'office';
     Parquet pruning skips irrelevant files/row_groups, while filter pushdown skips irrelevant rows. Without filter pushdown, all rows from location, val, and date_time columns are decoded before `location='office'` is evaluated. Filter pushdown is especially useful when the filter is selective, i.e., removes many rows.
   &lt;/figcaption&gt;
 &lt;/figure&gt;
-&lt;p&gt;In our setup, sensor data is aggregated by date &amp;mdash; each day has its own Parquet file.
+&lt;p&gt;In our setup, sensor data is aggregated by date — each day has its own Parquet file.
 At planning time, DataFusion prunes the unneeded Parquet files, i.e., &lt;code&gt;2025-03-10.parquet&lt;/code&gt; and &lt;code&gt;2025-03-11.parquet&lt;/code&gt;.&lt;/p&gt;
 &lt;p&gt;Once the files to read are located, the &lt;a href="https://github.com/apache/datafusion/issues/3463"&gt;&lt;em&gt;DataFusion's current default implementation&lt;/em&gt;&lt;/a&gt; reads all the projected columns (&lt;code&gt;sensor_id&lt;/code&gt;, &lt;code&gt;val&lt;/code&gt;, and &lt;code&gt;location&lt;/code&gt;) into Arrow RecordBatches, then applies the filters over &lt;code&gt;location&lt;/code&gt; to get the final set of rows.&lt;/p&gt;
 &lt;p&gt;A better approach is called &lt;strong&gt;filter pushdown&lt;/strong&gt; with &lt;strong&gt;late materialization&lt;/strong&gt;, which evaluates filter conditions first and only decodes data that passes these conditions.
 In practice, this works by first processing only the filter columns (&lt;code&gt;date_time&lt;/code&gt; and &lt;code&gt;location&lt;/code&gt;), building a boolean mask of rows that satisfy our conditions, then using this mask to selectively decode only the relevant rows from other columns (&lt;code&gt;sensor_id&lt;/code&gt;, &lt;code&gt;val&lt;/code&gt;). 
 This eliminates the waste of decoding rows that will be immediately filtered out.&lt;/p&gt;
 &lt;p&gt;While simple in theory, practical implementations often make performance worse.&lt;/p&gt;
-&lt;h2 id="how-can-filter-pushdown-be-slower"&gt;How can filter pushdown be slower?&lt;a class="headerlink" href="#how-can-filter-pushdown-be-slower" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
+&lt;h2 id="how-can-filter-pushdown-be-slower"&gt;How can filter pushdown be slower?&lt;a class="headerlink" href="#how-can-filter-pushdown-be-slower" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;At a high level, the Parquet reader first builds a filter mask -- essentially a boolean array indicating which rows meet the filter criteria -- and then uses this mask to selectively decode only the needed rows from the remaining columns in the projection.&lt;/p&gt;
 &lt;p&gt;Let's dig into details of &lt;a href="https://github.com/apache/arrow-rs/blob/d5339f31a60a4bd8a4256e7120fe32603249d88e/parquet/src/arrow/async_reader/mod.rs#L618-L712"&gt;how filter pushdown is implemented&lt;/a&gt; in the current Rust Parquet reader implementation, illustrated in the following figure.&lt;/p&gt;
 &lt;figure&gt;
@@ -143,7 +145,7 @@ This explains why filter pushdown is slower in some cases.&lt;/p&gt;
 &lt;blockquote&gt;
 &lt;p&gt;&lt;strong&gt;Note:&lt;/strong&gt; Highly selective filters may skip the entire page; but as long as it reads one row from the page, it needs to decompress and often decode the entire page.&lt;/p&gt;
 &lt;/blockquote&gt;
-&lt;h2 id="attempt-cache-filter-columns"&gt;Attempt: cache filter columns&lt;a class="headerlink" href="#attempt-cache-filter-columns" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
+&lt;h2 id="attempt-cache-filter-columns"&gt;Attempt: cache filter columns&lt;a class="headerlink" href="#attempt-cache-filter-columns" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;Intuitively, caching the filter columns and reusing them later could help.&lt;/p&gt;
 &lt;p&gt;But naively caching decoded pages consumes prohibitively high memory:&lt;/p&gt;
 &lt;ol&gt;
@@ -161,7 +163,7 @@ This explains why filter pushdown is slower in some cases.&lt;/p&gt;
 &lt;blockquote&gt;
 &lt;p&gt;&lt;strong&gt;Feel the complexity:&lt;/strong&gt; consider building a cache that properly handles nested columns, multiple filters, and filters with multiple columns.&lt;/p&gt;
 &lt;/blockquote&gt;
-&lt;h2 id="real-solution"&gt;Real solution&lt;a class="headerlink" href="#real-solution" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
+&lt;h2 id="real-solution"&gt;Real solution&lt;a class="headerlink" href="#real-solution" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;We need a solution that:&lt;/p&gt;
 &lt;ol&gt;
 &lt;li&gt;
@@ -188,7 +190,7 @@ This explains why filter pushdown is slower in some cases.&lt;/p&gt;
 &lt;/li&gt;
 &lt;/ol&gt;
 &lt;p&gt;This allows the cache to only hold 1 page at a time, and to immediately discard the previous page after it's used, significantly reducing the memory requirement for caching.&lt;/p&gt;
-&lt;h3 id="what-pages-are-cached"&gt;What pages are cached?&lt;a class="headerlink" href="#what-pages-are-cached" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h3&gt;
+&lt;h3 id="what-pages-are-cached"&gt;What pages are cached?&lt;a class="headerlink" href="#what-pages-are-cached" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;You may have noticed that only &lt;code&gt;location&lt;/code&gt; is cached, not &lt;code&gt;val&lt;/code&gt;, because &lt;code&gt;val&lt;/code&gt; is only used for output.
 More generally, only columns that appear both in the filter and output are cached, and at most 1 page is cached for each such column.&lt;/p&gt;
 &lt;p&gt;More examples:&lt;/p&gt;
@@ -202,7 +204,7 @@ FROM sensor_data
 WHERE date_time &amp;gt; '2025-03-11' AND location = 'office';
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;In this case, again, no columns are cached, because the output projection is empty after query plan optimization.&lt;/p&gt;
-&lt;h3 id="then-why-cache-2-pages-per-column-instead-of-1"&gt;Then why cache 2 pages per column instead of 1?&lt;a class="headerlink" href="#then-why-cache-2-pages-per-column-instead-of-1" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h3&gt;
+&lt;h3 id="then-why-cache-2-pages-per-column-instead-of-1"&gt;Then why cache 2 pages per column instead of 1?&lt;a class="headerlink" href="#then-why-cache-2-pages-per-column-instead-of-1" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;This is another real-world nuance regarding how Parquet layouts the pages.&lt;/p&gt;
 &lt;p&gt;Parquet by default encodes data using &lt;a href="https://parquet.apache.org/docs/file-format/data-pages/encodings/"&gt;dictionary encoding&lt;/a&gt;, which writes a dictionary page as the first page of a column chunk, followed by the keys referencing the dictionary.&lt;/p&gt;
 &lt;p&gt;You can see this in action using &lt;a href="https://parquet-viewer.xiangpeng.systems"&gt;parquet-viewer&lt;/a&gt;:&lt;/p&gt;
@@ -221,69 +223,69 @@ The data page slot will move forward as it reads the data; but the dictionary pa
     Cached two pages, one for dictionary (pinned), one for data (moves as it reads the data)
   &lt;/figcaption&gt;
 &lt;/figure&gt;
-&lt;h2 id="how-does-it-perform"&gt;How does it perform?&lt;a class="headerlink" href="#how-does-it-perform" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
+&lt;h2 id="how-does-it-perform"&gt;How does it perform?&lt;a class="headerlink" href="#how-does-it-perform" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;Here are my results on &lt;a href="https://github.com/apache/datafusion/tree/main/benchmarks#clickbench"&gt;ClickBench&lt;/a&gt; on my AMD 9900X machine. The total time is reduced by 15%, with Q23 being 2.24x faster,
 and queries that get slower are likely due to noise.&lt;/p&gt;
 &lt;pre&gt;&lt;code&gt;┏━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┓
 ┃ Query        ┃ no-pushdown ┃ new-pushdown ┃        Change ┃
 ┡━━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━┩
-&amp;boxv; QQuery 0     &amp;boxv;      0.47ms &amp;boxv;       0.43ms &amp;boxv; +1.10x faster &amp;boxv;
-&amp;boxv; QQuery 1     &amp;boxv;     51.10ms &amp;boxv;      50.10ms &amp;boxv;     no change &amp;boxv;
-&amp;boxv; QQuery 2     &amp;boxv;     68.23ms &amp;boxv;      64.49ms &amp;boxv; +1.06x faster &amp;boxv;
-&amp;boxv; QQuery 3     &amp;boxv;     90.68ms &amp;boxv;      86.73ms &amp;boxv;     no change &amp;boxv;
-&amp;boxv; QQuery 4     &amp;boxv;    458.93ms &amp;boxv;     458.59ms &amp;boxv;     no change &amp;boxv;
-&amp;boxv; QQuery 5     &amp;boxv;    522.06ms &amp;boxv;     478.50ms &amp;boxv; +1.09x faster &amp;boxv;
-&amp;boxv; QQuery 6     &amp;boxv;     49.84ms &amp;boxv;      49.94ms &amp;boxv;     no change &amp;boxv;
-&amp;boxv; QQuery 7     &amp;boxv;     55.09ms &amp;boxv;      55.77ms &amp;boxv;     no change &amp;boxv;
-&amp;boxv; QQuery 8     &amp;boxv;    565.26ms &amp;boxv;     556.95ms &amp;boxv;     no change &amp;boxv;
-&amp;boxv; QQuery 9     &amp;boxv;    575.83ms &amp;boxv;     575.05ms &amp;boxv;     no change &amp;boxv;
-&amp;boxv; QQuery 10    &amp;boxv;    164.56ms &amp;boxv;     178.23ms &amp;boxv;  1.08x slower &amp;boxv;
-&amp;boxv; QQuery 11    &amp;boxv;    177.20ms &amp;boxv;     191.32ms &amp;boxv;  1.08x slower &amp;boxv;
-&amp;boxv; QQuery 12    &amp;boxv;    591.05ms &amp;boxv;     569.92ms &amp;boxv;     no change &amp;boxv;
-&amp;boxv; QQuery 13    &amp;boxv;    861.06ms &amp;boxv;     848.59ms &amp;boxv;     no change &amp;boxv;
-&amp;boxv; QQuery 14    &amp;boxv;    596.20ms &amp;boxv;     580.73ms &amp;boxv;     no change &amp;boxv;
-&amp;boxv; QQuery 15    &amp;boxv;    554.96ms &amp;boxv;     548.77ms &amp;boxv;     no change &amp;boxv;
-&amp;boxv; QQuery 16    &amp;boxv;   1175.08ms &amp;boxv;    1146.07ms &amp;boxv;     no change &amp;boxv;
-&amp;boxv; QQuery 17    &amp;boxv;   1150.45ms &amp;boxv;    1121.49ms &amp;boxv;     no change &amp;boxv;
-&amp;boxv; QQuery 18    &amp;boxv;   2634.75ms &amp;boxv;    2494.07ms &amp;boxv; +1.06x faster &amp;boxv;
-&amp;boxv; QQuery 19    &amp;boxv;     90.15ms &amp;boxv;      89.24ms &amp;boxv;     no change &amp;boxv;
-&amp;boxv; QQuery 20    &amp;boxv;    620.15ms &amp;boxv;     591.67ms &amp;boxv;     no change &amp;boxv;
-&amp;boxv; QQuery 21    &amp;boxv;    782.38ms &amp;boxv;     703.15ms &amp;boxv; +1.11x faster &amp;boxv;
-&amp;boxv; QQuery 22    &amp;boxv;   1927.94ms &amp;boxv;    1404.35ms &amp;boxv; +1.37x faster &amp;boxv;
-&amp;boxv; QQuery 23    &amp;boxv;   8104.11ms &amp;boxv;    3610.76ms &amp;boxv; +2.24x faster &amp;boxv;
-&amp;boxv; QQuery 24    &amp;boxv;    360.79ms &amp;boxv;     330.55ms &amp;boxv; +1.09x faster &amp;boxv;
-&amp;boxv; QQuery 25    &amp;boxv;    290.61ms &amp;boxv;     252.54ms &amp;boxv; +1.15x faster &amp;boxv;
-&amp;boxv; QQuery 26    &amp;boxv;    395.18ms &amp;boxv;     362.72ms &amp;boxv; +1.09x faster &amp;boxv;
-&amp;boxv; QQuery 27    &amp;boxv;    891.76ms &amp;boxv;     959.39ms &amp;boxv;  1.08x slower &amp;boxv;
-&amp;boxv; QQuery 28    &amp;boxv;   4059.54ms &amp;boxv;    4137.37ms &amp;boxv;     no change &amp;boxv;
-&amp;boxv; QQuery 29    &amp;boxv;    235.88ms &amp;boxv;     228.99ms &amp;boxv;     no change &amp;boxv;
-&amp;boxv; QQuery 30    &amp;boxv;    564.22ms &amp;boxv;     584.65ms &amp;boxv;     no change &amp;boxv;
-&amp;boxv; QQuery 31    &amp;boxv;    741.20ms &amp;boxv;     757.87ms &amp;boxv;     no change &amp;boxv;
-&amp;boxv; QQuery 32    &amp;boxv;   2652.48ms &amp;boxv;    2574.19ms &amp;boxv;     no change &amp;boxv;
-&amp;boxv; QQuery 33    &amp;boxv;   2373.71ms &amp;boxv;    2327.10ms &amp;boxv;     no change &amp;boxv;
-&amp;boxv; QQuery 34    &amp;boxv;   2391.00ms &amp;boxv;    2342.15ms &amp;boxv;     no change &amp;boxv;
-&amp;boxv; QQuery 35    &amp;boxv;    700.79ms &amp;boxv;     694.51ms &amp;boxv;     no change &amp;boxv;
-&amp;boxv; QQuery 36    &amp;boxv;    151.51ms &amp;boxv;     152.93ms &amp;boxv;     no change &amp;boxv;
-&amp;boxv; QQuery 37    &amp;boxv;    108.18ms &amp;boxv;      86.03ms &amp;boxv; +1.26x faster &amp;boxv;
-&amp;boxv; QQuery 38    &amp;boxv;    114.64ms &amp;boxv;     106.22ms &amp;boxv; +1.08x faster &amp;boxv;
-&amp;boxv; QQuery 39    &amp;boxv;    260.80ms &amp;boxv;     239.13ms &amp;boxv; +1.09x faster &amp;boxv;
-&amp;boxv; QQuery 40    &amp;boxv;     60.74ms &amp;boxv;      73.29ms &amp;boxv;  1.21x slower &amp;boxv;
-&amp;boxv; QQuery 41    &amp;boxv;     58.75ms &amp;boxv;      67.85ms &amp;boxv;  1.15x slower &amp;boxv;
-&amp;boxv; QQuery 42    &amp;boxv;     65.49ms &amp;boxv;      68.11ms &amp;boxv;     no change &amp;boxv;
-&amp;boxur;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxhu;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxhu;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxhu;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxul;
+│ QQuery 0     │      0.47ms │       0.43ms │ +1.10x faster │
+│ QQuery 1     │     51.10ms │      50.10ms │     no change │
+│ QQuery 2     │     68.23ms │      64.49ms │ +1.06x faster │
+│ QQuery 3     │     90.68ms │      86.73ms │     no change │
+│ QQuery 4     │    458.93ms │     458.59ms │     no change │
+│ QQuery 5     │    522.06ms │     478.50ms │ +1.09x faster │
+│ QQuery 6     │     49.84ms │      49.94ms │     no change │
+│ QQuery 7     │     55.09ms │      55.77ms │     no change │
+│ QQuery 8     │    565.26ms │     556.95ms │     no change │
+│ QQuery 9     │    575.83ms │     575.05ms │     no change │
+│ QQuery 10    │    164.56ms │     178.23ms │  1.08x slower │
+│ QQuery 11    │    177.20ms │     191.32ms │  1.08x slower │
+│ QQuery 12    │    591.05ms │     569.92ms │     no change │
+│ QQuery 13    │    861.06ms │     848.59ms │     no change │
+│ QQuery 14    │    596.20ms │     580.73ms │     no change │
+│ QQuery 15    │    554.96ms │     548.77ms │     no change │
+│ QQuery 16    │   1175.08ms │    1146.07ms │     no change │
+│ QQuery 17    │   1150.45ms │    1121.49ms │     no change │
+│ QQuery 18    │   2634.75ms │    2494.07ms │ +1.06x faster │
+│ QQuery 19    │     90.15ms │      89.24ms │     no change │
+│ QQuery 20    │    620.15ms │     591.67ms │     no change │
+│ QQuery 21    │    782.38ms │     703.15ms │ +1.11x faster │
+│ QQuery 22    │   1927.94ms │    1404.35ms │ +1.37x faster │
+│ QQuery 23    │   8104.11ms │    3610.76ms │ +2.24x faster │
+│ QQuery 24    │    360.79ms │     330.55ms │ +1.09x faster │
+│ QQuery 25    │    290.61ms │     252.54ms │ +1.15x faster │
+│ QQuery 26    │    395.18ms │     362.72ms │ +1.09x faster │
+│ QQuery 27    │    891.76ms │     959.39ms │  1.08x slower │
+│ QQuery 28    │   4059.54ms │    4137.37ms │     no change │
+│ QQuery 29    │    235.88ms │     228.99ms │     no change │
+│ QQuery 30    │    564.22ms │     584.65ms │     no change │
+│ QQuery 31    │    741.20ms │     757.87ms │     no change │
+│ QQuery 32    │   2652.48ms │    2574.19ms │     no change │
+│ QQuery 33    │   2373.71ms │    2327.10ms │     no change │
+│ QQuery 34    │   2391.00ms │    2342.15ms │     no change │
+│ QQuery 35    │    700.79ms │     694.51ms │     no change │
+│ QQuery 36    │    151.51ms │     152.93ms │     no change │
+│ QQuery 37    │    108.18ms │      86.03ms │ +1.26x faster │
+│ QQuery 38    │    114.64ms │     106.22ms │ +1.08x faster │
+│ QQuery 39    │    260.80ms │     239.13ms │ +1.09x faster │
+│ QQuery 40    │     60.74ms │      73.29ms │  1.21x slower │
+│ QQuery 41    │     58.75ms │      67.85ms │  1.15x slower │
+│ QQuery 42    │     65.49ms │      68.11ms │     no change │
+└──────────────┴─────────────┴──────────────┴───────────────┘
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┓
 ┃ Benchmark Summary           ┃            ┃
 ┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━┩
-&amp;boxv; Total Time (no-pushdown)    &amp;boxv; 38344.79ms &amp;boxv;
-&amp;boxv; Total Time (new-pushdown)   &amp;boxv; 32800.50ms &amp;boxv;
-&amp;boxv; Average Time (no-pushdown)  &amp;boxv;   891.74ms &amp;boxv;
-&amp;boxv; Average Time (new-pushdown) &amp;boxv;   762.80ms &amp;boxv;
-&amp;boxv; Queries Faster              &amp;boxv;         13 &amp;boxv;
-&amp;boxv; Queries Slower              &amp;boxv;          5 &amp;boxv;
-&amp;boxv; Queries with No Change      &amp;boxv;         25 &amp;boxv;
-&amp;boxur;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxhu;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxul;
+│ Total Time (no-pushdown)    │ 38344.79ms │
+│ Total Time (new-pushdown)   │ 32800.50ms │
+│ Average Time (no-pushdown)  │   891.74ms │
+│ Average Time (new-pushdown) │   762.80ms │
+│ Queries Faster              │         13 │
+│ Queries Slower              │          5 │
+│ Queries with No Change      │         25 │
+└─────────────────────────────┴────────────┘
 &lt;/code&gt;&lt;/pre&gt;
-&lt;h2 id="conclusion"&gt;Conclusion&lt;a class="headerlink" href="#conclusion" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
+&lt;h2 id="conclusion"&gt;Conclusion&lt;a class="headerlink" href="#conclusion" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;Despite being simple in theory, filter pushdown in Parquet is non-trivial to implement.
 It requires understanding both the Parquet format and reader implementation details. 
 The challenge lies in efficiently navigating through the dynamics of decoding, filter evaluation, and memory management.&lt;/p&gt;
@@ -305,6 +307,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 {% endcomment %}
 --&gt;
+
 &lt;p&gt;&lt;em&gt;Editor's Note: This blog was first published on &lt;a href="https://blog.xiangpeng.systems/posts/parquet-to-arrow/"&gt;Xiangpeng Hao's blog&lt;/a&gt;. Thanks to &lt;a href="https://www.influxdata.com/"&gt;InfluxData&lt;/a&gt; for sponsoring this work as part of his PhD funding.&lt;/em&gt;&lt;/p&gt;
 &lt;hr/&gt;
 &lt;p&gt;&lt;a href="https://parquet.apache.org/"&gt;Apache Parquet&lt;/a&gt; has become the industry standard for storing columnar data, and reading Parquet efficiently -- especially from remote storage -- is crucial for query performance.&lt;/p&gt;
@@ -326,20 +329,21 @@ See the License for the specific language governing permissions and
 limitations under the License.
 {% endcomment %}
 --&gt;
+
 &lt;p&gt;&lt;em&gt;Editor's Note: This blog was first published on &lt;a href="https://blog.xiangpeng.systems/posts/parquet-to-arrow/"&gt;Xiangpeng Hao's blog&lt;/a&gt;. Thanks to &lt;a href="https://www.influxdata.com/"&gt;InfluxData&lt;/a&gt; for sponsoring this work as part of his PhD funding.&lt;/em&gt;&lt;/p&gt;
 &lt;hr/&gt;
 &lt;p&gt;&lt;a href="https://parquet.apache.org/"&gt;Apache Parquet&lt;/a&gt; has become the industry standard for storing columnar data, and reading Parquet efficiently -- especially from remote storage -- is crucial for query performance.&lt;/p&gt;
 &lt;p&gt;&lt;a href="https://datafusion.apache.org/"&gt;Apache DataFusion&lt;/a&gt; implements advanced Parquet pruning techniques to effectively read only the data that matters for a given query.&lt;/p&gt;
 &lt;p&gt;Achieving high performance adds complexity.
 This post provides an overview of the techniques used in DataFusion to selectively read Parquet files.&lt;/p&gt;
-&lt;h3 id="the-pipeline"&gt;The pipeline&lt;a class="headerlink" href="#the-pipeline" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h3&gt;
+&lt;h3 id="the-pipeline"&gt;The pipeline&lt;a class="headerlink" href="#the-pipeline" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;The diagram below illustrates the &lt;a href="https://docs.rs/datafusion/46.0.0/datafusion/datasource/physical_plan/parquet/source/struct.ParquetSource.html"&gt;Parquet reading pipeline&lt;/a&gt; in DataFusion, highlighting how data flows through various pruning stages before being converted to Arrow format:&lt;/p&gt;
 &lt;p&gt;&lt;img alt="Parquet pruning pipeline in DataFusion" class="img-responsive" src="/blog/images/parquet-pruning/read-parquet.jpg" width="100%"/&gt;&lt;/p&gt;
-&lt;h4 id="background-parquet-file-structure"&gt;Background: Parquet file structure&lt;a class="headerlink" href="#background-parquet-file-structure" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h4&gt;
+&lt;h4 id="background-parquet-file-structure"&gt;Background: Parquet file structure&lt;a class="headerlink" href="#background-parquet-file-structure" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h4&gt;
 &lt;p&gt;As shown in the figure above, each Parquet file has multiple row groups. Each row group contains a set of columns, and each column contains a set of pages.&lt;/p&gt;
 &lt;p&gt;Pages are the smallest units of data in Parquet files and typically contain compressed and encoded values for a specific column. This hierarchical structure enables efficient columnar access and forms the foundation for the pruning techniques we'll discuss.&lt;/p&gt;
 &lt;p&gt;Check out &lt;a href="https://www.influxdata.com/blog/querying-parquet-millisecond-latency/"&gt;Querying Parquet with Millisecond Latency&lt;/a&gt; for more details on the Parquet file structure.&lt;/p&gt;
-&lt;h4 id="1-read-metadata"&gt;1. Read metadata&lt;a class="headerlink" href="#1-read-metadata" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h4&gt;
+&lt;h4 id="1-read-metadata"&gt;1. Read metadata&lt;a class="headerlink" href="#1-read-metadata" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h4&gt;
 &lt;p&gt;DataFusion first reads the &lt;a href="https://parquet.apache.org/docs/file-format/metadata/"&gt;Parquet metadata&lt;/a&gt; to understand the data in the file. 
 Metadata often includes data schema, the exact location of each row group and column chunk, and their corresponding statistics (e.g., min/max values).
 It also optionally includes &lt;a href="https://parquet.apache.org/docs/file-format/pageindex/"&gt;page-level stats&lt;/a&gt; and &lt;a href="https://www.influxdata.com/blog/using-parquets-bloom-filters/"&gt;Bloom filters&lt;/a&gt;.
@@ -347,30 +351,30 @@ This information is used to prune the file before reading the actual data.&lt;/p
 &lt;p&gt;&lt;a href="https://github.com/apache/datafusion/blob/31701b8dc9c6486856c06a29a32107d9f4549cec/datafusion/core/src/datasource/physical_plan/parquet/reader.rs#L118"&gt;Fetching metadata&lt;/a&gt; requires up to two network requests: one to read the footer size from the end of the file, and another to read the footer itself. &lt;/p&gt;
 &lt;p&gt;&lt;a href="https://www.influxdata.com/blog/how-good-parquet-wide-tables/"&gt;Decoding metadata&lt;/a&gt; is generally fast since it only requires parsing a small amount of data. However, for tables with hundreds or thousands of columns, the metadata can become quite large and decoding it can become a bottleneck. This is particularly noticeable when scanning many small files.&lt;/p&gt;
 &lt;p&gt;Reading metadata is latency-critical, so DataFusion allows users to cache metadata through the &lt;a href="https://github.com/apache/datafusion/blob/31701b8dc9c6486856c06a29a32107d9f4549cec/datafusion/core/src/datasource/physical_plan/parquet/reader.rs#L39"&gt;ParquetFileReaderFactory&lt;/a&gt; trait.&lt;/p&gt;
-&lt;h4 id="2-prune-by-projection"&gt;2. Prune by projection&lt;a class="headerlink" href="#2-prune-by-projection" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h4&gt;
+&lt;h4 id="2-prune-by-projection"&gt;2. Prune by projection&lt;a class="headerlink" href="#2-prune-by-projection" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h4&gt;
 &lt;p&gt;The simplest yet perhaps most effective pruning is to read only the columns that are needed.
 This is because queries usually don't select all columns, e.g., &lt;code&gt;SELECT a FROM table&lt;/code&gt; only reads column &lt;code&gt;a&lt;/code&gt;.
 As a &lt;strong&gt;columnar&lt;/strong&gt; format, Parquet allows DataFusion to &lt;a href="https://github.com/apache/datafusion/blob/31701b8dc9c6486856c06a29a32107d9f4549cec/datafusion/core/src/datasource/physical_plan/parquet/mod.rs#L778"&gt;only read&lt;/a&gt; the &lt;strong&gt;columns&lt;/strong&gt; that are needed.&lt;/p&gt;
 &lt;p&gt;This projection pruning happens at the column level and can dramatically reduce I/O when working with wide tables where queries typically access only a small subset of columns.&lt;/p&gt;
-&lt;h4 id="3-prune-by-row-group-stats-and-bloom-filters"&gt;3. Prune by row group stats and Bloom filters&lt;a class="headerlink" href="#3-prune-by-row-group-stats-and-bloom-filters" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h4&gt;
+&lt;h4 id="3-prune-by-row-group-stats-and-bloom-filters"&gt;3. Prune by row group stats and Bloom filters&lt;a class="headerlink" href="#3-prune-by-row-group-stats-and-bloom-filters" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h4&gt;
 &lt;p&gt;Each row group has &lt;a href="https://github.com/apache/datafusion/blob/31701b8dc9c6486856c06a29a32107d9f4549cec/datafusion/core/src/physical_optimizer/pruning.rs#L81"&gt;basic stats&lt;/a&gt; like min/max values for each column.
 DataFusion applies the query predicates to these stats to prune row groups, e.g., &lt;code&gt;SELECT * FROM table WHERE a &amp;gt; 10&lt;/code&gt; will only read row groups where &lt;code&gt;a&lt;/code&gt; has a max value greater than 10.&lt;/p&gt;
 &lt;p&gt;Sometimes min/max stats are too simple to prune effectively, so Parquet also supports &lt;a href="https://www.influxdata.com/blog/using-parquets-bloom-filters/"&gt;Bloom filters&lt;/a&gt;. DataFusion &lt;a href="https://github.com/apache/datafusion/blob/31701b8dc9c6486856c06a29a32107d9f4549cec/datafusion/core/src/datasource/physical_plan/parquet/opener.rs#L202"&gt;uses Bloom filters when available&lt;/a&gt;.&lt;/p&gt;
 &lt;p&gt;Bloom filters are particularly effective for equality predicates (&lt;code&gt;WHERE a = 10&lt;/code&gt;) and can significantly reduce the number of row groups that need to be read for point queries or queries with highly selective predicates.&lt;/p&gt;
-&lt;h4 id="4-prune-by-page-stats"&gt;4. Prune by page stats&lt;a class="headerlink" href="#4-prune-by-page-stats" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h4&gt;
+&lt;h4 id="4-prune-by-page-stats"&gt;4. Prune by page stats&lt;a class="headerlink" href="#4-prune-by-page-stats" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h4&gt;
 &lt;p&gt;Parquet optionally supports &lt;a href="https://github.com/apache/parquet-format/blob/master/PageIndex.md"&gt;page-level stats&lt;/a&gt; -- similar to row group stats but more fine-grained.
 DataFusion implements &lt;a href="https://github.com/apache/datafusion/blob/31701b8dc9c6486856c06a29a32107d9f4549cec/datafusion/core/src/datasource/physical_plan/parquet/opener.rs#L219"&gt;page pruning&lt;/a&gt; when the stats are present.&lt;/p&gt;
 &lt;p&gt;Page-level pruning provides an additional layer of filtering after row group pruning. It allows DataFusion to skip individual pages within a row group, further reducing the amount of data that needs to be read and decoded.&lt;/p&gt;
-&lt;h4 id="5-read-from-storage"&gt;5. Read from storage&lt;a class="headerlink" href="#5-read-from-storage" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h4&gt;
+&lt;h4 id="5-read-from-storage"&gt;5. Read from storage&lt;a class="headerlink" href="#5-read-from-storage" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h4&gt;
 &lt;p&gt;Now we (hopefully) have pruned the Parquet file into small ranges of bytes, i.e., the &lt;a href="https://github.com/apache/datafusion/blob/76a7789ace33ced54c973fa0d5fc9d1866e1bf19/datafusion/datasource-parquet/src/access_plan.rs#L86"&gt;Access Plan&lt;/a&gt;.
 The last step is to &lt;a href="https://github.com/apache/datafusion/blob/31701b8dc9c6486856c06a29a32107d9f4549cec/datafusion/core/src/datasource/physical_plan/parquet/reader.rs#L103"&gt;make requests&lt;/a&gt; to fetch those bytes and decode them into Arrow RecordBatch. &lt;/p&gt;
-&lt;h3 id="preview-of-coming-attractions-filter-pushdown"&gt;Preview of coming attractions: filter pushdown&lt;a class="headerlink" href="#preview-of-coming-attractions-filter-pushdown" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h3&gt;
+&lt;h3 id="preview-of-coming-attractions-filter-pushdown"&gt;Preview of coming attractions: filter pushdown&lt;a class="headerlink" href="#preview-of-coming-attractions-filter-pushdown" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;So far we have discussed techniques that prune the Parquet file using only the metadata, i.e., before reading the actual data.&lt;/p&gt;
 &lt;p&gt;Filter pushdown, also known as predicate pushdown or late materialization, is a technique that prunes data during scanning, with filters being generated and applied in the Parquet reader.&lt;/p&gt;
 &lt;p&gt;&lt;img alt="Filter pushdown in DataFusion" class="img-responsive" src="/blog/images/parquet-pruning/filter-pushdown.jpg" width="100%"/&gt;&lt;/p&gt;
 &lt;p&gt;Unlike metadata-based pruning which works at the row group or page level, filter pushdown operates at the row level, allowing DataFusion to filter out individual rows that don't match the query predicates during the decoding process.&lt;/p&gt;
 &lt;p&gt;DataFusion &lt;a href="https://github.com/apache/datafusion/blob/31701b8dc9c6486856c06a29a32107d9f4549cec/datafusion/core/src/datasource/physical_plan/parquet/row_filter.rs#L154"&gt;implements filter pushdown&lt;/a&gt; but has &lt;a href="https://github.com/apache/datafusion/blob/31701b8dc9c6486856c06a29a32107d9f4549cec/datafusion/common/src/config.rs#L382"&gt;not enabled it by default&lt;/a&gt; due to &lt;a href="https://github.com/apache/datafusion/issues/3463"&gt;some performance regressions&lt;/a&gt;.&lt;/p&gt;
 &lt;p&gt;We are working to remove the &lt;a href="https://github.com/apache/arrow-rs/issues/5523#issuecomment-2429470872"&gt;remaining performance issues&lt;/a&gt; and enable it by default, which we will discuss in the next blog post.&lt;/p&gt;
-&lt;h3 id="conclusion"&gt;Conclusion&lt;a class="headerlink" href="#conclusion" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h3&gt;
+&lt;h3 id="conclusion"&gt;Conclusion&lt;a class="headerlink" href="#conclusion" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;DataFusion employs a multi-step approach to Parquet pruning, from column projection to row group stats, page stats, and potentially row-level filtering. 
 Each step may reduce the amount of data to be read and processed, significantly improving query performance.&lt;/p&gt;</content><category term="blog"></category></entry></feed>

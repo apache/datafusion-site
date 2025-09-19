@@ -44,6 +44,21 @@
         </h1>
         <p>Posted on: Sat 19 April 2025 by Aditya Singh Rathore, Andrew Lamb</p>
 
+        <aside class="d-md-none mb-2">
+          <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#understanding-window-functions-in-sql">Understanding Window Functions in SQL</a></li>
+<li><a href="#user-defined-window-functions">User Defined Window Functions</a></li>
+<li><a href="#understanding-sliding-window">Understanding Sliding Window</a></li>
+<li><a href="#why-computing-sliding-windows-is-hard">Why Computing Sliding Windows Is Hard</a></li>
+<li><a href="#how-datafusion-evaluates-window-functions-quickly">How DataFusion Evaluates Window Functions Quickly</a><ul>
+<li><a href="#creating-your-own-window-function">Creating your own Window Function</a></li>
+<li><a href="#registering-a-window-udf">Registering a Window UDF</a></li>
+</ul>
+</li>
+<li><a href="#final-thoughts-and-recommendations">Final Thoughts and Recommendations</a></li>
+</ul>
+</div>
+        </aside>
 
         <!--
 {% comment %}
@@ -63,6 +78,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 {% endcomment %}
 -->
+
 <p>Window functions are a powerful feature in SQL, allowing for complex analytical computations over a subset of data. However, efficiently implementing them, especially sliding windows, can be quite challenging. With <a href="https://datafusion.apache.org/">Apache DataFusion</a>'s user-defined window functions, developers can easily take advantage of all the effort put into DataFusion's implementation.</p>
 <p>In this post, we'll explore:</p>
 <ul>
@@ -79,8 +95,8 @@ limitations under the License.
 <p>How to implement user-defined window functions in DataFusion</p>
 </li>
 </ul>
-<h2 id="understanding-window-functions-in-sql">Understanding Window Functions in SQL<a class="headerlink" href="#understanding-window-functions-in-sql" title="Permanent link">&para;</a></h2>
-<p>Imagine you're analyzing sales data and want insights without losing the finer details. This is where <strong><a href="https://en.wikipedia.org/wiki/Window_function_(SQL)">window functions</a></strong> come into play. Unlike <strong>GROUP BY</strong>, which condenses data, window functions let you retain each row while performing calculations over a defined <strong>range</strong> &mdash;like having a moving lens over your dataset.</p>
+<h2 id="understanding-window-functions-in-sql">Understanding Window Functions in SQL<a class="headerlink" href="#understanding-window-functions-in-sql" title="Permanent link">¶</a></h2>
+<p>Imagine you're analyzing sales data and want insights without losing the finer details. This is where <strong><a href="https://en.wikipedia.org/wiki/Window_function_(SQL)">window functions</a></strong> come into play. Unlike <strong>GROUP BY</strong>, which condenses data, window functions let you retain each row while performing calculations over a defined <strong>range</strong> —like having a moving lens over your dataset.</p>
 <p>Picture a business tracking daily sales. They need a running total to understand cumulative revenue trends without collapsing individual transactions. SQL makes this easy:</p>
 <pre><code class="language-sql">SELECT id, value, SUM(value) OVER (ORDER BY id) AS running_total
 FROM sales;
@@ -101,8 +117,8 @@ FROM sales;
 </code></pre>
 <p><strong>Figure 1</strong>: A row-by-row representation of how a 7-day moving average includes the previous 6 days and the current one.</p>
 <p>This helps in analytical queries where we need cumulative sums, moving averages, or ranking without losing individual records.</p>
-<h2 id="user-defined-window-functions">User Defined Window Functions<a class="headerlink" href="#user-defined-window-functions" title="Permanent link">&para;</a></h2>
-<p>DataFusion's <a href="https://datafusion.apache.org/user-guide/sql/window_functions.html">Built-in window functions</a> such as <code>first_value</code>, <code>rank</code> and <code>row_number</code> serve many common use cases, but sometimes custom logic is needed&mdash;for example:</p>
+<h2 id="user-defined-window-functions">User Defined Window Functions<a class="headerlink" href="#user-defined-window-functions" title="Permanent link">¶</a></h2>
+<p>DataFusion's <a href="https://datafusion.apache.org/user-guide/sql/window_functions.html">Built-in window functions</a> such as <code>first_value</code>, <code>rank</code> and <code>row_number</code> serve many common use cases, but sometimes custom logic is needed—for example:</p>
 <ul>
 <li>
 <p>Calculating moving averages with complex conditions (e.g. exponential averages, integrals, etc)</p>
@@ -119,31 +135,31 @@ FROM sales;
 to the variety of ways that window functions are called. I recommend reviewing the
 <a href="https://datafusion.apache.org/library-user-guide/adding-udfs.html#registering-a-window-udf">online documentation</a>
 for a description of which functions need to be implemented. </p>
-<h2 id="understanding-sliding-window">Understanding Sliding Window<a class="headerlink" href="#understanding-sliding-window" title="Permanent link">&para;</a></h2>
+<h2 id="understanding-sliding-window">Understanding Sliding Window<a class="headerlink" href="#understanding-sliding-window" title="Permanent link">¶</a></h2>
 <p>Sliding windows define a <strong>moving range</strong> of data over which aggregations are computed. Unlike simple cumulative functions, these windows are dynamically updated as new data arrives.</p>
 <p>For instance, if we want a 7-day moving average of sales:</p>
 <pre><code class="language-sql">SELECT date, sales, 
        AVG(sales) OVER (ORDER BY date ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) AS moving_avg
 FROM sales;
 </code></pre>
-<p>Here, each row&rsquo;s result is computed based on the last 7 days, making it computationally intensive as data grows.</p>
-<h2 id="why-computing-sliding-windows-is-hard">Why Computing Sliding Windows Is Hard<a class="headerlink" href="#why-computing-sliding-windows-is-hard" title="Permanent link">&para;</a></h2>
-<p>Imagine you&rsquo;re at a caf&eacute;, and the barista is preparing coffee orders. If they made each cup from scratch without using pre-prepared ingredients, the process would be painfully slow. This is exactly the problem with na&iuml;ve sliding window computations.</p>
+<p>Here, each row’s result is computed based on the last 7 days, making it computationally intensive as data grows.</p>
+<h2 id="why-computing-sliding-windows-is-hard">Why Computing Sliding Windows Is Hard<a class="headerlink" href="#why-computing-sliding-windows-is-hard" title="Permanent link">¶</a></h2>
+<p>Imagine you’re at a café, and the barista is preparing coffee orders. If they made each cup from scratch without using pre-prepared ingredients, the process would be painfully slow. This is exactly the problem with naïve sliding window computations.</p>
 <p>Computing sliding windows efficiently is tricky because:</p>
 <ul>
 <li>
 <p><strong>High Computation Costs:</strong> Just like making coffee from scratch for each customer, recalculating aggregates for every row is expensive.</p>
 </li>
 <li>
-<p><strong>Data Shuffling:</strong> In large distributed systems, data must often be shuffled between nodes, causing delays&mdash;like passing orders between multiple baristas who don&rsquo;t communicate efficiently.</p>
+<p><strong>Data Shuffling:</strong> In large distributed systems, data must often be shuffled between nodes, causing delays—like passing orders between multiple baristas who don’t communicate efficiently.</p>
 </li>
 <li>
-<p><strong>State Management:</strong> Keeping track of past computations is like remembering previous orders without writing them down&mdash;error-prone and inefficient.</p>
+<p><strong>State Management:</strong> Keeping track of past computations is like remembering previous orders without writing them down—error-prone and inefficient.</p>
 </li>
 </ul>
 <p>Many traditional query engines struggle to optimize these computations effectively, leading to sluggish performance.</p>
-<h2 id="how-datafusion-evaluates-window-functions-quickly">How DataFusion Evaluates Window Functions Quickly<a class="headerlink" href="#how-datafusion-evaluates-window-functions-quickly" title="Permanent link">&para;</a></h2>
-<p>In the world of big data, every millisecond counts. Imagine you&rsquo;re analyzing stock market data, tracking sensor readings from millions of IoT devices, or crunching through massive customer logs&mdash;speed matters. This is where <a href="https://datafusion.apache.org/">DataFusion</a> shines, making window function computations blazing fast. Let&rsquo;s break down how it achieves this remarkable performance.</p>
+<h2 id="how-datafusion-evaluates-window-functions-quickly">How DataFusion Evaluates Window Functions Quickly<a class="headerlink" href="#how-datafusion-evaluates-window-functions-quickly" title="Permanent link">¶</a></h2>
+<p>In the world of big data, every millisecond counts. Imagine you’re analyzing stock market data, tracking sensor readings from millions of IoT devices, or crunching through massive customer logs—speed matters. This is where <a href="https://datafusion.apache.org/">DataFusion</a> shines, making window function computations blazing fast. Let’s break down how it achieves this remarkable performance.</p>
 <p>DataFusion implements the battle tested sort-based approach described in <a href="https://www.vldb.org/pvldb/vol8/p1058-leis.pdf">this
 paper</a> which is also used in systems such as Postgresql and Vertica. The input
 is first sorted by both the <code>PARTITION BY</code> and <code>ORDER BY</code> expressions and
@@ -191,7 +207,7 @@ col | val
  D  | 30     &lt;--- partition 3
  D  | 30
 </code></pre>
-<h3 id="creating-your-own-window-function">Creating your own Window Function<a class="headerlink" href="#creating-your-own-window-function" title="Permanent link">&para;</a></h3>
+<h3 id="creating-your-own-window-function">Creating your own Window Function<a class="headerlink" href="#creating-your-own-window-function" title="Permanent link">¶</a></h3>
 <p>DataFusion supports <a href="https://datafusion.apache.org/library-user-guide/adding-udfs.html">user-defined window aggregates (UDWAs)</a>, meaning you can bring your own window function logic using the exact same APIs and performance as the built in functions.</p>
 <p>For example, we will declare a user defined window function that computes a moving average.</p>
 <pre><code class="language-rust">use datafusion::arrow::{array::{ArrayRef, Float64Array, AsArray}, datatypes::Float64Type};
@@ -259,7 +275,7 @@ fn make_partition_evaluator() -&gt; Result&lt;Box&lt;dyn PartitionEvaluator&gt;&
     Ok(Box::new(MyPartitionEvaluator::new()))
 }
 </code></pre>
-<h3 id="registering-a-window-udf">Registering a Window UDF<a class="headerlink" href="#registering-a-window-udf" title="Permanent link">&para;</a></h3>
+<h3 id="registering-a-window-udf">Registering a Window UDF<a class="headerlink" href="#registering-a-window-udf" title="Permanent link">¶</a></h3>
 <p>To register a Window UDF, you need to wrap the function implementation in a <a href="https://docs.rs/datafusion/latest/datafusion/logical_expr/struct.WindowUDF.html">WindowUDF</a> struct and then register it with the <code>SessionContext</code>. DataFusion provides the <a href="https://docs.rs/datafusion/latest/datafusion/logical_expr/fn.create_udwf.html">create_udwf</a> helper functions to make this easier. There is a lower level API with more functionality but is more complex, that is documented in <a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/advanced_udwf.rs">advanced_udwf.rs</a>.</p>
 <pre><code class="language-rust">use datafusion::logical_expr::{Volatility, create_udwf};
 use datafusion::arrow::datatypes::DataType;
@@ -286,7 +302,7 @@ let smooth_it = create_udwf(
 <p>The <strong>third argument</strong> is the return type of the function. I.e. in this case, the function returns an <code>Float64</code>.</p>
 </li>
 <li>
-<p>The <strong>fourth argument</strong> is the volatility of the function. In short, this is used to determine if the function&rsquo;s performance can be optimized in some situations. In this case, the function is <code>Immutable</code> because it always returns the same value for the same input. A random number generator would be <code>Volatile</code> because it returns a different value for the same input.</p>
+<p>The <strong>fourth argument</strong> is the volatility of the function. In short, this is used to determine if the function’s performance can be optimized in some situations. In this case, the function is <code>Immutable</code> because it always returns the same value for the same input. A random number generator would be <code>Volatile</code> because it returns a different value for the same input.</p>
 </li>
 <li>
 <p>The <strong>fifth argument</strong> is the function implementation. This is the function that we defined above.</p>
@@ -368,16 +384,16 @@ async fn main() -&gt; Result&lt;()&gt; {
 ...
 +-------+-------+--------------------+---------------------+
 </code></pre>
-<p>This gives you full flexibility to build <strong>domain-specific logic</strong> that plugs seamlessly into DataFusion&rsquo;s engine &mdash; all without sacrificing performance.</p>
-<h2 id="final-thoughts-and-recommendations">Final Thoughts and Recommendations<a class="headerlink" href="#final-thoughts-and-recommendations" title="Permanent link">&para;</a></h2>
+<p>This gives you full flexibility to build <strong>domain-specific logic</strong> that plugs seamlessly into DataFusion’s engine — all without sacrificing performance.</p>
+<h2 id="final-thoughts-and-recommendations">Final Thoughts and Recommendations<a class="headerlink" href="#final-thoughts-and-recommendations" title="Permanent link">¶</a></h2>
 <p>Window functions may be common in SQL, but <em>efficient and extensible</em> window functions in engines are rare. 
 While many databases support user defined scalar and user defined aggregate functions, user defined window functions are not as common and Datafusion making it easier for all .</p>
 <p>For anyone who is curious about <a href="https://datafusion.apache.org/">DataFusion</a> I highly recommend
 giving it a try. This post was designed to make it easier for new users to work with User Defined Window Functions by giving a few examples of how one might implement these.</p>
 <p>When it comes to designing UDFs, I strongly recommend reviewing the 
 <a href="https://datafusion.apache.org/library-user-guide/adding-udfs.html">Window functions</a> documentation.</p>
-<p>A heartfelt thank you to <a href="https://github.com/alamb">@alamb</a> and <a href="https://github.com/andygrove">@andygrove</a> for their invaluable reviews and thoughtful feedback&mdash;they&rsquo;ve been instrumental in shaping this post.</p>
-<p>The Apache Arrow and Apache DataFusion communities are vibrant, welcoming, and full of passionate developers building something truly powerful. If you&rsquo;re excited about high-performance analytics and want to be part of an open-source journey, I highly encourage you to explore the <a href="(https://datafusion.apache.org/)">official documentation</a> and dive into one of the many <a href="https://github.com/apache/datafusion/issues">open issues</a>. There&rsquo;s never been a better time to get involved!</p>
+<p>A heartfelt thank you to <a href="https://github.com/alamb">@alamb</a> and <a href="https://github.com/andygrove">@andygrove</a> for their invaluable reviews and thoughtful feedback—they’ve been instrumental in shaping this post.</p>
+<p>The Apache Arrow and Apache DataFusion communities are vibrant, welcoming, and full of passionate developers building something truly powerful. If you’re excited about high-performance analytics and want to be part of an open-source journey, I highly encourage you to explore the <a href="(https://datafusion.apache.org/)">official documentation</a> and dive into one of the many <a href="https://github.com/apache/datafusion/issues">open issues</a>. There’s never been a better time to get involved!</p>
 
 <!--
   Comments Section
@@ -409,6 +425,21 @@ giving it a try. This post was designed to make it easier for new users to work 
   <!-- Container where Giscus will render -->
   <div id="comment-thread"></div>
 </div>      </div>
+      <aside class="d-none d-md-block col-md-4 col-xl-3 ms-xl-2">
+        <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#understanding-window-functions-in-sql">Understanding Window Functions in SQL</a></li>
+<li><a href="#user-defined-window-functions">User Defined Window Functions</a></li>
+<li><a href="#understanding-sliding-window">Understanding Sliding Window</a></li>
+<li><a href="#why-computing-sliding-windows-is-hard">Why Computing Sliding Windows Is Hard</a></li>
+<li><a href="#how-datafusion-evaluates-window-functions-quickly">How DataFusion Evaluates Window Functions Quickly</a><ul>
+<li><a href="#creating-your-own-window-function">Creating your own Window Function</a></li>
+<li><a href="#registering-a-window-udf">Registering a Window UDF</a></li>
+</ul>
+</li>
+<li><a href="#final-thoughts-and-recommendations">Final Thoughts and Recommendations</a></li>
+</ul>
+</div>
+      </aside>
     </div>
   </div>
 </div>    

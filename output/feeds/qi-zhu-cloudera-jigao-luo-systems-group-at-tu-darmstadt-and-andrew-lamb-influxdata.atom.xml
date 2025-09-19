@@ -17,7 +17,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 {% endcomment %}
 --&gt;
-&lt;p&gt;It&amp;rsquo;s a common misconception that &lt;a href="https://parquet.apache.org/"&gt;Apache Parquet&lt;/a&gt; files are limited to basic Min/Max/Null Count statistics and Bloom filters, and that adding more advanced indexes requires changing the specification or creating a new file format. In fact, footer metadata and offset-based addressing already provide everything needed to embed …&lt;/p&gt;</summary><content type="html">&lt;!--
+
+&lt;p&gt;It’s a common misconception that &lt;a href="https://parquet.apache.org/"&gt;Apache Parquet&lt;/a&gt; files are limited to basic Min/Max/Null Count statistics and Bloom filters, and that adding more advanced indexes requires changing the specification or creating a new file format. In fact, footer metadata and offset-based addressing already provide everything needed to embed …&lt;/p&gt;</summary><content type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -35,7 +36,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 {% endcomment %}
 --&gt;
-&lt;p&gt;It&amp;rsquo;s a common misconception that &lt;a href="https://parquet.apache.org/"&gt;Apache Parquet&lt;/a&gt; files are limited to basic Min/Max/Null Count statistics and Bloom filters, and that adding more advanced indexes requires changing the specification or creating a new file format. In fact, footer metadata and offset-based addressing already provide everything needed to embed user-defined index structures within Parquet files without breaking compatibility with other Parquet readers.&lt;/p&gt;
+
+&lt;p&gt;It’s a common misconception that &lt;a href="https://parquet.apache.org/"&gt;Apache Parquet&lt;/a&gt; files are limited to basic Min/Max/Null Count statistics and Bloom filters, and that adding more advanced indexes requires changing the specification or creating a new file format. In fact, footer metadata and offset-based addressing already provide everything needed to embed user-defined index structures within Parquet files without breaking compatibility with other Parquet readers.&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Motivating Example:&lt;/strong&gt; Imagine your data has a &lt;code&gt;Nation&lt;/code&gt; column with dozens of distinct values across thousands of Parquet files. You execute:&lt;/p&gt;
 &lt;pre&gt;&lt;code class="language-sql"&gt;  SELECT AVG(sales_amount)
   FROM sales
@@ -44,7 +46,7 @@ limitations under the License.
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;Relying on the min/max statistics from the Parquet format will be ineffective at pruning files when &lt;code&gt;Nation&lt;/code&gt; spans "Argentina" through "Zimbabwe". Instead of relying on a Bloom Filter, you may want to store a list of every distinct &lt;code&gt;Nation&lt;/code&gt; value in the file near the end. At query time, your engine will read that tiny list and skip any file that does not contain 'Singapore'. This special distinct value index can yield dramatically better file‑pruning performance for your engine, all while preserving full compatibility with standard Parquet readers.&lt;/p&gt;
 &lt;p&gt;In this post, we review how indexes are stored in the Apache Parquet format, explain the mechanism for storing user-defined indexes, and finally show how to read and write a user-defined index using &lt;a href="https://datafusion.apache.org/"&gt;Apache DataFusion&lt;/a&gt;.&lt;/p&gt;
-&lt;h2 id="introduction"&gt;Introduction&lt;a class="headerlink" href="#introduction" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
+&lt;h2 id="introduction"&gt;Introduction&lt;a class="headerlink" href="#introduction" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;hr/&gt;
 &lt;p&gt;Apache Parquet is a popular columnar file format with well understood and &lt;a href="https://arrow.apache.org/blog/2022/12/26/querying-parquet-with-millisecond-latency/"&gt;production grade libraries for high‑performance analytics&lt;/a&gt;. Features like efficient encodings, column pruning, and predicate pushdown work well for many common query patterns. Apache DataFusion includes a &lt;a href="https://datafusion.apache.org/blog/2025/03/20/parquet-pruning/"&gt;highly optimized Parquet implementation&lt;/a&gt; and has excellent performance in general. However, some production query patterns require more than the statistics included in the Parquet format itself&lt;sup&gt;&lt;a href="#footnote1"&gt;1&lt;/a&gt;&lt;/sup&gt;.&lt;/p&gt;
 &lt;p&gt;Many systems improve query performance using &lt;em&gt;external&lt;/em&gt; indexes or other metadata in addition to Parquet. For example, Apache Iceberg's &lt;a href="https://iceberg.apache.org/docs/latest/performance/#scan-planning"&gt;Scan Planning&lt;/a&gt; uses metadata stored in separate files or an in memory cache, and the &lt;a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/parquet_index.rs"&gt;parquet_index.rs&lt;/a&gt; and &lt;a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/advanced_parquet_index.rs"&gt;advanced_parquet_index.rs&lt;/a&gt; examples in the DataFusion repository use external files for Parquet pruning (skipping).&lt;/p&gt;
@@ -54,8 +56,8 @@ limitations under the License.
 &lt;li&gt;&lt;strong&gt;Synchronization Risks:&lt;/strong&gt; The external index may become out of sync with the Parquet data if you do not manage it carefully.&lt;/li&gt;
 &lt;/ul&gt;
 &lt;p&gt;Proponents have even cited these drawbacks as justification for new file formats, such as Microsoft's &lt;a href="https://github.com/microsoft/amudai/blob/main/docs/spec/src/what_about_parquet.md"&gt;Amudai&lt;/a&gt;.&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;However, Parquet is extensible with user-defined indexes&lt;/strong&gt;: Parquet tolerates unknown bytes within the file body and permits arbitrary key/value pairs in its footer metadata. These two features enable &lt;strong&gt;embedding&lt;/strong&gt; user-defined indexes directly in the file&amp;mdash;no extra files, no format forks, and no compatibility breakage. &lt;/p&gt;
-&lt;h2 id="parquet-file-anatomy-standard-index-structures"&gt;Parquet File Anatomy &amp;amp; Standard Index Structures&lt;a class="headerlink" href="#parquet-file-anatomy-standard-index-structures" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;&lt;strong&gt;However, Parquet is extensible with user-defined indexes&lt;/strong&gt;: Parquet tolerates unknown bytes within the file body and permits arbitrary key/value pairs in its footer metadata. These two features enable &lt;strong&gt;embedding&lt;/strong&gt; user-defined indexes directly in the file—no extra files, no format forks, and no compatibility breakage. &lt;/p&gt;
+&lt;h2 id="parquet-file-anatomy-standard-index-structures"&gt;Parquet File Anatomy &amp;amp; Standard Index Structures&lt;a class="headerlink" href="#parquet-file-anatomy-standard-index-structures" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;hr/&gt;
 &lt;p&gt;Logically, Parquet files contain row groups, each with column chunks, which in turn contain data pages. Physically, a Parquet file is a sequence of bytes with a Thrift-encoded footer metadata containing metadata about the file structure. The footer metadata includes the schema, row groups, column chunks, and other metadata required to read the file.&lt;/p&gt;
 &lt;p&gt;The Parquet format includes three main types&lt;sup&gt;&lt;a href="#footnote2"&gt;2&lt;/a&gt;&lt;/sup&gt; of optional index structures:&lt;/p&gt;
@@ -75,7 +77,7 @@ limitations under the License.
 &lt;p&gt;&lt;strong&gt;Figure 1&lt;/strong&gt;: Parquet file layout with standard index structures (as written by arrow-rs).&lt;/p&gt;
 &lt;p&gt;Only the Min/Max/Null Count Statistics are stored inline in the Parquet footer metadata. The Page Index and Bloom Filters are typically stored in the file body before the Thrift-encoded footer metadata. The locations of these index structures are recorded in the footer metadata, as shown in Figure 1. Parquet readers that do not understand these structures simply ignore them.&lt;/p&gt;
 &lt;p&gt;Modern Parquet writers create these indexes automatically and provide APIs to control their generation and placement. For example, the &lt;a href="https://docs.rs/parquet/latest/parquet/"&gt;Rust Parquet Library&lt;/a&gt; provides &lt;a href="https://docs.rs/parquet/latest/parquet/file/properties/struct.WriterProperties.html"&gt;Parquet WriterProperties&lt;/a&gt;, &lt;a href="https://docs.rs/parquet/latest/parquet/file/properties/enum.EnabledStatistics.html"&gt;EnabledStatistics&lt;/a&gt;, and &lt;a href="https://docs.rs/parquet/latest/parquet/file/properties/enum.BloomFilterPosition.html"&gt;BloomFilterPosition&lt;/a&gt;.&lt;/p&gt;
-&lt;h2 id="embedding-user-defined-indexes-in-parquet-files"&gt;Embedding User Defined Indexes in Parquet Files&lt;a class="headerlink" href="#embedding-user-defined-indexes-in-parquet-files" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
+&lt;h2 id="embedding-user-defined-indexes-in-parquet-files"&gt;Embedding User Defined Indexes in Parquet Files&lt;a class="headerlink" href="#embedding-user-defined-indexes-in-parquet-files" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;hr/&gt;
 &lt;p&gt;Embedding user-defined indexes in Parquet files is straightforward and follows the same principles as standard index structures&lt;sup&gt;&lt;a href="#footnote6"&gt;6&lt;/a&gt;&lt;/sup&gt;:&lt;/p&gt;
 &lt;ol&gt;
@@ -96,7 +98,7 @@ limitations under the License.
 &lt;p&gt;Row group or page-level distinct sets: a finer-grained version of the file-level example in this blog.&lt;/p&gt;
 &lt;/li&gt;
 &lt;li&gt;
-&lt;p&gt;&lt;a href="https://en.wikipedia.org/wiki/HyperLogLog"&gt;HyperLogLog&lt;/a&gt; sketches for distinct value estimation, addressing a common criticism&lt;sup&gt;3&lt;/sup&gt; of Parquet&amp;rsquo;s lack of cardinality estimation.&lt;/p&gt;
+&lt;p&gt;&lt;a href="https://en.wikipedia.org/wiki/HyperLogLog"&gt;HyperLogLog&lt;/a&gt; sketches for distinct value estimation, addressing a common criticism&lt;sup&gt;3&lt;/sup&gt; of Parquet’s lack of cardinality estimation.&lt;/p&gt;
 &lt;/li&gt;
 &lt;li&gt;
 &lt;p&gt;Additional zone maps (&lt;a href="https://www.vldb.org/conf/1998/p476.pdf"&gt;small materialized aggregates&lt;/a&gt;) such as precomputed &lt;code&gt;sum&lt;/code&gt;s at the column chunk or data page level for faster query execution.&lt;/p&gt;
@@ -105,10 +107,10 @@ limitations under the License.
 &lt;p&gt;Histograms or samples at the row group or column chunk level for predicate selectivity estimates.&lt;/p&gt;
 &lt;/li&gt;
 &lt;/ol&gt;
-&lt;h2 id="example-embedding-a-user-defined-distinct-value-index-in-parquet-files"&gt;Example: Embedding a User Defined Distinct Value Index in Parquet Files&lt;a class="headerlink" href="#example-embedding-a-user-defined-distinct-value-index-in-parquet-files" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
+&lt;h2 id="example-embedding-a-user-defined-distinct-value-index-in-parquet-files"&gt;Example: Embedding a User Defined Distinct Value Index in Parquet Files&lt;a class="headerlink" href="#example-embedding-a-user-defined-distinct-value-index-in-parquet-files" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;hr/&gt;
 &lt;p&gt;This section demonstrates how to embed a simple distinct value index in Parquet files and use it for file-level pruning (skipping) in DataFusion. The full example is available in the DataFusion repository at &lt;a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/parquet_embedded_index.rs"&gt;parquet_embedded_index.rs&lt;/a&gt;.&lt;/p&gt;
-&lt;p&gt;Note that the example requires &lt;strong&gt;&lt;a href="https://crates.io/crates/parquet/55.2.0"&gt;arrow‑rs v55.2.0&lt;/a&gt;&lt;/strong&gt; or later, which includes the new &amp;ldquo;buffered write&amp;rdquo; API (&lt;a href="https://github.com/apache/arrow-rs/pull/7714"&gt;apache/arrow-rs#7714&lt;/a&gt;) to keep the internal byte count in sync after appending index bytes immediately after data pages.&lt;/p&gt;
+&lt;p&gt;Note that the example requires &lt;strong&gt;&lt;a href="https://crates.io/crates/parquet/55.2.0"&gt;arrow‑rs v55.2.0&lt;/a&gt;&lt;/strong&gt; or later, which includes the new “buffered write” API (&lt;a href="https://github.com/apache/arrow-rs/pull/7714"&gt;apache/arrow-rs#7714&lt;/a&gt;) to keep the internal byte count in sync after appending index bytes immediately after data pages.&lt;/p&gt;
 &lt;p&gt;This example is intentionally simple for clarity, but you can adapt the same approach for any index type or data types. The high-level design is:&lt;/p&gt;
 &lt;ol&gt;
 &lt;li&gt;
@@ -126,7 +128,7 @@ limitations under the License.
 &lt;/ol&gt;
 &lt;p&gt;The &lt;code&gt;TableProvider&lt;/code&gt; simply reads the footer metadata to discover the index offset, seeks to that offset and deserializes the index, and then uses the index to speed up processing (e.g., skip files, row groups, data pages, etc.).&lt;/p&gt;
 &lt;p&gt;The resulting Parquet files remain fully compatible with other tools such as DuckDB and Spark, which simply ignore the unknown index bytes and key/value metadata.&lt;/p&gt;
-&lt;h3 id="introduction-to-distinct-value-indexes"&gt;Introduction to Distinct Value Indexes&lt;a class="headerlink" href="#introduction-to-distinct-value-indexes" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h3&gt;
+&lt;h3 id="introduction-to-distinct-value-indexes"&gt;Introduction to Distinct Value Indexes&lt;a class="headerlink" href="#introduction-to-distinct-value-indexes" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;hr/&gt;
 &lt;p&gt;A &lt;strong&gt;distinct value index&lt;/strong&gt; stores the unique values of a specific column. This type of index is effective for columns with a small number of distinct values and can be used to quickly skip files that do not match the query. These indexes are popular in several engines, such as the &lt;a href="https://clickhouse.com/docs/optimize/skipping-indexes#set"&gt;"set" Skip Index in ClickHouse&lt;/a&gt; and the &lt;a href="https://docs.influxdata.com/influxdb3/enterprise/admin/distinct-value-cache/"&gt;Distinct Value Cache&lt;/a&gt; in InfluxDB 3.0.&lt;/p&gt;
 &lt;p&gt;For example, if the files contain a column named &lt;code&gt;Category&lt;/code&gt; like this:&lt;/p&gt;
@@ -170,38 +172,38 @@ struct DistinctIndex {
    inner: HashSet&amp;lt;String&amp;gt;,
 }
 &lt;/code&gt;&lt;/pre&gt;
-&lt;h3 id="file-layout-with-distinct-value-index"&gt;File Layout with Distinct Value Index&lt;a class="headerlink" href="#file-layout-with-distinct-value-index" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h3&gt;
+&lt;h3 id="file-layout-with-distinct-value-index"&gt;File Layout with Distinct Value Index&lt;a class="headerlink" href="#file-layout-with-distinct-value-index" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;hr/&gt;
 &lt;p&gt;In this example, we write a distinct value index for the &lt;code&gt;Category&lt;/code&gt; column into the Parquet file body after all the data pages, and record the index location in the footer metadata. The resulting file layout looks like this:&lt;/p&gt;
-&lt;pre&gt;&lt;code class="language-text"&gt;                  &amp;boxdr;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxdl;                           
-                  &amp;boxv;&amp;boxdr;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxdl; &amp;boxv;                           
-                  &amp;boxv;&amp;boxv;     DataPage      &amp;boxv; &amp;boxv;                           
-                  &amp;boxv;&amp;boxur;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxul; &amp;boxv;                           
- Standard Parquet &amp;boxv;&amp;boxdr;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxdl; &amp;boxv;                           
- Data Pages       &amp;boxv;&amp;boxv;     DataPage      &amp;boxv; &amp;boxv;                           
-                  &amp;boxv;&amp;boxur;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxul; &amp;boxv;                           
-                  &amp;boxv;        ...           &amp;boxv;                           
-                  &amp;boxv;&amp;boxdr;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxdl; &amp;boxv;                           
-                  &amp;boxv;&amp;boxv;     DataPage      &amp;boxv; &amp;boxv;                           
-                  &amp;boxv;&amp;boxur;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxul; &amp;boxv;                           
-                  &amp;boxv;┏━━━━━━━━━━━━━━━━━━━┓ &amp;boxv;                           
-Non standard      &amp;boxv;┃                   ┃ &amp;boxv;                           
-index (ignored by &amp;boxv;┃Custom Binary Index┃ &amp;boxv;                           
-other Parquet     &amp;boxv;┃ (Distinct Values) ┃◀&amp;boxv;&amp;boxh; &amp;boxh; &amp;boxh;                      
-readers)          &amp;boxv;┃                   ┃ &amp;boxv;     &amp;boxv;                     
-                  &amp;boxv;┗━━━━━━━━━━━━━━━━━━━┛ &amp;boxv;                           
-Standard Parquet  &amp;boxv;┏━━━━━━━━━━━━━━━━━━━┓ &amp;boxv;     &amp;boxv;  key/value metadata
-Page Index        &amp;boxv;┃    Page Index     ┃ &amp;boxv;        contains location  
-                  &amp;boxv;┗━━━━━━━━━━━━━━━━━━━┛ &amp;boxv;     &amp;boxv;  of special index   
-                  &amp;boxv;&amp;boxDR;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxDL; &amp;boxv;                           
-                  &amp;boxv;&amp;boxV; Parquet Footer w/ &amp;boxV; &amp;boxv;     &amp;boxv;                     
-                  &amp;boxv;&amp;boxV;     Metadata      &amp;boxV; &amp;boxvh; &amp;boxh; &amp;boxh;                       
-                  &amp;boxv;&amp;boxV; (Thrift Encoded)  &amp;boxV; &amp;boxv;                           
-                  &amp;boxv;&amp;boxUR;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxH;&amp;boxUL; &amp;boxv;                           
-                  &amp;boxur;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxul;                           
+&lt;pre&gt;&lt;code class="language-text"&gt;                  ┌──────────────────────┐                           
+                  │┌───────────────────┐ │                           
+                  ││     DataPage      │ │                           
+                  │└───────────────────┘ │                           
+ Standard Parquet │┌───────────────────┐ │                           
+ Data Pages       ││     DataPage      │ │                           
+                  │└───────────────────┘ │                           
+                  │        ...           │                           
+                  │┌───────────────────┐ │                           
+                  ││     DataPage      │ │                           
+                  │└───────────────────┘ │                           
+                  │┏━━━━━━━━━━━━━━━━━━━┓ │                           
+Non standard      │┃                   ┃ │                           
+index (ignored by │┃Custom Binary Index┃ │                           
+other Parquet     │┃ (Distinct Values) ┃◀│─ ─ ─                      
+readers)          │┃                   ┃ │     │                     
+                  │┗━━━━━━━━━━━━━━━━━━━┛ │                           
+Standard Parquet  │┏━━━━━━━━━━━━━━━━━━━┓ │     │  key/value metadata
+Page Index        │┃    Page Index     ┃ │        contains location  
+                  │┗━━━━━━━━━━━━━━━━━━━┛ │     │  of special index   
+                  │╔═══════════════════╗ │                           
+                  │║ Parquet Footer w/ ║ │     │                     
+                  │║     Metadata      ║ ┼ ─ ─                       
+                  │║ (Thrift Encoded)  ║ │                           
+                  │╚═══════════════════╝ │                           
+                  └──────────────────────┘                           
 
 &lt;/code&gt;&lt;/pre&gt;
-&lt;h3 id="serializing-the-distinctvalue-index"&gt;Serializing the Distinct‑Value Index&lt;a class="headerlink" href="#serializing-the-distinctvalue-index" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h3&gt;
+&lt;h3 id="serializing-the-distinctvalue-index"&gt;Serializing the Distinct‑Value Index&lt;a class="headerlink" href="#serializing-the-distinctvalue-index" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;hr/&gt;
 &lt;p&gt;The example uses a simple newline‑separated UTF‑8 format as the binary format. The code to serialize the distinct index is shown below:&lt;/p&gt;
 &lt;pre&gt;&lt;code class="language-rust"&gt;/// Magic bytes to identify our custom index format
@@ -255,7 +257,7 @@ fn serialize&amp;lt;W: Write + Send&amp;gt;(
 &lt;/li&gt;
 &lt;/ol&gt;
 &lt;p&gt;Note: Use the &lt;a href="https://docs.rs/parquet/latest/parquet/arrow/arrow_writer/struct.ArrowWriter.html#method.write_all"&gt;ArrowWriter::write_all&lt;/a&gt; API to ensure the offsets in the footer metadata are correctly tracked. &lt;/p&gt;
-&lt;h3 id="reading-the-index"&gt;Reading the Index&lt;a class="headerlink" href="#reading-the-index" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h3&gt;
+&lt;h3 id="reading-the-index"&gt;Reading the Index&lt;a class="headerlink" href="#reading-the-index" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;hr/&gt;
 &lt;p&gt;This code reads the distinct index from a Parquet file:&lt;/p&gt;
 &lt;pre&gt;&lt;code class="language-rust"&gt;/// Read a `DistinctIndex` from a Parquet file
@@ -328,7 +330,7 @@ fn read_distinct_index(path: &amp;amp;Path) -&amp;gt; Result&amp;lt;DistinctInde
 &lt;p&gt;Reads the index bytes, converts them to a &lt;code&gt;String&lt;/code&gt;, and splits into lines to populate the &lt;code&gt;HashSet&amp;lt;String&amp;gt;&lt;/code&gt;.&lt;/p&gt;
 &lt;/li&gt;
 &lt;/ol&gt;
-&lt;h3 id="extending-datafusions-tableprovider"&gt;Extending DataFusion&amp;rsquo;s &lt;code&gt;TableProvider&lt;/code&gt;&lt;a class="headerlink" href="#extending-datafusions-tableprovider" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h3&gt;
+&lt;h3 id="extending-datafusions-tableprovider"&gt;Extending DataFusion’s &lt;code&gt;TableProvider&lt;/code&gt;&lt;a class="headerlink" href="#extending-datafusions-tableprovider" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;hr/&gt;
 &lt;p&gt;To use the distinct index for file-level pruning, extend DataFusion's &lt;code&gt;TableProvider&lt;/code&gt; to read the index and apply it during query execution:&lt;/p&gt;
 &lt;pre&gt;&lt;code class="language-rust"&gt;impl TableProvider for DistinctIndexTable {
@@ -425,7 +427,7 @@ fn read_distinct_index(path: &amp;amp;Path) -&amp;gt; Result&amp;lt;DistinctInde
 &lt;p&gt;Builds a &lt;code&gt;FileScanConfig&lt;/code&gt; with only the files that match the filter.&lt;/p&gt;
 &lt;/li&gt;
 &lt;/ol&gt;
-&lt;h3 id="putting-it-all-together"&gt;Putting It All Together&lt;a class="headerlink" href="#putting-it-all-together" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h3&gt;
+&lt;h3 id="putting-it-all-together"&gt;Putting It All Together&lt;a class="headerlink" href="#putting-it-all-together" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;To use the distinct index in a DataFusion query, write sample Parquet files with the embedded index, register the &lt;code&gt;DistinctIndexTable&lt;/code&gt; provider, and run a query with a predicate that can be optimized by the index as shown below.&lt;/p&gt;
 &lt;pre&gt;&lt;code class="language-rust"&gt;// Write sample files with embedded indexes
 tmp_dir.iter().for_each(|(name, vals)| {
@@ -440,29 +442,29 @@ ctx.register_table("t", provider)?;
 let df = ctx.sql("SELECT * FROM t WHERE category = 'foo'").await?;
 df.show().await?;
 &lt;/code&gt;&lt;/pre&gt;
-&lt;h3 id="verifying-compatibility-with-duckdb"&gt;Verifying Compatibility with DuckDB&lt;a class="headerlink" href="#verifying-compatibility-with-duckdb" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h3&gt;
+&lt;h3 id="verifying-compatibility-with-duckdb"&gt;Verifying Compatibility with DuckDB&lt;a class="headerlink" href="#verifying-compatibility-with-duckdb" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;hr/&gt;
 &lt;p&gt;Even with extra bytes and unknown metadata keys, standard Parquet readers ignore the index. You can verify this using another system such as DuckDB to read the Parquet created in the example. DuckDB will read the files without any issues, ignoring the custom index and unknown footer metadata.&lt;/p&gt;
 &lt;pre&gt;&lt;code class="language-sql"&gt;SELECT * FROM read_parquet('/tmp/parquet_index_data/*');
-&amp;boxdr;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxdl;
-&amp;boxv; category &amp;boxv;
-&amp;boxv; varchar  &amp;boxv;
-&amp;boxvr;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxvl;
-&amp;boxv; foo      &amp;boxv;
-&amp;boxv; bar      &amp;boxv;
-&amp;boxv; foo      &amp;boxv;
-&amp;boxv; baz      &amp;boxv;
-&amp;boxv; qux      &amp;boxv;
-&amp;boxv; foo      &amp;boxv;
-&amp;boxv; quux     &amp;boxv;
-&amp;boxv; quux     &amp;boxv;
-&amp;boxur;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxh;&amp;boxul;
+┌──────────┐
+│ category │
+│ varchar  │
+├──────────┤
+│ foo      │
+│ bar      │
+│ foo      │
+│ baz      │
+│ qux      │
+│ foo      │
+│ quux     │
+│ quux     │
+└──────────┘
 &lt;/code&gt;&lt;/pre&gt;
-&lt;h2 id="conclusion"&gt;Conclusion&lt;a class="headerlink" href="#conclusion" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
+&lt;h2 id="conclusion"&gt;Conclusion&lt;a class="headerlink" href="#conclusion" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;In this post, we explained how index structures are stored in Apache Parquet, how to embed user-defined indexes without changing the format, and how to use user-defined indexes to speed up query processing.&lt;/p&gt;
 &lt;p&gt;Parquet-based systems can achieve significant performance improvements for almost any query pattern while still retaining broad compatibility, using user-defined embedded indexes, external indexes&lt;sup&gt;&lt;a href="#footnote4"&gt;4&lt;/a&gt;&lt;/sup&gt; and rewriting files optimized for specific queries&lt;sup&gt;&lt;a href="#footnote5"&gt;5&lt;/a&gt;&lt;/sup&gt;. System designers can choose among the available options to make the appropriate trade-offs between operational complexity, performance, file size, and cost for their specific use cases.&lt;/p&gt;
 &lt;p&gt;We hope this post inspires you to explore custom indexes in Parquet files, rather than proposing new file formats and reimplementing existing features. The DataFusion community is excited to see how you use this feature in your projects!&lt;/p&gt;
-&lt;h2 id="about-the-authors"&gt;About the Authors&lt;a class="headerlink" href="#about-the-authors" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
+&lt;h2 id="about-the-authors"&gt;About the Authors&lt;a class="headerlink" href="#about-the-authors" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;&lt;a href="https://www.linkedin.com/in/qi-zhu-862330119/"&gt;Qi Zhu&lt;/a&gt; is a Senior Engineer at &lt;a href="https://www.cloudera.com/"&gt;Cloudera&lt;/a&gt;, an active contributor to &lt;a href="https://datafusion.apache.org/"&gt;Apache DataFusion&lt;/a&gt; and &lt;a href="https://arrow.apache.org/"&gt;Apache Arrow&lt;/a&gt;, a committer on &lt;a href="https://hadoop.apache.org/"&gt;Apache Hadoop&lt;/a&gt; and &lt;a href="https://yunikorn.apache.org/"&gt;Apache YuniKorn&lt;/a&gt;. He has extensive experience in distributed systems, scheduling, and large-scale computing.&lt;/p&gt;
 &lt;p&gt;&lt;a href="https://www.linkedin.com/in/jigao-luo/"&gt;Jigao Luo&lt;/a&gt; is a 1.5-year PhD student at
 &lt;a href="https://tuda.systems"&gt;Systems Group @ TU Darmstadt&lt;/a&gt;. Regarding Parquet, he is an external 
@@ -471,17 +473,17 @@ contributor to &lt;a href="https://github.com/rapidsai/cudf"&gt;NVIDIA RAPIDS cu
 &lt;a href="https://www.influxdata.com/"&gt;InfluxData&lt;/a&gt;, and a member of the &lt;a href="https://datafusion.apache.org/"&gt;Apache
 DataFusion&lt;/a&gt; and &lt;a href="https://arrow.apache.org/"&gt;Apache Arrow&lt;/a&gt; PMCs. He has been working on
 Databases and related systems more than 20 years.&lt;/p&gt;
-&lt;h2 id="about-datafusion"&gt;About DataFusion&lt;a class="headerlink" href="#about-datafusion" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
+&lt;h2 id="about-datafusion"&gt;About DataFusion&lt;a class="headerlink" href="#about-datafusion" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;&lt;a href="https://datafusion.apache.org/"&gt;Apache DataFusion&lt;/a&gt; is an extensible query engine toolkit, written
 in Rust, that uses &lt;a href="https://arrow.apache.org/"&gt;Apache Arrow&lt;/a&gt; as its in-memory format. DataFusion and
-similar technology are part of the next generation &amp;ldquo;Deconstructed Database&amp;rdquo;
+similar technology are part of the next generation “Deconstructed Database”
 architectures, where new systems are built on a foundation of fast, modular
 components, rather than as a single tightly integrated system.&lt;/p&gt;
 &lt;p&gt;The &lt;a href="https://datafusion.apache.org/contributor-guide/communication.html"&gt;DataFusion community&lt;/a&gt; is always looking for new contributors to help
 improve the project. If you are interested in learning more about how query
 execution works, help document or improve the DataFusion codebase, or just try
 it out, we would love for you to join us.&lt;/p&gt;
-&lt;h3 id="footnotes"&gt;Footnotes&lt;a class="headerlink" href="#footnotes" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h3&gt;
+&lt;h3 id="footnotes"&gt;Footnotes&lt;a class="headerlink" href="#footnotes" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;&lt;a id="footnote1"&gt;&lt;/a&gt;&lt;code&gt;1&lt;/code&gt;: A commonly cited example is highly selective predicates (e.g. &lt;code&gt;category = 'foo'&lt;/code&gt;) but for which the built in BloomFilters are not sufficient.&lt;/p&gt;
 &lt;p&gt;&lt;a id="footnote2"&gt;&lt;/a&gt;&lt;code&gt;2&lt;/code&gt;: There are other index structures, but they are either 1) not widely supported (such as statistics in the page headers) or 2) not yet widely used in practice at the time of this writing (such as &lt;a href="https://github.com/apache/parquet-format/blob/819adce0ec6aa848e56c56f20b9347f4ab50857f/src/main/thrift/parquet.thrift#L256"&gt;GeospatialStatistics&lt;/a&gt; and &lt;a href="https://github.com/apache/parquet-format/blob/819adce0ec6aa848e56c56f20b9347f4ab50857f/src/main/thrift/parquet.thrift#L194-L202"&gt;SizeStatistics&lt;/a&gt;).&lt;/p&gt;
 &lt;p&gt;&lt;a id="footnote3"&gt;&lt;/a&gt;&lt;code&gt;3&lt;/code&gt;: &lt;a href="https://dl.gi.de/items/2a8571f8-0ef2-481c-8ee9-05f82ee258c8"&gt;Seamless Integration of Parquet Files into Data Processing. / Rey, Alice; Freitag, Michael; Neumann, Thomas. / BTW 2023&lt;/a&gt;&lt;/p&gt;
