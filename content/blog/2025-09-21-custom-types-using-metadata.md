@@ -1,6 +1,6 @@
 ---
 layout: post
-title: Field metadata and extension type support in user defined functions
+title: Custom types in DataFusion using Metadata
 date: 2025-09-21
 author: Tim Saucer, Dewey Dunnington, Andrew Lamb
 categories: [core]
@@ -234,9 +234,6 @@ UDFs to [datafusion-python]. This requires version 48.0.0 or later.
 The metadata attached to the fields can be used to store *any* user data in key/value
 pairs. Some of the other use cases that have been identified include:
 
-- Storing statistics data for a column. If you have a table provider that can produce
-  column level statistics, then you can write functions that take advantage of that
-  data.
 - Creating output for downstream systems. One user of DataFusion produces
   [data visualizations] that are dependant upon metadata in record batch fields. By
   enabling metadata on output of user defined functions, we can now produce batches
@@ -248,6 +245,20 @@ pairs. Some of the other use cases that have been identified include:
   all of the columns that contain transform information and then allow the function
   to determine which columns to use based on the metadata. This allows for
   encapsulation of the transform logic within the user function.
+
+Based on the past experience of the authors, we recommend caution when using metadata
+for use cases other than type extension. One issue that can arises is that as columns
+are used to compute new fields, some functions may pass through the metadata and the
+semantic meaning may change. For example, suppose you decided to use metadata to
+store some kind of statistics for the entire stream of record batches. Then you pass
+that column through a filter that removes many rows of data. Your statistics
+metadata may now be invalid, even though it was passed through the filter.
+
+Similarly, if you use metadata to form relations between one column and another and
+the naming of the columns has changed at some point in your workflow, then the metadata
+may indicate an incorrect column of data it is referring to. This can be mitigated by
+not relying on column naming but rather adding additional metadata to all columns of
+interest.
 
 [data visualizations]: https://rerun.io/blog/column-chunks
 [transforms]: https://wiki.ros.org/tf2
