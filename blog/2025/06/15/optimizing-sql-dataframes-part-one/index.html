@@ -44,6 +44,20 @@
         </h1>
         <p>Posted on: Sun 15 June 2025 by alamb, akurmustafa</p>
 
+        <aside class="toc-container d-md-none mb-2">
+          <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#introduction">Introduction</a></li>
+<li><a href="#query-optimizer-background">Query Optimizer Background</a></li>
+<li><a href="#sql-dataframes-logicalplan-equivalence">SQL, DataFrames, LogicalPlan Equivalence</a></li>
+<li><a href="#example-of-query-optimizer">Example of Query Optimizer</a></li>
+<li><a href="#query-optimizer-implementation">Query Optimizer Implementation</a></li>
+<li><a href="#about-the-authors">About the Authors</a><ul>
+<li><a href="#notes">Notes</a></li>
+</ul>
+</li>
+</ul>
+</div>
+        </aside>
 
         <!--
 {% comment %}
@@ -63,11 +77,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 {% endcomment %}
 -->
+
 <p><em>Note: this blog was originally published <a href="https://www.influxdata.com/blog/optimizing-sql-dataframes-part-one/">on the InfluxData blog</a></em></p>
-<h2 id="introduction">Introduction<a class="headerlink" href="#introduction" title="Permanent link">&para;</a></h2>
-<p>Sometimes Query Optimizers are seen as a sort of black magic, <a href="https://15799.courses.cs.cmu.edu/spring2025/">&ldquo;the most
+<h2 id="introduction">Introduction<a class="headerlink" href="#introduction" title="Permanent link">¶</a></h2>
+<p>Sometimes Query Optimizers are seen as a sort of black magic, <a href="https://15799.courses.cs.cmu.edu/spring2025/">“the most
 challenging problem in computer
-science,&rdquo;</a> according to Father
+science,”</a> according to Father
 Pavlo, or some behind-the-scenes player. We believe this perception is because:</p>
 <ol>
 <li>
@@ -82,7 +97,7 @@ Pavlo, or some behind-the-scenes player. We believe this perception is because:<
 </li>
 <li>
 <p>Some optimizer tasks, such as access path selection and join order are known
-   challenges and not yet solved (practically)&mdash;maybe they really do require
+   challenges and not yet solved (practically)—maybe they really do require
    black magic 🤔.</p>
 </li>
 </ol>
@@ -95,21 +110,21 @@ Pavlo, or some behind-the-scenes player. We believe this perception is because:<
 <p><strong>Part 2:</strong></p>
 <ul>
 <li>Describe the optimization categories with examples and pointers to implementations.</li>
-<li>Describe <a href="https://datafusion.apache.org/">Apache DataFusion</a>&rsquo;s rationale and approach to query optimization, specifically for access path and join ordering.</li>
+<li>Describe <a href="https://datafusion.apache.org/">Apache DataFusion</a>’s rationale and approach to query optimization, specifically for access path and join ordering.</li>
 </ul>
 <p>After reading these blogs, we hope people will use DataFusion to:</p>
 <ol>
 <li>Build their own system specific optimizers.</li>
 <li>Perform practical academic research on optimization (especially researchers
-   working on new optimizations / join ordering&mdash;looking at you <a href="https://15799.courses.cs.cmu.edu/spring2025/">CMU
+   working on new optimizations / join ordering—looking at you <a href="https://15799.courses.cs.cmu.edu/spring2025/">CMU
    15-799</a>, next year).</li>
 </ol>
-<h2 id="query-optimizer-background">Query Optimizer Background<a class="headerlink" href="#query-optimizer-background" title="Permanent link">&para;</a></h2>
+<h2 id="query-optimizer-background">Query Optimizer Background<a class="headerlink" href="#query-optimizer-background" title="Permanent link">¶</a></h2>
 <p>The key pitch for querying databases, and likely the key to the longevity of SQL
-(despite people&rsquo;s love/hate relationship&mdash;see <a href="https://db.cs.cmu.edu/seminar2025/">SQL or Death? Seminar Series &ndash;
+(despite people’s love/hate relationship—see <a href="https://db.cs.cmu.edu/seminar2025/">SQL or Death? Seminar Series –
 Spring 2025</a>), is that it disconnects the
 <code>WHAT</code> you want to compute from the <code>HOW</code> to do it. SQL is a <em>declarative</em>
-language&mdash;it describes what answers are desired rather than an <em>imperative</em>
+language—it describes what answers are desired rather than an <em>imperative</em>
 language such as Python, where you describe how to do the computation as shown
 in Figure 1.</p>
 <p><img alt="Fig 1: Query Execution." class="img-responsive" src="/blog/images/optimizing-sql-dataframes/query-execution.png" width="80%"/></p>
@@ -120,7 +135,7 @@ The initial plan is correct, but slow. Then, the Query
 Optimizer rewrites the initial plan into an <em>optimized plan</em>, which computes
 the same results but faster and more efficiently. Finally, the Execution Engine
 executes the optimized plan producing results.</p>
-<h2 id="sql-dataframes-logicalplan-equivalence">SQL, DataFrames, LogicalPlan Equivalence<a class="headerlink" href="#sql-dataframes-logicalplan-equivalence" title="Permanent link">&para;</a></h2>
+<h2 id="sql-dataframes-logicalplan-equivalence">SQL, DataFrames, LogicalPlan Equivalence<a class="headerlink" href="#sql-dataframes-logicalplan-equivalence" title="Permanent link">¶</a></h2>
 <p>Given their name, it is not surprising that Query Optimizers can improve the
 performance of SQL queries. However, it is under-appreciated that this also
 applies to DataFrame style APIs.</p>
@@ -129,8 +144,8 @@ eagerly and thus have limited opportunities for optimization. However, more
 modern APIs such as <a href="https://docs.pola.rs/user-guide/lazy/using/">Polars' lazy API</a>, <a href="https://spark.apache.org/docs/latest/sql-programming-guide.html#datasets-and-dataframes),">Apache Spark's DataFrame</a>. and
 <a href="https://datafusion.apache.org/user-guide/dataframe.html">DataFusion's DataFrame</a> are much faster as they use the design shown in Figure
 1 and apply many query optimization techniques.</p>
-<h2 id="example-of-query-optimizer">Example of Query Optimizer<a class="headerlink" href="#example-of-query-optimizer" title="Permanent link">&para;</a></h2>
-<p>This section motivates the value of a Query Optimizer with an example. Let&rsquo;s say
+<h2 id="example-of-query-optimizer">Example of Query Optimizer<a class="headerlink" href="#example-of-query-optimizer" title="Permanent link">¶</a></h2>
+<p>This section motivates the value of a Query Optimizer with an example. Let’s say
 you have some observations of animal behavior, as illustrated in Table 1.</p>
 <p><img alt="Table 1: Observational Data." class="img-responsive" src="/blog/images/optimizing-sql-dataframes/table1.png" width="75%"/></p>
 <p><strong>Table 1</strong>: Example observational data.</p>
@@ -139,7 +154,7 @@ month, a user can write a SQL query or a DataFrame such as the following:</p>
 <p>SQL:</p>
 <pre><code class="language-sql">SELECT location, AVG(population)
 FROM observations
-WHERE species = &lsquo;contrarian spider&rsquo; AND 
+WHERE species = ‘contrarian spider’ AND 
   observation_time &gt;= now() - interval '1 month'
 GROUP BY location
 </code></pre>
@@ -150,7 +165,7 @@ GROUP BY location
   .agg(vec![col(location)], vec![avg(col("population")])
 </code></pre>
 <p>Within DataFusion, both the SQL and DataFrame are translated into the same
-<a href="https://docs.rs/datafusion/latest/datafusion/logical_expr/enum.LogicalPlan.html">LogicalPlan</a>, a &ldquo;tree of relational operators.&rdquo; This is a fancy way of
+<a href="https://docs.rs/datafusion/latest/datafusion/logical_expr/enum.LogicalPlan.html">LogicalPlan</a>, a “tree of relational operators.” This is a fancy way of
 saying data flow graphs where the edges represent tabular data (rows + columns)
 and the nodes represent a transformation (see <a href="https://youtu.be/EzZTLiSJnhY">this DataFusion overview video</a>
 for more details). The initial <code>LogicalPlan</code> for the queries above is shown in
@@ -168,9 +183,9 @@ has applied <em>Projection Pushdown</em>, <em>Filter Pushdown</em>, and <em>Cons
 Note that this is a simplified example for explanatory purposes, and actual
 optimizers such as the one in DataFusion perform additional tasks such as
 choosing specific aggregation algorithms.</p>
-<h2 id="query-optimizer-implementation">Query Optimizer Implementation<a class="headerlink" href="#query-optimizer-implementation" title="Permanent link">&para;</a></h2>
+<h2 id="query-optimizer-implementation">Query Optimizer Implementation<a class="headerlink" href="#query-optimizer-implementation" title="Permanent link">¶</a></h2>
 <p>Industrial optimizers, such as 
-DataFusion&rsquo;s (<a href="https://github.com/apache/datafusion/tree/334d6ec50f36659403c96e1bffef4228be7c458e/datafusion/optimizer/src">source</a>),
+DataFusion’s (<a href="https://github.com/apache/datafusion/tree/334d6ec50f36659403c96e1bffef4228be7c458e/datafusion/optimizer/src">source</a>),
 ClickHouse (<a href="https://github.com/ClickHouse/ClickHouse/tree/master/src/Analyzer/Passes">source</a>, <a href="https://github.com/ClickHouse/ClickHouse/tree/master/src/Processors/QueryPlan/Optimizations">source</a>),
 DuckDB (<a href="https://github.com/duckdb/duckdb/tree/4afa85c6a4dacc39524d1649fd8eb8c19c28ad14/src/optimizer">source</a>),
 and Apache Spark (<a href="https://github.com/apache/spark/tree/7bc8e99cde424c59b98fe915e3fdaaa30beadb76/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/optimizer">source</a>),
@@ -185,7 +200,7 @@ discuss this detail in this post.</p>
 </ol>
 <p><img alt="Fig 4: Query Optimizer Passes." class="img-responsive" src="/blog/images/optimizing-sql-dataframes/optimizer-passes.png" width="80%"/></p>
 <p><strong>Figure 4</strong>: Query Optimizers are implemented as a series of rules that each
-rewrite the query plan. Each rule&rsquo;s algorithm is expressed as a transformation
+rewrite the query plan. Each rule’s algorithm is expressed as a transformation
 of a previous plan.</p>
 <p>There are three major classes of optimizations in industrial optimizers:</p>
 <ol>
@@ -213,7 +228,7 @@ of a previous plan.</p>
 <p>This brings us to the end of Part 1. In Part 2, we will explain these classes of
 optimizations in more detail and provide examples of how they are implemented in
 DataFusion and other systems.</p>
-<h1 id="about-the-authors">About the Authors<a class="headerlink" href="#about-the-authors" title="Permanent link">&para;</a></h1>
+<h1 id="about-the-authors">About the Authors<a class="headerlink" href="#about-the-authors" title="Permanent link">¶</a></h1>
 <p><a href="https://www.linkedin.com/in/andrewalamb/">Andrew Lamb</a> is a Staff Engineer at
 <a href="https://www.influxdata.com/">InfluxData</a> and an <a href="https://datafusion.apache.org/">Apache
 DataFusion</a> PMC member. A Database Optimizer
@@ -229,8 +244,8 @@ DataFusion</a> PMC member. He was previously a
 Software Developer at <a href="https://www.synnada.ai/">Synnada</a> where he contributed
 significant features to the DataFusion optimizer, including many <a href="https://datafusion.apache.org/blog/2025/03/11/ordering-analysis/">sort-based
 optimizations</a>.</p>
-<h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
-<p><a id="footnote1"></a><sup>[1]</sup> <em>Modular Query Optimizer, US 8,312,027 &middot; Issued Nov 13, 2012</em>, Query Optimizer with schema conversion US 8,086,598 &middot; Issued Dec 27, 2011</p>
+<h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">¶</a></h2>
+<p><a id="footnote1"></a><sup>[1]</sup> <em>Modular Query Optimizer, US 8,312,027 · Issued Nov 13, 2012</em>, Query Optimizer with schema conversion US 8,086,598 · Issued Dec 27, 2011</p>
 <p><a id="footnote2"></a><sup>[2]</sup> <a href="https://www.researchgate.net/publication/269306314_The_Vertica_Query_Optimizer_The_case_for_specialized_query_optimizers">The Vertica Query Optimizer: The case for specialized Query Optimizers</a></p>
 <p><a id="footnote3"></a><sup>[3]</sup> <a href="https://www.vldb.org/pvldb/vol17/p1350-justen.pdf">https://www.vldb.org/pvldb/vol17/p1350-justen.pdf</a></p>
 <p><a id="footnote4"></a><sup>[4]</sup> <a href="https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/24101">https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/24101</a>, <a href="https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/22111">https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/22111</a>, <a href="https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/12321">https://www.dagstuhl.de/en/seminars/seminar-calendar/seminar-details/12321</a></p>
@@ -267,6 +282,20 @@ optimizations</a>.</p>
   <!-- Container where Giscus will render -->
   <div id="comment-thread"></div>
 </div>      </div>
+      <aside class="toc-container d-none d-md-block col-md-4 col-xl-3 ms-xl-2">
+        <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#introduction">Introduction</a></li>
+<li><a href="#query-optimizer-background">Query Optimizer Background</a></li>
+<li><a href="#sql-dataframes-logicalplan-equivalence">SQL, DataFrames, LogicalPlan Equivalence</a></li>
+<li><a href="#example-of-query-optimizer">Example of Query Optimizer</a></li>
+<li><a href="#query-optimizer-implementation">Query Optimizer Implementation</a></li>
+<li><a href="#about-the-authors">About the Authors</a><ul>
+<li><a href="#notes">Notes</a></li>
+</ul>
+</li>
+</ul>
+</div>
+      </aside>
     </div>
   </div>
 </div>    

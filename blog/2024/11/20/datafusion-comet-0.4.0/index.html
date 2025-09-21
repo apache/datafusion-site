@@ -44,6 +44,27 @@
         </h1>
         <p>Posted on: Wed 20 November 2024 by pmc</p>
 
+        <aside class="toc-container d-md-none mb-2">
+          <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#release-highlights">Release Highlights</a><ul>
+<li><a href="#performance-stability">Performance &amp; Stability</a><ul>
+<li><a href="#unified-memory-management">Unified Memory Management</a></li>
+<li><a href="#faster-joins">Faster Joins</a></li>
+<li><a href="#bloom-filter-aggregates">Bloom Filter Aggregates</a></li>
+<li><a href="#complex-type-support">Complex Type support</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#roadmap">Roadmap</a><ul>
+<li><a href="#use-datafusions-parquetexec">Use DataFusion’s ParquetExec</a></li>
+<li><a href="#use-arrows-parquet-batch-reader">Use Arrow’s Parquet Batch Reader</a></li>
+</ul>
+</li>
+<li><a href="#getting-involved">Getting Involved</a></li>
+</ul>
+</div>
+        </aside>
 
         <!--
 {% comment %}
@@ -63,6 +84,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 {% endcomment %}
 -->
+
 <p>The Apache DataFusion PMC is pleased to announce version 0.4.0 of the <a href="https://datafusion.apache.org/comet/">Comet</a> subproject.</p>
 <p>Comet is an accelerator for Apache Spark that translates Spark physical plans to DataFusion physical plans for
 improved performance and efficiency without requiring any code changes.</p>
@@ -71,52 +93,52 @@ expressions that are not fully compatible will fall back to Spark unless explici
 to the <a href="https://datafusion.apache.org/comet/user-guide/compatibility.html">compatibility guide</a> for more information.</p>
 <p>This release covers approximately six weeks of development work and is the result of merging 51 PRs from 10
 contributors. See the <a href="https://github.com/apache/datafusion-comet/blob/main/dev/changelog/0.4.0.md">change log</a> for more information.</p>
-<h2 id="release-highlights">Release Highlights<a class="headerlink" href="#release-highlights" title="Permanent link">&para;</a></h2>
-<h3 id="performance-stability">Performance &amp; Stability<a class="headerlink" href="#performance-stability" title="Permanent link">&para;</a></h3>
+<h2 id="release-highlights">Release Highlights<a class="headerlink" href="#release-highlights" title="Permanent link">¶</a></h2>
+<h3 id="performance-stability">Performance &amp; Stability<a class="headerlink" href="#performance-stability" title="Permanent link">¶</a></h3>
 <p>There are a number of performance and stability improvements in this release. Here is a summary of some of the
 larger changes. Current benchmarking results can be found in the <a href="https://datafusion.apache.org/comet/contributor-guide/benchmarking.html">Comet Benchmarking Guide</a>.</p>
-<h4 id="unified-memory-management">Unified Memory Management<a class="headerlink" href="#unified-memory-management" title="Permanent link">&para;</a></h4>
+<h4 id="unified-memory-management">Unified Memory Management<a class="headerlink" href="#unified-memory-management" title="Permanent link">¶</a></h4>
 <p>Comet now uses a unified memory management approach that shares an off-heap memory pool with Apache Spark, resulting
 in a much simpler configuration. Comet now requires <code>spark.memory.offHeap.enabled=true</code>. This approach provides a
 holistic view of memory usage in Spark and Comet and makes it easier to optimize system performance.</p>
-<h4 id="faster-joins">Faster Joins<a class="headerlink" href="#faster-joins" title="Permanent link">&para;</a></h4>
+<h4 id="faster-joins">Faster Joins<a class="headerlink" href="#faster-joins" title="Permanent link">¶</a></h4>
 <p>Apache Spark supports sort-merge and hash joins, which have similar performance characteristics. Spark defaults to
 using sort-merge joins because they are less likely to result in OutOfMemory exceptions. In vectorized query
 engines such as DataFusion, hash joins outperform sort-merge joins. Comet now has an experimental feature to
 replace Spark sort-merge joins with hash joins for improved performance. This feature is experimental because
 there is currently no spill-to-disk support in the hash join implementation. This feature can be enabled by
 setting <code>spark.comet.exec.replaceSortMergeJoin=true</code>.</p>
-<h4 id="bloom-filter-aggregates">Bloom Filter Aggregates<a class="headerlink" href="#bloom-filter-aggregates" title="Permanent link">&para;</a></h4>
-<p>Spark&rsquo;s optimizer can insert Bloom filter aggregations and filters to prune large result sets before a shuffle. However,
+<h4 id="bloom-filter-aggregates">Bloom Filter Aggregates<a class="headerlink" href="#bloom-filter-aggregates" title="Permanent link">¶</a></h4>
+<p>Spark’s optimizer can insert Bloom filter aggregations and filters to prune large result sets before a shuffle. However,
 Comet would fall back to Spark for the aggregation. Comet now has native support for Bloom filter aggregations
 after previously supporting Bloom filter testing. Users no longer need to set
 <code>spark.sql.optimizer.runtime.bloomFilter.enabled=false</code> when using Comet.</p>
-<h4 id="complex-type-support">Complex Type support<a class="headerlink" href="#complex-type-support" title="Permanent link">&para;</a></h4>
+<h4 id="complex-type-support">Complex Type support<a class="headerlink" href="#complex-type-support" title="Permanent link">¶</a></h4>
 <p>This release has the following improvements to complex type support:</p>
 <ul>
 <li>Implemented <code>ArrayAppend</code> and <code>GetArrayStructFields</code>.</li>
 <li>Implemented native cast between structs</li>
 <li>Implemented native cast from structs to string</li>
 </ul>
-<h2 id="roadmap">Roadmap<a class="headerlink" href="#roadmap" title="Permanent link">&para;</a></h2>
+<h2 id="roadmap">Roadmap<a class="headerlink" href="#roadmap" title="Permanent link">¶</a></h2>
 <p>One of the highest priority items on the roadmap is to add support for reading complex types (maps, structs, and arrays)
 from Parquet sources, both when reading Parquet directly and from Iceberg.</p>
-<p>Comet currently has proprietary native code for decoding Parquet pages, native column readers for all of Spark&rsquo;s
+<p>Comet currently has proprietary native code for decoding Parquet pages, native column readers for all of Spark’s
 primitive types, and special handling for Spark-specific use cases such as timestamp rebasing and decimal type
 promotion. This implementation does not yet support complex types. File IO, decryption, and decompression are handled
 in JVM code, and Parquet pages are passed on to native code for decoding.</p>
 <p>Rather than add complex type support to this existing code, we are exploring two main options to allow us to
 leverage more of the upstream Arrow and DataFusion code.</p>
-<h3 id="use-datafusions-parquetexec">Use DataFusion&rsquo;s ParquetExec<a class="headerlink" href="#use-datafusions-parquetexec" title="Permanent link">&para;</a></h3>
+<h3 id="use-datafusions-parquetexec">Use DataFusion’s ParquetExec<a class="headerlink" href="#use-datafusions-parquetexec" title="Permanent link">¶</a></h3>
 <p>For use cases where DataFusion can support reading a Parquet source, Comet could create a native plan that uses
-DataFusion&rsquo;s ParquetExec. We are investigating using DataFusion&rsquo;s SchemaAdapter to handle some Spark-specific
+DataFusion’s ParquetExec. We are investigating using DataFusion’s SchemaAdapter to handle some Spark-specific
 handling of timestamps and decimals.</p>
-<h3 id="use-arrows-parquet-batch-reader">Use Arrow&rsquo;s Parquet Batch Reader<a class="headerlink" href="#use-arrows-parquet-batch-reader" title="Permanent link">&para;</a></h3>
-<p>For use cases not supported by DataFusion&rsquo;s ParquetExec, such as integrating with Iceberg, we are exploring
+<h3 id="use-arrows-parquet-batch-reader">Use Arrow’s Parquet Batch Reader<a class="headerlink" href="#use-arrows-parquet-batch-reader" title="Permanent link">¶</a></h3>
+<p>For use cases not supported by DataFusion’s ParquetExec, such as integrating with Iceberg, we are exploring
 replacing our current native Parquet decoding logic with the Arrow readers provided by the Parquet crate.</p>
 <p>Iceberg already provides a vectorized Spark reader for Parquet. A <a href="https://github.com/apache/iceberg/pull/9841">PR</a> is open against Iceberg for adding a native
 version based on Comet, and we hope to update this to leverage the improvements outlined above.</p>
-<h2 id="getting-involved">Getting Involved<a class="headerlink" href="#getting-involved" title="Permanent link">&para;</a></h2>
+<h2 id="getting-involved">Getting Involved<a class="headerlink" href="#getting-involved" title="Permanent link">¶</a></h2>
 <p>The Comet project welcomes new contributors. We use the same <a href="https://datafusion.apache.org/contributor-guide/communication.html#slack-and-discord">Slack and Discord</a> channels as the main DataFusion
 project and have a weekly <a href="https://docs.google.com/document/d/1NBpkIAuU7O9h8Br5CbFksDhX-L9TyO9wmGLPMe0Plc8/edit?usp=sharing">DataFusion video call</a>.</p>
 <p>The easiest way to get involved is to test Comet with your current Spark jobs and file issues for any bugs or
@@ -154,6 +176,27 @@ Comet.</p>
   <!-- Container where Giscus will render -->
   <div id="comment-thread"></div>
 </div>      </div>
+      <aside class="toc-container d-none d-md-block col-md-4 col-xl-3 ms-xl-2">
+        <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#release-highlights">Release Highlights</a><ul>
+<li><a href="#performance-stability">Performance &amp; Stability</a><ul>
+<li><a href="#unified-memory-management">Unified Memory Management</a></li>
+<li><a href="#faster-joins">Faster Joins</a></li>
+<li><a href="#bloom-filter-aggregates">Bloom Filter Aggregates</a></li>
+<li><a href="#complex-type-support">Complex Type support</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#roadmap">Roadmap</a><ul>
+<li><a href="#use-datafusions-parquetexec">Use DataFusion’s ParquetExec</a></li>
+<li><a href="#use-arrows-parquet-batch-reader">Use Arrow’s Parquet Batch Reader</a></li>
+</ul>
+</li>
+<li><a href="#getting-involved">Getting Involved</a></li>
+</ul>
+</div>
+      </aside>
     </div>
   </div>
 </div>    

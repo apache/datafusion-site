@@ -44,6 +44,28 @@
         </h1>
         <p>Posted on: Tue 19 November 2024 by timsaucer</p>
 
+        <aside class="toc-container d-md-none mb-2">
+          <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#personal-context">Personal Context</a></li>
+<li><a href="#user-defined-functions">User-Defined Functions</a><ul>
+<li><a href="#use-case-1-scalar-function">Use Case 1: Scalar Function</a></li>
+<li><a href="#use-case-2-aggregate-function">Use Case 2: Aggregate Function</a></li>
+</ul>
+</li>
+<li><a href="#pure-python-approach">Pure Python approach</a></li>
+<li><a href="#python-approach-using-pyarrow-compute">Python approach using PyArrow compute</a></li>
+<li><a href="#rust-udf-with-python-wrapper">Rust UDF with Python wrapper</a><ul>
+<li><a href="#rust-udf-with-initialization">Rust UDF with initialization</a></li>
+<li><a href="#rust-udf-with-direct-iteration">Rust UDF with direct iteration</a></li>
+</ul>
+</li>
+<li><a href="#user-defined-aggregate-function">User Defined Aggregate Function</a></li>
+<li><a href="#user-defined-window-functions">User Defined Window Functions</a></li>
+<li><a href="#performance-comparison">Performance Comparison</a></li>
+<li><a href="#final-thoughts-and-recommendations">Final Thoughts and Recommendations</a></li>
+</ul>
+</div>
+        </aside>
 
         <!--
 {% comment %}
@@ -63,8 +85,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 {% endcomment %}
 -->
-<h2 id="personal-context">Personal Context<a class="headerlink" href="#personal-context" title="Permanent link">&para;</a></h2>
-<p>For a few months now I&rsquo;ve been working with <a href="https://datafusion.apache.org/">Apache DataFusion</a>, a
+
+<h2 id="personal-context">Personal Context<a class="headerlink" href="#personal-context" title="Permanent link">¶</a></h2>
+<p>For a few months now I’ve been working with <a href="https://datafusion.apache.org/">Apache DataFusion</a>, a
 fast query engine written in Rust. From my experience the language that nearly all data scientists
 are working in is Python. In general, data scientists often use <a href="https://pandas.pydata.org/">Pandas</a>
 for in-memory tasks and <a href="https://spark.apache.org/">PySpark</a> for larger tasks that require
@@ -78,24 +101,24 @@ I do recommend evaluating Polars for in-memory work.</p>
 extend to large batch processing to exploit parallelization. I think DataFusion, coupled with
 <a href="https://datafusion.apache.org/ballista/">Ballista</a> or
 <a href="https://github.com/apache/datafusion-ray">DataFusion-Ray</a>, may provide this solution.</p>
-<p>As I&rsquo;m testing, I&rsquo;m primarily limiting my work to the
+<p>As I’m testing, I’m primarily limiting my work to the
 <a href="https://datafusion.apache.org/python/">datafusion-python</a> project, a wrapper around the Rust
 DataFusion library. This wrapper gives you the speed advantages of keeping all of the data in the
 Rust implementation and the ergonomics of working in Python. Personally, I would prefer to work
 purely in Rust, but I also recognize that since the industry works in Python we should meet the
 people where they are.</p>
-<h2 id="user-defined-functions">User-Defined Functions<a class="headerlink" href="#user-defined-functions" title="Permanent link">&para;</a></h2>
+<h2 id="user-defined-functions">User-Defined Functions<a class="headerlink" href="#user-defined-functions" title="Permanent link">¶</a></h2>
 <p>The focus of this post is User-Defined Functions (UDFs). The DataFusion library gives a lot of
 useful functions already for doing DataFrame manipulation. These are going to be similar to those
-you find in other DataFrame libraries. You&rsquo;ll be able to do simple arithmetic, create substrings of
+you find in other DataFrame libraries. You’ll be able to do simple arithmetic, create substrings of
 columns, or find the average value across a group of rows. These cover most of the use cases
-you&rsquo;ll need in a DataFrame.</p>
+you’ll need in a DataFrame.</p>
 <p>However, there will always arise times when you want a custom function. With UDFs you open a
-world of possibilities in your code. Sometimes there simply isn&rsquo;t an easy way to use built-in
+world of possibilities in your code. Sometimes there simply isn’t an easy way to use built-in
 functions to achieve your goals.</p>
-<p>In the following, I&rsquo;m going to demonstrate two example use cases. These are based on real world
-problems I&rsquo;ve encountered. Also I want to demonstrate the approach of &ldquo;make it work, make it work
-well, make it work fast&rdquo; that is a motto I&rsquo;ve seen thrown around in data science.</p>
+<p>In the following, I’m going to demonstrate two example use cases. These are based on real world
+problems I’ve encountered. Also I want to demonstrate the approach of “make it work, make it work
+well, make it work fast” that is a motto I’ve seen thrown around in data science.</p>
 <p>I will demonstrate three approaches to writing UDFs. In order of increasing performance they are</p>
 <ul>
 <li>Writing a pure Python function to do your computation</li>
@@ -107,8 +130,8 @@ PyArrow library approach to simplify understanding how to connect the Rust code 
 second version we will do the iteration through the input arrays ourselves to give even greater
 flexibility to the user.</p>
 <p>Here are the two example use cases, taken from my own work but generalized.</p>
-<h3 id="use-case-1-scalar-function">Use Case 1: Scalar Function<a class="headerlink" href="#use-case-1-scalar-function" title="Permanent link">&para;</a></h3>
-<p>I have a DataFrame and a list of tuples that I&rsquo;m interested in. I want to filter out the DataFrame
+<h3 id="use-case-1-scalar-function">Use Case 1: Scalar Function<a class="headerlink" href="#use-case-1-scalar-function" title="Permanent link">¶</a></h3>
+<p>I have a DataFrame and a list of tuples that I’m interested in. I want to filter out the DataFrame
 to only have values that match those tuples from certain columns in the DataFrame.</p>
 <p>To give a concrete example, we will use data generated for the <a href="https://www.tpc.org/tpch/">TPC-H benchmarks</a>.
 Suppose I have a table of sales line items. There are many columns, but I am interested in three: a
@@ -122,7 +145,7 @@ DataFrame itself, perform a join, and select the columns from the original DataF
 working in PySpark we would probably broadcast join the DataFrame created from the tuple list since
 it is tiny. In practice, I have found that with some DataFrame libraries performing a filter rather
 than a join can be significantly faster. This is worth profiling for your specific use case.</p>
-<h3 id="use-case-2-aggregate-function">Use Case 2: Aggregate Function<a class="headerlink" href="#use-case-2-aggregate-function" title="Permanent link">&para;</a></h3>
+<h3 id="use-case-2-aggregate-function">Use Case 2: Aggregate Function<a class="headerlink" href="#use-case-2-aggregate-function" title="Permanent link">¶</a></h3>
 <p>I have a DataFrame with many values that I want to aggregate. I have already analyzed it and
 determined there is a noise level below which I do not want to include in my analysis. I want to
 compute a sum of only values that are above my noise threshold.</p>
@@ -130,10 +153,10 @@ compute a sum of only values that are above my noise threshold.</p>
 simply filter the DataFrame and then aggregate using the built-in <code>sum</code> function. Here, we
 demonstrate doing this as a UDF primarily as an example of how to write UDAFs. We will use the
 PyArrow compute approach.</p>
-<h2 id="pure-python-approach">Pure Python approach<a class="headerlink" href="#pure-python-approach" title="Permanent link">&para;</a></h2>
+<h2 id="pure-python-approach">Pure Python approach<a class="headerlink" href="#pure-python-approach" title="Permanent link">¶</a></h2>
 <p>The fastest way (developer time, not code time) for me to implement the scalar problem solution
-was to do something along the lines of &ldquo;for each row, check the values of interest contains that
-tuple&rdquo;. I&rsquo;ve published this as
+was to do something along the lines of “for each row, check the values of interest contains that
+tuple”. I’ve published this as
 <a href="https://github.com/apache/datafusion-python/blob/main/examples/python-udf-comparisons.py">an example</a>
 in the <a href="https://github.com/apache/datafusion-python">datafusion-python repository</a>. Here is an
 example of how this can be done:</p>
@@ -176,8 +199,8 @@ df_udf_filter = df_lineitem.filter(
 expressions. During the evaluation, these will get computed into their corresponding values and
 passed to your UDF as a PyArrow Array. We must return an Array also with the same number of
 elements (rows). So the UDF example just iterates through all of the arrays and checks to see if
-the tuple created from these columns matches any of those that we&rsquo;re looking for.</p>
-<p>I&rsquo;ll repeat because this is something that tripped me up the first time I wrote a UDF for
+the tuple created from these columns matches any of those that we’re looking for.</p>
+<p>I’ll repeat because this is something that tripped me up the first time I wrote a UDF for
 datafusion: <strong>DataFusion UDFs, even scalar UDFs, process an array of values at a time not a single
 row.</strong> This is different from some other DataFrame libraries and you may need to recognize a slight
 change in mentality.</p>
@@ -189,7 +212,7 @@ through the array in Python rather than Rust native. These will <strong>signific
 code. Any time you have to cross the barrier where you change values inside the Rust arrays into
 Python objects or vice versa you will pay <strong>heavy</strong> cost in that transformation. You will want to
 design your UDFs to avoid this as much as possible.</p>
-<h2 id="python-approach-using-pyarrow-compute">Python approach using PyArrow compute<a class="headerlink" href="#python-approach-using-pyarrow-compute" title="Permanent link">&para;</a></h2>
+<h2 id="python-approach-using-pyarrow-compute">Python approach using PyArrow compute<a class="headerlink" href="#python-approach-using-pyarrow-compute" title="Permanent link">¶</a></h2>
 <p>DataFusion uses <a href="https://arrow.apache.org/">Apache Arrow</a> as its in-memory data format. This can
 be seen in the way that Arrow Arrays are passed into the UDFs. We can take advantage of the fact
 that <a href="https://arrow.apache.org/docs/python/">PyArrow</a>, the canonical Python Arrow implementation,
@@ -234,7 +257,7 @@ df_udf_pyarrow_compute = df_lineitem.filter(
 )
 </code></pre>
 <p>The idea in the code above is that we will iterate through each of the values of interest, which we
-expect to be small. For each of the columns, we compare the value of interest to it&rsquo;s corresponding
+expect to be small. For each of the columns, we compare the value of interest to it’s corresponding
 array using <code>pyarrow.compute.equal</code>. This will give use three boolean arrays. We have a match to
 the tuple if we have a row in all three arrays that is true, so we use <code>pyarrow.compute.and_</code>. Now
 our return value from the UDF needs to include arrays for which any of the values of interest list
@@ -243,25 +266,25 @@ on it.</p>
 <p>From my benchmarking, switching from approach of converting values into Python objects to this
 approach of using the PyArrow built-in functions leads to about a 10x speed improvement in this
 simple problem.</p>
-<p>It&rsquo;s worth noting that almost all of the PyArrow compute functions expect to take one or two arrays
-as their arguments. If you need to write a UDF that is evaluating three or more columns, you&rsquo;ll
-need to do something akin to what we&rsquo;ve shown here.</p>
-<h2 id="rust-udf-with-python-wrapper">Rust UDF with Python wrapper<a class="headerlink" href="#rust-udf-with-python-wrapper" title="Permanent link">&para;</a></h2>
+<p>It’s worth noting that almost all of the PyArrow compute functions expect to take one or two arrays
+as their arguments. If you need to write a UDF that is evaluating three or more columns, you’ll
+need to do something akin to what we’ve shown here.</p>
+<h2 id="rust-udf-with-python-wrapper">Rust UDF with Python wrapper<a class="headerlink" href="#rust-udf-with-python-wrapper" title="Permanent link">¶</a></h2>
 <p>This is the most complicated approach, but has the potential to be the most performant. What we
 will do here is write a Rust function to perform our computation and then expose that function to
 Python. I know of two use cases where I would recommend this approach. The first is the case when
 the PyArrow compute functions are insufficient for your needs. Perhaps your code is too complex or
 could be greatly simplified if you pulled in some outside dependency. The second use case is when
-you have written a UDF that you&rsquo;re sharing across multiple projects and have hardened the approach.
+you have written a UDF that you’re sharing across multiple projects and have hardened the approach.
 It is possible that you can implement your function in Rust to give a speed improvement and then
 every project that is using this shared UDF will benefit from those updates.</p>
-<p>When deciding to use this approach, it&rsquo;s worth considering how much you think you&rsquo;ll actually
-benefit from the Rust implementation to decide if it&rsquo;s worth the additional effort to maintain and
+<p>When deciding to use this approach, it’s worth considering how much you think you’ll actually
+benefit from the Rust implementation to decide if it’s worth the additional effort to maintain and
 deploy the Python wheels you generate. It is certainly not necessary for every use case.</p>
 <p>Due to the excellent work by the Python arrow team, we can simplify our work to needing only two
 dependencies on the Rust side, <a href="https://github.com/apache/arrow-rs">arrow-rs</a> and
 <a href="https://pyo3.rs/">pyo3</a>. I have posted a <a href="https://github.com/timsaucer/tuple_filter_example">minimal example</a>.
-You&rsquo;ll need <a href="https://github.com/PyO3/maturin">maturin</a> to build the project, and you must use
+You’ll need <a href="https://github.com/PyO3/maturin">maturin</a> to build the project, and you must use
 release mode when building to get the expected performance.</p>
 <pre><code class="language-bash">maturin develop --release
 </code></pre>
@@ -275,14 +298,14 @@ release mode when building to get the expected performance.</p>
 <p>For the conversion to and from Python objects, we can take advantage of the
 <code>ArrayData::from_pyarrow_bound</code> and <code>ArrayData::to_pyarrow</code> functions.  All that remains is to
 perform your computation.</p>
-<p>We are going to demonstrate doing this computation in two ways. The first is to mimic what we&rsquo;ve
+<p>We are going to demonstrate doing this computation in two ways. The first is to mimic what we’ve
 done in the above approach using PyArrow. In the second we demonstrate iterating through the three
 arrays ourselves.</p>
 <p>In our first approach, we can expect the performance to be nearly identical to when we used the
 PyArrow compute functions. On the Rust side we will have slightly less overhead but the heavy
 lifting portions of the code are essentially the same between this Rust implementation and the
 PyArrow approach above.</p>
-<p>The reason for demonstrating this, even though it doesn&rsquo;t provide a significant speedup over
+<p>The reason for demonstrating this, even though it doesn’t provide a significant speedup over
 Python, is to primarily demonstrate how to make the Python to Rust with Python wrapper
 transition. In the second implementation you can see how we can iterate through all of the arrays
 ourselves.</p>
@@ -351,7 +374,7 @@ udf_using_custom_rust_fn = udf(
 </code></pre>
 <p>That's it! We've now got a third party Rust UDF with Python wrappers working with DataFusion's
 Python bindings!</p>
-<h3 id="rust-udf-with-initialization">Rust UDF with initialization<a class="headerlink" href="#rust-udf-with-initialization" title="Permanent link">&para;</a></h3>
+<h3 id="rust-udf-with-initialization">Rust UDF with initialization<a class="headerlink" href="#rust-udf-with-initialization" title="Permanent link">¶</a></h3>
 <p>Looking at the code above, you can see that it is hard coding the values we're interested in. There
 are many types of UDFs that don't require any additional data provided to them before they start
 the computation. The code above is sloppy, so let's clean it up.</p>
@@ -436,7 +459,7 @@ udf_using_custom_rust_fn_with_data = udf(
 <p>When you use this approach you will need to provide a <code>name</code> argument to <code>udf</code>. This is because our
 class/struct does not get the <code>__qualname__</code> attribute that the <code>udf</code> function is looking for. You
 can give this udf any name you choose.</p>
-<h3 id="rust-udf-with-direct-iteration">Rust UDF with direct iteration<a class="headerlink" href="#rust-udf-with-direct-iteration" title="Permanent link">&para;</a></h3>
+<h3 id="rust-udf-with-direct-iteration">Rust UDF with direct iteration<a class="headerlink" href="#rust-udf-with-direct-iteration" title="Permanent link">¶</a></h3>
 <p>The final version of our scalar UDF is one where we implement it in Rust and iterate through all of
 the arrays ourselves. If you are iterating through more than 3 arrays at a time I recommend looking
 at <a href="https://docs.rs/itertools/latest/itertools/macro.izip.html">izip</a> in the
@@ -492,7 +515,7 @@ but that memory allocation is unnecessary. After that we use two <code>zip</code
 iterate over all three columns in a single pass. Since each <code>zip</code> will return a tuple of two
 elements, a quick <code>map</code> turns them into the tuple format we need. Also, <code>StringArray</code> is a little
 different in the buffer it uses, so it is treated slightly differently from the others.</p>
-<h2 id="user-defined-aggregate-function">User Defined Aggregate Function<a class="headerlink" href="#user-defined-aggregate-function" title="Permanent link">&para;</a></h2>
+<h2 id="user-defined-aggregate-function">User Defined Aggregate Function<a class="headerlink" href="#user-defined-aggregate-function" title="Permanent link">¶</a></h2>
 <p>Writing a user defined aggregate function or user defined window function is slightly more complex
 than scalar functions. This is because we must accumulate values and there is no guarantee that one
 batch will contain all the values we are aggregating over. For this we need to define an
@@ -545,13 +568,13 @@ our example they are very similar.</p>
 operations are different is computing an average. In <code>update()</code> we would create a state that is both
 a sum and a count. <code>state()</code> would return a list of these two values, and <code>merge()</code> would compute
 the final result.</p>
-<h2 id="user-defined-window-functions">User Defined Window Functions<a class="headerlink" href="#user-defined-window-functions" title="Permanent link">&para;</a></h2>
+<h2 id="user-defined-window-functions">User Defined Window Functions<a class="headerlink" href="#user-defined-window-functions" title="Permanent link">¶</a></h2>
 <p>Writing a user defined window function is slightly more complex than an aggregate function due
 to the variety of ways that window functions are called. I recommend reviewing the
 <a href="https://datafusion.apache.org/python/user-guide/common-operations/udf-and-udfa.html">online documentation</a>
 for a description of which functions need to be implemented. The details of how to implement
 these generally follow the same patterns as described above for aggregate functions.</p>
-<h2 id="performance-comparison">Performance Comparison<a class="headerlink" href="#performance-comparison" title="Permanent link">&para;</a></h2>
+<h2 id="performance-comparison">Performance Comparison<a class="headerlink" href="#performance-comparison" title="Permanent link">¶</a></h2>
 <p>For the scalar functions above, we performed a timing evaluation, repeating the operation 100
 times. For this simple example these are our results.</p>
 <pre><code>+-----------------------------+--------------+---------+
@@ -571,7 +594,7 @@ into using any functions that keep the data entirely on the Native (Rust or C/C+
 near 10x speed improvement. Then as we increase our complexity from using PyArrow compute functions
 to implementing the UDF in Rust we see incremental improvements. Our fastest approach - iterating
 through the arrays ourselves does operate nearly 10% faster than the PyArrow compute approach.</p>
-<h2 id="final-thoughts-and-recommendations">Final Thoughts and Recommendations<a class="headerlink" href="#final-thoughts-and-recommendations" title="Permanent link">&para;</a></h2>
+<h2 id="final-thoughts-and-recommendations">Final Thoughts and Recommendations<a class="headerlink" href="#final-thoughts-and-recommendations" title="Permanent link">¶</a></h2>
 <p>For anyone who is curious about <a href="https://datafusion.apache.org/">DataFusion</a> I highly recommend
 giving it a try. This post was designed to make it easier for new users to the Python implementation
 to work with User Defined Functions by giving a few examples of how one might implement these.</p>
@@ -617,6 +640,28 @@ to make a great tool. If you want to get involved, please take a look at the
   <!-- Container where Giscus will render -->
   <div id="comment-thread"></div>
 </div>      </div>
+      <aside class="toc-container d-none d-md-block col-md-4 col-xl-3 ms-xl-2">
+        <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#personal-context">Personal Context</a></li>
+<li><a href="#user-defined-functions">User-Defined Functions</a><ul>
+<li><a href="#use-case-1-scalar-function">Use Case 1: Scalar Function</a></li>
+<li><a href="#use-case-2-aggregate-function">Use Case 2: Aggregate Function</a></li>
+</ul>
+</li>
+<li><a href="#pure-python-approach">Pure Python approach</a></li>
+<li><a href="#python-approach-using-pyarrow-compute">Python approach using PyArrow compute</a></li>
+<li><a href="#rust-udf-with-python-wrapper">Rust UDF with Python wrapper</a><ul>
+<li><a href="#rust-udf-with-initialization">Rust UDF with initialization</a></li>
+<li><a href="#rust-udf-with-direct-iteration">Rust UDF with direct iteration</a></li>
+</ul>
+</li>
+<li><a href="#user-defined-aggregate-function">User Defined Aggregate Function</a></li>
+<li><a href="#user-defined-window-functions">User Defined Window Functions</a></li>
+<li><a href="#performance-comparison">Performance Comparison</a></li>
+<li><a href="#final-thoughts-and-recommendations">Final Thoughts and Recommendations</a></li>
+</ul>
+</div>
+      </aside>
     </div>
   </div>
 </div>    

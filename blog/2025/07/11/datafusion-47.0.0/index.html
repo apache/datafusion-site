@@ -44,6 +44,21 @@
         </h1>
         <p>Posted on: Fri 11 July 2025 by PMC</p>
 
+        <aside class="toc-container d-md-none mb-2">
+          <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#breaking-changes">Breaking Changes</a></li>
+<li><a href="#performance-improvements">Performance Improvements</a></li>
+<li><a href="#highlighted-new-features">Highlighted New Features</a><ul>
+<li><a href="#tree-style-explains">Tree style explains</a></li>
+<li><a href="#sql-varchar-defaults-to-utf8view">SQL VARCHAR defaults to Utf8View</a></li>
+<li><a href="#context-propagation-in-spawned-tasks-for-tracing-logging-etc">Context propagation in spawned tasks (for tracing, logging, etc.)</a></li>
+</ul>
+</li>
+<li><a href="#upgrade-guide-and-changelog">Upgrade Guide and Changelog</a></li>
+<li><a href="#get-involved">Get Involved</a></li>
+</ul>
+</div>
+        </aside>
 
         <!--
 {% comment %}
@@ -61,16 +76,17 @@ See the License for the specific language governing permissions and
 limitations under the License.
 {% endcomment %}
 -->
+
 <!-- see https://github.com/apache/datafusion/issues/16347 for details -->
-<p>We&rsquo;re excited to announce the release of <strong>Apache DataFusion 47.0.0</strong>! This new version represents a significant
+<p>We’re excited to announce the release of <strong>Apache DataFusion 47.0.0</strong>! This new version represents a significant
 milestone for the project, packing in a wide range of improvements and fixes. You can find the complete details in the
-full <a href="https://github.com/apache/datafusion/blob/branch-47/dev/changelog/47.0.0.md">changelog</a>. We&rsquo;ll highlight the most
+full <a href="https://github.com/apache/datafusion/blob/branch-47/dev/changelog/47.0.0.md">changelog</a>. We’ll highlight the most
 important changes below and guide you through upgrading.</p>
 <p>Note that DataFusion 47.0.0 was released in April 2025, but we are only now publishing the blog post due to 
 limited bandwidth in the DataFusion community. We apologize for the delay and encourage you to come help us
 accelerate the next release and announcements 
 by <a href="https://datafusion.apache.org/contributor-guide/communication.html">joining the community</a>  🎣.</p>
-<h2 id="breaking-changes">Breaking Changes<a class="headerlink" href="#breaking-changes" title="Permanent link">&para;</a></h2>
+<h2 id="breaking-changes">Breaking Changes<a class="headerlink" href="#breaking-changes" title="Permanent link">¶</a></h2>
 <p>DataFusion 47.0.0 brings a few <strong>breaking changes</strong> that may require adjustments to your code as described in
 the <a href="https://datafusion.apache.org/library-user-guide/upgrading.html#datafusion-47-0-0">Upgrade Guide</a>. Here are some notable ones:</p>
 <ul>
@@ -101,7 +117,7 @@ the <a href="https://datafusion.apache.org/library-user-guide/upgrading.html#dat
   provide support for the new <a href="https://datafusion.apache.org/user-guide/sql/explain.html#tree-format-default">tree style explains</a>.
   This can be the same as the existing <code>DisplayFormatType::Default</code>.</li>
 </ul>
-<h2 id="performance-improvements">Performance Improvements<a class="headerlink" href="#performance-improvements" title="Permanent link">&para;</a></h2>
+<h2 id="performance-improvements">Performance Improvements<a class="headerlink" href="#performance-improvements" title="Permanent link">¶</a></h2>
 <p>DataFusion 47.0.0 comes with numerous performance enhancements across the board. Here are some of the noteworthy
 optimizations in this release:</p>
 <ul>
@@ -131,8 +147,8 @@ optimizations in this release:</p>
   (PR <a href="https://github.com/apache/datafusion/pull/15454">#15454</a> by <a href="https://github.com/zebsme">zebsme</a>).</p>
 </li>
 </ul>
-<h2 id="highlighted-new-features">Highlighted New Features<a class="headerlink" href="#highlighted-new-features" title="Permanent link">&para;</a></h2>
-<h3 id="tree-style-explains">Tree style explains<a class="headerlink" href="#tree-style-explains" title="Permanent link">&para;</a></h3>
+<h2 id="highlighted-new-features">Highlighted New Features<a class="headerlink" href="#highlighted-new-features" title="Permanent link">¶</a></h2>
+<h3 id="tree-style-explains">Tree style explains<a class="headerlink" href="#tree-style-explains" title="Permanent link">¶</a></h3>
 <p>In previous releases the <a href="https://datafusion.apache.org/user-guide/sql/explain.html">EXPLAIN statement</a> results in a formatted table
 which is succinct and contains important details for implementers, but was often hard to read
 especially with queries that included joins or unions having multiple children.</p>
@@ -148,24 +164,24 @@ create table t2(ti int) as values (1), (2), (3);
 +---------------+------------------------------------------------------------+
 | plan_type     | plan                                                       |
 +---------------+------------------------------------------------------------+
-| physical_plan | &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;                              |
-|               | &boxv;    CoalesceBatchesExec    &boxv;                              |
-|               | &boxv;    --------------------   &boxv;                              |
-|               | &boxv;     target_batch_size:    &boxv;                              |
-|               | &boxv;            8192           &boxv;                              |
-|               | &boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxhd;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul;                              |
-|               | &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxhu;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;                              |
-|               | &boxv;        HashJoinExec       &boxv;                              |
-|               | &boxv;    --------------------   &boxvr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;               |
-|               | &boxv;       on: (ti = ti)       &boxv;              &boxv;               |
-|               | &boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxhd;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul;              &boxv;               |
-|               | &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxhu;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;&boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxhu;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl; |
-|               | &boxv;       DataSourceExec      &boxv;&boxv;       DataSourceExec      &boxv; |
-|               | &boxv;    --------------------   &boxv;&boxv;    --------------------   &boxv; |
-|               | &boxv;         bytes: 112        &boxv;&boxv;         bytes: 112        &boxv; |
-|               | &boxv;       format: memory      &boxv;&boxv;       format: memory      &boxv; |
-|               | &boxv;          rows: 1          &boxv;&boxv;          rows: 1          &boxv; |
-|               | &boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul;&boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul; |
+| physical_plan | ┌───────────────────────────┐                              |
+|               | │    CoalesceBatchesExec    │                              |
+|               | │    --------------------   │                              |
+|               | │     target_batch_size:    │                              |
+|               | │            8192           │                              |
+|               | └─────────────┬─────────────┘                              |
+|               | ┌─────────────┴─────────────┐                              |
+|               | │        HashJoinExec       │                              |
+|               | │    --------------------   ├──────────────┐               |
+|               | │       on: (ti = ti)       │              │               |
+|               | └─────────────┬─────────────┘              │               |
+|               | ┌─────────────┴─────────────┐┌─────────────┴─────────────┐ |
+|               | │       DataSourceExec      ││       DataSourceExec      │ |
+|               | │    --------------------   ││    --------------------   │ |
+|               | │         bytes: 112        ││         bytes: 112        │ |
+|               | │       format: memory      ││       format: memory      │ |
+|               | │          rows: 1          ││          rows: 1          │ |
+|               | └───────────────────────────┘└───────────────────────────┘ |
 |               |                                                            |
 +---------------+------------------------------------------------------------+
 </code></pre>
@@ -187,7 +203,7 @@ create table t2(ti int) as values (1), (2), (3);
 </code></pre>
 <p>Thanks to <a href="https://github.com/irenjj">irenjj</a> for the initial work in PR <a href="https://github.com/apache/datafusion/pull/14677">#14677</a>
 and many others for completing the <a href="https://github.com/apache/datafusion/issues/14914">followup epic</a></p>
-<h3 id="sql-varchar-defaults-to-utf8view">SQL <code>VARCHAR</code> defaults to Utf8View<a class="headerlink" href="#sql-varchar-defaults-to-utf8view" title="Permanent link">&para;</a></h3>
+<h3 id="sql-varchar-defaults-to-utf8view">SQL <code>VARCHAR</code> defaults to Utf8View<a class="headerlink" href="#sql-varchar-defaults-to-utf8view" title="Permanent link">¶</a></h3>
 <p>In previous releases when a column was created in SQL the column would be mapped to the <a href="https://docs.rs/arrow/latest/arrow/datatypes/enum.DataType.html#variant.Utf8">Utf8 Arrow data type</a>. In this release
 the SQL <code>varchar</code> columns will be mapped to the <a href="https://docs.rs/arrow/latest/arrow/datatypes/enum.DataType.html#variant.Utf8View">Utf8View arrow data type</a> by default, which is a more efficient representation of UTF-8 strings in Arrow.</p>
 <pre><code class="language-sql">create table foo(x varchar);
@@ -202,7 +218,7 @@ the SQL <code>varchar</code> columns will be mapped to the <a href="https://docs
 </code></pre>
 <p>Previous versions of DataFusion used <code>Utf8View</code> when reading parquet files and it is faster in most cases.</p>
 <p>Thanks to <a href="https://github.com/zhuqi-lucas">zhuqi-lucas</a> for PR <a href="https://github.com/apache/datafusion/pull/15104">#15104</a></p>
-<h3 id="context-propagation-in-spawned-tasks-for-tracing-logging-etc">Context propagation in spawned tasks (for tracing, logging, etc.)<a class="headerlink" href="#context-propagation-in-spawned-tasks-for-tracing-logging-etc" title="Permanent link">&para;</a></h3>
+<h3 id="context-propagation-in-spawned-tasks-for-tracing-logging-etc">Context propagation in spawned tasks (for tracing, logging, etc.)<a class="headerlink" href="#context-propagation-in-spawned-tasks-for-tracing-logging-etc" title="Permanent link">¶</a></h3>
 <p>This release introduces an API for propagating user-defined context (such as tracing spans,
 logging, or metrics) across thread boundaries without depending on any specific instrumentation library.
 You can use the <a href="https://docs.rs/datafusion/latest/datafusion/common/runtime/trait.JoinSetTracer.html">JoinSetTracer</a> API to instrument DataFusion plans with your own tracing or logging libraries, or
@@ -212,8 +228,8 @@ use pre-integrated community crates such as the <a href="https://github.com/data
 <img alt="DataFusion telemetry project logo" class="img-responsive" src="/blog/images/datafusion-47.0.0/datafusion-telemetry.png" width="50%"/>
 </a>
 </div>
-<p>Previously, tasks spawned on new threads &mdash; such as those performing
-repartitioning or Parquet file reads &mdash; could lose thread-local context, which is
+<p>Previously, tasks spawned on new threads — such as those performing
+repartitioning or Parquet file reads — could lose thread-local context, which is
 often used in instrumentation libraries. A full example of how to use this new
 API is available in the <a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/tracing.rs">DataFusion examples</a>, and a simple example is shown below.</p>
 <pre><code class="language-Rust">/// Models a simple tracer. Calling `in_current_span()` and `in_scope()` saves thread-specific state
@@ -251,18 +267,18 @@ set_join_set_tracer(&amp;SpanTracer).expect("Failed to set tracer");
 ...
 </code></pre>
 <p>Thanks to <a href="https://github.com/geoffreyclaude">geoffreyclaude</a> for PR <a href="https://github.com/apache/datafusion/issues/14914">#14914</a></p>
-<h2 id="upgrade-guide-and-changelog">Upgrade Guide and Changelog<a class="headerlink" href="#upgrade-guide-and-changelog" title="Permanent link">&para;</a></h2>
+<h2 id="upgrade-guide-and-changelog">Upgrade Guide and Changelog<a class="headerlink" href="#upgrade-guide-and-changelog" title="Permanent link">¶</a></h2>
 <p>Upgrading to 47.0.0 should be straightforward for most users, but do review
 the <a href="https://datafusion.apache.org/library-user-guide/upgrading.html#datafusion-47-0-0">Upgrade Guide for DataFusion 47.0.0</a> for detailed
 steps and code changes. The upgrade guide covers the breaking changes mentioned above and provides code snippets to help with the
 transition. For a comprehensive list of all changes, please refer to the <a href="https://github.com/apache/datafusion/blob/branch-47/dev/changelog/47.0.0.md">changelog</a> for 47.0.0. The changelog
-enumerates every merged PR in this release, including many smaller fixes and improvements that we couldn&rsquo;t cover in this post.</p>
-<h2 id="get-involved">Get Involved<a class="headerlink" href="#get-involved" title="Permanent link">&para;</a></h2>
+enumerates every merged PR in this release, including many smaller fixes and improvements that we couldn’t cover in this post.</p>
+<h2 id="get-involved">Get Involved<a class="headerlink" href="#get-involved" title="Permanent link">¶</a></h2>
 <p>Apache DataFusion is an open-source project, and we welcome involvement from anyone interested. Now is a great time to
 take 47.0.0 for a spin: try it out on your workloads, and let us know if you encounter any issues or have suggestions.
 You can report bugs or request features on our GitHub issue tracker, or better yet, submit a pull request. Join our
-community discussions &ndash; whether you have questions, want to share how you&rsquo;re using DataFusion, or are looking to
-contribute, we&rsquo;d love to hear from you. A list of open issues suitable for beginners
+community discussions – whether you have questions, want to share how you’re using DataFusion, or are looking to
+contribute, we’d love to hear from you. A list of open issues suitable for beginners
 is <a href="https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22">here</a> and you
 can find how to reach us on the <a href="https://datafusion.apache.org/contributor-guide/communication.html">communication doc</a>.</p>
 <p>Happy querying!</p>
@@ -297,6 +313,21 @@ can find how to reach us on the <a href="https://datafusion.apache.org/contribut
   <!-- Container where Giscus will render -->
   <div id="comment-thread"></div>
 </div>      </div>
+      <aside class="toc-container d-none d-md-block col-md-4 col-xl-3 ms-xl-2">
+        <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#breaking-changes">Breaking Changes</a></li>
+<li><a href="#performance-improvements">Performance Improvements</a></li>
+<li><a href="#highlighted-new-features">Highlighted New Features</a><ul>
+<li><a href="#tree-style-explains">Tree style explains</a></li>
+<li><a href="#sql-varchar-defaults-to-utf8view">SQL VARCHAR defaults to Utf8View</a></li>
+<li><a href="#context-propagation-in-spawned-tasks-for-tracing-logging-etc">Context propagation in spawned tasks (for tracing, logging, etc.)</a></li>
+</ul>
+</li>
+<li><a href="#upgrade-guide-and-changelog">Upgrade Guide and Changelog</a></li>
+<li><a href="#get-involved">Get Involved</a></li>
+</ul>
+</div>
+      </aside>
     </div>
   </div>
 </div>    

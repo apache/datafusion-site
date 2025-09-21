@@ -44,6 +44,26 @@
         </h1>
         <p>Posted on: Thu 10 April 2025 by Andrew Lamb, Achraf B, and Sean Smith</p>
 
+        <aside class="toc-container d-md-none mb-2">
+          <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#try-it-for-yourself">Try it for yourself</a></li>
+<li><a href="#what-is-tpc-h-dbgen">What is TPC-H / dbgen?</a></li>
+<li><a href="#why-do-we-need-a-new-tpc-h-data-generator">Why do we need a new TPC-H Data generator?</a></li>
+<li><a href="#why-rust">Why Rust?</a></li>
+<li><a href="#how-the-journey">How: The Journey</a><ul>
+<li><a href="#optimizing-single-threaded-performance">Optimizing Single Threaded Performance</a></li>
+<li><a href="#multi-threading">Multi-threading</a></li>
+<li><a href="#direct-to-parquet">Direct to parquet</a></li>
+</ul>
+</li>
+<li><a href="#conclusion">Conclusion 👊🎤</a></li>
+<li><a href="#about-the-authors">About the Authors:</a><ul>
+<li><a href="#footnotes">Footnotes</a></li>
+</ul>
+</li>
+</ul>
+</div>
+        </aside>
 
         <!--
 {% comment %}
@@ -61,6 +81,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 {% endcomment %}x
 -->
+
 <style>
 /* Table borders */
 table, th, td {
@@ -87,14 +108,14 @@ analytical engines such as DataFusion.</p>
 VM with 88GB of memory. For Scale Factor(SF) 100 <code>tpchgen</code> takes 1 minute and 14 seconds and
 <a href="https://duckdb.org">DuckDB</a> takes 17 minutes and 48 seconds. For SF=1000, <code>tpchgen</code> takes 10
 minutes and 26 and uses about 5 GB of RAM at peak, and we could not measure
-DuckDB&rsquo;s time as it <a href="https://duckdb.org/docs/stable/extensions/tpch.html#resource-usage-of-the-data-generator">requires 647 GB of RAM</a>, more than the 88 GB that was
+DuckDB’s time as it <a href="https://duckdb.org/docs/stable/extensions/tpch.html#resource-usage-of-the-data-generator">requires 647 GB of RAM</a>, more than the 88 GB that was
 available on our test machine. The testing methodology is in the
 <a href="https://github.com/clflushopt/tpchgen-rs/blob/main/benchmarks/BENCHMARKS.md">documentation</a>.</p>
 <p>This blog explains what TPC-H is, how we ported the vintage C data generator to
 Rust (yes, <a href="https://www.reddit.com/r/rust/comments/4ri2gn/riir_rewrite_it_in_rust/">RWIR</a>) and optimized its performance over the course of a few weeks
 of part-time work. We began this project so we can easily generate TPC-H data in
 <a href="https://datafusion.apache.org/">Apache DataFusion</a> and <a href="https://glaredb.com/">GlareDB</a>.</p>
-<h1 id="try-it-for-yourself">Try it for yourself<a class="headerlink" href="#try-it-for-yourself" title="Permanent link">&para;</a></h1>
+<h1 id="try-it-for-yourself">Try it for yourself<a class="headerlink" href="#try-it-for-yourself" title="Permanent link">¶</a></h1>
 <p>The tool is entirely open source under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache 2.0 license</a>. Visit the <a href="https://github.com/clflushopt/tpchgen-rs">tpchgen-rs repository</a> or try it for yourself by run the following commands after <a href="https://www.rust-lang.org/tools/install">installing Rust</a>:</p>
 <pre><code class="language-shell">$ cargo install tpchgen-cli
 
@@ -104,7 +125,7 @@ $ tpchgen-cli -s 1
 # create SF=10 in Parquet
 $ tpchgen-cli -s 10 --format=parquet
 </code></pre>
-<h1 id="what-is-tpc-h-dbgen">What is TPC-H / dbgen?<a class="headerlink" href="#what-is-tpc-h-dbgen" title="Permanent link">&para;</a></h1>
+<h1 id="what-is-tpc-h-dbgen">What is TPC-H / dbgen?<a class="headerlink" href="#what-is-tpc-h-dbgen" title="Permanent link">¶</a></h1>
 <p>The popular <a href="https://www.tpc.org/tpch/">TPC-H</a> benchmark (often referred to as TPCH) helps evaluate the
 performance of database systems on <a href="https://en.wikipedia.org/wiki/Online_analytical_processing">OLAP</a> queries, the kind used to build BI
 dashboards.</p>
@@ -112,7 +133,7 @@ dashboards.</p>
 known</a> limitations as the data and queries do not well represent many real world
 use cases, the majority of analytic database papers and industrial systems still
 use TPC-H query performance benchmarks as a baseline. You will inevitably find
-multiple results for  &ldquo;<code>TPCH Performance &lt;your favorite database&gt;</code>&rdquo; in any
+multiple results for  “<code>TPCH Performance &lt;your favorite database&gt;</code>” in any
 search engine.</p>
 <p>The benchmark was created at a time when access to high performance analytical
 systems was not widespread, so the <a href="https://www.tpc.org/">Transaction Processing Performance Council</a>
@@ -188,7 +209,7 @@ bound on the Scale Factor.</p>
 </tr>
 </table>
 <p><strong>Table 1</strong>: TPC-H data set sizes at different scale factors for both TBL and <a href="https://parquet.apache.org/">Apache Parquet</a>.</p>
-<h1 id="why-do-we-need-a-new-tpc-h-data-generator">Why do we need a new TPC-H Data generator?<a class="headerlink" href="#why-do-we-need-a-new-tpc-h-data-generator" title="Permanent link">&para;</a></h1>
+<h1 id="why-do-we-need-a-new-tpc-h-data-generator">Why do we need a new TPC-H Data generator?<a class="headerlink" href="#why-do-we-need-a-new-tpc-h-data-generator" title="Permanent link">¶</a></h1>
 <p>Despite the known limitations of the TPC-H benchmark, it is so well known that it
 is used frequently in database performance analysis. To run TPC-H, you must first
 load the data, using <code>dbgen</code>, which is not ideal for several reasons:</p>
@@ -221,7 +242,7 @@ the first student project of <a href="https://15799.courses.cs.cmu.edu/spring202
 <p>The above limitations makes it impractical to generate Scale Factor 100 and
 above on laptops or standard workstations, though DuckDB offers <a href="https://duckdb.org/docs/stable/extensions/tpch.html#pre-generated-data-sets">pre-computed
 files</a> for larger factors<sup>3</sup>.</p>
-<h1 id="why-rust">Why Rust?<a class="headerlink" href="#why-rust" title="Permanent link">&para;</a></h1>
+<h1 id="why-rust">Why Rust?<a class="headerlink" href="#why-rust" title="Permanent link">¶</a></h1>
 <p>Realistically we used Rust because we wanted to integrate the data generator
 into <a href="https://datafusion.apache.org/">Apache DataFusion</a> and <a href="https://glaredb.com/">GlareDB</a>. However, we also believe Rust is
 superior to C/C++ due to its comparable performance, but much higher programmer
@@ -236,18 +257,18 @@ strings.</p>
 <p><strong>Figure 4</strong>: Lamb Theory of System Language Evolution from <a href="https://midas.bu.edu/assets/slides/andrew_lamb_slides.pdf">Boston University
 MiDAS Fall 2024 (Data Systems Seminar)</a>, <a href="https://www.youtube.com/watch?v=CpnxuBwHbUc">recording</a>. Special
 thanks to <a href="https://x.com/KurtFehlhauer">@KurtFehlhauer</a></p>
-<h1 id="how-the-journey">How: The Journey<a class="headerlink" href="#how-the-journey" title="Permanent link">&para;</a></h1>
+<h1 id="how-the-journey">How: The Journey<a class="headerlink" href="#how-the-journey" title="Permanent link">¶</a></h1>
 <p>We did it together as a team in the open over the course of a few weeks.
 <a href="https://github.com/lmwnshn">Wan Shen Lim</a> inspired the project by pointing out the benefits of <a href="https://github.com/apache/datafusion/issues/14373">easy TPC-H
 dataset creation</a>  and <a href="https://github.com/apache/datafusion/issues/14608#issuecomment-2651044600">suggesting we check out a Java port on February 11,
 2025</a>. Achraf made <a href="https://github.com/clflushopt/tpchgen-rs/commit/53d3402680422a15349ece0a7ea3c3f001018ba0">first commit a few days later</a> on February 16, and <a href="https://github.com/clflushopt/tpchgen-rs/commit/9bb386a4c55b8cf93ffac1b98f29b5da990ee79e">Andrew
 and Sean started helping on March 8, 2025</a> and we <a href="https://crates.io/crates/tpchgen/0.1.0">released version 0.1</a> on
 March 30, 2025.</p>
-<h2 id="optimizing-single-threaded-performance">Optimizing Single Threaded Performance<a class="headerlink" href="#optimizing-single-threaded-performance" title="Permanent link">&para;</a></h2>
+<h2 id="optimizing-single-threaded-performance">Optimizing Single Threaded Performance<a class="headerlink" href="#optimizing-single-threaded-performance" title="Permanent link">¶</a></h2>
 <p>Archaf <a href="https://github.com/clflushopt/tpchgen-rs/pull/16">completed the end to end conformance tests</a>, to ensure correctness, and
 an initial <a href="https://github.com/clflushopt/tpchgen-rs/pull/12">cli check in</a> on March 15, 2025.</p>
 <p>On a Macbook Pro M3 (Nov 2023), the initial performance numbers were actually
-slower than the original Java implementation which was ported 😭. This wasn&rsquo;t
+slower than the original Java implementation which was ported 😭. This wasn’t
 surprising since the focus of the first version was to get a byte of byte
 compatible port, and knew about the performance shortcomings and how to approach
 them.</p>
@@ -279,14 +300,14 @@ them.</p>
 </table>
 <p><strong>Table 2</strong>: Performance of running <a href="https://github.com/clflushopt/tpchgen-rs/pull/12">the initial tpchgen-cli</a>, measured with
 <code>time target/release/tpchgen-cli -s $SCALE_FACTOR</code></p>
-<p>With this strong foundation we began optimizing the code using Rust&rsquo;s low level
+<p>With this strong foundation we began optimizing the code using Rust’s low level
 memory management to improve performance while retaining memory safely. We spent
 several days obsessing over low level details and implemented a textbook like
 list of optimizations:</p>
 <ul>
 <li><a href="https://github.com/clflushopt/tpchgen-rs/pull/19">Avoiding startup overhead</a>,</li>
 <li><a href="https://github.com/clflushopt/tpchgen-rs/pull/26">not</a> <a href="https://github.com/clflushopt/tpchgen-rs/pull/32">copying</a> strings (many more PRs as well)</li>
-<li><a href="https://github.com/clflushopt/tpchgen-rs/pull/27">Rust&rsquo;s zero overhead abstractions for dates</a></li>
+<li><a href="https://github.com/clflushopt/tpchgen-rs/pull/27">Rust’s zero overhead abstractions for dates</a></li>
 <li><a href="https://github.com/clflushopt/tpchgen-rs/pull/35">Static strings</a> (entirely safely with static lifetimes)</li>
 <li><a href="https://github.com/clflushopt/tpchgen-rs/pull/33">Generics to avoid virtual function call overhead</a></li>
 <li><a href="https://github.com/clflushopt/tpchgen-rs/pull/62">Moving lookups from runtime</a> to load time</li>
@@ -327,14 +348,14 @@ list of optimizations:</p>
 </tr>
 </table>
 <p><strong>Table 3</strong>: Single threaded <code>tpchgen-cli</code> performance, measured with <code>time target/release/tpchgen-cli -s $SCALE_FACTOR --num-threads=1</code></p>
-<h2 id="multi-threading">Multi-threading<a class="headerlink" href="#multi-threading" title="Permanent link">&para;</a></h2>
-<p>Then we applied <a href="https://doc.rust-lang.org/book/ch16-00-concurrency.html">Rust&rsquo;s fearless concurrency</a> &ndash; with a single, <a href="https://github.com/clflushopt/tpchgen-rs/commit/ab720a70cdc80a711f4a3dda6bac05445106f499">small PR</a> (272
+<h2 id="multi-threading">Multi-threading<a class="headerlink" href="#multi-threading" title="Permanent link">¶</a></h2>
+<p>Then we applied <a href="https://doc.rust-lang.org/book/ch16-00-concurrency.html">Rust’s fearless concurrency</a> – with a single, <a href="https://github.com/clflushopt/tpchgen-rs/commit/ab720a70cdc80a711f4a3dda6bac05445106f499">small PR</a> (272
 net new lines) we updated the same memory safe code to run with multiple threads
 and consume bounded memory using <a href="https://thenewstack.io/using-rustlangs-async-tokio-runtime-for-cpu-bound-tasks/">tokio for the thread scheduler</a><sup>4</sup>.</p>
 <p>As shown in Table 4, with this change, tpchgen-cli generates the full SF=100
 dataset in 32 seconds (which is 3.3 GB/sec 🤯). Further investigation reveals
 that at SF=100 our generator is actually IO bound (which is not the case for
-<code>dbgen</code> or <code>duckdb</code>) &ndash; it creates data <strong>faster than can be written to an SSD</strong>.
+<code>dbgen</code> or <code>duckdb</code>) – it creates data <strong>faster than can be written to an SSD</strong>.
 When writing to <code>/dev/null</code> tpchgen  generates the entire dataset in 25 seconds
 (4 GB/s).</p>
 <table class="table">
@@ -396,7 +417,7 @@ generator seems to <a href="https://duckdb.org/docs/stable/extensions/tpch.html#
 developer laptops and memory use increases with scale factor. With <code>tpchgen-cli</code>
 it is perfectly possible to create data for SF=10000 or larger on a machine with
 16GB of memory (assuming sufficient storage capacity).</p>
-<h2 id="direct-to-parquet">Direct to parquet<a class="headerlink" href="#direct-to-parquet" title="Permanent link">&para;</a></h2>
+<h2 id="direct-to-parquet">Direct to parquet<a class="headerlink" href="#direct-to-parquet" title="Permanent link">¶</a></h2>
 <p>At this point, <code>tpchgen-cli</code> could very quickly generate the TBL format.
 However, as described above, the TBL is annoying to work with, because</p>
 <ol>
@@ -463,7 +484,7 @@ or CSV, tpchgen-cli creates the full SF=100 parquet format dataset in less than
 </table>
 <p><strong>Table 5</strong>: <code>tpchgen-cli</code> Parquet generation performance measured with  <code>time
 target/release/tpchgen-cli -s $SCALE_FACTOR --format=parquet</code></p>
-<h1 id="conclusion">Conclusion 👊🎤<a class="headerlink" href="#conclusion" title="Permanent link">&para;</a></h1>
+<h1 id="conclusion">Conclusion 👊🎤<a class="headerlink" href="#conclusion" title="Permanent link">¶</a></h1>
 <p>In just a few days, with some fellow database nerds and the power of Rust, we built something 10x better than what currently exists. We hope it inspires more research
 into analytical systems using the TPC-H dataset and that people build awesome
 things with it. For example, Sean has already added <a href="https://github.com/GlareDB/glaredb/pull/3549">on-demand generation of
@@ -473,14 +494,14 @@ tables to GlareDB</a>. Please consider joining us and helping out at
 are looking for a community of like minded people hacking on databases, we
 welcome you to <a href="https://datafusion.apache.org/contributor-guide/communication.html">come join us</a>. We are in the process of integrating this into
 DataFusion (see <a href="https://github.com/apache/datafusion/issues/14608">apache/datafusion#14608</a>) if you are interested in helping 🎣</p>
-<h1 id="about-the-authors">About the Authors:<a class="headerlink" href="#about-the-authors" title="Permanent link">&para;</a></h1>
+<h1 id="about-the-authors">About the Authors:<a class="headerlink" href="#about-the-authors" title="Permanent link">¶</a></h1>
 <ul>
 <li><a href="https://www.linkedin.com/in/andrewalamb/">Andrew Lamb</a> (<a href="https://github.com/alamb">@alamb</a>) is a Staff Engineer at <a href="https://www.influxdata.com/">InfluxData</a> and a PMC member of <a href="https://datafusion.apache.org/">Apache DataFusion</a> and <a href="https://arrow.apache.org/">Apache Arrow</a>.</li>
 <li>Achraf B (<a href="https://github.com/clflushopt">@clflushopt</a>) is a Software Engineer at <a href="https://optable.co/">Optable</a> where he works on data infrastructure.</li>
 <li><a href="https://www.linkedin.com/in/scsmithr/">Sean Smith</a> (<a href="https://github.com/scsmithr">@scsmithr</a>) is the founder of <a href="https://glaredb.com/">GlareDB</a> focused on building a fast analytics database.</li>
 </ul>
 <!-- Footnotes themselves at the bottom. -->
-<h2 id="footnotes">Footnotes<a class="headerlink" href="#footnotes" title="Permanent link">&para;</a></h2>
+<h2 id="footnotes">Footnotes<a class="headerlink" href="#footnotes" title="Permanent link">¶</a></h2>
 <p><em>1</em>: Actual Time: <code>30:35</code></p>
 <p><em>2</em>: It is possible to embed the dbgen code, which appears to be the approach taken by DuckDB. This approach was tried in GlareDB (<a href="https://github.com/GlareDB/glaredb/pull/3313">GlareDB/glaredb#3313</a>), but ultimately shelved given the amount of effort needed to adapt and isolate the dbgen code.</p>
 <p><em>3</em>: It is pretty amazing to imagine the machine required to generate SF300 that had 1.8TB (!!) of RAM</p>
@@ -517,6 +538,26 @@ DataFusion (see <a href="https://github.com/apache/datafusion/issues/14608">apac
   <!-- Container where Giscus will render -->
   <div id="comment-thread"></div>
 </div>      </div>
+      <aside class="toc-container d-none d-md-block col-md-4 col-xl-3 ms-xl-2">
+        <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#try-it-for-yourself">Try it for yourself</a></li>
+<li><a href="#what-is-tpc-h-dbgen">What is TPC-H / dbgen?</a></li>
+<li><a href="#why-do-we-need-a-new-tpc-h-data-generator">Why do we need a new TPC-H Data generator?</a></li>
+<li><a href="#why-rust">Why Rust?</a></li>
+<li><a href="#how-the-journey">How: The Journey</a><ul>
+<li><a href="#optimizing-single-threaded-performance">Optimizing Single Threaded Performance</a></li>
+<li><a href="#multi-threading">Multi-threading</a></li>
+<li><a href="#direct-to-parquet">Direct to parquet</a></li>
+</ul>
+</li>
+<li><a href="#conclusion">Conclusion 👊🎤</a></li>
+<li><a href="#about-the-authors">About the Authors:</a><ul>
+<li><a href="#footnotes">Footnotes</a></li>
+</ul>
+</li>
+</ul>
+</div>
+      </aside>
     </div>
   </div>
 </div>    

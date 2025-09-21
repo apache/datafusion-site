@@ -44,6 +44,24 @@
         </h1>
         <p>Posted on: Mon 18 November 2024 by Andrew Lamb, Staff Engineer at InfluxData</p>
 
+        <aside class="toc-container d-md-none mb-2">
+          <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#a-strong-history-of-performance-improvements">A Strong History of Performance Improvements</a><ul>
+<li><a href="#stringview">StringView</a></li>
+<li><a href="#parquet">Parquet</a></li>
+<li><a href="#skipping-partial-aggregation-when-it-doesnt-help">Skipping Partial Aggregation When It Doesn't Help</a></li>
+<li><a href="#optimized-multi-column-grouping">Optimized Multi-Column Grouping</a></li>
+</ul>
+</li>
+<li><a href="#whats-next">What’s Next 🚀</a></li>
+<li><a href="#additional-thanks">Additional Thanks</a></li>
+<li><a href="#conclusion">Conclusion</a><ul>
+<li><a href="#notes">Notes</a></li>
+</ul>
+</li>
+</ul>
+</div>
+        </aside>
 
         <!--
 {% comment %}
@@ -63,6 +81,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 {% endcomment %}
 -->
+
 <p>I am extremely excited to announce that <a href="https://crates.io/crates/datafusion">Apache DataFusion</a>  is the
 fastest engine for querying Apache Parquet files in <a href="https://benchmark.clickhouse.com/">ClickBench</a>. It is faster
 than <a href="https://duckdb.org/">DuckDB</a>, <a href="https://clickhouse.com/chdb">chDB</a> and <a href="https://clickhouse.com/">Clickhouse</a> using the same hardware. It also marks
@@ -70,11 +89,11 @@ the first time a <a href="https://www.rust-lang.org/">Rust</a>-based engine hold
 been held by traditional C/C++-based engines.</p>
 <p><img alt="Apache DataFusion Logo" class="img-responsive" src="/blog/images/2x_bgwhite_original.png" width="80%"/></p>
 <p><img alt="ClickBench performance for DataFusion 43.0.0" class="img-responsive" src="/blog/images/clickbench-datafusion-43/perf.png" width="100%"/></p>
-<p><strong>Figure 1</strong>: 2024-11-16 <a href="https://benchmark.clickhouse.com/#eyJzeXN0ZW0iOnsiQWxsb3lEQiI6ZmFsc2UsIkFsbG95REIgKHR1bmVkKSI6ZmFsc2UsIkF0aGVuYSAocGFydGl0aW9uZWQpIjpmYWxzZSwiQXRoZW5hIChzaW5nbGUpIjpmYWxzZSwiQXVyb3JhIGZvciBNeVNRTCI6ZmFsc2UsIkF1cm9yYSBmb3IgUG9zdGdyZVNRTCI6ZmFsc2UsIkJ5Q29uaXR5IjpmYWxzZSwiQnl0ZUhvdXNlIjpmYWxzZSwiY2hEQiAoRGF0YUZyYW1lKSI6ZmFsc2UsImNoREIgKFBhcnF1ZXQsIHBhcnRpdGlvbmVkKSI6dHJ1ZSwiY2hEQiI6ZmFsc2UsIkNpdHVzIjpmYWxzZSwiQ2xpY2tIb3VzZSBDbG91ZCAoYXdzKSI6ZmFsc2UsIkNsaWNrSG91c2UgQ2xvdWQgKGF6dXJlKSI6ZmFsc2UsIkNsaWNrSG91c2UgQ2xvdWQgKGdjcCkiOmZhbHNlLCJDbGlja0hvdXNlIChkYXRhIGxha2UsIHBhcnRpdGlvbmVkKSI6ZmFsc2UsIkNsaWNrSG91c2UgKGRhdGEgbGFrZSwgc2luZ2xlKSI6ZmFsc2UsIkNsaWNrSG91c2UgKFBhcnF1ZXQsIHBhcnRpdGlvbmVkKSI6dHJ1ZSwiQ2xpY2tIb3VzZSAoUGFycXVldCwgc2luZ2xlKSI6ZmFsc2UsIkNsaWNrSG91c2UgKHdlYikiOmZhbHNlLCJDbGlja0hvdXNlIjpmYWxzZSwiQ2xpY2tIb3VzZSAodHVuZWQpIjpmYWxzZSwiQ2xpY2tIb3VzZSAodHVuZWQsIG1lbW9yeSkiOmZhbHNlLCJDbG91ZGJlcnJ5IjpmYWxzZSwiQ3JhdGVEQiI6ZmFsc2UsIkNydW5jaHkgQnJpZGdlIGZvciBBbmFseXRpY3MgKFBhcnF1ZXQpIjpmYWxzZSwiRGF0YWJlbmQiOmZhbHNlLCJEYXRhRnVzaW9uIChQYXJxdWV0LCBwYXJ0aXRpb25lZCkiOnRydWUsIkRhdGFGdXNpb24gKFBhcnF1ZXQsIHNpbmdsZSkiOmZhbHNlLCJBcGFjaGUgRG9yaXMiOmZhbHNlLCJEcnVpZCI6ZmFsc2UsIkR1Y2tEQiAoRGF0YUZyYW1lKSI6ZmFsc2UsIkR1Y2tEQiAoUGFycXVldCwgcGFydGl0aW9uZWQpIjp0cnVlLCJEdWNrREIiOmZhbHNlLCJFbGFzdGljc2VhcmNoIjpmYWxzZSwiRWxhc3RpY3NlYXJjaCAodHVuZWQpIjpmYWxzZSwiR2xhcmVEQiI6ZmFsc2UsIkdyZWVucGx1bSI6ZmFsc2UsIkhlYXZ5QUkiOmZhbHNlLCJIeWRyYSI6ZmFsc2UsIkluZm9icmlnaHQiOmZhbHNlLCJLaW5ldGljYSI6ZmFsc2UsIk1hcmlhREIgQ29sdW1uU3RvcmUiOmZhbHNlLCJNYXJpYURCIjpmYWxzZSwiTW9uZXREQiI6ZmFsc2UsIk1vbmdvREIiOmZhbHNlLCJNb3RoZXJEdWNrIjpmYWxzZSwiTXlTUUwgKE15SVNBTSkiOmZhbHNlLCJNeVNRTCI6ZmFsc2UsIk94bGEiOmZhbHNlLCJQYW5kYXMgKERhdGFGcmFtZSkiOmZhbHNlLCJQYXJhZGVEQiAoUGFycXVldCwgcGFydGl0aW9uZWQpIjp0cnVlLCJQYXJhZGVEQiAoUGFycXVldCwgc2luZ2xlKSI6ZmFsc2UsIlBpbm90IjpmYWxzZSwiUG9sYXJzIChEYXRhRnJhbWUpIjpmYWxzZSwiUG9zdGdyZVNRTCAodHVuZWQpIjpmYWxzZSwiUG9zdGdyZVNRTCI6ZmFsc2UsIlF1ZXN0REIgKHBhcnRpdGlvbmVkKSI6ZmFsc2UsIlF1ZXN0REIiOmZhbHNlLCJSZWRzaGlmdCI6ZmFsc2UsIlNpbmdsZVN0b3JlIjpmYWxzZSwiU25vd2ZsYWtlIjpmYWxzZSwiU1FMaXRlIjpmYWxzZSwiU3RhclJvY2tzIjpmYWxzZSwiVGFibGVzcGFjZSI6ZmFsc2UsIlRlbWJvIE9MQVAgKGNvbHVtbmFyKSI6ZmFsc2UsIlRpbWVzY2FsZURCIChubyBjb2x1bW5zdG9yZSkiOmZhbHNlLCJUaW1lc2NhbGVEQiI6ZmFsc2UsIlRpbnliaXJkIChGcmVlIFRyaWFsKSI6ZmFsc2UsIlVtYnJhIjpmYWxzZX0sInR5cGUiOnsiQyI6dHJ1ZSwiY29sdW1uLW9yaWVudGVkIjp0cnVlLCJQb3N0Z3JlU1FMIGNvbXBhdGlibGUiOnRydWUsIm1hbmFnZWQiOnRydWUsImdjcCI6dHJ1ZSwic3RhdGVsZXNzIjp0cnVlLCJKYXZhIjp0cnVlLCJDKysiOnRydWUsIk15U1FMIGNvbXBhdGlibGUiOnRydWUsInJvdy1vcmllbnRlZCI6dHJ1ZSwiQ2xpY2tIb3VzZSBkZXJpdmF0aXZlIjp0cnVlLCJlbWJlZGRlZCI6dHJ1ZSwic2VydmVybGVzcyI6dHJ1ZSwiZGF0YWZyYW1lIjp0cnVlLCJhd3MiOnRydWUsImF6dXJlIjp0cnVlLCJhbmFseXRpY2FsIjp0cnVlLCJSdXN0Ijp0cnVlLCJzZWFyY2giOnRydWUsImRvY3VtZW50Ijp0cnVlLCJzb21ld2hhdCBQb3N0Z3JlU1FMIGNvbXBhdGlibGUiOnRydWUsInRpbWUtc2VyaWVzIjp0cnVlfSwibWFjaGluZSI6eyIxNiB2Q1BVIDEyOEdCIjp0cnVlLCI4IHZDUFUgNjRHQiI6dHJ1ZSwic2VydmVybGVzcyI6dHJ1ZSwiMTZhY3UiOnRydWUsImM2YS40eGxhcmdlLCA1MDBnYiBncDIiOnRydWUsIkwiOnRydWUsIk0iOnRydWUsIlMiOnRydWUsIlhTIjp0cnVlLCJjNmEubWV0YWwsIDUwMGdiIGdwMiI6ZmFsc2UsIjE5MkdCIjp0cnVlLCIyNEdCIjp0cnVlLCIzNjBHQiI6dHJ1ZSwiNDhHQiI6dHJ1ZSwiNzIwR0IiOnRydWUsIjk2R0IiOnRydWUsImRldiI6dHJ1ZSwiNzA4R0IiOnRydWUsImM1bi40eGxhcmdlLCA1MDBnYiBncDIiOnRydWUsIkFuYWx5dGljcy0yNTZHQiAoNjQgdkNvcmVzLCAyNTYgR0IpIjp0cnVlLCJjNS40eGxhcmdlLCA1MDBnYiBncDIiOnRydWUsImM2YS40eGxhcmdlLCAxNTAwZ2IgZ3AyIjp0cnVlLCJjbG91ZCI6dHJ1ZSwiZGMyLjh4bGFyZ2UiOnRydWUsInJhMy4xNnhsYXJnZSI6dHJ1ZSwicmEzLjR4bGFyZ2UiOnRydWUsInJhMy54bHBsdXMiOnRydWUsIlMyIjp0cnVlLCJTMjQiOnRydWUsIjJYTCI6dHJ1ZSwiM1hMIjp0cnVlLCI0WEwiOnRydWUsIlhMIjp0cnVlLCJMMSAtIDE2Q1BVIDMyR0IiOnRydWUsImM2YS40eGxhcmdlLCA1MDBnYiBncDMiOnRydWV9LCJjbHVzdGVyX3NpemUiOnsiMSI6dHJ1ZSwiMiI6dHJ1ZSwiNCI6dHJ1ZSwiOCI6dHJ1ZSwiMTYiOnRydWUsIjMyIjp0cnVlLCI2NCI6dHJ1ZSwiMTI4Ijp0cnVlLCJzZXJ2ZXJsZXNzIjp0cnVlfSwibWV0cmljIjoiaG90IiwicXVlcmllcyI6W3RydWUsdHJ1ZSx0cnVlLHRydWUsdHJ1ZSx0cnVlLHRydWUsdHJ1ZSx0cnVlLHRydWUsdHJ1ZSx0cnVlLHRydWUsdHJ1ZSx0cnVlLHRydWUsdHJ1ZSx0cnVlLHRydWUsdHJ1ZSx0cnVlLHRydWUsdHJ1ZSx0cnVlLHRydWUsdHJ1ZSx0cnVlLHRydWUsdHJ1ZSx0cnVlLHRydWUsdHJ1ZSx0cnVlLHRydWUsdHJ1ZSx0cnVlLHRydWUsdHJ1ZSx0cnVlLHRydWUsdHJ1ZSx0cnVlLHRydWVdfQ==">ClickBench Results</a> for the  &lsquo;hot&rsquo;[^1] run against the
+<p><strong>Figure 1</strong>: 2024-11-16 <a href="https://benchmark.clickhouse.com/#eyJzeXN0ZW0iOnsiQWxsb3lEQiI6ZmFsc2UsIkFsbG95REIgKHR1bmVkKSI6ZmFsc2UsIkF0aGVuYSAocGFydGl0aW9uZWQpIjpmYWxzZSwiQXRoZW5hIChzaW5nbGUpIjpmYWxzZSwiQXVyb3JhIGZvciBNeVNRTCI6ZmFsc2UsIkF1cm9yYSBmb3IgUG9zdGdyZVNRTCI6ZmFsc2UsIkJ5Q29uaXR5IjpmYWxzZSwiQnl0ZUhvdXNlIjpmYWxzZSwiY2hEQiAoRGF0YUZyYW1lKSI6ZmFsc2UsImNoREIgKFBhcnF1ZXQsIHBhcnRpdGlvbmVkKSI6dHJ1ZSwiY2hEQiI6ZmFsc2UsIkNpdHVzIjpmYWxzZSwiQ2xpY2tIb3VzZSBDbG91ZCAoYXdzKSI6ZmFsc2UsIkNsaWNrSG91c2UgQ2xvdWQgKGF6dXJlKSI6ZmFsc2UsIkNsaWNrSG91c2UgQ2xvdWQgKGdjcCkiOmZhbHNlLCJDbGlja0hvdXNlIChkYXRhIGxha2UsIHBhcnRpdGlvbmVkKSI6ZmFsc2UsIkNsaWNrSG91c2UgKGRhdGEgbGFrZSwgc2luZ2xlKSI6ZmFsc2UsIkNsaWNrSG91c2UgKFBhcnF1ZXQsIHBhcnRpdGlvbmVkKSI6dHJ1ZSwiQ2xpY2tIb3VzZSAoUGFycXVldCwgc2luZ2xlKSI6ZmFsc2UsIkNsaWNrSG91c2UgKHdlYikiOmZhbHNlLCJDbGlja0hvdXNlIjpmYWxzZSwiQ2xpY2tIb3VzZSAodHVuZWQpIjpmYWxzZSwiQ2xpY2tIb3VzZSAodHVuZWQsIG1lbW9yeSkiOmZhbHNlLCJDbG91ZGJlcnJ5IjpmYWxzZSwiQ3JhdGVEQiI6ZmFsc2UsIkNydW5jaHkgQnJpZGdlIGZvciBBbmFseXRpY3MgKFBhcnF1ZXQpIjpmYWxzZSwiRGF0YWJlbmQiOmZhbHNlLCJEYXRhRnVzaW9uIChQYXJxdWV0LCBwYXJ0aXRpb25lZCkiOnRydWUsIkRhdGFGdXNpb24gKFBhcnF1ZXQsIHNpbmdsZSkiOmZhbHNlLCJBcGFjaGUgRG9yaXMiOmZhbHNlLCJEcnVpZCI6ZmFsc2UsIkR1Y2tEQiAoRGF0YUZyYW1lKSI6ZmFsc2UsIkR1Y2tEQiAoUGFycXVldCwgcGFydGl0aW9uZWQpIjp0cnVlLCJEdWNrREIiOmZhbHNlLCJFbGFzdGljc2VhcmNoIjpmYWxzZSwiRWxhc3RpY3NlYXJjaCAodHVuZWQpIjpmYWxzZSwiR2xhcmVEQiI6ZmFsc2UsIkdyZWVucGx1bSI6ZmFsc2UsIkhlYXZ5QUkiOmZhbHNlLCJIeWRyYSI6ZmFsc2UsIkluZm9icmlnaHQiOmZhbHNlLCJLaW5ldGljYSI6ZmFsc2UsIk1hcmlhREIgQ29sdW1uU3RvcmUiOmZhbHNlLCJNYXJpYURCIjpmYWxzZSwiTW9uZXREQiI6ZmFsc2UsIk1vbmdvREIiOmZhbHNlLCJNb3RoZXJEdWNrIjpmYWxzZSwiTXlTUUwgKE15SVNBTSkiOmZhbHNlLCJNeVNRTCI6ZmFsc2UsIk94bGEiOmZhbHNlLCJQYW5kYXMgKERhdGFGcmFtZSkiOmZhbHNlLCJQYXJhZGVEQiAoUGFycXVldCwgcGFydGl0aW9uZWQpIjp0cnVlLCJQYXJhZGVEQiAoUGFycXVldCwgc2luZ2xlKSI6ZmFsc2UsIlBpbm90IjpmYWxzZSwiUG9sYXJzIChEYXRhRnJhbWUpIjpmYWxzZSwiUG9zdGdyZVNRTCAodHVuZWQpIjpmYWxzZSwiUG9zdGdyZVNRTCI6ZmFsc2UsIlF1ZXN0REIgKHBhcnRpdGlvbmVkKSI6ZmFsc2UsIlF1ZXN0REIiOmZhbHNlLCJSZWRzaGlmdCI6ZmFsc2UsIlNpbmdsZVN0b3JlIjpmYWxzZSwiU25vd2ZsYWtlIjpmYWxzZSwiU1FMaXRlIjpmYWxzZSwiU3RhclJvY2tzIjpmYWxzZSwiVGFibGVzcGFjZSI6ZmFsc2UsIlRlbWJvIE9MQVAgKGNvbHVtbmFyKSI6ZmFsc2UsIlRpbWVzY2FsZURCIChubyBjb2x1bW5zdG9yZSkiOmZhbHNlLCJUaW1lc2NhbGVEQiI6ZmFsc2UsIlRpbnliaXJkIChGcmVlIFRyaWFsKSI6ZmFsc2UsIlVtYnJhIjpmYWxzZX0sInR5cGUiOnsiQyI6dHJ1ZSwiY29sdW1uLW9yaWVudGVkIjp0cnVlLCJQb3N0Z3JlU1FMIGNvbXBhdGlibGUiOnRydWUsIm1hbmFnZWQiOnRydWUsImdjcCI6dHJ1ZSwic3RhdGVsZXNzIjp0cnVlLCJKYXZhIjp0cnVlLCJDKysiOnRydWUsIk15U1FMIGNvbXBhdGlibGUiOnRydWUsInJvdy1vcmllbnRlZCI6dHJ1ZSwiQ2xpY2tIb3VzZSBkZXJpdmF0aXZlIjp0cnVlLCJlbWJlZGRlZCI6dHJ1ZSwic2VydmVybGVzcyI6dHJ1ZSwiZGF0YWZyYW1lIjp0cnVlLCJhd3MiOnRydWUsImF6dXJlIjp0cnVlLCJhbmFseXRpY2FsIjp0cnVlLCJSdXN0Ijp0cnVlLCJzZWFyY2giOnRydWUsImRvY3VtZW50Ijp0cnVlLCJzb21ld2hhdCBQb3N0Z3JlU1FMIGNvbXBhdGlibGUiOnRydWUsInRpbWUtc2VyaWVzIjp0cnVlfSwibWFjaGluZSI6eyIxNiB2Q1BVIDEyOEdCIjp0cnVlLCI4IHZDUFUgNjRHQiI6dHJ1ZSwic2VydmVybGVzcyI6dHJ1ZSwiMTZhY3UiOnRydWUsImM2YS40eGxhcmdlLCA1MDBnYiBncDIiOnRydWUsIkwiOnRydWUsIk0iOnRydWUsIlMiOnRydWUsIlhTIjp0cnVlLCJjNmEubWV0YWwsIDUwMGdiIGdwMiI6ZmFsc2UsIjE5MkdCIjp0cnVlLCIyNEdCIjp0cnVlLCIzNjBHQiI6dHJ1ZSwiNDhHQiI6dHJ1ZSwiNzIwR0IiOnRydWUsIjk2R0IiOnRydWUsImRldiI6dHJ1ZSwiNzA4R0IiOnRydWUsImM1bi40eGxhcmdlLCA1MDBnYiBncDIiOnRydWUsIkFuYWx5dGljcy0yNTZHQiAoNjQgdkNvcmVzLCAyNTYgR0IpIjp0cnVlLCJjNS40eGxhcmdlLCA1MDBnYiBncDIiOnRydWUsImM2YS40eGxhcmdlLCAxNTAwZ2IgZ3AyIjp0cnVlLCJjbG91ZCI6dHJ1ZSwiZGMyLjh4bGFyZ2UiOnRydWUsInJhMy4xNnhsYXJnZSI6dHJ1ZSwicmEzLjR4bGFyZ2UiOnRydWUsInJhMy54bHBsdXMiOnRydWUsIlMyIjp0cnVlLCJTMjQiOnRydWUsIjJYTCI6dHJ1ZSwiM1hMIjp0cnVlLCI0WEwiOnRydWUsIlhMIjp0cnVlLCJMMSAtIDE2Q1BVIDMyR0IiOnRydWUsImM2YS40eGxhcmdlLCA1MDBnYiBncDMiOnRydWV9LCJjbHVzdGVyX3NpemUiOnsiMSI6dHJ1ZSwiMiI6dHJ1ZSwiNCI6dHJ1ZSwiOCI6dHJ1ZSwiMTYiOnRydWUsIjMyIjp0cnVlLCI2NCI6dHJ1ZSwiMTI4Ijp0cnVlLCJzZXJ2ZXJsZXNzIjp0cnVlfSwibWV0cmljIjoiaG90IiwicXVlcmllcyI6W3RydWUsdHJ1ZSx0cnVlLHRydWUsdHJ1ZSx0cnVlLHRydWUsdHJ1ZSx0cnVlLHRydWUsdHJ1ZSx0cnVlLHRydWUsdHJ1ZSx0cnVlLHRydWUsdHJ1ZSx0cnVlLHRydWUsdHJ1ZSx0cnVlLHRydWUsdHJ1ZSx0cnVlLHRydWUsdHJ1ZSx0cnVlLHRydWUsdHJ1ZSx0cnVlLHRydWUsdHJ1ZSx0cnVlLHRydWUsdHJ1ZSx0cnVlLHRydWUsdHJ1ZSx0cnVlLHRydWUsdHJ1ZSx0cnVlLHRydWVdfQ==">ClickBench Results</a> for the  ‘hot’[^1] run against the
 partitioned 14 GB Parquet dataset (100 files, each ~140MB) on a <code>c6a.4xlarge</code> (16
 CPU / 32 GB  RAM) VM. Measurements are relative (<code>1.x</code>) to results using
 different hardware.</p>
-<p>Best in class performance on Parquet is now available to anyone. DataFusion&rsquo;s
+<p>Best in class performance on Parquet is now available to anyone. DataFusion’s
 open design lets you start quickly with a full featured Query Engine, including
 SQL, data formats, catalogs, and more, and then customize any behavior you need.
 I predict the continued emergence of new classes of data systems now that
@@ -87,12 +106,12 @@ less important than open formats (though the idea of use case specific formats
 is interesting[^2]).</p>
 <p>This blog post highlights some of the techniques we used to achieve this
 performance, and celebrates the teamwork involved.</p>
-<h1 id="a-strong-history-of-performance-improvements">A Strong History of Performance Improvements<a class="headerlink" href="#a-strong-history-of-performance-improvements" title="Permanent link">&para;</a></h1>
+<h1 id="a-strong-history-of-performance-improvements">A Strong History of Performance Improvements<a class="headerlink" href="#a-strong-history-of-performance-improvements" title="Permanent link">¶</a></h1>
 <p>Performance has long been a core focus for DataFusion's community, and 
 speed attracts users and contributors. Recently, we seem to have been
 even more focused on performance, including in July, 2024 when <a href="https://www.linkedin.com/in/mehmet-ozan-kabak/">Mehmet Ozan
 Kabak</a>, CEO of <a href="https://www.synnada.ai/">Synnada</a>, again <a href="https://github.com/apache/datafusion/issues/11442#issuecomment-2226834443">suggested focusing on performance</a>. This
-got many of us excited (who doesn&rsquo;t love a challenge!), and we have subsequently
+got many of us excited (who doesn’t love a challenge!), and we have subsequently
 rallied to steadily improve the performance release on release as shown in
 Figure 2.</p>
 <p><img alt="ClickBench performance results over time for DataFusion" class="img-responsive" src="/blog/images/clickbench-datafusion-43/perf-over-time.png" width="100%"/></p>
@@ -110,9 +129,9 @@ Photon</a>, or
 <a href="https://www.snowflake.com/en/">Snowflake</a> or in tightly integrated open source
 systems such as <a href="https://duckdb.org/">DuckDB</a> or
 <a href="https://clickhouse.com/">ClickHouse</a> which were not designed to be extended.</p>
-<h2 id="stringview">StringView<a class="headerlink" href="#stringview" title="Permanent link">&para;</a></h2>
+<h2 id="stringview">StringView<a class="headerlink" href="#stringview" title="Permanent link">¶</a></h2>
 <p>Performance improved for all queries when DataFusion switched to using Arrow
-<code>StringView</code>. Using <code>StringView</code> &ldquo;just&rdquo; saves some copies and avoids one memory
+<code>StringView</code>. Using <code>StringView</code> “just” saves some copies and avoids one memory
 access for certain comparisons. However, these copies and comparisons happen to
 occur in many of the hottest loops during query processing, so optimizing them
 resulted in measurable performance improvements.</p>
@@ -122,7 +141,7 @@ Queries Faster: Part 1</a> showing how <code>StringView</code> saves copying dat
 <p>Using StringView to make DataFusion faster for ClickBench required substantial
 careful, low level optimization work described in <a href="https://www.influxdata.com/blog/faster-queries-with-stringview-part-one-influxdb/">Using StringView / German
 Style Strings to Make Queries Faster: Part 1</a> and <a href="https://www.influxdata.com/blog/faster-queries-with-stringview-part-two-influxdb/">Part 2</a>. However, it <em>also</em>
-required extending the rest of DataFusion&rsquo;s operations to support the new type.
+required extending the rest of DataFusion’s operations to support the new type.
 You can get a sense of the magnitude of the work required by looking at the 100+
 pull requests linked to the epic in arrow-rs
 (<a href="https://github.com/apache/arrow-rs/issues/5374">here</a>) and three major epics
@@ -131,11 +150,11 @@ pull requests linked to the epic in arrow-rs
 <a href="https://github.com/apache/datafusion/issues/11752">here</a>) in DataFusion.</p>
 <p>Here is a partial list of people involved in the project (I am sorry to those whom I forgot)</p>
 <ul>
-<li><strong>Arrow</strong>:  <a href="https://github.com/XiangpengHao">Xiangpeng Hao</a> (InfluxData&rsquo;s amazing 2024 summer intern and UW Madison PhD), <a href="https://github.com/ariesdevil">Yijun Zhao</a> from DataBend Labs, and <a href="https://github.com/tustvold">Raphael Taylor-Davies</a> laid the foundation.  <a href="https://github.com/RinChanNOWWW">RinChanNOW</a> from Tencent and <a href="https://github.com/a10y">Andrew Duffy</a> from SpiralDB helped push it along in the early days, and <a href="https://github.com/viirya">Liang-Chi Hsieh</a>, <a href="https://github.com/Dandandan">Dani&euml;l Heres</a> reviewed and provided guidance.</li>
+<li><strong>Arrow</strong>:  <a href="https://github.com/XiangpengHao">Xiangpeng Hao</a> (InfluxData’s amazing 2024 summer intern and UW Madison PhD), <a href="https://github.com/ariesdevil">Yijun Zhao</a> from DataBend Labs, and <a href="https://github.com/tustvold">Raphael Taylor-Davies</a> laid the foundation.  <a href="https://github.com/RinChanNOWWW">RinChanNOW</a> from Tencent and <a href="https://github.com/a10y">Andrew Duffy</a> from SpiralDB helped push it along in the early days, and <a href="https://github.com/viirya">Liang-Chi Hsieh</a>, <a href="https://github.com/Dandandan">Daniël Heres</a> reviewed and provided guidance.</li>
 <li><strong>DataFusion</strong>:  <a href="https://github.com/XiangpengHao">Xiangpeng Hao</a>, again charted the initial path and <a href="https://github.com/Weijun-H">Weijun Huang</a>, <a href="https://github.com/dharanad">Dharan Aditya</a> <a href="https://github.com/Lordworms">Lordworms</a>, <a href="https://github.com/goldmedal">Jax Liu</a>,  <a href="https://github.com/wiedld">wiedld</a>, <a href="https://github.com/tlm365">Tai Le Manh</a>, <a href="https://github.com/my-vegetable-has-exploded">yi wang</a>, <a href="https://github.com/doupache">doupache</a>, <a href="https://github.com/jayzhan211">Jay Zhan</a> , <a href="https://github.com/xinlifoobar">Xin Li</a>  and <a href="https://github.com/Kev1n8">Kaifeng Zheng</a> made it real.</li>
 <li><strong>DataFusion String Function Migration</strong>:  <a href="https://github.com/tshauck">Trent Hauck</a> organized the effort and set the patterns, <a href="https://github.com/goldmedal">Jax Liu</a> made a clever testing framework, and <a href="https://github.com/austin362667">Austin Liu</a>, <a href="https://github.com/demetribu">Dmitrii Bu</a>, <a href="https://github.com/tlm365">Tai Le Manh</a>, <a href="https://github.com/PsiACE">Chojan Shang</a>, <a href="https://github.com/devanbenz">WeblWabl</a>, <a href="https://github.com/Lordworms">Lordworms</a>, <a href="https://github.com/thinh2">iamthinh</a>, <a href="https://github.com/Omega359">Bruce Ritchie</a>, <a href="https://github.com/Kev1n8">Kaifeng Zheng</a>, and <a href="https://github.com/xinlifoobar">Xin Li</a> bashed out the conversions.</li>
 </ul>
-<h2 id="parquet">Parquet<a class="headerlink" href="#parquet" title="Permanent link">&para;</a></h2>
+<h2 id="parquet">Parquet<a class="headerlink" href="#parquet" title="Permanent link">¶</a></h2>
 <p>Part of the reason for DataFusion's speed in ClickBench is reading Parquet files (really) quickly,
 which reflects invested effort in the Parquet reading system (see <a href="https://www.influxdata.com/blog/querying-parquet-millisecond-latency/">Querying
 Parquet with Millisecond Latency</a> )</p>
@@ -143,17 +162,17 @@ Parquet with Millisecond Latency</a> )</p>
 sophisticated open source Parquet reader I know of. It has every optimization we
 can think of for reading Parquet, including projection pushdown, predicate
 pushdown (row group metadata, page index, and bloom filters), limit pushdown,
-parallel reading, interleaved I/O, and late materialized filtering (coming soon &trade;️
+parallel reading, interleaved I/O, and late materialized filtering (coming soon ™️
 by default). Some recent work from <a href="https://github.com/itsjunetime">June</a>
 <a href="https://github.com/apache/datafusion/pull/12135">recently unblocked a remaining hurdle</a> for enabling late materialized
 filtering, and conveniently <a href="https://github.com/XiangpengHao">Xiangpeng Hao</a> is
 working on the <a href="https://github.com/apache/arrow-datafusion/issues/3463">final piece</a> (no pressure😅)</p>
-<h2 id="skipping-partial-aggregation-when-it-doesnt-help">Skipping Partial Aggregation When It Doesn't Help<a class="headerlink" href="#skipping-partial-aggregation-when-it-doesnt-help" title="Permanent link">&para;</a></h2>
+<h2 id="skipping-partial-aggregation-when-it-doesnt-help">Skipping Partial Aggregation When It Doesn't Help<a class="headerlink" href="#skipping-partial-aggregation-when-it-doesnt-help" title="Permanent link">¶</a></h2>
 <p>Many ClickBench queries are aggregations that summarize millions of rows, a
 common task for reporting and dashboarding. DataFusion uses state of the art
 <a href="https://docs.rs/datafusion/latest/datafusion/physical_plan/trait.Accumulator.html#tymethod.state">two phase aggregation</a> plans. Normally, two phase aggregation works well as the
 first phase consolidates many rows immediately after reading, while the data is
-still in cache. However, for certain &ldquo;high cardinality&rdquo; aggregate queries (that
+still in cache. However, for certain “high cardinality” aggregate queries (that
 have large numbers of groups), <a href="https://github.com/apache/datafusion/issues/6937">the two phase aggregation strategy used in
 DataFusion was inefficient</a>,
 manifesting in relatively slower performance compared to other engines for
@@ -171,7 +190,7 @@ bypass the first phase when it is not working efficiently, shown in Figure 4.</p
 <p><img alt="Two phase aggregation diagram from DataFusion API docs annotated to show first phase not helping" class="img-responsive" src="/blog/images/clickbench-datafusion-43/skipping-partial-aggregation.png" width="100%"/></p>
 <p><strong>Figure 4</strong>: Diagram from <a href="https://docs.rs/datafusion/latest/datafusion/physical_plan/trait.Accumulator.html#tymethod.state">DataFusion API docs</a> showing when the multi-phase
 grouping is not effective</p>
-<h2 id="optimized-multi-column-grouping">Optimized Multi-Column Grouping<a class="headerlink" href="#optimized-multi-column-grouping" title="Permanent link">&para;</a></h2>
+<h2 id="optimized-multi-column-grouping">Optimized Multi-Column Grouping<a class="headerlink" href="#optimized-multi-column-grouping" title="Permanent link">¶</a></h2>
 <p>Another method for improving analytic database performance is specialized (aka
 highly optimized) versions of operations for different data types, which the
 system picks at runtime based on the query. Like other systems, DataFusion has
@@ -198,17 +217,17 @@ hand. In a great example of diligent and disciplined engineering, <a href="https
 Zhan</a> tried <a href="https://github.com/apache/datafusion/pull/10937">several</a>, <a href="https://github.com/apache/datafusion/pull/10976">different</a> approaches until arriving
 at the [one shipped in DataFusion <code>43.0.0</code>], shown in Figure 6.</p>
 <p><img alt="Column based storage for multiple group columns" class="img-responsive" src="/blog/images/clickbench-datafusion-43/column-based-storage.png" width="100%"/></p>
-<p><strong>Figure 6</strong>: DataFusion 43.0.0&rsquo;s new columnar group storage copies each group
+<p><strong>Figure 6</strong>: DataFusion 43.0.0’s new columnar group storage copies each group
 value exactly once, which is significantly faster when grouping by multiple
 columns.</p>
 <p>Huge thanks as well to <a href="https://github.com/eejbyfeldt">Emil Ejbyfeldt</a> and
-<a href="https://github.com/Dandandan">Dani&euml;l Heres</a> for their help reviewing and to
+<a href="https://github.com/Dandandan">Daniël Heres</a> for their help reviewing and to
 <a href="https://github.com/Rachelint">Rachelint (kamille</a>) for reviewing and
 contributing a faster <a href="https://github.com/apache/datafusion/pull/12996">vectorized append and compare for multiple groups</a> which
 will be released in DataFusion 44. The discussion on <a href="https://github.com/apache/datafusion/issues/9403">the ticket</a> is another
 great example of the power of the DataFusion community working together to build
 great software.</p>
-<h1 id="whats-next">What&rsquo;s Next 🚀<a class="headerlink" href="#whats-next" title="Permanent link">&para;</a></h1>
+<h1 id="whats-next">What’s Next 🚀<a class="headerlink" href="#whats-next" title="Permanent link">¶</a></h1>
 <p>Just as I expect the performance of other engines to improve, DataFusion has
 several more performance improvements lined up itself:</p>
 <ol>
@@ -220,13 +239,13 @@ months</a> and are always
 looking for people to help! If you want to geek out (obsess??) about performance
 and other features with engineers from around the world, <a href="https://datafusion.apache.org/contributor-guide/communication.html">we would love you to
 join us</a>.</p>
-<h1 id="additional-thanks">Additional Thanks<a class="headerlink" href="#additional-thanks" title="Permanent link">&para;</a></h1>
+<h1 id="additional-thanks">Additional Thanks<a class="headerlink" href="#additional-thanks" title="Permanent link">¶</a></h1>
 <p>In addition to the people called out above, thanks:</p>
 <ol>
 <li><a href="https://github.com/pmcgleenon">Patrick McGleenon</a> for running ClickBench and gathering this data (<a href="https://github.com/apache/datafusion/issues/13099#issuecomment-2478314793">source</a>).</li>
-<li>Everyone I missed in the shoutouts &ndash; there are so many of you. We appreciate everyone.</li>
+<li>Everyone I missed in the shoutouts – there are so many of you. We appreciate everyone.</li>
 </ol>
-<h1 id="conclusion">Conclusion<a class="headerlink" href="#conclusion" title="Permanent link">&para;</a></h1>
+<h1 id="conclusion">Conclusion<a class="headerlink" href="#conclusion" title="Permanent link">¶</a></h1>
 <p>I have dreamed about DataFusion being on top of the ClickBench leaderboard for
 several years. I often watched with envy improvements in systems backed by large
 VC investments, internet companies, or world class research institutions, and
@@ -237,13 +256,13 @@ think speaks to the power and possibility of focusing on community and aligning
 our collective enthusiasm and skills towards a common goal. Of course, being on
 the top in any particular benchmark is likely fleeting as other engines will
 improve, but so will DataFusion!</p>
-<p>I love working on DataFusion &ndash; the people, the quality of the code, my
+<p>I love working on DataFusion – the people, the quality of the code, my
 interactions and the results we have achieved together far surpass my
 expectations as well as most of my other software development experiences. I
-can&rsquo;t wait to see what people will build next, and hope to <a href="https://github.com/apache/datafusion">see you
+can’t wait to see what people will build next, and hope to <a href="https://github.com/apache/datafusion">see you
 online</a>.</p>
-<h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
-<p>[^1]: Note that DuckDB is slightly faster on the &lsquo;cold&rsquo; run.</p>
+<h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">¶</a></h2>
+<p>[^1]: Note that DuckDB is slightly faster on the ‘cold’ run.</p>
 <p>[^2]: Want to try your hand at a custom format for ClickBench fame / glory?: <a href="https://github.com/apache/datafusion/issues/13448">Make DataFusion the fastest engine in ClickBench with custom file format</a></p>
 <p>[^3]: We have contributors from North America, South American, Europe, Asia, Africa and Australia</p>
 <p>[^4]: Undergraduates, PhD, Junior engineers, and getting-kind-of-crotchety experienced engineers</p>
@@ -279,6 +298,24 @@ online</a>.</p>
   <!-- Container where Giscus will render -->
   <div id="comment-thread"></div>
 </div>      </div>
+      <aside class="toc-container d-none d-md-block col-md-4 col-xl-3 ms-xl-2">
+        <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#a-strong-history-of-performance-improvements">A Strong History of Performance Improvements</a><ul>
+<li><a href="#stringview">StringView</a></li>
+<li><a href="#parquet">Parquet</a></li>
+<li><a href="#skipping-partial-aggregation-when-it-doesnt-help">Skipping Partial Aggregation When It Doesn't Help</a></li>
+<li><a href="#optimized-multi-column-grouping">Optimized Multi-Column Grouping</a></li>
+</ul>
+</li>
+<li><a href="#whats-next">What’s Next 🚀</a></li>
+<li><a href="#additional-thanks">Additional Thanks</a></li>
+<li><a href="#conclusion">Conclusion</a><ul>
+<li><a href="#notes">Notes</a></li>
+</ul>
+</li>
+</ul>
+</div>
+      </aside>
     </div>
   </div>
 </div>    
