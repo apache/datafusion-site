@@ -92,15 +92,18 @@ specify the encoding for the entire column.
 
 ## How to use metadata in user defined functions
 
-When working with metadata for user defined scalar functions, there are typically two
+When working with metadata for [user defined scalar functions], there are typically two
 places in the function definition that require implementation.
 
 - Computing the return field from the arguments
 - Invocation
 
-During planning, we will attempt to call the function `return_field_from_args()`. This will
+During planning, we will attempt to call the function [return_field_from_args()]. This will
 provide a list of input fields to the function and return the output field. To evaluate
 metadata on the input side, you can write a functions similar to this example:
+
+[user defined scalar functions]: https://docs.rs/datafusion/latest/datafusion/logical_expr/trait.ScalarUDFImpl.html
+[return_field_from_args()]: https://docs.rs/datafusion/latest/datafusion/logical_expr/trait.ScalarUDFImpl.html#method.return_field_from_args
 
 ```rust
 fn return_field_from_args(
@@ -155,9 +158,12 @@ call. In our above example, we could change the return line to:
 
 By checking the metadata during the planning process, we can identify errors early in
 the query process. There are cases were we wish to have access to this metadata during
-execution as well. The function `invoke_with_args` in the user defined function takes
-the updated struct `ScalarFunctionArgs`. This now contains the input fields, which can
+execution as well. The function [invoke_with_args] in the user defined function takes
+the updated struct [ScalarFunctionArgs]. This now contains the input fields, which can
 be used to check for metadata. For example, you can do the following:
+
+[invoke_with_args]: https://docs.rs/datafusion/latest/datafusion/logical_expr/trait.ScalarUDFImpl.html#tymethod.invoke_with_args
+[ScalarFunctionArgs]: https://docs.rs/datafusion/latest/datafusion/logical_expr/struct.ScalarFunctionArgs.html
 
 ```rust
 fn invoke_with_args(&self, args: ScalarFunctionArgs) -> Result<ColumnarValue> {
