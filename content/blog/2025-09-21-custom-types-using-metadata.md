@@ -255,8 +255,10 @@ pairs. Some of the other use cases that have been identified include:
   all of the columns that contain transform information and then allow the function
   to determine which columns to use based on the metadata. This allows for
   encapsulation of the transform logic within the user function.
+- Storing logical types of the data model. [InfluxDB] uses field metadata to specify
+  which columns are used for tags, times, and fields.
 
-Based on the past experience of the authors, we recommend caution when using metadata
+Based on the experience of the authors, we recommend caution when using metadata
 for use cases other than type extension. One issue that can arises is that as columns
 are used to compute new fields, some functions may pass through the metadata and the
 semantic meaning may change. For example, suppose you decided to use metadata to
@@ -272,6 +274,7 @@ interest.
 
 [data visualizations]: https://rerun.io/blog/column-chunks
 [transforms]: https://wiki.ros.org/tf2
+[InfluxDB]: https://docs.influxdata.com/influxdb/v1/concepts/schema_and_data_layout/
 
 ## Acknowledgements
 
