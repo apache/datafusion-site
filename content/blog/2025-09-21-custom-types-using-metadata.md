@@ -117,7 +117,9 @@ fn return_field_from_args(
         };
     }
 
-    Ok(Arc::new(Field::new(self.name(), DataType::UInt32, true)))
+    let is_nullable = args.arg_fields[0].is_nullable();
+
+    Ok(Arc::new(Field::new(self.name(), DataType::UInt32, is_nullable)))
 }
 ```
 
@@ -141,7 +143,7 @@ call. In our above example, we could change the return line to:
 
 ```rust
     Ok(Arc::new(
-        Field::new(self.name(), DataType::UInt32, true).with_metadata(
+        Field::new(self.name(), DataType::UInt32, is_nullable).with_metadata(
             [("my_key".to_string(), "my_value".to_string())]
                 .into_iter()
                 .collect(),
