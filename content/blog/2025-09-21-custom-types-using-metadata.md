@@ -283,7 +283,7 @@ pairs. Some of the other use cases that have been identified include:
   one column of data relates to another and use these during function evaluation. For
   example, in robotics it is common to use [transforms] to describe how to convert
   from one coordinate system to another. It can be convenient to send the function
-  all of the columns that contain transform information and then allow the function
+  all the columns that contain transform information and then allow the function
   to determine which columns to use based on the metadata. This allows for
   encapsulation of the transform logic within the user function.
 
@@ -314,11 +314,12 @@ context about columns in Arrow record batches.
 
 ## Conclusion
 
-The enhancements to the metadata handling in [DataFusion 48.0.0] are a significant step
-forward in the ability to handle more interesting types of data. We can validate the input
-data matches not only the data types but also the intent of the data to be processed. We
-can enable complex operations on binary data because we understand the encoding used. We
-can also use metadata to create new and interesting user defined data types.    
+The enhanced metadata handling in [DataFusion 48.0.0] is a significant step
+forward in the ability to handle more interesting types of data. Users can
+validate the input data matches the intent of the data to be processed, enable
+complex operations on binary data because we understand the encoding used, and 
+use metadata to create new and interesting user defined data types.
+We can't wait to see what you build with it!
 
 ## Get Involved
 
