@@ -15,6 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 {% endcomment %}x
 --&gt;
+
 &lt;p&gt;&lt;a href="https://datafusion.apache.org/blog/2025/07/16/datafusion-48.0.0/"&gt;DataFusion 48.0.0&lt;/a&gt; introduced a change in the interface for writing custom functions
 which enables a variety of interesting improvements. Now users can access metadata on
 the input columns to functions and produce metadata in the output.&lt;/p&gt;
@@ -34,6 +35,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 {% endcomment %}x
 --&gt;
+
 &lt;p&gt;&lt;a href="https://datafusion.apache.org/blog/2025/07/16/datafusion-48.0.0/"&gt;DataFusion 48.0.0&lt;/a&gt; introduced a change in the interface for writing custom functions
 which enables a variety of interesting improvements. Now users can access metadata on
 the input columns to functions and produce metadata in the output.&lt;/p&gt;
@@ -50,7 +52,7 @@ existing &lt;a href="https://arrow.apache.org/docs/format/Columnar.html#data-typ
 stored data. The use of extension types was one of the primary motivations for adding
 metadata to the function processing, but arbitrary metadata can be put on the input and
 output fields. This allows for a range of other interesting use cases.&lt;/p&gt;
-&lt;h2 id="why-metadata-handling-is-important"&gt;Why metadata handling is important&lt;a class="headerlink" href="#why-metadata-handling-is-important" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
+&lt;h2 id="why-metadata-handling-is-important"&gt;Why metadata handling is important&lt;a class="headerlink" href="#why-metadata-handling-is-important" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;Data in Arrow record batches carry a &lt;code&gt;Schema&lt;/code&gt; in addition to the Arrow arrays. Each
 &lt;a href="https://arrow.apache.org/docs/format/Glossary.html#term-field"&gt;Field&lt;/a&gt; in this &lt;code&gt;Schema&lt;/code&gt; contains a name, data type, nullability, and metadata. The
 metadata is specified as a map of key-value pairs of strings.  In the new
@@ -82,14 +84,14 @@ you cannot ensure you are using the correct methods for decoding it. You may wor
 this by adding another column to your data source indicating the encoding, but this can be
 wasteful for systems where the encoding never changes. Instead, you could use metadata to
 specify the encoding for the entire column.&lt;/p&gt;
-&lt;h2 id="how-to-use-metadata-in-user-defined-functions"&gt;How to use metadata in user defined functions&lt;a class="headerlink" href="#how-to-use-metadata-in-user-defined-functions" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
-&lt;p&gt;When working with metadata for user defined scalar functions, there are typically two
+&lt;h2 id="how-to-use-metadata-in-user-defined-functions"&gt;How to use metadata in user defined functions&lt;a class="headerlink" href="#how-to-use-metadata-in-user-defined-functions" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;When working with metadata for &lt;a href="https://docs.rs/datafusion/latest/datafusion/logical_expr/trait.ScalarUDFImpl.html"&gt;user defined scalar functions&lt;/a&gt;, there are typically two
 places in the function definition that require implementation.&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;Computing the return field from the arguments&lt;/li&gt;
 &lt;li&gt;Invocation&lt;/li&gt;
 &lt;/ul&gt;
-&lt;p&gt;During planning, we will attempt to call the function &lt;code&gt;return_field_from_args()&lt;/code&gt;. This will
+&lt;p&gt;During planning, we will attempt to call the function &lt;a href="https://docs.rs/datafusion/latest/datafusion/logical_expr/trait.ScalarUDFImpl.html#method.return_field_from_args"&gt;return_field_from_args()&lt;/a&gt;. This will
 provide a list of input fields to the function and return the output field. To evaluate
 metadata on the input side, you can write a functions similar to this example:&lt;/p&gt;
 &lt;pre&gt;&lt;code class="language-rust"&gt;fn return_field_from_args(
@@ -137,8 +139,8 @@ call. In our above example, we could change the return line to:&lt;/p&gt;
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;By checking the metadata during the planning process, we can identify errors early in
 the query process. There are cases were we wish to have access to this metadata during
-execution as well. The function &lt;code&gt;invoke_with_args&lt;/code&gt; in the user defined function takes
-the updated struct &lt;code&gt;ScalarFunctionArgs&lt;/code&gt;. This now contains the input fields, which can
+execution as well. The function &lt;a href="https://docs.rs/datafusion/latest/datafusion/logical_expr/trait.ScalarUDFImpl.html#tymethod.invoke_with_args"&gt;invoke_with_args&lt;/a&gt; in the user defined function takes
+the updated struct &lt;a href="https://docs.rs/datafusion/latest/datafusion/logical_expr/struct.ScalarFunctionArgs.html"&gt;ScalarFunctionArgs&lt;/a&gt;. This now contains the input fields, which can
 be used to check for metadata. For example, you can do the following:&lt;/p&gt;
 &lt;pre&gt;&lt;code class="language-rust"&gt;fn invoke_with_args(&amp;amp;self, args: ScalarFunctionArgs) -&amp;gt; Result&amp;lt;ColumnarValue&amp;gt; {
     assert_eq!(args.arg_fields.len(), 1);
@@ -154,7 +156,7 @@ evaluating the array in the arguments. Since &lt;code&gt;return_field_from_args&
 this check could not be performed during the planning stage.&lt;/p&gt;
 &lt;p&gt;The description in this section applies to scalar user defined functions, but equivalent
 support exists for aggregate and window functions.&lt;/p&gt;
-&lt;h2 id="extension-types"&gt;Extension types&lt;a class="headerlink" href="#extension-types" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
+&lt;h2 id="extension-types"&gt;Extension types&lt;a class="headerlink" href="#extension-types" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;Extension types are one of the primary motivations for this  enhancement in
 &lt;a href="https://datafusion.apache.org/blog/2025/07/16/datafusion-48.0.0/"&gt;Datafusion 48.0.0&lt;/a&gt;. The official Rust implementation of Apache Arrow, &lt;a href="https://github.com/apache/arrow-rs"&gt;arrow-rs&lt;/a&gt;,
 already contains support for the &lt;a href="https://arrow.apache.org/docs/format/CanonicalExtensions.html"&gt;canonical extension types&lt;/a&gt;. This support includes
@@ -199,7 +201,7 @@ be used thusly:&lt;/p&gt;
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;The &lt;a href="https://github.com/timsaucer/datafusion_extension_type_examples"&gt;example repository&lt;/a&gt; also contains a crate that demonstrates how to expose these
 UDFs to &lt;a href="https://datafusion.apache.org/python/"&gt;datafusion-python&lt;/a&gt;. This requires version 48.0.0 or later.&lt;/p&gt;
-&lt;h2 id="other-use-cases"&gt;Other use cases&lt;a class="headerlink" href="#other-use-cases" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
+&lt;h2 id="other-use-cases"&gt;Other use cases&lt;a class="headerlink" href="#other-use-cases" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;The metadata attached to the fields can be used to store &lt;em&gt;any&lt;/em&gt; user data in key/value
 pairs. Some of the other use cases that have been identified include:&lt;/p&gt;
 &lt;ul&gt;
@@ -227,17 +229,17 @@ the naming of the columns has changed at some point in your workflow, then the m
 may indicate an incorrect column of data it is referring to. This can be mitigated by
 not relying on column naming but rather adding additional metadata to all columns of
 interest.&lt;/p&gt;
-&lt;h2 id="thanks-to-our-sponsor"&gt;Thanks to our sponsor&lt;a class="headerlink" href="#thanks-to-our-sponsor" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
+&lt;h2 id="thanks-to-our-sponsor"&gt;Thanks to our sponsor&lt;a class="headerlink" href="#thanks-to-our-sponsor" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;We would like to thank &lt;a href="https://rerun.io"&gt;Rerun.io&lt;/a&gt; for sponsoring the development of this work. &lt;a href="https://rerun.io"&gt;Rerun.io&lt;/a&gt;
 is building a data visualization system for Physical AI and uses metadata to specify 
 context about columns in Arrow record batches.&lt;/p&gt;
-&lt;h2 id="conclusion"&gt;Conclusion&lt;a class="headerlink" href="#conclusion" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
+&lt;h2 id="conclusion"&gt;Conclusion&lt;a class="headerlink" href="#conclusion" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;The enhancements to the metadata handling in &lt;a href="https://datafusion.apache.org/blog/2025/07/16/datafusion-48.0.0/"&gt;DataFusion 48.0.0&lt;/a&gt; are a significant step
 forward in the ability to handle more interesting types of data. We can validate the input
 data matches not only the data types but also the intent of the data to be processed. We
 can enable complex operations on binary data because we understand the encoding used. We
 can also use metadata to create new and interesting user defined data types.    &lt;/p&gt;
-&lt;h2 id="get-involved"&gt;Get Involved&lt;a class="headerlink" href="#get-involved" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
+&lt;h2 id="get-involved"&gt;Get Involved&lt;a class="headerlink" href="#get-involved" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;The DataFusion team is an active and engaging community and we would love to have you join
 us and help the project.&lt;/p&gt;
 &lt;p&gt;Here are some ways to get involved:&lt;/p&gt;
