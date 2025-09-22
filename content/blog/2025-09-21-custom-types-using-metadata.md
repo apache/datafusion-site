@@ -23,6 +23,8 @@ limitations under the License.
 {% endcomment %}x
 -->
 
+[TOC]
+
 [DataFusion 48.0.0] introduced a change in the interface for writing custom functions
 which enables a variety of interesting improvements. Now users can access metadata on
 the input columns to functions and produce metadata in the output.
