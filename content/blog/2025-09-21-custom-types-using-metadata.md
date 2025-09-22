@@ -1,6 +1,6 @@
 ---
 layout: post
-title: Custom types in DataFusion using Metadata
+title: Implementing User Defined Types and Custom Metadata in DataFusion
 date: 2025-09-21
 author: Tim Saucer, Dewey Dunnington, Andrew Lamb
 categories: [core]
@@ -25,32 +25,61 @@ limitations under the License.
 
 [TOC]
 
-[DataFusion 48.0.0] introduced a change in the interface for writing custom functions
-which enables a variety of interesting improvements. Now users can access metadata on
-the input columns to functions and produce metadata in the output.
+[Apache DataFusion] [version 48.0.0] significantly improves support for user
+defined types and metadata. The user defined function APIs let users access
+metadata on the input columns to functions and produce metadata in the output.
 
-Metadata is specified as a map of key-value pairs of strings. This extra metadata is used
-by Arrow implementations to support [extension types] and can also be used to add
-use case-specific context to a column of values where the formality of an extension type
-is not required. In previous versions of DataFusion field metadata was propagated through
-certain operations (e.g., renaming or selecting a column) but was not accessible to others
-(e.g., scalar, window, or aggregate function calls). In the new implementation, during
-processing of all user defined functions we pass the input field information and allow
-user defined function implementations to return field information to the caller.
+## User defined types == extension types
 
-[Extension types] are user defined data types where the data is stored using one of the
-existing [Arrow data types] but the metadata specifies how we are to interpret the
-stored data. The use of extension types was one of the primary motivations for adding
-metadata to the function processing, but arbitrary metadata can be put on the input and
-output fields. This allows for a range of other interesting use cases.
+DataFusion directly uses the [Apache Arrow] [data types] as its type system. This
+has several benefits including being simple to explain, supports a rich set of
+both scalar and nested types, true zero copy interoperability with other Arrow
+implementations, and world-class library support (via [arrow-rs]). However, one
+challenge of directly using the Arrow type system is there is no distinction
+between logical types and physical types. For example, the Arrow type system
+contains multiple types which can store "String"s (sequences of UTF8 encoded
+bytes) such as `Utf8`, `LargeUTF8`, `Dictionary(Utf8)`, and `Utf8View`. 
 
-[DataFusion 48.0.0]: https://datafusion.apache.org/blog/2025/07/16/datafusion-48.0.0/
+However, Apache Arrow does provide [extension types], a version of logical type
+information, which describe how to interpret data stored in one of the existing
+physical types. With the improved support for metadata in DataFusion 48.0.0, it
+is now easier to implement user defined types using Arrow extension types.
+
+## Metadata in Apache Arrow `Field`s  
+
+The [Arrow specification] defines Metadata as a map of key-value pairs of
+strings. This metadata is used to attach extension types and use case-specific
+context to a column of values. The Rust implementation of Apache Arrow,
+[arrow-rs], stores metadata on [Field]s, but prior to DataFusion 48.0.0, many of
+DataFusion's internal APIs used [DataType]s directly, and thus did not propagate
+metadata through all operations.
+
+[Arrow specification]: https://arrow.apache.org/docs/format/Columnar.html
+[Field]: https://docs.rs/arrow/latest/arrow/datatypes/struct.Field.html
+[DataType]: https://docs.rs/arrow/latest/arrow/datatypes/enum.DataType.html
+
+In previous versions of DataFusion `Field` metadata was propagated through certain
+operations (e.g., renaming or selecting a column) but was not 
+others (e.g., scalar, window, or aggregate function calls). In DataFusion 48.0.0, 
+and later, all user defined functions are passed the full
+input `Field` information and can return `Field` information to the caller.
+
+Supporting extension types was a key motivation for adding metadata to the
+function processing, the same mechanism can store arbitrary metadata on the
+input and output fields, which supports other interesting use cases as we describe
+later in this post.
+
+[Apache DataFusion]: https://datafusion.apache.org
+[Apache Arrow]: https://arrow.apache.org
+[Field]: https://docs.rs/arrow/latest/arrow/datatypes/struct.Field.html
+[version 48.0.0]: https://datafusion.apache.org/blog/2025/07/16/datafusion-48.0.0/
 [extension types]: https://arrow.apache.org/docs/format/Columnar.html#format-metadata-extension-types
 [Arrow data types]: https://arrow.apache.org/docs/format/Columnar.html#data-types
+[arrow-rs]: https://crates.io/crates/arrow
 
-## Why metadata handling is important
+## Metadata handling
 
-Data in Arrow record batches carry a `Schema` in addition to the Arrow arrays. Each
+Data in Arrow record batches carry a [Schema] in addition to the Arrow arrays. Each
 [Field] in this `Schema` contains a name, data type, nullability, and metadata. The
 metadata is specified as a map of key-value pairs of strings.  In the new
 implementation, during processing of all user defined functions we pass the input
@@ -59,18 +88,20 @@ field information.
 <figure>
   <img src="/blog/images/metadata-handling/arrow_record_batch.png" alt="Relationship between a Record Batch, it's schema, and the underlying arrays. There is a one to one relationship between each Field in the Schema and Array entry in the Columns." width="100%" class="img-responsive">
   <figcaption>
-    Relationship between a Record Batch, it's schema, and the underlying arrays. There is a one to one relationship between each Field in the Schema and Array entry in the Columns.
+    <b>Figure 1:</b> Relationship between a Record Batch, it's schema, and the underlying arrays. There is a one to one relationship between each Field in the Schema and Array entry in the Columns.
   </figcaption>
 </figure>
 
-It is often desirable to write a generic function for reuse. With the prior version of
-user defined functions, we only had access to the `DataType` of the input columns. This
-works well for some features that only rely on the types of data. Other use cases may
-need additional information that describes the data.
+[Schema]: https://docs.rs/arrow/latest/arrow/datatypes/struct.Schema.html
+
+It is often desirable to write a generic function for reuse. Prior versions of
+user defined functions only had access to the `DataType` of the input columns.
+This works well for some features that only rely on the types of data, but other
+use cases may need additional information that describes the data.
 
 For example, suppose I wish to write a function that takes in a UUID and returns a string
 of the [variant] of the input field. We would want this function to be able to handle
-all of the string types and also a binary encoded UUID. The arrow specification does not
+all of the string types and also a binary encoded UUID. The Arrow specification does not
 contain a unsigned 128 bit value, it is common to encode a UUID as a fixed sized binary
 array where each element is 16 bytes long. With the metadata handling in [DataFusion 48.0.0]
 we can validate during planning that the input data not only has the correct underlying
