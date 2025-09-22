@@ -108,7 +108,9 @@ metadata on the input side, you can write a functions similar to this example:&l
         };
     }
 
-    Ok(Arc::new(Field::new(self.name(), DataType::UInt32, true)))
+    let is_nullable = args.arg_fields[0].is_nullable();
+
+    Ok(Arc::new(Field::new(self.name(), DataType::UInt32, is_nullable)))
 }
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;In this example, we take advantage of the fact that we already have support for extension
@@ -126,7 +128,7 @@ extension type support, we could have instead written a snippet such as:&lt;/p&g
 you can add this directly into the &lt;code&gt;Field&lt;/code&gt; that is the output of the &lt;code&gt;return_field_from_args&lt;/code&gt;
 call. In our above example, we could change the return line to:&lt;/p&gt;
 &lt;pre&gt;&lt;code class="language-rust"&gt;    Ok(Arc::new(
-        Field::new(self.name(), DataType::UInt32, true).with_metadata(
+        Field::new(self.name(), DataType::UInt32, is_nullable).with_metadata(
             [("my_key".to_string(), "my_value".to_string())]
                 .into_iter()
                 .collect(),

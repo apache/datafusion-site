@@ -135,7 +135,9 @@ metadata on the input side, you can write a functions similar to this example:</
         };
     }
 
-    Ok(Arc::new(Field::new(self.name(), DataType::UInt32, true)))
+    let is_nullable = args.arg_fields[0].is_nullable();
+
+    Ok(Arc::new(Field::new(self.name(), DataType::UInt32, is_nullable)))
 }
 </code></pre>
 <p>In this example, we take advantage of the fact that we already have support for extension
@@ -153,7 +155,7 @@ extension type support, we could have instead written a snippet such as:</p>
 you can add this directly into the <code>Field</code> that is the output of the <code>return_field_from_args</code>
 call. In our above example, we could change the return line to:</p>
 <pre><code class="language-rust">    Ok(Arc::new(
-        Field::new(self.name(), DataType::UInt32, true).with_metadata(
+        Field::new(self.name(), DataType::UInt32, is_nullable).with_metadata(
             [("my_key".to_string(), "my_value".to_string())]
                 .into_iter()
                 .collect(),
