@@ -2,7 +2,7 @@
 layout: post
 title: Custom types in DataFusion using Metadata
 date: 2025-09-21
-author: Tim Saucer, Dewey Dunnington, Andrew Lamb
+author: Tim Saucer(rerun.io), Dewey Dunnington(Wherobots), Andrew Lamb(InfluxData)
 categories: [core]
 ---
 
