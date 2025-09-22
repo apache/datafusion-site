@@ -273,7 +273,7 @@ interest.
 [data visualizations]: https://rerun.io/blog/column-chunks
 [transforms]: https://wiki.ros.org/tf2
 
-## Thanks to our sponsor
+## Acknowledgements
 
 We would like to thank [Rerun.io] for sponsoring the development of this work. [Rerun.io]
 is building a data visualization system for Physical AI and uses metadata to specify 
