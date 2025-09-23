@@ -31,7 +31,7 @@ metadata on the input columns to functions and produce metadata in the output.
 
 ## User defined types == extension types
 
-DataFusion directly uses the [Apache Arrow] [DataTypes] as its type system. This
+DataFusion directly uses [Apache Arrow]'s [DataTypes] as its type system. This
 has several benefits including being simple to explain, supports a rich set of
 both scalar and nested types, true zero copy interoperability with other Arrow
 implementations, and world-class library support (via [arrow-rs]). However, one
