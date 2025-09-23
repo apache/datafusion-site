@@ -31,7 +31,7 @@ metadata on the input columns to functions and produce metadata in the output.
 
 ## User defined types == extension types
 
-DataFusion directly uses the [Apache Arrow] [data types] as its type system. This
+DataFusion directly uses the [Apache Arrow] [DataTypes] as its type system. This
 has several benefits including being simple to explain, supports a rich set of
 both scalar and nested types, true zero copy interoperability with other Arrow
 implementations, and world-class library support (via [arrow-rs]). However, one
@@ -51,12 +51,12 @@ The [Arrow specification] defines Metadata as a map of key-value pairs of
 strings. This metadata is used to attach extension types and use case-specific
 context to a column of values. The Rust implementation of Apache Arrow,
 [arrow-rs], stores metadata on [Field]s, but prior to DataFusion 48.0.0, many of
-DataFusion's internal APIs used [DataType]s directly, and thus did not propagate
+DataFusion's internal APIs used [DataTypes] directly, and thus did not propagate
 metadata through all operations.
 
 [Arrow specification]: https://arrow.apache.org/docs/format/Columnar.html
 [Field]: https://docs.rs/arrow/latest/arrow/datatypes/struct.Field.html
-[DataType]: https://docs.rs/arrow/latest/arrow/datatypes/enum.DataType.html
+[DataTypes]: https://docs.rs/arrow/latest/arrow/datatypes/enum.DataType.html
 
 In previous versions of DataFusion `Field` metadata was propagated through certain
 operations (e.g., renaming or selecting a column) but was not 
