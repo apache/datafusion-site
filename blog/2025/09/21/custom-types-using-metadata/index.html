@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta http-equiv="x-ua-compatible" content="ie=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Custom types in DataFusion using Metadata - Apache DataFusion Blog</title>
+    <title>Implementing User Defined Types and Custom Metadata in DataFusion - Apache DataFusion Blog</title>
 <link href="/blog/css/bootstrap.min.css" rel="stylesheet">
 <link href="/blog/css/fontawesome.all.min.css" rel="stylesheet">
 <link href="/blog/css/headerlink.css" rel="stylesheet">
@@ -40,13 +40,15 @@
     <div class="row justify-content-center">
       <div class="col-12 col-md-8 main-content">
         <h1>
-          Custom types in DataFusion using Metadata
+          Implementing User Defined Types and Custom Metadata in DataFusion
         </h1>
         <p>Posted on: Sun 21 September 2025 by Tim Saucer(rerun.io), Dewey Dunnington(Wherobots), Andrew Lamb(InfluxData)</p>
 
         <aside class="toc-container d-md-none mb-2">
           <div class="toc"><span class="toctitle">Contents</span><ul>
-<li><a href="#why-metadata-handling-is-important">Why metadata handling is important</a></li>
+<li><a href="#user-defined-types-extension-types">User defined types == extension types</a></li>
+<li><a href="#metadata-in-apache-arrow-fields">Metadata in Apache Arrow Fields</a></li>
+<li><a href="#metadata-handling">Metadata handling</a></li>
 <li><a href="#how-to-use-metadata-in-user-defined-functions">How to use metadata in user defined functions</a></li>
 <li><a href="#extension-types">Extension types</a></li>
 <li><a href="#other-use-cases">Other use cases</a></li>
@@ -74,24 +76,40 @@ limitations under the License.
 {% endcomment %}x
 -->
 
-<p><a href="https://datafusion.apache.org/blog/2025/07/16/datafusion-48.0.0/">DataFusion 48.0.0</a> introduced a change in the interface for writing custom functions
-which enables a variety of interesting improvements. Now users can access metadata on
-the input columns to functions and produce metadata in the output.</p>
-<p>Metadata is specified as a map of key-value pairs of strings. This extra metadata is used
-by Arrow implementations to support <a href="https://arrow.apache.org/docs/format/Columnar.html#format-metadata-extension-types">extension types</a> and can also be used to add
-use case-specific context to a column of values where the formality of an extension type
-is not required. In previous versions of DataFusion field metadata was propagated through
-certain operations (e.g., renaming or selecting a column) but was not accessible to others
-(e.g., scalar, window, or aggregate function calls). In the new implementation, during
-processing of all user defined functions we pass the input field information and allow
-user defined function implementations to return field information to the caller.</p>
-<p><a href="https://arrow.apache.org/docs/format/Columnar.html#format-metadata-extension-types">Extension types</a> are user defined data types where the data is stored using one of the
-existing <a href="https://arrow.apache.org/docs/format/Columnar.html#data-types">Arrow data types</a> but the metadata specifies how we are to interpret the
-stored data. The use of extension types was one of the primary motivations for adding
-metadata to the function processing, but arbitrary metadata can be put on the input and
-output fields. This allows for a range of other interesting use cases.</p>
-<h2 id="why-metadata-handling-is-important">Why metadata handling is important<a class="headerlink" href="#why-metadata-handling-is-important" title="Permanent link">¶</a></h2>
-<p>Data in Arrow record batches carry a <code>Schema</code> in addition to the Arrow arrays. Each
+<p><a href="https://datafusion.apache.org/blog/2025/07/16/datafusion-48.0.0/">Apache DataFusion</a> significantly improves support for user
+defined types and metadata. The user defined function APIs let users access
+metadata on the input columns to functions and produce metadata in the output.</p>
+<h2 id="user-defined-types-extension-types">User defined types == extension types<a class="headerlink" href="#user-defined-types-extension-types" title="Permanent link">¶</a></h2>
+<p>DataFusion directly uses the <a href="https://arrow.apache.org">Apache Arrow</a> [data types] as its type system. This
+has several benefits including being simple to explain, supports a rich set of
+both scalar and nested types, true zero copy interoperability with other Arrow
+implementations, and world-class library support (via <a href="https://github.com/apache/arrow-rs">arrow-rs</a>). However, one
+challenge of directly using the Arrow type system is there is no distinction
+between logical types and physical types. For example, the Arrow type system
+contains multiple types which can store "String"s (sequences of UTF8 encoded
+bytes) such as <code>Utf8</code>, <code>LargeUTF8</code>, <code>Dictionary(Utf8)</code>, and <code>Utf8View</code>. </p>
+<p>However, Apache Arrow does provide <a href="https://arrow.apache.org/docs/format/Columnar.html#format-metadata-extension-types">extension types</a>, a version of logical type
+information, which describe how to interpret data stored in one of the existing
+physical types. With the improved support for metadata in DataFusion 48.0.0, it
+is now easier to implement user defined types using Arrow extension types.</p>
+<h2 id="metadata-in-apache-arrow-fields">Metadata in Apache Arrow <code>Field</code>s<a class="headerlink" href="#metadata-in-apache-arrow-fields" title="Permanent link">¶</a></h2>
+<p>The <a href="https://arrow.apache.org/docs/format/Columnar.html">Arrow specification</a> defines Metadata as a map of key-value pairs of
+strings. This metadata is used to attach extension types and use case-specific
+context to a column of values. The Rust implementation of Apache Arrow,
+<a href="https://github.com/apache/arrow-rs">arrow-rs</a>, stores metadata on <a href="https://arrow.apache.org/docs/format/Glossary.html#term-field">Field</a>s, but prior to DataFusion 48.0.0, many of
+DataFusion's internal APIs used <a href="https://docs.rs/arrow/latest/arrow/datatypes/enum.DataType.html">DataType</a>s directly, and thus did not propagate
+metadata through all operations.</p>
+<p>In previous versions of DataFusion <code>Field</code> metadata was propagated through certain
+operations (e.g., renaming or selecting a column) but was not 
+others (e.g., scalar, window, or aggregate function calls). In DataFusion 48.0.0, 
+and later, all user defined functions are passed the full
+input <code>Field</code> information and can return <code>Field</code> information to the caller.</p>
+<p>Supporting extension types was a key motivation for adding metadata to the
+function processing, the same mechanism can store arbitrary metadata on the
+input and output fields, which supports other interesting use cases as we describe
+later in this post.</p>
+<h2 id="metadata-handling">Metadata handling<a class="headerlink" href="#metadata-handling" title="Permanent link">¶</a></h2>
+<p>Data in Arrow record batches carry a <a href="https://docs.rs/arrow/latest/arrow/datatypes/struct.Schema.html">Schema</a> in addition to the Arrow arrays. Each
 <a href="https://arrow.apache.org/docs/format/Glossary.html#term-field">Field</a> in this <code>Schema</code> contains a name, data type, nullability, and metadata. The
 metadata is specified as a map of key-value pairs of strings.  In the new
 implementation, during processing of all user defined functions we pass the input
@@ -99,18 +117,18 @@ field information.</p>
 <figure>
 <img alt="Relationship between a Record Batch, it's schema, and the underlying arrays. There is a one to one relationship between each Field in the Schema and Array entry in the Columns." class="img-responsive" src="/blog/images/metadata-handling/arrow_record_batch.png" width="100%"/>
 <figcaption>
-    Relationship between a Record Batch, it's schema, and the underlying arrays. There is a one to one relationship between each Field in the Schema and Array entry in the Columns.
+<b>Figure 1:</b> Relationship between a Record Batch, it's schema, and the underlying arrays. There is a one to one relationship between each Field in the Schema and Array entry in the Columns.
   </figcaption>
 </figure>
-<p>It is often desirable to write a generic function for reuse. With the prior version of
-user defined functions, we only had access to the <code>DataType</code> of the input columns. This
-works well for some features that only rely on the types of data. Other use cases may
-need additional information that describes the data.</p>
+<p>It is often desirable to write a generic function for reuse. Prior versions of
+user defined functions only had access to the <code>DataType</code> of the input columns.
+This works well for some features that only rely on the types of data, but other
+use cases may need additional information that describes the data.</p>
 <p>For example, suppose I wish to write a function that takes in a UUID and returns a string
 of the <a href="https://www.ietf.org/rfc/rfc9562.html#section-4.1">variant</a> of the input field. We would want this function to be able to handle
-all of the string types and also a binary encoded UUID. The arrow specification does not
+all of the string types and also a binary encoded UUID. The Arrow specification does not
 contain a unsigned 128 bit value, it is common to encode a UUID as a fixed sized binary
-array where each element is 16 bytes long. With the metadata handling in <a href="https://datafusion.apache.org/blog/2025/07/16/datafusion-48.0.0/">DataFusion 48.0.0</a>
+array where each element is 16 bytes long. With the metadata handling in [DataFusion 48.0.0]
 we can validate during planning that the input data not only has the correct underlying
 data type, but that it also represents the right <em>kind</em> of data. The UUID example is a
 common one, and it is included in the <a href="https://arrow.apache.org/docs/format/CanonicalExtensions.html">canonical extension types</a> that are now
@@ -196,7 +214,7 @@ this check could not be performed during the planning stage.</p>
 support exists for aggregate and window functions.</p>
 <h2 id="extension-types">Extension types<a class="headerlink" href="#extension-types" title="Permanent link">¶</a></h2>
 <p>Extension types are one of the primary motivations for this  enhancement in
-<a href="https://datafusion.apache.org/blog/2025/07/16/datafusion-48.0.0/">Datafusion 48.0.0</a>. The official Rust implementation of Apache Arrow, <a href="https://github.com/apache/arrow-rs">arrow-rs</a>,
+[Datafusion 48.0.0]. The official Rust implementation of Apache Arrow, <a href="https://github.com/apache/arrow-rs">arrow-rs</a>,
 already contains support for the <a href="https://arrow.apache.org/docs/format/CanonicalExtensions.html">canonical extension types</a>. This support includes
 helper functions such as <code>try_canonical_extension_type()</code> in the earlier example.</p>
 <p>For a concrete example of how extension types can be used in DataFusion functions,
@@ -251,7 +269,7 @@ pairs. Some of the other use cases that have been identified include:</p>
   one column of data relates to another and use these during function evaluation. For
   example, in robotics it is common to use <a href="https://wiki.ros.org/tf2">transforms</a> to describe how to convert
   from one coordinate system to another. It can be convenient to send the function
-  all of the columns that contain transform information and then allow the function
+  all the columns that contain transform information and then allow the function
   to determine which columns to use based on the metadata. This allows for
   encapsulation of the transform logic within the user function.</li>
 <li>Storing logical types of the data model. <a href="https://docs.influxdata.com/influxdb/v1/concepts/schema_and_data_layout/">InfluxDB</a> uses field metadata to specify
@@ -274,11 +292,12 @@ interest.</p>
 is building a data visualization system for Physical AI and uses metadata to specify 
 context about columns in Arrow record batches.</p>
 <h2 id="conclusion">Conclusion<a class="headerlink" href="#conclusion" title="Permanent link">¶</a></h2>
-<p>The enhancements to the metadata handling in <a href="https://datafusion.apache.org/blog/2025/07/16/datafusion-48.0.0/">DataFusion 48.0.0</a> are a significant step
-forward in the ability to handle more interesting types of data. We can validate the input
-data matches not only the data types but also the intent of the data to be processed. We
-can enable complex operations on binary data because we understand the encoding used. We
-can also use metadata to create new and interesting user defined data types.    </p>
+<p>The enhanced metadata handling in [DataFusion 48.0.0] is a significant step
+forward in the ability to handle more interesting types of data. Users can
+validate the input data matches the intent of the data to be processed, enable
+complex operations on binary data because we understand the encoding used, and 
+use metadata to create new and interesting user defined data types.
+We can't wait to see what you build with it!</p>
 <h2 id="get-involved">Get Involved<a class="headerlink" href="#get-involved" title="Permanent link">¶</a></h2>
 <p>The DataFusion team is an active and engaging community and we would love to have you join
 us and help the project.</p>
@@ -322,7 +341,9 @@ us and help the project.</p>
 </div>      </div>
       <aside class="toc-container d-none d-md-block col-md-4 col-xl-3 ms-xl-2">
         <div class="toc"><span class="toctitle">Contents</span><ul>
-<li><a href="#why-metadata-handling-is-important">Why metadata handling is important</a></li>
+<li><a href="#user-defined-types-extension-types">User defined types == extension types</a></li>
+<li><a href="#metadata-in-apache-arrow-fields">Metadata in Apache Arrow Fields</a></li>
+<li><a href="#metadata-handling">Metadata handling</a></li>
 <li><a href="#how-to-use-metadata-in-user-defined-functions">How to use metadata in user defined functions</a></li>
 <li><a href="#extension-types">Extension types</a></li>
 <li><a href="#other-use-cases">Other use cases</a></li>
