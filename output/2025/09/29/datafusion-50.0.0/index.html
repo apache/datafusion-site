@@ -1,0 +1,453 @@
+<!doctype html>
+<html class="no-js" lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apache DataFusion 50.0.0 Released - Apache DataFusion Blog</title>
+<link href="/blog/css/bootstrap.min.css" rel="stylesheet">
+<link href="/blog/css/fontawesome.all.min.css" rel="stylesheet">
+<link href="/blog/css/headerlink.css" rel="stylesheet">
+<link href="/blog/highlight/default.min.css" rel="stylesheet">
+<link href="/blog/css/app.css" rel="stylesheet">
+<script src="/blog/highlight/highlight.js"></script>
+<script>hljs.highlightAll();</script>  </head>
+  <body class="d-flex flex-column h-100">
+  <main class="flex-shrink-0">
+<!-- nav bar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark" aria-label="Fifth navbar example">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/blog"><img src="/blog/images/logo_original4x.png" style="height: 32px;"/> Apache DataFusion Blog</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarADP" aria-controls="navbarADP" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarADP">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/about.html">About</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/feed.xml">RSS</a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>    
+<!-- article contents -->
+<div id="contents">
+  <div class="bg-white p-4 p-md-5 rounded">
+    <div class="row justify-content-center">
+      <div class="col-12 col-md-8 main-content">
+        <h1>
+          Apache DataFusion 50.0.0 Released
+        </h1>
+        <p>Posted on: Mon 29 September 2025 by pmc</p>
+
+        <aside class="toc-container d-md-none mb-2">
+          <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#introduction">Introduction</a></li>
+<li><a href="#performance-improvements">Performance Improvements 🚀</a></li>
+<li><a href="#community-growth">Community Growth 📈</a></li>
+<li><a href="#new-features">New Features ✨</a><ul>
+<li><a href="#improved-spilling-sorts-for-larger-than-memory-datasets">Improved Spilling Sorts for Larger-than-Memory Datasets</a></li>
+<li><a href="#dynamic-filter-pushdown-for-hash-joins">Dynamic Filter Pushdown for Hash Joins</a></li>
+<li><a href="#parquet-metadata-cache">Parquet Metadata Cache</a></li>
+<li><a href="#qualify-clause">QUALIFY Clause</a></li>
+<li><a href="#filter-support-for-window-functions">FILTER Support for Window Functions</a></li>
+<li><a href="#configoptions-now-available-to-functions">ConfigOptions Now Available to Functions</a></li>
+<li><a href="#additional-apache-spark-compatible-functions">Additional Apache Spark Compatible Functions</a></li>
+</ul>
+</li>
+<li><a href="#known-issues-patchset">Known Issues / Patchset</a></li>
+<li><a href="#upgrade-guide-and-changelog">Upgrade Guide and Changelog</a></li>
+<li><a href="#about-datafusion">About DataFusion</a></li>
+<li><a href="#how-to-get-involved">How to Get Involved</a></li>
+</ul>
+</div>
+        </aside>
+
+        <!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+-->
+
+<!-- see https://github.com/apache/datafusion/issues/16347 for details -->
+<h2 id="introduction">Introduction<a class="headerlink" href="#introduction" title="Permanent link">¶</a></h2>
+<p>We are proud to announce the release of <a href="https://crates.io/crates/datafusion/50.0.0">DataFusion 50.0.0</a>. This blog post
+highlights some of the major improvements since the release of <a href="https://datafusion.apache.org/blog/2025/07/28/datafusion-49.0.0/">DataFusion
+49.0.0</a>. The complete list of changes is available in the <a href="https://github.com/apache/datafusion/blob/branch-50/dev/changelog/50.0.0.md">changelog</a>.
+Thanks to <a href="https://github.com/apache/datafusion/blob/branch-50/dev/changelog/50.0.0.md#credits">numerous contributors</a> for making this release possible!</p>
+<h2 id="performance-improvements">Performance Improvements 🚀<a class="headerlink" href="#performance-improvements" title="Permanent link">¶</a></h2>
+<p>DataFusion continues to focus on enhancing performance, as shown in ClickBench
+and other benchmark results.</p>
+<p><img alt="ClickBench performance results over time for DataFusion" class="img-responsive" src="/blog/images/datafusion-50.0.0/performance_over_time_clickbench.png" width="100%"/></p>
+<p><strong>Figure 1</strong>: Average and median normalized query execution times for ClickBench queries for each git revision.
+Query times are normalized using the ClickBench definition. See the 
+<a href="https://alamb.github.io/datafusion-benchmarking/">DataFusion Benchmarking Page</a> 
+for more details.</p>
+<p>Here are some noteworthy optimizations added since DataFusion 49:</p>
+<p><strong>Dynamic Filter Pushdown Improvements</strong></p>
+<p>The dynamic filter pushdown optimization, which allows runtime filters to cut
+down on the amount of data read, has been extended to support <strong>inner hash
+joins</strong>, dramatically improving performance when one relation is relatively
+small or filtered by a highly selective predicate. More details can be found in
+the <a href="#dynamic-filter-pushdown-for-hash-joins">Dynamic Filter Pushdown for Hash Joins</a> section below.
+The dynamic filters in the TopK operator have also been improved in DataFusion
+50.0.0, further increasing the effectiveness and efficiency of the optimization.
+More details can be found in this
+<a href="https://github.com/apache/datafusion/pull/16433">ticket</a>.</p>
+<p><strong>Nested Loop Join Optimization</strong></p>
+<p>The nested loop join operator has been rewritten to reduce execution time and memory
+usage by adopting a finer-grained approach. Specifically, we now limit the 
+intermediate data size to around a single <code>RecordBatch</code> for better memory
+efficiency, and we have eliminated redundant conversions from the old 
+implementation to further improve execution speed.
+When evaluating this new approach in a microbenchmark, we measured up to a 5x
+improvement in execution time and a 99% reduction in memory usage. More details and
+results can be found in this
+<a href="https://github.com/apache/datafusion/pull/16996">ticket</a>.</p>
+<p><strong>Parquet Metadata Caching</strong></p>
+<p>DataFusion now automatically caches the metadata of Parquet files (statistics,
+page indexes, etc.), to avoid unnecessary disk/network round-trips. This is
+especially useful when querying the same table multiple times over relatively
+slow networks, allowing us to achieve an order of magnitude faster execution
+time when running many small reads over large files. More information can be
+found in the <a href="#parquet-metadata-cache">Parquet Metadata Cache</a> section.</p>
+<h2 id="community-growth">Community Growth 📈<a class="headerlink" href="#community-growth" title="Permanent link">¶</a></h2>
+<p>Between <code>49.0.0</code> and <code>50.0.0</code>, we continue to see our community grow:</p>
+<ol>
+<li>Qi Zhu (<a href="https://github.com/zhuqi-lucas">zhuqi-lucas</a>) and Yoav Cohen
+   (<a href="https://github.com/yoavcloud">yoavcloud</a>) became committers. See the
+   <a href="https://lists.apache.org/list.html?dev@datafusion.apache.org">mailing list</a> for more details.</li>
+<li>In the <a href="https://github.com/apache/arrow-datafusion">core DataFusion repo</a> alone, we reviewed and accepted 318 PRs
+   from 79 different committers, created over 235 issues, and closed 197 of them
+   🚀. All changes are listed in the detailed <a href="https://github.com/apache/datafusion/tree/main/dev/changelog">changelogs</a>.</li>
+<li>DataFusion published several blogs, including <em><a href="https://datafusion.apache.org/blog/2025/08/15/external-parquet-indexes/">Using External Indexes, Metadata Stores, Catalogs and
+   Caches to Accelerate Queries on Apache Parquet</a></em>, <em><a href="https://datafusion.apache.org/blog/2025/09/10/dynamic-filters/">Dynamic Filters:
+   Passing Information Between Operators During Execution for 25x Faster
+   Queries</a></em>, and <em><a href="https://datafusion.apache.org/blog/2025/09/21/custom-types-using-metadata/">Implementing User Defined Types and Custom Metadata 
+   in DataFusion</a></em>.</li>
+</ol>
+<!--
+# Unique committers
+$ git shortlog -sn 49.0.0..50.0.0  . | wc -l
+    79
+# commits
+$ git log --pretty=oneline 49.0.0..50.0.0  . | wc -l
+    318
+
+https://crates.io/crates/datafusion/49.0.0
+DataFusion 49 released July 25, 2025
+
+https://crates.io/crates/datafusion/50.0.0
+DataFusion 50 released September 16, 2025
+
+Issues created in this time: 117 open, 118 closed = 235 total
+https://github.com/apache/datafusion/issues?q=is%3Aissue+created%3A2025-07-25..2025-09-16
+
+Issues closed: 197
+https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+closed%3A2025-07-25..2025-09-16
+
+PRs merged in this time 371
+https://github.com/apache/arrow-datafusion/pulls?q=is%3Apr+merged%3A2025-07-25..2025-09-16
+-->
+<h2 id="new-features">New Features ✨<a class="headerlink" href="#new-features" title="Permanent link">¶</a></h2>
+<h3 id="improved-spilling-sorts-for-larger-than-memory-datasets">Improved Spilling Sorts for Larger-than-Memory Datasets<a class="headerlink" href="#improved-spilling-sorts-for-larger-than-memory-datasets" title="Permanent link">¶</a></h3>
+<p>DataFusion has long been able to sort datasets that do not fit entirely in memory,
+but still struggled with particularly large inputs or highly memory-constrained 
+setups. Larger-than-memory sorts in DataFusion 50.0.0 have been improved with the recent introduction
+of multi-level merge sorts (more details in the respective
+<a href="https://github.com/apache/datafusion/pull/15700">ticket</a>). It is now
+possible to execute almost any sorting query that would have previously triggered <em>out-of-memory</em>
+errors, by relying on disk spilling. Thanks to <a href="https://github.com/rluvaton">Raz Luvaton</a>, <a href="https://github.com/2010YOUY01">Yongting You</a>, and
+<a href="https://github.com/ding-young">ding-young</a> for delivering this feature.</p>
+<h3 id="dynamic-filter-pushdown-for-hash-joins">Dynamic Filter Pushdown for Hash Joins<a class="headerlink" href="#dynamic-filter-pushdown-for-hash-joins" title="Permanent link">¶</a></h3>
+<p>The <a href="https://datafusion.apache.org/blog/2025/09/10/dynamic-filters/">dynamic filter pushdown
+optimization</a>
+has been extended to inner hash joins, dramatically reducing the amount of
+scanned data in some workloads—a technique sometimes referred to as
+<a href="https://www.cs.cmu.edu/~15721-f24/papers/Sideways_Information_Passing.pdf"><em>Sideways Information Passing</em></a>.</p>
+<p>These filters are automatically applied to inner hash joins, while future work
+will introduce them to other join types. </p>
+<p>For example, given a query that looks for a specific customer and
+their orders, DataFusion can now filter the <code>orders</code> relation based on the
+<code>c_custkey</code> of the target customer, reducing the amount of data
+read from disk by orders of magnitude.</p>
+<pre><code class="language-sql">-- retrieve the orders of the customer with c_phone = '25-989-741-2988'
+SELECT *
+FROM customer
+JOIN orders ON c_custkey = o_custkey
+WHERE c_phone = '25-989-741-2988';
+</code></pre>
+<p>The following shows an execution plan in DataFusion 50.0.0 with this optimization:</p>
+<pre><code class="language-sql">HashJoinExec
+    DataSourceExec: &lt;-- read customer
+      predicate=c_phone@4 = 25-989-741-2988
+      metrics=[output_rows=1, ...]
+    DataSourceExec: &lt;-- read orders
+      -- dynamic filter is added here, filtering directly at scan time
+      predicate=DynamicFilterPhysicalExpr [ o_custkey@1 &gt;= 1 AND o_custkey@1 &lt;= 1 ]
+      -- the number of output rows is kept to a minimum
+      metrics=[output_rows=11, ...]
+</code></pre>
+<p>Because there is a single customer in this query,
+almost all rows from <code>orders</code> are filtered out by the join. 
+In previous versions of DataFusion, the entire <code>orders</code> relation would be
+scanned to join with the target customer, but now the dynamic filter pushdown can
+filter it right at the source, minimizing the amount of data decoded.</p>
+<p>More information can be found in the respective
+<a href="https://github.com/apache/datafusion/pull/16445">ticket</a> and the next step will be to
+<a href="https://github.com/apache/datafusion/issues/16973">extend the dynamic filters to other types of joins</a>, such as <code>LEFT</code> and
+<code>RIGHT</code> outer joins. Thanks to <a href="https://github.com/adriangb">Adrian Garcia Badaracco</a>, <a href="https://github.com/zhuqi-lucas">Qi Zhu</a>, <a href="https://github.com/xudong963">xudong963</a>, <a href="https://github.com/Dandandan">Daniël Heres</a>, and <a href="https://github.com/LiaCastaneda">Lía Adriana</a>
+for delivering this feature.</p>
+<h3 id="parquet-metadata-cache">Parquet Metadata Cache<a class="headerlink" href="#parquet-metadata-cache" title="Permanent link">¶</a></h3>
+<p>The metadata of Parquet files (statistics, page indexes, etc.) is now
+automatically cached when using the built-in <a href="https://docs.rs/datafusion/latest/datafusion/datasource/listing/struct.ListingTable.html">ListingTable</a>, which reduces disk/network round-trips and repeated decoding
+of the same information. With a simple microbenchmark that executes point reads
+(e.g., <code>SELECT v FROM t WHERE k = x</code>) over large files, we measured a 12x
+improvement in execution time (more details can be found in the respective
+<a href="https://github.com/apache/datafusion/pull/16971">ticket</a>). This optimization
+is production ready and enabled by default (more details in the
+<a href="https://github.com/apache/datafusion/issues/17000">Epic</a>).
+Thanks to <a href="https://github.com/nuno-faria">Nuno Faria</a>, <a href="https://github.com/jonathanc-n">Jonathan Chen</a>, <a href="https://github.com/shehabgamin">Shehab Amin</a>, <a href="https://github.com/comphead">Oleks V</a>, <a href="https://github.com/timsaucer">Tim Saucer</a>, and <a href="https://github.com/BlakeOrth">Blake Orth</a> for delivering this feature.</p>
+<p>Here is an example of the metadata cache in action:</p>
+<pre><code class="language-sql">-- disabling the metadata cache
+&gt; SET datafusion.runtime.metadata_cache_limit = '0M';
+
+-- simple query (t.parquet: 100M rows, 3 cols)
+&gt; EXPLAIN ANALYZE SELECT * FROM 't.parquet' LIMIT 1;
+DataSourceExec: ... metrics=[..., metadata_load_time=229.196422ms, ...]
+Elapsed 0.246 seconds.
+
+-- enabling the metadata cache
+&gt; SET datafusion.runtime.metadata_cache_limit = '50M';
+
+&gt; EXPLAIN ANALYZE SELECT * FROM 't.parquet' LIMIT 1;
+DataSourceExec: ... metrics=[..., metadata_load_time=228.612µs, ...]
+Elapsed 0.003 seconds. -- 82x improvement in this specific query
+</code></pre>
+<p>The cache can be configured with the following runtime parameter:</p>
+<pre><code class="language-sql">datafusion.runtime.metadata_cache_limit
+</code></pre>
+<p>The default <a href="https://docs.rs/datafusion/latest/datafusion/execution/cache/cache_manager/trait.FileMetadataCache.html"><code>FileMetadataCache</code></a> uses a
+least-recently-used eviction algorithm and up to 50MB of memory.
+If the underlying file changes, the cache is automatically invalidated.
+Setting the limit to 0 will disable any metadata caching. As with most APIs in
+DataFusion, users can provide their own behavior using a custom
+<a href="https://docs.rs/datafusion/50.0.0/datafusion/execution/cache/cache_manager/trait.FileMetadataCache.html"><code>FileMetadataCache</code></a>
+implementation when setting up the <a href="https://docs.rs/datafusion/latest/datafusion/execution/runtime_env/struct.RuntimeEnv.html"><code>RuntimeEnv</code></a>.</p>
+<p>For users with custom <a href="https://docs.rs/datafusion/latest/datafusion/catalog/trait.TableProvider.html"><code>TableProvider</code></a>:</p>
+<ul>
+<li>
+<p>If the custom provider uses the
+<a href="https://docs.rs/datafusion/latest/datafusion/datasource/file_format/parquet/struct.ParquetFormat.html"><code>ParquetFormat</code></a>, caching will work
+without any changes.</p>
+</li>
+<li>
+<p>Otherwise the
+<a href="https://docs.rs/datafusion/latest/datafusion/datasource/physical_plan/parquet/struct.CachedParquetFileReaderFactory.html"><code>CachedParquetFileReaderFactory</code></a>
+can be provided when creating a
+<a href="https://docs.rs/datafusion/latest/datafusion/datasource/physical_plan/struct.ParquetSource.html"><code>ParquetSource</code></a>.</p>
+</li>
+</ul>
+<p>Users can inspect the cache contents through the
+<a href="https://docs.rs/datafusion/latest/datafusion/execution/cache/cache_manager/trait.FileMetadataCache.html#tymethod.list_entries"><code>FileMetadataCache::list_entries</code></a>
+method, or with the
+<a href="https://datafusion.apache.org/user-guide/cli/functions.html#metadata-cache"><code>metadata_cache()</code></a>
+function in <code>datafusion-cli</code>:</p>
+<pre><code class="language-sql">&gt; SELECT * FROM metadata_cache();
++---------------+-------------------------+-----------------+--------------------------+---------+---------------------+------+-----------------+
+| path          | file_modified           | file_size_bytes | e_tag                    | version | metadata_size_bytes | hits | extra           |
++---------------+-------------------------+-----------------+--------------------------+---------+---------------------+------+-----------------+
+| .../t.parquet | 2025-09-21T17:40:13.650 | 420827020       | 0-63f5331fb4458-19154f8c | NULL    | 44480534            | 27   | page_index=true |
++---------------+-------------------------+-----------------+--------------------------+---------+---------------------+------+-----------------+
+1 row(s) fetched.
+Elapsed 0.003 seconds.
+</code></pre>
+<h3 id="qualify-clause"><code>QUALIFY</code> Clause<a class="headerlink" href="#qualify-clause" title="Permanent link">¶</a></h3>
+<p>DataFusion now supports the <code>QUALIFY</code> SQL clause
+(<a href="https://github.com/apache/datafusion/pull/16933">#16933</a>), which simplifies
+filtering window function output (similar to how <code>HAVING</code> filters
+aggregation output).</p>
+<p>For example, filtering the output of the <code>rank()</code> function previously
+required a query like this:</p>
+<pre><code class="language-sql">SELECT a, b, c
+FROM (
+   SELECT a, b, c, rank() OVER(PARTITION BY a ORDER BY b) as rk
+   FROM t
+)
+WHERE rk = 1
+</code></pre>
+<p>The same query can now be written like this:</p>
+<pre><code class="language-sql">SELECT a, b, c, rank() OVER(PARTITION BY a ORDER BY b) as rk
+FROM t
+QUALIFY rk = 1
+</code></pre>
+<p>Although it is not part of the SQL standard (yet), it has been gaining
+adoption in several SQL analytical systems such as DuckDB, Snowflake, and
+BigQuery. Thanks to <a href="https://github.com/haohuaijin">Huaijin</a> and <a href="https://github.com/jonahgao">Jonah Gao</a> for delivering this feature.</p>
+<h3 id="filter-support-for-window-functions"><code>FILTER</code> Support for Window Functions<a class="headerlink" href="#filter-support-for-window-functions" title="Permanent link">¶</a></h3>
+<p>Continuing the theme, the <code>FILTER</code> clause has been extended to support
+<a href="https://github.com/apache/datafusion/pull/17378">aggregate window functions</a>.
+It allows these functions to apply to specific rows without having to
+rely on <code>CASE</code> expressions, similar to what was already possible with regular
+aggregate functions.</p>
+<p>For example, we can gather multiple distinct sets of values matching different
+criteria with a single pass over the input:</p>
+<pre><code class="language-sql">SELECT 
+  ARRAY_AGG(c2) FILTER (WHERE c2 &gt;= 2) OVER (...)     -- e.g. [2, 3, 4]
+  ARRAY_AGG(CASE WHEN c2 &gt;= 2 THEN c2 END) OVER (...) -- e.g. [NULL, NULL, 2, 3, 4]
+...
+FROM table
+</code></pre>
+<p>Thanks to <a href="https://github.com/geoffreyclaude">Geoffrey Claude</a> and <a href="https://github.com/Jefffrey">Jeffrey Vo</a> for delivering this feature.</p>
+<h3 id="configoptions-now-available-to-functions"><code>ConfigOptions</code> Now Available to Functions<a class="headerlink" href="#configoptions-now-available-to-functions" title="Permanent link">¶</a></h3>
+<p>DataFusion 50.0.0 now passes session configuration parameters to User-Defined
+Functions (UDFs) via
+<a href="https://docs.rs/datafusion/latest/datafusion/logical_expr/struct.ScalarFunctionArgs.html">ScalarFunctionArgs</a>
+(<a href="https://github.com/apache/datafusion/pull/16970">#16970</a>). This allows
+behavior that varies based on runtime state; for example, time UDFs can use the
+session-specified time zone instead of just UTC.</p>
+<p>Thanks to <a href="https://github.com/Omega359">Bruce Ritchie</a>, <a href="https://github.com/findepi">Piotr Findeisen</a>, <a href="https://github.com/comphead">Oleks V</a>, and <a href="https://github.com/alamb">Andrew Lamb</a> for delivering this feature.</p>
+<h3 id="additional-apache-spark-compatible-functions">Additional Apache Spark Compatible Functions<a class="headerlink" href="#additional-apache-spark-compatible-functions" title="Permanent link">¶</a></h3>
+<p>Finally, due to Apache Spark's impact on analytical processing, many DataFusion
+users desire Spark compatibility in their workloads, so DataFusion provides a
+set of Spark-compatible functions in the <a href="https://crates.io/crates/datafusion-spark">datafusion-spark</a> crate.
+You can read more about this project in the <a href="https://datafusion.apache.org/blog/2025/07/16/datafusion-48.0.0/#new-datafusion-spark-crate">announcement</a> and <a href="https://github.com/apache/datafusion/issues/15914">epic</a>.
+DataFusion 50.0.0 adds several new such functions:</p>
+<ul>
+<li><a href="https://github.com/apache/datafusion/pull/16936"><code>array</code></a></li>
+<li><a href="https://github.com/apache/datafusion/pull/16942"><code>bit_get/bit_count</code></a></li>
+<li><a href="https://github.com/apache/datafusion/pull/17179"><code>bitmap_count</code></a></li>
+<li><a href="https://github.com/apache/datafusion/pull/17032"><code>crc32/sha1</code></a></li>
+<li><a href="https://github.com/apache/datafusion/pull/17024"><code>date_add/date_sub</code></a></li>
+<li><a href="https://github.com/apache/datafusion/pull/16946"><code>if</code></a></li>
+<li><a href="https://github.com/apache/datafusion/pull/16828"><code>last_day</code></a></li>
+<li><a href="https://github.com/apache/datafusion/pull/16962"><code>like/ilike</code></a></li>
+<li><a href="https://github.com/apache/datafusion/pull/16848"><code>luhn_check</code></a></li>
+<li><a href="https://github.com/apache/datafusion/pull/16829"><code>mod/pmod</code></a></li>
+<li><a href="https://github.com/apache/datafusion/pull/16780"><code>next_day</code></a></li>
+<li><a href="https://github.com/apache/datafusion/pull/16937"><code>parse_url</code></a></li>
+<li><a href="https://github.com/apache/datafusion/pull/16924"><code>rint</code></a></li>
+<li><a href="https://github.com/apache/datafusion/pull/17331"><code>width_bucket</code></a></li>
+</ul>
+<p>Thanks to <a href="https://github.com/davidlghellin">David López</a>, <a href="https://github.com/chenkovsky">Chen Chongchen</a>, <a href="https://github.com/Standing-Man">Alan Tang</a>, <a href="https://github.com/petern48">Peter Nguyen</a>, and <a href="https://github.com/SparkApplicationMaster">Evgenii Glotov</a> for delivering these functions. We are looking for additional help
+reviewing and implementing more functions; please reach out on the <a href="https://github.com/apache/datafusion/issues/15914">epic</a> if you are interested.</p>
+<h2 id="known-issues-patchset">Known Issues / Patchset<a class="headerlink" href="#known-issues-patchset" title="Permanent link">¶</a></h2>
+<p>As DataFusion continues to mature, we regularly release patch versions to fix issues 
+in major releases. Since the release of <code>50.0.0</code>, we have identified a few
+issues, and expect to release <code>50.1.0</code> to address them. You can track progress
+in this <a href="https://github.com/apache/datafusion/issues/17594">ticket</a>. </p>
+<h2 id="upgrade-guide-and-changelog">Upgrade Guide and Changelog<a class="headerlink" href="#upgrade-guide-and-changelog" title="Permanent link">¶</a></h2>
+<p>Upgrading to 50.0.0 should be straightforward for most users. Please review the
+<a href="https://datafusion.apache.org/library-user-guide/upgrading.html">Upgrade Guide</a>
+for details on breaking changes and code snippets to help with the transition.
+Recently, some users have reported success automatically upgrading DataFusion by
+pairing AI tools with the upgrade guide. For a comprehensive list of all
+changes, please refer to the <a href="https://github.com/apache/datafusion/blob/branch-50/dev/changelog/50.0.0.md">changelog</a>.</p>
+<h2 id="about-datafusion">About DataFusion<a class="headerlink" href="#about-datafusion" title="Permanent link">¶</a></h2>
+<p><a href="https://datafusion.apache.org/">Apache DataFusion</a> is an extensible query engine, written in <a href="https://www.rust-lang.org/">Rust</a>, that uses
+<a href="https://arrow.apache.org">Apache Arrow</a> as its in-memory format. DataFusion is used by developers to
+create new, fast, data-centric systems such as databases, dataframe libraries,
+and machine learning and streaming applications. While <a href="https://datafusion.apache.org/user-guide/introduction.html#project-goals">DataFusion’s primary
+design goal</a> is to accelerate the creation of other data-centric systems, it
+provides a reasonable experience directly out of the box as a <a href="https://datafusion.apache.org/user-guide/dataframe.html">dataframe
+library</a>, <a href="https://datafusion.apache.org/python/">Python library</a>, and <a href="https://datafusion.apache.org/user-guide/cli/">command-line SQL tool</a>.</p>
+<p>DataFusion's core thesis is that, as a community, together we can build much
+more advanced technology than any of us as individuals or companies could build
+alone. Without DataFusion, highly performant vectorized query engines would
+remain the domain of a few large companies and world-class research
+institutions. With DataFusion, we can all build on top of a shared foundation
+and focus on what makes our projects unique.</p>
+<h2 id="how-to-get-involved">How to Get Involved<a class="headerlink" href="#how-to-get-involved" title="Permanent link">¶</a></h2>
+<p>DataFusion is not a project built or driven by a single person, company, or
+foundation. Rather, our community of users and contributors works together to
+build a shared technology that none of us could have built alone.</p>
+<p>If you are interested in joining us, we would love to have you. You can try out
+DataFusion on some of your own data and projects and let us know how it goes,
+contribute suggestions, documentation, bug reports, or a PR with documentation,
+tests, or code. A list of open issues suitable for beginners is <a href="https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22">here</a>, and you
+can find out how to reach us on the <a href="https://datafusion.apache.org/contributor-guide/communication.html">communication doc</a>.</p>
+
+<!--
+  Comments Section
+  Loaded only after explicit visitor consent to comply with ASF policy.
+-->
+
+<div id="comments">
+  <hr>
+  <h3>Comments</h3>
+
+  <!-- Local loader script -->
+  <script src="/content/js/giscus-consent.js" defer></script>
+
+  <!-- Consent UI -->
+  <div id="giscus-consent">
+    <p>
+        We use <a href="https://giscus.app/">Giscus</a> for comments, powered by GitHub Discussions.
+        To respect your privacy, Giscus and comments will load only if you click "Show Comments"
+    </p>
+
+    <div class="consent-actions">
+      <button id="giscus-load" type="button">Show Comments</button>
+      <button id="giscus-revoke" type="button" hidden>Hide Comments</button>
+    </div>
+
+    <noscript>JavaScript is required to load comments from Giscus.</noscript>
+  </div>
+
+  <!-- Container where Giscus will render -->
+  <div id="comment-thread"></div>
+</div>      </div>
+      <aside class="toc-container d-none d-md-block col-md-4 col-xl-3 ms-xl-2">
+        <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#introduction">Introduction</a></li>
+<li><a href="#performance-improvements">Performance Improvements 🚀</a></li>
+<li><a href="#community-growth">Community Growth 📈</a></li>
+<li><a href="#new-features">New Features ✨</a><ul>
+<li><a href="#improved-spilling-sorts-for-larger-than-memory-datasets">Improved Spilling Sorts for Larger-than-Memory Datasets</a></li>
+<li><a href="#dynamic-filter-pushdown-for-hash-joins">Dynamic Filter Pushdown for Hash Joins</a></li>
+<li><a href="#parquet-metadata-cache">Parquet Metadata Cache</a></li>
+<li><a href="#qualify-clause">QUALIFY Clause</a></li>
+<li><a href="#filter-support-for-window-functions">FILTER Support for Window Functions</a></li>
+<li><a href="#configoptions-now-available-to-functions">ConfigOptions Now Available to Functions</a></li>
+<li><a href="#additional-apache-spark-compatible-functions">Additional Apache Spark Compatible Functions</a></li>
+</ul>
+</li>
+<li><a href="#known-issues-patchset">Known Issues / Patchset</a></li>
+<li><a href="#upgrade-guide-and-changelog">Upgrade Guide and Changelog</a></li>
+<li><a href="#about-datafusion">About DataFusion</a></li>
+<li><a href="#how-to-get-involved">How to Get Involved</a></li>
+</ul>
+</div>
+      </aside>
+    </div>
+  </div>
+</div>    
+    <!-- footer -->
+    <div class="row g-0">
+      <div class="col-12">
+        <p style="font-style: italic; font-size: 0.8rem; text-align: center;">
+          Copyright 2025, <a href="https://www.apache.org/">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a>.<br/>
+          Apache&reg; and the Apache feather logo are trademarks of The Apache Software Foundation.
+        </p>
+      </div>
+    </div>
+    <script src="/blog/js/bootstrap.bundle.min.js"></script>  </main>
+  </body>
+</html>
