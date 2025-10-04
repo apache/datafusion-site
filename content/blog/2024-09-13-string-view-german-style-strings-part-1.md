@@ -41,7 +41,7 @@ StringView support was released as part of [arrow-rs v52.2.0](https://crates.io/
 
 [Xiangpeng Hao]: https://haoxp.xyz/
 [InfluxData blog]: https://www.influxdata.com/blog/faster-queries-with-stringview-part-one-influxdb/
-[two part]: ../2024/09/13/string-view-german-style-strings-part-2/
+[two part]: ../string-view-german-style-strings-part-2/
 
 
 <img
@@ -231,7 +231,7 @@ post], we explore additional optimizations enabled by StringView in DataFusion,
 along with some of the pitfalls we encountered while implementing them.
 
 
-[next post]: https://datafusion.apache.org/blog/2024/09/13/using-stringview-to-make-queries-faster-part-2.html
+[next post]: https://datafusion.apache.org/blog/2024/09/13//string-view-german-style-strings-part-2
 
 
 # Footnotes
