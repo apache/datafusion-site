@@ -66,7 +66,7 @@ Comet has improved its support for Apache Spark 4.0.1 with several important enh
   - [ANSI mode rounding functions](https://github.com/apache/datafusion-comet/pull/2542)
   - [ANSI mode remainder function](https://github.com/apache/datafusion-comet/pull/2556)
 
-TODO: Confirm if Spark 4.0 jars are available on Maven Central.
+Spark 4.0 compatible jar files are now available on Maven Central. See the [installation guide](https://datafusion.apache.org/comet/user-guide/0.11/installation.html#using-a-published-jar-file) for instructions on using published jar files.
 
 ### Complex Types for Columnar Shuffle
 
