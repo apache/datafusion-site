@@ -102,6 +102,18 @@ New expression capabilities include:
 - [New configuration from shared conf](https://github.com/apache/datafusion-comet/pull/2402) to reduce overhead
 - [Buffered index writes](https://github.com/apache/datafusion-comet/pull/2579) to reduce system calls in shuffle operations
 
+### Comet 0.11.0 TPC-H Performance
+
+Comet 0.11.0 continues to deliver significant performance improvements over Spark. In our [TPC-H benchmarks](https://github.com/apache/datafusion-comet/pull/2596), Comet reduced overall query runtime from 687 seconds to 302 seconds when processing 100 GB of Parquet data using a single 8-core executor, achieving a **2.2x speedup**.
+
+![TPC-H Overall Performance](/images/comet-0.11.0/tpch_allqueries.png)
+
+The performance gains are consistent across individual queries, with most queries showing substantial improvements:
+
+![TPC-H Query-by-Query Comparison](/images/comet-0.11.0/tpch_queries_compare.png)
+
+You can reproduce these benchmarks using our [Comet Benchmarking Guide](https://datafusion.apache.org/comet/contributor-guide/benchmarking.html). We encourage you to run your own performance tests with your workloads.
+
 ### Apache Iceberg Support
 
 - [Updated support for Apache Iceberg 1.9.1](https://github.com/apache/datafusion-comet/pull/2386)
