@@ -106,11 +106,21 @@ New expression capabilities include:
 
 Comet 0.11.0 continues to deliver significant performance improvements over Spark. In our [TPC-H benchmarks](https://github.com/apache/datafusion-comet/pull/2596), Comet reduced overall query runtime from 687 seconds to 302 seconds when processing 100 GB of Parquet data using a single 8-core executor, achieving a **2.2x speedup**.
 
-![TPC-H Overall Performance](/images/comet-0.11.0/tpch_allqueries.png)
+<img
+src="/blog/images/comet-0.11.0/tpch_allqueries.png"
+width="100%"
+class="img-responsive"
+alt="TPC-H Overall Performance"
+/>
 
 The performance gains are consistent across individual queries, with most queries showing substantial improvements:
 
-![TPC-H Query-by-Query Comparison](/images/comet-0.11.0/tpch_queries_compare.png)
+<img
+src="/blog/images/comet-0.11.0/tpch_queries_compare.png"
+width="100%"
+class="img-responsive"
+alt="TPC-H Query-by-Query Comparison"
+/>
 
 You can reproduce these benchmarks using our [Comet Benchmarking Guide](https://datafusion.apache.org/comet/contributor-guide/benchmarking.html). We encourage you to run your own performance tests with your workloads.
 
