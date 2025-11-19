@@ -1,0 +1,227 @@
+<!doctype html>
+<html class="no-js" lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apache DataFusion 51.0.0 Released - Apache DataFusion Blog</title>
+<link href="/blog/css/bootstrap.min.css" rel="stylesheet">
+<link href="/blog/css/fontawesome.all.min.css" rel="stylesheet">
+<link href="/blog/css/headerlink.css" rel="stylesheet">
+<link href="/blog/highlight/default.min.css" rel="stylesheet">
+<link href="/blog/css/app.css" rel="stylesheet">
+<script src="/blog/highlight/highlight.js"></script>
+<script>hljs.highlightAll();</script>  </head>
+  <body class="d-flex flex-column h-100">
+  <main class="flex-shrink-0">
+<!-- nav bar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark" aria-label="Fifth navbar example">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/blog"><img src="/blog/images/logo_original4x.png" style="height: 32px;"/> Apache DataFusion Blog</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarADP" aria-controls="navbarADP" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarADP">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/about.html">About</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/feed.xml">RSS</a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>    
+<!-- article contents -->
+<div id="contents">
+  <div class="bg-white p-4 p-md-5 rounded">
+    <div class="row justify-content-center">
+      <div class="col-12 col-md-8 main-content">
+        <h1>
+          Apache DataFusion 51.0.0 Released
+        </h1>
+        <p>Posted on: Tue 25 November 2025 by pmc</p>
+
+        <aside class="toc-container d-md-none mb-2">
+          <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#introduction">Introduction</a></li>
+<li><a href="#performance-improvements">Performance Improvements 🚀</a></li>
+<li><a href="#new-features">New Features ✨</a><ul>
+<li><a href="#decimal32decimal64-everywhere">Decimal32/Decimal64 Everywhere</a></li>
+<li><a href="#sql-pipe-operators">SQL Pipe Operators</a></li>
+<li><a href="#object-store-profiling-in-datafusion-cli">Object Store Profiling in datafusion-cli</a></li>
+<li><a href="#better-defaults-for-remote-parquet-reads">Better Defaults for Remote Parquet Reads</a></li>
+</ul>
+</li>
+<li><a href="#upgrade-guide-and-changelog">Upgrade Guide and Changelog</a></li>
+<li><a href="#about-datafusion">About DataFusion</a></li>
+<li><a href="#how-to-get-involved">How to Get Involved</a></li>
+</ul>
+</div>
+        </aside>
+
+        <!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+-->
+
+<h2 id="introduction">Introduction<a class="headerlink" href="#introduction" title="Permanent link">¶</a></h2>
+<p>We are proud to announce the release of <a href="https://crates.io/crates/datafusion/51.0.0">DataFusion 51.0.0</a>. This post highlights
+some of the major improvements since <a href="https://datafusion.apache.org/blog/2025/09/29/datafusion-50.0.0/">DataFusion 50.0.0</a>. The complete list of
+changes is available in the <a href="https://github.com/apache/datafusion/blob/branch-51/dev/changelog/51.0.0.md">changelog</a>. Thanks to <a href="https://github.com/apache/datafusion/blob/branch-51/dev/changelog/51.0.0.md#credits">numerous contributors</a> for
+making this release possible!</p>
+<h2 id="performance-improvements">Performance Improvements 🚀<a class="headerlink" href="#performance-improvements" title="Permanent link">¶</a></h2>
+<p><strong>Faster <code>CASE</code> expressions</strong></p>
+<p>A series of optimizer and execution changes (see the
+<a href="https://github.com/apache/datafusion/issues/18075">CASE performance epic</a>)
+significantly reduces work when evaluating complex <code>CASE</code> branches. Expressions
+short‑circuit earlier, reuse partial results, and avoid unnecessary scattering,
+speeding up common ETL patterns.</p>
+<p><strong>Fewer object store round-trips for Parquet</strong></p>
+<p>DataFusion now sets a default <code>metadata_size_hint</code> for Parquet scans
+(<a href="https://github.com/apache/datafusion/issues/18118">#18118</a>), avoiding the extra
+“last 8‑byte” request many clouds require to read file footers. Remote scans
+typically drop from five requests to four per file, cutting latency and transfer
+costs without any application changes.</p>
+<h2 id="new-features">New Features ✨<a class="headerlink" href="#new-features" title="Permanent link">¶</a></h2>
+<h3 id="decimal32decimal64-everywhere">Decimal32/Decimal64 Everywhere<a class="headerlink" href="#decimal32decimal64-everywhere" title="Permanent link">¶</a></h3>
+<p>DataFusion now treats the smaller decimal types as first-class citizens
+(<a href="https://github.com/apache/datafusion/pull/17501">#17501</a>). Aggregations like
+<code>SUM</code>, <code>AVG</code>, <code>MIN/MAX</code>, and window functions work seamlessly with <code>Decimal32</code>
+and <code>Decimal64</code>, removing a common source of “type not supported” errors for
+financial and sensor workloads.</p>
+<h3 id="sql-pipe-operators">SQL Pipe Operators<a class="headerlink" href="#sql-pipe-operators" title="Permanent link">¶</a></h3>
+<p>Pipe operators from sqlparser are now executable in DataFusion
+(<a href="https://github.com/apache/datafusion/pull/17278">#17278</a>), enabling inline
+transforms such as:</p>
+<pre><code class="language-sql">SELECT * FROM t
+|&gt; WHERE a &gt; 10
+|&gt; ORDER BY b
+|&gt; LIMIT 5;
+</code></pre>
+<p>This syntax keeps multi-step transformations concise while preserving regular
+SQL semantics.</p>
+<h3 id="object-store-profiling-in-datafusion-cli">Object Store Profiling in <code>datafusion-cli</code><a class="headerlink" href="#object-store-profiling-in-datafusion-cli" title="Permanent link">¶</a></h3>
+<p>The CLI gained built-in instrumentation to trace object store calls
+(<a href="https://github.com/apache/datafusion/issues/17207">#17207</a>). Toggle profiling
+with a single command and inspect the exact <code>GET</code>/<code>LIST</code> requests issued during
+query execution:</p>
+<pre><code class="language-sql">&gt; \\object_store_profiling trace
+&gt; SELECT COUNT(*) FROM 'https://datasets.clickhouse.com/.../hits_1.parquet';
+-- trace output includes operation, range, size, path, and duration
+</code></pre>
+<p>This makes it far easier to diagnose slow remote scans and validate caching
+strategies.</p>
+<h3 id="better-defaults-for-remote-parquet-reads">Better Defaults for Remote Parquet Reads<a class="headerlink" href="#better-defaults-for-remote-parquet-reads" title="Permanent link">¶</a></h3>
+<p>Alongside the new profiling tools, DataFusion now uses a larger default Parquet
+footer prefetch hint so the first request usually includes the full footer
+(<a href="https://github.com/apache/datafusion/issues/18118">#18118</a>). Users can tune it
+via <code>datafusion.execution.parquet.metadata_size_hint</code>, and disable prefetching
+by setting it to <code>0</code>.</p>
+<h2 id="upgrade-guide-and-changelog">Upgrade Guide and Changelog<a class="headerlink" href="#upgrade-guide-and-changelog" title="Permanent link">¶</a></h2>
+<p>Upgrading to 51.0.0 should be straightforward for most users. Please review the
+<a href="https://datafusion.apache.org/library-user-guide/upgrading.html">Upgrade Guide</a>
+for details on breaking changes and code snippets to help with the transition.
+For a comprehensive list of all changes, please refer to the <a href="https://github.com/apache/datafusion/blob/branch-51/dev/changelog/51.0.0.md">changelog</a>.</p>
+<h2 id="about-datafusion">About DataFusion<a class="headerlink" href="#about-datafusion" title="Permanent link">¶</a></h2>
+<p><a href="https://datafusion.apache.org/">Apache DataFusion</a> is an extensible query engine, written in <a href="https://www.rust-lang.org/">Rust</a>, that uses
+<a href="https://arrow.apache.org">Apache Arrow</a> as its in-memory format. DataFusion is used by developers to
+create new, fast, data-centric systems such as databases, dataframe libraries,
+and machine learning and streaming applications. While <a href="https://datafusion.apache.org/user-guide/introduction.html#project-goals">DataFusion’s primary
+design goal</a> is to accelerate the creation of other data-centric systems, it
+provides a reasonable experience directly out of the box as a <a href="https://datafusion.apache.org/user-guide/dataframe.html">dataframe
+library</a>, <a href="https://datafusion.apache.org/python/">Python library</a>, and <a href="https://datafusion.apache.org/user-guide/cli/">command-line SQL tool</a>.</p>
+<p>DataFusion's core thesis is that, as a community, together we can build much
+more advanced technology than any of us as individuals or companies could build
+alone. Without DataFusion, highly performant vectorized query engines would
+remain the domain of a few large companies and world-class research
+institutions. With DataFusion, we can all build on top of a shared foundation
+and focus on what makes our projects unique.</p>
+<h2 id="how-to-get-involved">How to Get Involved<a class="headerlink" href="#how-to-get-involved" title="Permanent link">¶</a></h2>
+<p>DataFusion is not a project built or driven by a single person, company, or
+foundation. Rather, our community of users and contributors works together to
+build a shared technology that none of us could have built alone.</p>
+<p>If you are interested in joining us, we would love to have you. You can try out
+DataFusion on some of your own data and projects and let us know how it goes,
+contribute suggestions, documentation, bug reports, or a PR with documentation,
+tests, or code. A list of open issues suitable for beginners is <a href="https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22">here</a>, and you
+can find out how to reach us on the <a href="https://datafusion.apache.org/contributor-guide/communication.html">communication doc</a>.</p>
+
+<!--
+  Comments Section
+  Loaded only after explicit visitor consent to comply with ASF policy.
+-->
+
+<div id="comments">
+  <hr>
+  <h3>Comments</h3>
+
+  <!-- Local loader script -->
+  <script src="/content/js/giscus-consent.js" defer></script>
+
+  <!-- Consent UI -->
+  <div id="giscus-consent">
+    <p>
+        We use <a href="https://giscus.app/">Giscus</a> for comments, powered by GitHub Discussions.
+        To respect your privacy, Giscus and comments will load only if you click "Show Comments"
+    </p>
+
+    <div class="consent-actions">
+      <button id="giscus-load" type="button">Show Comments</button>
+      <button id="giscus-revoke" type="button" hidden>Hide Comments</button>
+    </div>
+
+    <noscript>JavaScript is required to load comments from Giscus.</noscript>
+  </div>
+
+  <!-- Container where Giscus will render -->
+  <div id="comment-thread"></div>
+</div>      </div>
+      <aside class="toc-container d-none d-md-block col-md-4 col-xl-3 ms-xl-2">
+        <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#introduction">Introduction</a></li>
+<li><a href="#performance-improvements">Performance Improvements 🚀</a></li>
+<li><a href="#new-features">New Features ✨</a><ul>
+<li><a href="#decimal32decimal64-everywhere">Decimal32/Decimal64 Everywhere</a></li>
+<li><a href="#sql-pipe-operators">SQL Pipe Operators</a></li>
+<li><a href="#object-store-profiling-in-datafusion-cli">Object Store Profiling in datafusion-cli</a></li>
+<li><a href="#better-defaults-for-remote-parquet-reads">Better Defaults for Remote Parquet Reads</a></li>
+</ul>
+</li>
+<li><a href="#upgrade-guide-and-changelog">Upgrade Guide and Changelog</a></li>
+<li><a href="#about-datafusion">About DataFusion</a></li>
+<li><a href="#how-to-get-involved">How to Get Involved</a></li>
+</ul>
+</div>
+      </aside>
+    </div>
+  </div>
+</div>    
+    <!-- footer -->
+    <div class="row g-0">
+      <div class="col-12">
+        <p style="font-style: italic; font-size: 0.8rem; text-align: center;">
+          Copyright 2025, <a href="https://www.apache.org/">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a>.<br/>
+          Apache&reg; and the Apache feather logo are trademarks of The Apache Software Foundation.
+        </p>
+      </div>
+    </div>
+    <script src="/blog/js/bootstrap.bundle.min.js"></script>  </main>
+  </body>
+</html>
