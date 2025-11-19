@@ -47,12 +47,19 @@
         <aside class="toc-container d-md-none mb-2">
           <div class="toc"><span class="toctitle">Contents</span><ul>
 <li><a href="#introduction">Introduction</a></li>
-<li><a href="#performance-improvements">Performance Improvements 🚀</a></li>
+<li><a href="#performance-improvements">Performance Improvements 🚀</a><ul>
+<li><a href="#faster-case-expression-evaluation">Faster CASE expression Evaluation</a></li>
+<li><a href="#faster-parquet-metadata-parsing">Faster Parquet metadata parsing</a></li>
+<li><a href="#better-defaults-for-remote-parquet-reads">Better Defaults for Remote Parquet Reads</a></li>
+</ul>
+</li>
 <li><a href="#new-features">New Features ✨</a><ul>
-<li><a href="#decimal32decimal64-everywhere">Decimal32/Decimal64 Everywhere</a></li>
+<li><a href="#decimal32decimal64-support">Decimal32/Decimal64 support</a></li>
 <li><a href="#sql-pipe-operators">SQL Pipe Operators</a></li>
 <li><a href="#io-profiling-in-datafusion-cli">I/O Profiling in datafusion-cli</a></li>
-<li><a href="#better-defaults-for-remote-parquet-reads">Better Defaults for Remote Parquet Reads</a></li>
+<li><a href="#describe-query-support">DESCRIBE &lt;query&gt; support</a></li>
+<li><a href="#support-for-named-arguments-in-sql-functions">Support for named arguments in SQL functions</a></li>
+<li><a href="#metrics-improvement">Metrics improvement</a></li>
 </ul>
 </li>
 <li><a href="#upgrade-guide-and-changelog">Upgrade Guide and Changelog</a></li>
@@ -84,51 +91,61 @@ limitations under the License.
 <h2 id="introduction">Introduction<a class="headerlink" href="#introduction" title="Permanent link">¶</a></h2>
 <p>We are proud to announce the release of <a href="https://crates.io/crates/datafusion/51.0.0">DataFusion 51.0.0</a>. This post highlights
 some of the major improvements since <a href="https://datafusion.apache.org/blog/2025/09/29/datafusion-50.0.0/">DataFusion 50.0.0</a>. The complete list of
-changes is available in the <a href="https://github.com/apache/datafusion/blob/branch-51/dev/changelog/51.0.0.md">changelog</a>. Thanks to <a href="https://github.com/apache/datafusion/blob/branch-51/dev/changelog/51.0.0.md#credits">numerous contributors</a> for
-making this release possible!</p>
+changes is available in the <a href="https://github.com/apache/datafusion/blob/branch-51/dev/changelog/51.0.0.md">changelog</a>. Thanks to the <a href="https://github.com/apache/datafusion/blob/branch-51/dev/changelog/51.0.0.md#credits">128 contributors</a> for
+making this release possible.</p>
 <h2 id="performance-improvements">Performance Improvements 🚀<a class="headerlink" href="#performance-improvements" title="Permanent link">¶</a></h2>
-<p><strong>Faster <code>CASE</code> expressions</strong></p>
-<p>A series of optimizer and execution changes (see the <a href="https://github.com/apache/datafusion/issues/18075">CASE performance
-epic</a>) significantly reduces
-work when evaluating complex <code>CASE</code> branches. Expressions short‑circuit earlier,
-reuse partial results, and avoid unnecessary scattering, speeding up common ETL
-patterns. Thanks to <a href="https://github.com/pepijnve">pepijnve</a> and <a href="https://github.com/chenkovsky">chenkovsky</a> for leading this effort.</p>
-<p><strong>Fewer object store round-trips for Parquet</strong></p>
+<p><img alt="Performance over time" class="img-responsive" src="/blog/images/datafusion-51.0.0/performance_over_time_clickbench.png" width="100%"/></p>
+<p>TODO: update this image</p>
+<h3 id="faster-case-expression-evaluation">Faster <code>CASE</code> expression Evaluation<a class="headerlink" href="#faster-case-expression-evaluation" title="Permanent link">¶</a></h3>
+<p>This release includes significantly improved <a href="https://github.com/apache/datafusion/issues/18075">CASE performance epic</a>.
+Expressions short‑circuit earlier, reuse partial results, and avoid unnecessary
+scattering, speeding up common ETL patterns. Thanks to <a href="https://github.com/pepijnve">pepijnve</a>, <a href="https://github.com/chenkovsky">chenkovsky</a>
+and <a href="https://github.com/petern48">petern48</a> for leading this effort. We hope to share more details on our
+implementation in a future post.</p>
+<p><strong>Fewer object store round-trips for Parquet by Default</strong></p>
 <p>DataFusion now sets a default <code>metadata_size_hint</code> for Parquet scans
 (<a href="https://github.com/apache/datafusion/issues/18118">#18118</a>), avoiding the extra
 “last 8‑byte” request many clouds require to read file footers. Remote scans
 typically drop from five requests to four per file, cutting latency and transfer
 costs without any application changes. Thanks to <a href="https://github.com/zhuqi-lucas">zhuqi-lucas</a> for leading this
 effort.</p>
-<p><strong>Faster Parquet metadata parsing</strong>
-DataFusion 51 includes the latest Parquet improvements from 
-<a href="https://arrow.apache.org/blog/2025/10/30/arrow-rs-57.0.0/">Arrow Rust 57.0.0</a>
-including significantly faster Parquet metadata parsing. </p>
+<h3 id="faster-parquet-metadata-parsing">Faster Parquet metadata parsing<a class="headerlink" href="#faster-parquet-metadata-parsing" title="Permanent link">¶</a></h3>
+<p>DataFusion 51 also includes the latest Parquet reader improvements from
+<a href="https://arrow.apache.org/blog/2025/10/30/arrow-rs-57.0.0/">Arrow Rust 57.0.0</a>, delivering faster Parquet metadata parsing. This is
+especially beneficial for workloads with many small Parquet files and scenarios
+where startup time or low latency is important. Thanks again to the upstream work by
+<a href="https://github.com/etseidl">etseidl</a> and <a href="https://github.com/jhorstmann">jhorstmann</a> for leading this effort.</p>
 <p><img alt="Metadata Parsing Performance Improvements in Arrow/Parquet 57" class="img-responsive" src="/blog/images/datafusion-51.0.0/arrow-57-metadata-parsing.png" width="100%"/></p>
+<h3 id="better-defaults-for-remote-parquet-reads">Better Defaults for Remote Parquet Reads<a class="headerlink" href="#better-defaults-for-remote-parquet-reads" title="Permanent link">¶</a></h3>
+<p>DataFusion by default now fetches the last 512KB (configurable) of Parquet files
+so the first request usually includes the full footer (<a href="https://github.com/apache/datafusion/issues/18118">#18118</a>). This will
+typically avoid 2 distinct I/O requests for each Parquet file. While this
+setting has existed in DataFusion for many years, it was not previously enabled
+by default. Users can tune the number of bytes fetched in the initial I/O
+request via the <code>datafusion.execution.parquet.metadata_size_hint</code> <a href="https://datafusion.apache.org/user-guide/configs.html">config setting</a>. Thanks to
+<a href="https://github.com/zhuqi-lucas">zhuqi-lucas</a> for leading this effort.</p>
 <h2 id="new-features">New Features ✨<a class="headerlink" href="#new-features" title="Permanent link">¶</a></h2>
-<h3 id="decimal32decimal64-everywhere">Decimal32/Decimal64 Everywhere<a class="headerlink" href="#decimal32decimal64-everywhere" title="Permanent link">¶</a></h3>
-<p>DataFusion now treats the smaller decimal types as first-class citizens
-(<a href="https://github.com/apache/datafusion/pull/17501">#17501</a>). Aggregations like
-<code>SUM</code>, <code>AVG</code>, <code>MIN/MAX</code>, and window functions work seamlessly with <code>Decimal32</code>
-and <code>Decimal64</code>, removing a common source of “type not supported” errors for
-financial and sensor workloads. Thanks to <a href="https://github.com/AdamGS">AdamGS</a> for leading this effort.</p>
+<h3 id="decimal32decimal64-support">Decimal32/Decimal64 support<a class="headerlink" href="#decimal32decimal64-support" title="Permanent link">¶</a></h3>
+<p>The new Arrow types <code>Decimal32</code> and <code>Decimal64</code> are now supported in DataFusion
+(<a href="https://github.com/apache/datafusion/pull/17501">#17501</a>), including in aggregations like
+<code>SUM</code>, <code>AVG</code>, <code>MIN/MAX</code>, and window functions. Thanks to <a href="https://github.com/AdamGS">AdamGS</a> for leading this effort.</p>
 <h3 id="sql-pipe-operators">SQL Pipe Operators<a class="headerlink" href="#sql-pipe-operators" title="Permanent link">¶</a></h3>
 <p>DataFusion now supports the SQL pipe operator syntax
-(<a href="https://github.com/apache/datafusion/pull/17278">#17278</a>), enabling inline
-transforms such as:</p>
+(<a href="https://github.com/apache/datafusion/pull/17278">#17278</a>), enabling inline transforms such as:</p>
 <pre><code class="language-sql">SELECT * FROM t
 |&gt; WHERE a &gt; 10
 |&gt; ORDER BY b
 |&gt; LIMIT 5;
 </code></pre>
-<p>This syntax keeps multi-step transformations concise while preserving regular
+<p>This syntax, <a href="https://docs.cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax">popularized by Google BigQuery</a>, keeps multi-step transformations concise while preserving regular
 SQL semantics. Thanks to <a href="https://github.com/simonvandel">simonvandel</a> for leading this effort.</p>
 <h3 id="io-profiling-in-datafusion-cli">I/O Profiling in <code>datafusion-cli</code><a class="headerlink" href="#io-profiling-in-datafusion-cli" title="Permanent link">¶</a></h3>
-<p>The <code>datafusion-cli</code> now has build-in instrumentation to trace IO store calls
+<p><a href="https://datafusion.apache.org/user-guide/cli/">datafusion-cli</a> now has built-in instrumentation to trace object store calls
 (<a href="https://github.com/apache/datafusion/issues/17207">#17207</a>). Toggle profiling
-with a single command and inspect the exact <code>GET</code>/<code>LIST</code> requests issued during
+with the <a href="https://datafusion.apache.org/user-guide/cli/usage.html#commands">\object_store_profiling command</a> and inspect the exact <code>GET</code>/<code>LIST</code> requests issued during
 query execution:</p>
-<pre><code class="language-sql">&gt; \object_store_profiling trace
+<pre><code class="language-sql">DataFusion CLI v51.0.0
+&gt; \object_store_profiling trace
 ObjectStore Profile mode set to Trace
 &gt; select count(*) from 'https://datasets.clickhouse.com/hits_compatible/athena_partitioned/hits_1.parquet';
 +----------+
@@ -137,29 +154,90 @@ ObjectStore Profile mode set to Trace
 | 1000000  |
 +----------+
 1 row(s) fetched.
-Elapsed 0.552 seconds.
+Elapsed 0.367 seconds.
 
 Object Store Profiling
 Instrumented Object Store: instrument_mode: Trace, inner: HttpStore
-2025-10-17T18:08:48.457992+00:00 operation=Get duration=0.043592s size=8 range: bytes=174965036-174965043 path=hits_compatible/athena_partitioned/hits_1.parquet
-2025-10-17T18:08:48.501878+00:00 operation=Get duration=0.031542s size=34322 range: bytes=174930714-174965035 path=hits_compatible/athena_partitioned/hits_1.parquet
+2025-11-19T21:10:43.476121+00:00 operation=Head duration=0.069763s path=hits_compatible/athena_partitioned/hits_1.parquet
+2025-11-19T21:10:43.545903+00:00 operation=Head duration=0.025859s path=hits_compatible/athena_partitioned/hits_1.parquet
+2025-11-19T21:10:43.571768+00:00 operation=Head duration=0.025684s path=hits_compatible/athena_partitioned/hits_1.parquet
+2025-11-19T21:10:43.597463+00:00 operation=Get duration=0.034194s size=524288 range: bytes=174440756-174965043 path=hits_compatible/athena_partitioned/hits_1.parquet
+2025-11-19T21:10:43.705821+00:00 operation=Head duration=0.022029s path=hits_compatible/athena_partitioned/hits_1.parquet
 
 Summaries:
 +-----------+----------+-----------+-----------+-----------+-----------+-------+
 | Operation | Metric   | min       | max       | avg       | sum       | count |
 +-----------+----------+-----------+-----------+-----------+-----------+-------+
-| Get       | duration | 0.031542s | 0.043592s | 0.037567s | 0.075133s | 2     |
-| Get       | size     | 8 B       | 34322 B   | 17165 B   | 34330 B   | 2     |
-+-----------+----------+-----------+-----------+-------
+| Get       | duration | 0.034194s | 0.034194s | 0.034194s | 0.034194s | 1     |
+| Get       | size     | 524288 B  | 524288 B  | 524288 B  | 524288 B  | 1     |
+| Head      | duration | 0.022029s | 0.069763s | 0.035834s | 0.143335s | 4     |
+| Head      | size     |           |           |           |           | 4     |
++-----------+----------+-----------+-----------+-----------+-----------+-------+
 </code></pre>
 <p>This makes it far easier to diagnose slow remote scans and validate caching
 strategies. Thanks to <a href="https://github.com/BlakeOrth">BlakeOrth</a> for leading this effort.</p>
-<h3 id="better-defaults-for-remote-parquet-reads">Better Defaults for Remote Parquet Reads<a class="headerlink" href="#better-defaults-for-remote-parquet-reads" title="Permanent link">¶</a></h3>
-<p>Alongside the new profiling tools, DataFusion now uses a larger default Parquet
-footer prefetch hint so the first request usually includes the full footer
-(<a href="https://github.com/apache/datafusion/issues/18118">#18118</a>). Users can tune it
-via <code>datafusion.execution.parquet.metadata_size_hint</code>, and disable prefetching
-by setting it to <code>0</code>. Thanks again to <a href="https://github.com/zhuqi-lucas">zhuqi-lucas</a> for leading this effort.</p>
+<h3 id="describe-query-support"><code>DESCRIBE &lt;query&gt;</code> support<a class="headerlink" href="#describe-query-support" title="Permanent link">¶</a></h3>
+<p><code>DESCRIBE</code> now works on arbitrary queries, returning the schema instead
+of being an alias for <code>EXPLAIN</code> (<a href="https://github.com/apache/datafusion/issues/18234">#18234</a>). This brings DataFusion in line with engines
+like DuckDB and makes it easy to inspect the output schema of queries
+without executing them.</p>
+<p>For example</p>
+<pre><code class="language-sql">DataFusion CLI v51.0.0
+&gt; create table t(a int, b varchar, c float) as values (1, 'a', 2.0);
+0 row(s) fetched.
+Elapsed 0.002 seconds.
+
+&gt; DESCRIBE SELECT a, b, SUM(c) FROM t GROUP BY a, b;
+
++-------------+-----------+-------------+
+| column_name | data_type | is_nullable |
++-------------+-----------+-------------+
+| a           | Int32     | YES         |
+| b           | Utf8View  | YES         |
+| sum(t.c)    | Float64   | YES         |
++-------------+-----------+-------------+
+3 row(s) fetched.
+</code></pre>
+<h3 id="support-for-named-arguments-in-sql-functions">Support for named arguments in SQL functions<a class="headerlink" href="#support-for-named-arguments-in-sql-functions" title="Permanent link">¶</a></h3>
+<p>DataFusion now understands <a href="https://www.postgresql.org/docs/current/sql-syntax-calling-funcs.html">PostgreSQL-style named arguments</a> (<code>param =&gt; value</code>)
+for scalar, aggregate, and window functions (<a href="https://github.com/apache/datafusion/issues/17379">#17379</a>). You can mix positional and named
+arguments in any order, and error messages now list parameter names to make
+diagnostics clearer. UDF authors can also expose parameter names so their
+functions benefit from the same syntax.</p>
+<p>For example, you can pass the arguments to functions like this:</p>
+<pre><code class="language-sql">SELECT power(exponent =&gt; 3.0, base =&gt; 2.0);
+</code></pre>
+<h3 id="metrics-improvement">Metrics improvement<a class="headerlink" href="#metrics-improvement" title="Permanent link">¶</a></h3>
+<p>The output of <a href="https://datafusion.apache.org/user-guide/sql/explain.html#explain-analyze">EXPLAIN ANALYZE</a> has been improved to include more metrics
+about execution time and memory usage of each operator in the query plan.
+Read about these new metrics in the <a href="https://datafusion.apache.org/user-guide/metrics.html">metrics user guide</a>.</p>
+<p>For example, the following query</p>
+<pre><code class="language-sql">&gt; explain analyze select count(*) 
+from 'https://datasets.clickhouse.com/hits_compatible/athena_partitioned/hits_1.parquet' 
+where "URL" &lt;&gt; '';
+</code></pre>
+<p>Now shows easier-to-understand metrics such as:</p>
+<pre><code class="language-text"> metrics=[
+   output_rows=1000000, 
+   elapsed_compute=16ns, 
+   output_bytes=222.5 MB, 
+   files_ranges_pruned_statistics=16 total → 16 matched, 
+   row_groups_pruned_statistics=3 total → 3 matched, 
+   row_groups_pruned_bloom_filter=3 total → 3 matched, 
+   page_index_rows_pruned=0 total → 0 matched, 
+   batches_split=0, 
+   bytes_scanned=33661364,
+   ... 
+   metadata_load_time=4.243098ms, 
+   page_index_eval_time=1.016µs, 
+   row_pushdown_eval_time=32ns, 
+   statistics_eval_time=601.477µs, 
+   time_elapsed_opening=6.816666ms, 
+   time_elapsed_processing=159.983752ms, 
+   time_elapsed_scanning_total=4.468917754s, 
+   time_elapsed_scanning_until_data=1.658900959s
+]
+</code></pre>
 <h2 id="upgrade-guide-and-changelog">Upgrade Guide and Changelog<a class="headerlink" href="#upgrade-guide-and-changelog" title="Permanent link">¶</a></h2>
 <p>Upgrading to 51.0.0 should be straightforward for most users. Please review the
 <a href="https://datafusion.apache.org/library-user-guide/upgrading.html">Upgrade Guide</a>
@@ -222,12 +300,19 @@ can find out how to reach us on the <a href="https://datafusion.apache.org/contr
       <aside class="toc-container d-none d-md-block col-md-4 col-xl-3 ms-xl-2">
         <div class="toc"><span class="toctitle">Contents</span><ul>
 <li><a href="#introduction">Introduction</a></li>
-<li><a href="#performance-improvements">Performance Improvements 🚀</a></li>
+<li><a href="#performance-improvements">Performance Improvements 🚀</a><ul>
+<li><a href="#faster-case-expression-evaluation">Faster CASE expression Evaluation</a></li>
+<li><a href="#faster-parquet-metadata-parsing">Faster Parquet metadata parsing</a></li>
+<li><a href="#better-defaults-for-remote-parquet-reads">Better Defaults for Remote Parquet Reads</a></li>
+</ul>
+</li>
 <li><a href="#new-features">New Features ✨</a><ul>
-<li><a href="#decimal32decimal64-everywhere">Decimal32/Decimal64 Everywhere</a></li>
+<li><a href="#decimal32decimal64-support">Decimal32/Decimal64 support</a></li>
 <li><a href="#sql-pipe-operators">SQL Pipe Operators</a></li>
 <li><a href="#io-profiling-in-datafusion-cli">I/O Profiling in datafusion-cli</a></li>
-<li><a href="#better-defaults-for-remote-parquet-reads">Better Defaults for Remote Parquet Reads</a></li>
+<li><a href="#describe-query-support">DESCRIBE &lt;query&gt; support</a></li>
+<li><a href="#support-for-named-arguments-in-sql-functions">Support for named arguments in SQL functions</a></li>
+<li><a href="#metrics-improvement">Metrics improvement</a></li>
 </ul>
 </li>
 <li><a href="#upgrade-guide-and-changelog">Upgrade Guide and Changelog</a></li>
