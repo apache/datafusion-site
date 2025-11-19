@@ -51,7 +51,7 @@
 <li><a href="#new-features">New Features ✨</a><ul>
 <li><a href="#decimal32decimal64-everywhere">Decimal32/Decimal64 Everywhere</a></li>
 <li><a href="#sql-pipe-operators">SQL Pipe Operators</a></li>
-<li><a href="#object-store-profiling-in-datafusion-cli">Object Store Profiling in datafusion-cli</a></li>
+<li><a href="#io-profiling-in-datafusion-cli">I/O Profiling in datafusion-cli</a></li>
 <li><a href="#better-defaults-for-remote-parquet-reads">Better Defaults for Remote Parquet Reads</a></li>
 </ul>
 </li>
@@ -88,26 +88,32 @@ changes is available in the <a href="https://github.com/apache/datafusion/blob/b
 making this release possible!</p>
 <h2 id="performance-improvements">Performance Improvements 🚀<a class="headerlink" href="#performance-improvements" title="Permanent link">¶</a></h2>
 <p><strong>Faster <code>CASE</code> expressions</strong></p>
-<p>A series of optimizer and execution changes (see the
-<a href="https://github.com/apache/datafusion/issues/18075">CASE performance epic</a>)
-significantly reduces work when evaluating complex <code>CASE</code> branches. Expressions
-short‑circuit earlier, reuse partial results, and avoid unnecessary scattering,
-speeding up common ETL patterns.</p>
+<p>A series of optimizer and execution changes (see the <a href="https://github.com/apache/datafusion/issues/18075">CASE performance
+epic</a>) significantly reduces
+work when evaluating complex <code>CASE</code> branches. Expressions short‑circuit earlier,
+reuse partial results, and avoid unnecessary scattering, speeding up common ETL
+patterns. Thanks to <a href="https://github.com/pepijnve">pepijnve</a> and <a href="https://github.com/chenkovsky">chenkovsky</a> for leading this effort.</p>
 <p><strong>Fewer object store round-trips for Parquet</strong></p>
 <p>DataFusion now sets a default <code>metadata_size_hint</code> for Parquet scans
 (<a href="https://github.com/apache/datafusion/issues/18118">#18118</a>), avoiding the extra
 “last 8‑byte” request many clouds require to read file footers. Remote scans
 typically drop from five requests to four per file, cutting latency and transfer
-costs without any application changes.</p>
+costs without any application changes. Thanks to <a href="https://github.com/zhuqi-lucas">zhuqi-lucas</a> for leading this
+effort.</p>
+<p><strong>Faster Parquet metadata parsing</strong>
+DataFusion 51 includes the latest Parquet improvements from 
+<a href="https://arrow.apache.org/blog/2025/10/30/arrow-rs-57.0.0/">Arrow Rust 57.0.0</a>
+including significantly faster Parquet metadata parsing. </p>
+<p><img alt="Metadata Parsing Performance Improvements in Arrow/Parquet 57" class="img-responsive" src="/blog/images/datafusion-51.0.0/arrow-57-metadata-parsing.png" width="100%"/></p>
 <h2 id="new-features">New Features ✨<a class="headerlink" href="#new-features" title="Permanent link">¶</a></h2>
 <h3 id="decimal32decimal64-everywhere">Decimal32/Decimal64 Everywhere<a class="headerlink" href="#decimal32decimal64-everywhere" title="Permanent link">¶</a></h3>
 <p>DataFusion now treats the smaller decimal types as first-class citizens
 (<a href="https://github.com/apache/datafusion/pull/17501">#17501</a>). Aggregations like
 <code>SUM</code>, <code>AVG</code>, <code>MIN/MAX</code>, and window functions work seamlessly with <code>Decimal32</code>
 and <code>Decimal64</code>, removing a common source of “type not supported” errors for
-financial and sensor workloads.</p>
+financial and sensor workloads. Thanks to <a href="https://github.com/AdamGS">AdamGS</a> for leading this effort.</p>
 <h3 id="sql-pipe-operators">SQL Pipe Operators<a class="headerlink" href="#sql-pipe-operators" title="Permanent link">¶</a></h3>
-<p>Pipe operators from sqlparser are now executable in DataFusion
+<p>DataFusion now supports the SQL pipe operator syntax
 (<a href="https://github.com/apache/datafusion/pull/17278">#17278</a>), enabling inline
 transforms such as:</p>
 <pre><code class="language-sql">SELECT * FROM t
@@ -116,24 +122,44 @@ transforms such as:</p>
 |&gt; LIMIT 5;
 </code></pre>
 <p>This syntax keeps multi-step transformations concise while preserving regular
-SQL semantics.</p>
-<h3 id="object-store-profiling-in-datafusion-cli">Object Store Profiling in <code>datafusion-cli</code><a class="headerlink" href="#object-store-profiling-in-datafusion-cli" title="Permanent link">¶</a></h3>
-<p>The CLI gained built-in instrumentation to trace object store calls
+SQL semantics. Thanks to <a href="https://github.com/simonvandel">simonvandel</a> for leading this effort.</p>
+<h3 id="io-profiling-in-datafusion-cli">I/O Profiling in <code>datafusion-cli</code><a class="headerlink" href="#io-profiling-in-datafusion-cli" title="Permanent link">¶</a></h3>
+<p>The <code>datafusion-cli</code> now has build-in instrumentation to trace IO store calls
 (<a href="https://github.com/apache/datafusion/issues/17207">#17207</a>). Toggle profiling
 with a single command and inspect the exact <code>GET</code>/<code>LIST</code> requests issued during
 query execution:</p>
-<pre><code class="language-sql">&gt; \\object_store_profiling trace
-&gt; SELECT COUNT(*) FROM 'https://datasets.clickhouse.com/.../hits_1.parquet';
--- trace output includes operation, range, size, path, and duration
+<pre><code class="language-sql">&gt; \object_store_profiling trace
+ObjectStore Profile mode set to Trace
+&gt; select count(*) from 'https://datasets.clickhouse.com/hits_compatible/athena_partitioned/hits_1.parquet';
++----------+
+| count(*) |
++----------+
+| 1000000  |
++----------+
+1 row(s) fetched.
+Elapsed 0.552 seconds.
+
+Object Store Profiling
+Instrumented Object Store: instrument_mode: Trace, inner: HttpStore
+2025-10-17T18:08:48.457992+00:00 operation=Get duration=0.043592s size=8 range: bytes=174965036-174965043 path=hits_compatible/athena_partitioned/hits_1.parquet
+2025-10-17T18:08:48.501878+00:00 operation=Get duration=0.031542s size=34322 range: bytes=174930714-174965035 path=hits_compatible/athena_partitioned/hits_1.parquet
+
+Summaries:
++-----------+----------+-----------+-----------+-----------+-----------+-------+
+| Operation | Metric   | min       | max       | avg       | sum       | count |
++-----------+----------+-----------+-----------+-----------+-----------+-------+
+| Get       | duration | 0.031542s | 0.043592s | 0.037567s | 0.075133s | 2     |
+| Get       | size     | 8 B       | 34322 B   | 17165 B   | 34330 B   | 2     |
++-----------+----------+-----------+-----------+-------
 </code></pre>
 <p>This makes it far easier to diagnose slow remote scans and validate caching
-strategies.</p>
+strategies. Thanks to <a href="https://github.com/BlakeOrth">BlakeOrth</a> for leading this effort.</p>
 <h3 id="better-defaults-for-remote-parquet-reads">Better Defaults for Remote Parquet Reads<a class="headerlink" href="#better-defaults-for-remote-parquet-reads" title="Permanent link">¶</a></h3>
 <p>Alongside the new profiling tools, DataFusion now uses a larger default Parquet
 footer prefetch hint so the first request usually includes the full footer
 (<a href="https://github.com/apache/datafusion/issues/18118">#18118</a>). Users can tune it
 via <code>datafusion.execution.parquet.metadata_size_hint</code>, and disable prefetching
-by setting it to <code>0</code>.</p>
+by setting it to <code>0</code>. Thanks again to <a href="https://github.com/zhuqi-lucas">zhuqi-lucas</a> for leading this effort.</p>
 <h2 id="upgrade-guide-and-changelog">Upgrade Guide and Changelog<a class="headerlink" href="#upgrade-guide-and-changelog" title="Permanent link">¶</a></h2>
 <p>Upgrading to 51.0.0 should be straightforward for most users. Please review the
 <a href="https://datafusion.apache.org/library-user-guide/upgrading.html">Upgrade Guide</a>
@@ -200,7 +226,7 @@ can find out how to reach us on the <a href="https://datafusion.apache.org/contr
 <li><a href="#new-features">New Features ✨</a><ul>
 <li><a href="#decimal32decimal64-everywhere">Decimal32/Decimal64 Everywhere</a></li>
 <li><a href="#sql-pipe-operators">SQL Pipe Operators</a></li>
-<li><a href="#object-store-profiling-in-datafusion-cli">Object Store Profiling in datafusion-cli</a></li>
+<li><a href="#io-profiling-in-datafusion-cli">I/O Profiling in datafusion-cli</a></li>
 <li><a href="#better-defaults-for-remote-parquet-reads">Better Defaults for Remote Parquet Reads</a></li>
 </ul>
 </li>

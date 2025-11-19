@@ -50,26 +50,32 @@ changes is available in the &lt;a href="https://github.com/apache/datafusion/blo
 making this release possible!&lt;/p&gt;
 &lt;h2 id="performance-improvements"&gt;Performance Improvements 🚀&lt;a class="headerlink" href="#performance-improvements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;&lt;strong&gt;Faster &lt;code&gt;CASE&lt;/code&gt; expressions&lt;/strong&gt;&lt;/p&gt;
-&lt;p&gt;A series of optimizer and execution changes (see the
-&lt;a href="https://github.com/apache/datafusion/issues/18075"&gt;CASE performance epic&lt;/a&gt;)
-significantly reduces work when evaluating complex &lt;code&gt;CASE&lt;/code&gt; branches. Expressions
-short‑circuit earlier, reuse partial results, and avoid unnecessary scattering,
-speeding up common ETL patterns.&lt;/p&gt;
+&lt;p&gt;A series of optimizer and execution changes (see the &lt;a href="https://github.com/apache/datafusion/issues/18075"&gt;CASE performance
+epic&lt;/a&gt;) significantly reduces
+work when evaluating complex &lt;code&gt;CASE&lt;/code&gt; branches. Expressions short‑circuit earlier,
+reuse partial results, and avoid unnecessary scattering, speeding up common ETL
+patterns. Thanks to &lt;a href="https://github.com/pepijnve"&gt;pepijnve&lt;/a&gt; and &lt;a href="https://github.com/chenkovsky"&gt;chenkovsky&lt;/a&gt; for leading this effort.&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Fewer object store round-trips for Parquet&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;DataFusion now sets a default &lt;code&gt;metadata_size_hint&lt;/code&gt; for Parquet scans
 (&lt;a href="https://github.com/apache/datafusion/issues/18118"&gt;#18118&lt;/a&gt;), avoiding the extra
 “last 8‑byte” request many clouds require to read file footers. Remote scans
 typically drop from five requests to four per file, cutting latency and transfer
-costs without any application changes.&lt;/p&gt;
+costs without any application changes. Thanks to &lt;a href="https://github.com/zhuqi-lucas"&gt;zhuqi-lucas&lt;/a&gt; for leading this
+effort.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Faster Parquet metadata parsing&lt;/strong&gt;
+DataFusion 51 includes the latest Parquet improvements from 
+&lt;a href="https://arrow.apache.org/blog/2025/10/30/arrow-rs-57.0.0/"&gt;Arrow Rust 57.0.0&lt;/a&gt;
+including significantly faster Parquet metadata parsing. &lt;/p&gt;
+&lt;p&gt;&lt;img alt="Metadata Parsing Performance Improvements in Arrow/Parquet 57" class="img-responsive" src="/blog/images/datafusion-51.0.0/arrow-57-metadata-parsing.png" width="100%"/&gt;&lt;/p&gt;
 &lt;h2 id="new-features"&gt;New Features ✨&lt;a class="headerlink" href="#new-features" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;h3 id="decimal32decimal64-everywhere"&gt;Decimal32/Decimal64 Everywhere&lt;a class="headerlink" href="#decimal32decimal64-everywhere" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;DataFusion now treats the smaller decimal types as first-class citizens
 (&lt;a href="https://github.com/apache/datafusion/pull/17501"&gt;#17501&lt;/a&gt;). Aggregations like
 &lt;code&gt;SUM&lt;/code&gt;, &lt;code&gt;AVG&lt;/code&gt;, &lt;code&gt;MIN/MAX&lt;/code&gt;, and window functions work seamlessly with &lt;code&gt;Decimal32&lt;/code&gt;
 and &lt;code&gt;Decimal64&lt;/code&gt;, removing a common source of “type not supported” errors for
-financial and sensor workloads.&lt;/p&gt;
+financial and sensor workloads. Thanks to &lt;a href="https://github.com/AdamGS"&gt;AdamGS&lt;/a&gt; for leading this effort.&lt;/p&gt;
 &lt;h3 id="sql-pipe-operators"&gt;SQL Pipe Operators&lt;a class="headerlink" href="#sql-pipe-operators" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
-&lt;p&gt;Pipe operators from sqlparser are now executable in DataFusion
+&lt;p&gt;DataFusion now supports the SQL pipe operator syntax
 (&lt;a href="https://github.com/apache/datafusion/pull/17278"&gt;#17278&lt;/a&gt;), enabling inline
 transforms such as:&lt;/p&gt;
 &lt;pre&gt;&lt;code class="language-sql"&gt;SELECT * FROM t
@@ -78,24 +84,44 @@ transforms such as:&lt;/p&gt;
 |&amp;gt; LIMIT 5;
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;This syntax keeps multi-step transformations concise while preserving regular
-SQL semantics.&lt;/p&gt;
-&lt;h3 id="object-store-profiling-in-datafusion-cli"&gt;Object Store Profiling in &lt;code&gt;datafusion-cli&lt;/code&gt;&lt;a class="headerlink" href="#object-store-profiling-in-datafusion-cli" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
-&lt;p&gt;The CLI gained built-in instrumentation to trace object store calls
+SQL semantics. Thanks to &lt;a href="https://github.com/simonvandel"&gt;simonvandel&lt;/a&gt; for leading this effort.&lt;/p&gt;
+&lt;h3 id="io-profiling-in-datafusion-cli"&gt;I/O Profiling in &lt;code&gt;datafusion-cli&lt;/code&gt;&lt;a class="headerlink" href="#io-profiling-in-datafusion-cli" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;The &lt;code&gt;datafusion-cli&lt;/code&gt; now has build-in instrumentation to trace IO store calls
 (&lt;a href="https://github.com/apache/datafusion/issues/17207"&gt;#17207&lt;/a&gt;). Toggle profiling
 with a single command and inspect the exact &lt;code&gt;GET&lt;/code&gt;/&lt;code&gt;LIST&lt;/code&gt; requests issued during
 query execution:&lt;/p&gt;
-&lt;pre&gt;&lt;code class="language-sql"&gt;&amp;gt; \\object_store_profiling trace
-&amp;gt; SELECT COUNT(*) FROM 'https://datasets.clickhouse.com/.../hits_1.parquet';
--- trace output includes operation, range, size, path, and duration
+&lt;pre&gt;&lt;code class="language-sql"&gt;&amp;gt; \object_store_profiling trace
+ObjectStore Profile mode set to Trace
+&amp;gt; select count(*) from 'https://datasets.clickhouse.com/hits_compatible/athena_partitioned/hits_1.parquet';
++----------+
+| count(*) |
++----------+
+| 1000000  |
++----------+
+1 row(s) fetched.
+Elapsed 0.552 seconds.
+
+Object Store Profiling
+Instrumented Object Store: instrument_mode: Trace, inner: HttpStore
+2025-10-17T18:08:48.457992+00:00 operation=Get duration=0.043592s size=8 range: bytes=174965036-174965043 path=hits_compatible/athena_partitioned/hits_1.parquet
+2025-10-17T18:08:48.501878+00:00 operation=Get duration=0.031542s size=34322 range: bytes=174930714-174965035 path=hits_compatible/athena_partitioned/hits_1.parquet
+
+Summaries:
++-----------+----------+-----------+-----------+-----------+-----------+-------+
+| Operation | Metric   | min       | max       | avg       | sum       | count |
++-----------+----------+-----------+-----------+-----------+-----------+-------+
+| Get       | duration | 0.031542s | 0.043592s | 0.037567s | 0.075133s | 2     |
+| Get       | size     | 8 B       | 34322 B   | 17165 B   | 34330 B   | 2     |
++-----------+----------+-----------+-----------+-------
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;This makes it far easier to diagnose slow remote scans and validate caching
-strategies.&lt;/p&gt;
+strategies. Thanks to &lt;a href="https://github.com/BlakeOrth"&gt;BlakeOrth&lt;/a&gt; for leading this effort.&lt;/p&gt;
 &lt;h3 id="better-defaults-for-remote-parquet-reads"&gt;Better Defaults for Remote Parquet Reads&lt;a class="headerlink" href="#better-defaults-for-remote-parquet-reads" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;Alongside the new profiling tools, DataFusion now uses a larger default Parquet
 footer prefetch hint so the first request usually includes the full footer
 (&lt;a href="https://github.com/apache/datafusion/issues/18118"&gt;#18118&lt;/a&gt;). Users can tune it
 via &lt;code&gt;datafusion.execution.parquet.metadata_size_hint&lt;/code&gt;, and disable prefetching
-by setting it to &lt;code&gt;0&lt;/code&gt;.&lt;/p&gt;
+by setting it to &lt;code&gt;0&lt;/code&gt;. Thanks again to &lt;a href="https://github.com/zhuqi-lucas"&gt;zhuqi-lucas&lt;/a&gt; for leading this effort.&lt;/p&gt;
 &lt;h2 id="upgrade-guide-and-changelog"&gt;Upgrade Guide and Changelog&lt;a class="headerlink" href="#upgrade-guide-and-changelog" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;Upgrading to 51.0.0 should be straightforward for most users. Please review the
 &lt;a href="https://datafusion.apache.org/library-user-guide/upgrading.html"&gt;Upgrade Guide&lt;/a&gt;
