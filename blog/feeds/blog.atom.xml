@@ -167,32 +167,38 @@ functions benefit from the same syntax.&lt;/p&gt;
 &lt;p&gt;The output of &lt;a href="https://datafusion.apache.org/user-guide/sql/explain.html#explain-analyze"&gt;EXPLAIN ANALYZE&lt;/a&gt; has been improved to include more metrics
 about execution time and memory usage of each operator in the query plan.
 Read about these new metrics in the &lt;a href="https://datafusion.apache.org/user-guide/metrics.html"&gt;metrics user guide&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;The &lt;code&gt;51.0.0&lt;/code&gt; release adds:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Configuration&lt;/strong&gt;: adds a new option &lt;code&gt;datafusion.explain.analyze_level&lt;/code&gt;, which can be set to &lt;code&gt;summary&lt;/code&gt; for a concise output or &lt;code&gt;dev&lt;/code&gt; for the full set of metrics (the previous default).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;For all major operators&lt;/strong&gt;: adds &lt;code&gt;output_bytes&lt;/code&gt;, reporting how many bytes of data each operator produces.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;FilterExec&lt;/strong&gt;: adds a &lt;code&gt;selectivity&lt;/code&gt; metric (&lt;code&gt;output_rows / input_rows&lt;/code&gt;) to show how effective the filter is.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;AggregateExec&lt;/strong&gt;: &lt;/li&gt;
+&lt;li&gt;adds detailed timing metrics for group-ID computation, aggregate argument evaluation, aggregation work, and emitting final results.&lt;/li&gt;
+&lt;li&gt;adds a &lt;code&gt;reduction_factor&lt;/code&gt; metric (&lt;code&gt;output_rows / input_rows&lt;/code&gt;) to show how much grouping reduces the data.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;NestedLoopJoinExec&lt;/strong&gt;: adds a &lt;code&gt;selectivity&lt;/code&gt; metric (&lt;code&gt;output_rows / (left_rows * right_rows)&lt;/code&gt;) to show how many combinations actually pass the join condition.&lt;/li&gt;
+&lt;li&gt;Several display formatting improvements were added to make &lt;code&gt;EXPLAIN ANALYZE&lt;/code&gt; output easier to read.&lt;/li&gt;
+&lt;/ul&gt;
 &lt;p&gt;For example, the following query&lt;/p&gt;
-&lt;pre&gt;&lt;code class="language-sql"&gt;explain analyze 
+&lt;pre&gt;&lt;code class="language-sql"&gt;set datafusion.explain.analyze_level = summary
+
+explain analyze 
 select count(*) 
 from 'https://datasets.clickhouse.com/hits_compatible/athena_partitioned/hits_1.parquet' 
 where "URL" &amp;lt;&amp;gt; '';
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;Now shows easier-to-understand metrics such as:&lt;/p&gt;
-&lt;pre&gt;&lt;code class="language-text"&gt; metrics=[
+
+Now shows easier-to-understand metrics such as:
+
+```text
+ metrics=[
    output_rows=1000000, 
    elapsed_compute=16ns, 
    output_bytes=222.5 MB, 
    files_ranges_pruned_statistics=16 total → 16 matched, 
    row_groups_pruned_statistics=3 total → 3 matched, 
    row_groups_pruned_bloom_filter=3 total → 3 matched, 
-   page_index_rows_pruned=0 total → 0 matched, 
-   batches_split=0, 
+   page_index_rows_pruned=0 total → 0 matched,
    bytes_scanned=33661364,
-   ... 
    metadata_load_time=4.243098ms, 
-   page_index_eval_time=1.016µs, 
-   row_pushdown_eval_time=32ns, 
-   statistics_eval_time=601.477µs, 
-   time_elapsed_opening=6.816666ms, 
-   time_elapsed_processing=159.983752ms, 
-   time_elapsed_scanning_total=4.468917754s, 
-   time_elapsed_scanning_until_data=1.658900959s
 ]
 &lt;/code&gt;&lt;/pre&gt;
 &lt;h2 id="upgrade-guide-and-changelog"&gt;Upgrade Guide and Changelog&lt;a class="headerlink" href="#upgrade-guide-and-changelog" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
