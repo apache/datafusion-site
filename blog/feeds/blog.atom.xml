@@ -62,13 +62,14 @@ Expressions short‑circuit earlier, reuse partial results, and avoid unnecessar
 scattering, speeding up common ETL patterns. Thanks to &lt;a href="https://github.com/pepijnve"&gt;pepijnve&lt;/a&gt;, &lt;a href="https://github.com/chenkovsky"&gt;chenkovsky&lt;/a&gt;,
 and &lt;a href="https://github.com/petern48"&gt;petern48&lt;/a&gt; for leading this effort. We hope to share more details on our
 implementation in a future post.&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;Fewer object store round-trips for Parquet by default&lt;/strong&gt;&lt;/p&gt;
-&lt;p&gt;DataFusion now sets a default &lt;code&gt;metadata_size_hint&lt;/code&gt; for &lt;a href="https://parquet.apache.org/"&gt;Apache Parquet&lt;/a&gt; scans
-(&lt;a href="https://github.com/apache/datafusion/issues/18118"&gt;#18118&lt;/a&gt;), avoiding the extra
-“last 8‑byte” request many clouds require to read file footers. Remote scans
-typically drop from five requests to four per file, cutting latency and transfer
-costs without any application changes. Thanks to &lt;a href="https://github.com/zhuqi-lucas"&gt;zhuqi-lucas&lt;/a&gt; for leading this
-effort.&lt;/p&gt;
+&lt;h3 id="better-defaults-for-remote-parquet-reads"&gt;Better Defaults for Remote Parquet Reads&lt;a class="headerlink" href="#better-defaults-for-remote-parquet-reads" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;By default, DataFusion now always fetches the last 512KB (configurable) of &lt;a href="https://parquet.apache.org/"&gt;Apache Parquet&lt;/a&gt; files
+which usually includes the footer and metadata (&lt;a href="https://github.com/apache/datafusion/issues/18118"&gt;#18118&lt;/a&gt;). This 
+change typically avoids 2 I/O requests for each Parquet. While this
+setting has existed in DataFusion for many years, it was not previously enabled
+by default. Users can tune the number of bytes fetched in the initial I/O
+request via the &lt;code&gt;datafusion.execution.parquet.metadata_size_hint&lt;/code&gt; &lt;a href="https://datafusion.apache.org/user-guide/configs.html"&gt;config setting&lt;/a&gt;. Thanks to
+&lt;a href="https://github.com/zhuqi-lucas"&gt;zhuqi-lucas&lt;/a&gt; for leading this effort.&lt;/p&gt;
 &lt;h3 id="faster-parquet-metadata-parsing"&gt;Faster Parquet metadata parsing&lt;a class="headerlink" href="#faster-parquet-metadata-parsing" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;DataFusion 51 also includes the latest Parquet reader from
 &lt;a href="https://arrow.apache.org/blog/2025/10/30/arrow-rs-57.0.0/"&gt;Arrow Rust 57.0.0&lt;/a&gt;, which parses Parquet metadata significantly faster. This is
@@ -77,14 +78,6 @@ where startup time or low latency is important. You can read more about the upst
 &lt;a href="https://github.com/etseidl"&gt;etseidl&lt;/a&gt; and &lt;a href="https://github.com/jhorstmann"&gt;jhorstmann&lt;/a&gt; that enabled these improvements in the &lt;a href="https://arrow.apache.org/blog/2025/10/23/rust-parquet-metadata/"&gt;Faster Apache Parquet Footer Metadata Using a Custom Thrift Parser&lt;/a&gt; blog.&lt;/p&gt;
 &lt;p&gt;&lt;img alt="Metadata Parsing Performance Improvements in Arrow/Parquet 57" class="img-responsive" src="/blog/images/datafusion-51.0.0/arrow-57-metadata-parsing.png" width="100%"/&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Figure 2&lt;/strong&gt;: Metadata parsing performance improvements in Arrow/Parquet 57.0.0. &lt;/p&gt;
-&lt;h3 id="better-defaults-for-remote-parquet-reads"&gt;Better Defaults for Remote Parquet Reads&lt;a class="headerlink" href="#better-defaults-for-remote-parquet-reads" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
-&lt;p&gt;By default, DataFusion now fetches the last 512KB (configurable) of Parquet files
-so the first request usually includes the full footer (&lt;a href="https://github.com/apache/datafusion/issues/18118"&gt;#18118&lt;/a&gt;). This will
-typically avoid two distinct I/O requests for each Parquet file. While this
-setting has existed in DataFusion for many years, it was not previously enabled
-by default. Users can tune the number of bytes fetched in the initial I/O
-request via the &lt;code&gt;datafusion.execution.parquet.metadata_size_hint&lt;/code&gt; &lt;a href="https://datafusion.apache.org/user-guide/configs.html"&gt;config setting&lt;/a&gt;. Thanks to
-&lt;a href="https://github.com/zhuqi-lucas"&gt;zhuqi-lucas&lt;/a&gt; for leading this effort.&lt;/p&gt;
 &lt;h2 id="new-features"&gt;New Features ✨&lt;a class="headerlink" href="#new-features" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;h3 id="decimal32decimal64-support"&gt;Decimal32/Decimal64 support&lt;a class="headerlink" href="#decimal32decimal64-support" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;The new Arrow types &lt;code&gt;Decimal32&lt;/code&gt; and &lt;code&gt;Decimal64&lt;/code&gt; are now supported in DataFusion
