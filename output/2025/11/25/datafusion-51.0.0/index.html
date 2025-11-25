@@ -1,0 +1,343 @@
+<!doctype html>
+<html class="no-js" lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apache DataFusion 51.0.0 Released - Apache DataFusion Blog</title>
+<link href="/blog/css/bootstrap.min.css" rel="stylesheet">
+<link href="/blog/css/fontawesome.all.min.css" rel="stylesheet">
+<link href="/blog/css/headerlink.css" rel="stylesheet">
+<link href="/blog/highlight/default.min.css" rel="stylesheet">
+<link href="/blog/css/app.css" rel="stylesheet">
+<script src="/blog/highlight/highlight.js"></script>
+<script>hljs.highlightAll();</script>  </head>
+  <body class="d-flex flex-column h-100">
+  <main class="flex-shrink-0">
+<!-- nav bar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark" aria-label="Fifth navbar example">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/blog"><img src="/blog/images/logo_original4x.png" style="height: 32px;"/> Apache DataFusion Blog</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarADP" aria-controls="navbarADP" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarADP">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/about.html">About</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/feed.xml">RSS</a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>    
+<!-- article contents -->
+<div id="contents">
+  <div class="bg-white p-4 p-md-5 rounded">
+    <div class="row justify-content-center">
+      <div class="col-12 col-md-8 main-content">
+        <h1>
+          Apache DataFusion 51.0.0 Released
+        </h1>
+        <p>Posted on: Tue 25 November 2025 by pmc</p>
+
+        <aside class="toc-container d-md-none mb-2">
+          <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#introduction">Introduction</a></li>
+<li><a href="#performance-improvements">Performance Improvements 🚀</a><ul>
+<li><a href="#faster-case-expression-evaluation">Faster CASE expression evaluation</a></li>
+<li><a href="#better-defaults-for-remote-parquet-reads">Better Defaults for Remote Parquet Reads</a></li>
+<li><a href="#faster-parquet-metadata-parsing">Faster Parquet metadata parsing</a></li>
+</ul>
+</li>
+<li><a href="#new-features">New Features ✨</a><ul>
+<li><a href="#decimal32decimal64-support">Decimal32/Decimal64 support</a></li>
+<li><a href="#sql-pipe-operators">SQL Pipe Operators</a></li>
+<li><a href="#io-profiling-in-datafusion-cli">I/O Profiling in datafusion-cli</a></li>
+<li><a href="#describe-query">DESCRIBE &lt;query&gt;</a></li>
+<li><a href="#named-arguments-in-sql-functions">Named arguments in SQL functions</a></li>
+<li><a href="#metrics-improvements">Metrics improvements</a></li>
+</ul>
+</li>
+<li><a href="#upgrade-guide-and-changelog">Upgrade Guide and Changelog</a></li>
+<li><a href="#about-datafusion">About DataFusion</a></li>
+<li><a href="#how-to-get-involved">How to Get Involved</a></li>
+</ul>
+</div>
+        </aside>
+
+        <!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+-->
+
+<h2 id="introduction">Introduction<a class="headerlink" href="#introduction" title="Permanent link">¶</a></h2>
+<p>We are proud to announce the release of <a href="https://crates.io/crates/datafusion/51.0.0">DataFusion 51.0.0</a>. This post highlights
+some of the major improvements since <a href="https://datafusion.apache.org/blog/2025/09/29/datafusion-50.0.0/">DataFusion 50.0.0</a>. The complete list of
+changes is available in the <a href="https://github.com/apache/datafusion/blob/branch-51/dev/changelog/51.0.0.md">changelog</a>. Thanks to the <a href="https://github.com/apache/datafusion/blob/branch-51/dev/changelog/51.0.0.md#credits">128 contributors</a> for
+making this release possible.</p>
+<h2 id="performance-improvements">Performance Improvements 🚀<a class="headerlink" href="#performance-improvements" title="Permanent link">¶</a></h2>
+<p>We continue to make significant performance improvements in DataFusion, both in
+the core engine and in the Parquet reader.</p>
+<p><img alt="Performance over time" class="img-responsive" src="/blog/images/datafusion-51.0.0/performance_over_time_clickbench.png" width="100%"/></p>
+<p><strong>Figure 1</strong>: Average and median normalized query execution times for ClickBench queries for DataFusion 51.0.0 compared to previous releases.
+Query times are normalized using the ClickBench definition. See the
+<a href="https://alamb.github.io/datafusion-benchmarking/">DataFusion Benchmarking Page</a>
+for more details.</p>
+<h3 id="faster-case-expression-evaluation">Faster <code>CASE</code> expression evaluation<a class="headerlink" href="#faster-case-expression-evaluation" title="Permanent link">¶</a></h3>
+<p>This release builds on the <a href="https://github.com/apache/datafusion/issues/18075">CASE performance epic</a> with significant improvements.
+Expressions short‑circuit earlier, reuse partial results, and avoid unnecessary
+scattering, speeding up common ETL patterns. Thanks to <a href="https://github.com/pepijnve">pepijnve</a>, <a href="https://github.com/chenkovsky">chenkovsky</a>,
+and <a href="https://github.com/petern48">petern48</a> for leading this effort. We hope to share more details on our
+implementation in a future post.</p>
+<h3 id="better-defaults-for-remote-parquet-reads">Better Defaults for Remote Parquet Reads<a class="headerlink" href="#better-defaults-for-remote-parquet-reads" title="Permanent link">¶</a></h3>
+<p>By default, DataFusion now always fetches the last 512KB (configurable) of <a href="https://parquet.apache.org/">Apache Parquet</a> files
+which usually includes the footer and metadata (<a href="https://github.com/apache/datafusion/issues/18118">#18118</a>). This 
+change typically avoids 2 I/O requests for each Parquet. While this
+setting has existed in DataFusion for many years, it was not previously enabled
+by default. Users can tune the number of bytes fetched in the initial I/O
+request via the <code>datafusion.execution.parquet.metadata_size_hint</code> <a href="https://datafusion.apache.org/user-guide/configs.html">config setting</a>. Thanks to
+<a href="https://github.com/zhuqi-lucas">zhuqi-lucas</a> for leading this effort.</p>
+<h3 id="faster-parquet-metadata-parsing">Faster Parquet metadata parsing<a class="headerlink" href="#faster-parquet-metadata-parsing" title="Permanent link">¶</a></h3>
+<p>DataFusion 51 also includes the latest Parquet reader from
+<a href="https://arrow.apache.org/blog/2025/10/30/arrow-rs-57.0.0/">Arrow Rust 57.0.0</a>, which parses Parquet metadata significantly faster. This is
+especially beneficial for workloads with many small Parquet files and scenarios
+where startup time or low latency is important. You can read more about the upstream work by
+<a href="https://github.com/etseidl">etseidl</a> and <a href="https://github.com/jhorstmann">jhorstmann</a> that enabled these improvements in the <a href="https://arrow.apache.org/blog/2025/10/23/rust-parquet-metadata/">Faster Apache Parquet Footer Metadata Using a Custom Thrift Parser</a> blog.</p>
+<p><img alt="Metadata Parsing Performance Improvements in Arrow/Parquet 57" class="img-responsive" src="/blog/images/datafusion-51.0.0/arrow-57-metadata-parsing.png" width="100%"/></p>
+<p><strong>Figure 2</strong>: Metadata parsing performance improvements in Arrow/Parquet 57.0.0. </p>
+<h2 id="new-features">New Features ✨<a class="headerlink" href="#new-features" title="Permanent link">¶</a></h2>
+<h3 id="decimal32decimal64-support">Decimal32/Decimal64 support<a class="headerlink" href="#decimal32decimal64-support" title="Permanent link">¶</a></h3>
+<p>The new Arrow types <code>Decimal32</code> and <code>Decimal64</code> are now supported in DataFusion
+(<a href="https://github.com/apache/datafusion/pull/17501">#17501</a>), including aggregations such as <code>SUM</code>, <code>AVG</code>, <code>MIN/MAX</code>, and window
+functions. Thanks to <a href="https://github.com/AdamGS">AdamGS</a> for leading this effort.</p>
+<h3 id="sql-pipe-operators">SQL Pipe Operators<a class="headerlink" href="#sql-pipe-operators" title="Permanent link">¶</a></h3>
+<p>DataFusion now supports the SQL pipe operator syntax
+(<a href="https://github.com/apache/datafusion/pull/17278">#17278</a>), enabling inline transforms such as:</p>
+<pre><code class="language-sql">SELECT * FROM t
+|&gt; WHERE a &gt; 10
+|&gt; ORDER BY b
+|&gt; LIMIT 5;
+</code></pre>
+<p>This syntax, <a href="https://docs.cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax">popularized by Google BigQuery</a>, keeps multi-step transformations concise while preserving regular
+SQL semantics. Thanks to <a href="https://github.com/simonvandel">simonvandel</a> for leading this effort.</p>
+<h3 id="io-profiling-in-datafusion-cli">I/O Profiling in <code>datafusion-cli</code><a class="headerlink" href="#io-profiling-in-datafusion-cli" title="Permanent link">¶</a></h3>
+<p><a href="https://datafusion.apache.org/user-guide/cli/">datafusion-cli</a> now has built-in instrumentation to trace object store calls
+(<a href="https://github.com/apache/datafusion/issues/17207">#17207</a>). Toggle profiling
+with the <a href="https://datafusion.apache.org/user-guide/cli/usage.html#commands">\object_store_profiling command</a> and inspect the exact <code>GET</code>/<code>LIST</code> requests issued during
+query execution:</p>
+<pre><code class="language-sql">DataFusion CLI v51.0.0
+&gt; \object_store_profiling trace
+ObjectStore Profile mode set to Trace
+&gt; select count(*) from 'https://datasets.clickhouse.com/hits_compatible/athena_partitioned/hits_1.parquet';
++----------+
+| count(*) |
++----------+
+| 1000000  |
++----------+
+1 row(s) fetched.
+Elapsed 0.367 seconds.
+
+Object Store Profiling
+Instrumented Object Store: instrument_mode: Trace, inner: HttpStore
+2025-11-19T21:10:43.476121+00:00 operation=Head duration=0.069763s path=hits_compatible/athena_partitioned/hits_1.parquet
+2025-11-19T21:10:43.545903+00:00 operation=Head duration=0.025859s path=hits_compatible/athena_partitioned/hits_1.parquet
+2025-11-19T21:10:43.571768+00:00 operation=Head duration=0.025684s path=hits_compatible/athena_partitioned/hits_1.parquet
+2025-11-19T21:10:43.597463+00:00 operation=Get duration=0.034194s size=524288 range: bytes=174440756-174965043 path=hits_compatible/athena_partitioned/hits_1.parquet
+2025-11-19T21:10:43.705821+00:00 operation=Head duration=0.022029s path=hits_compatible/athena_partitioned/hits_1.parquet
+
+Summaries:
++-----------+----------+-----------+-----------+-----------+-----------+-------+
+| Operation | Metric   | min       | max       | avg       | sum       | count |
++-----------+----------+-----------+-----------+-----------+-----------+-------+
+| Get       | duration | 0.034194s | 0.034194s | 0.034194s | 0.034194s | 1     |
+| Get       | size     | 524288 B  | 524288 B  | 524288 B  | 524288 B  | 1     |
+| Head      | duration | 0.022029s | 0.069763s | 0.035834s | 0.143335s | 4     |
+| Head      | size     |           |           |           |           | 4     |
++-----------+----------+-----------+-----------+-----------+-----------+-------+
+</code></pre>
+<p>This makes it far easier to diagnose slow remote scans and validate caching
+strategies. Thanks to <a href="https://github.com/BlakeOrth">BlakeOrth</a> for leading this effort.</p>
+<h3 id="describe-query"><code>DESCRIBE &lt;query&gt;</code><a class="headerlink" href="#describe-query" title="Permanent link">¶</a></h3>
+<p><code>DESCRIBE</code> now works on arbitrary queries, returning the schema instead
+of being an alias for <code>EXPLAIN</code> (<a href="https://github.com/apache/datafusion/issues/18234">#18234</a>). This brings DataFusion in line with engines
+like DuckDB and makes it easy to inspect the output schema of queries
+without executing them. Thanks to <a href="https://github.com/djanderson">djanderson</a> for leading this effort.</p>
+<p>For example:</p>
+<pre><code class="language-sql">DataFusion CLI v51.0.0
+&gt; create table t(a int, b varchar, c float) as values (1, 'a', 2.0);
+0 row(s) fetched.
+Elapsed 0.002 seconds.
+
+&gt; DESCRIBE SELECT a, b, SUM(c) FROM t GROUP BY a, b;
+
++-------------+-----------+-------------+
+| column_name | data_type | is_nullable |
++-------------+-----------+-------------+
+| a           | Int32     | YES         |
+| b           | Utf8View  | YES         |
+| sum(t.c)    | Float64   | YES         |
++-------------+-----------+-------------+
+3 row(s) fetched.
+</code></pre>
+<h3 id="named-arguments-in-sql-functions">Named arguments in SQL functions<a class="headerlink" href="#named-arguments-in-sql-functions" title="Permanent link">¶</a></h3>
+<p>DataFusion now understands <a href="https://www.postgresql.org/docs/current/sql-syntax-calling-funcs.html">PostgreSQL-style named arguments</a> (<code>param =&gt; value</code>)
+for scalar, aggregate, and window functions (<a href="https://github.com/apache/datafusion/issues/17379">#17379</a>). You can mix positional and named
+arguments in any order, and error messages now list parameter names to make
+diagnostics clearer. UDF authors can also expose parameter names so their
+functions benefit from the same syntax. Thanks to <a href="https://github.com/timsaucer">timsaucer</a> and <a href="https://github.com/bubulalabu">bubulalabu</a> for leading this effort.</p>
+<p>For example, you can pass arguments to functions like this:</p>
+<pre><code class="language-sql">SELECT power(exponent =&gt; 3.0, base =&gt; 2.0);
+</code></pre>
+<h3 id="metrics-improvements">Metrics improvements<a class="headerlink" href="#metrics-improvements" title="Permanent link">¶</a></h3>
+<p>The output of <a href="https://datafusion.apache.org/user-guide/sql/explain.html#explain-analyze">EXPLAIN ANALYZE</a> has been improved to include more metrics
+about execution time and memory usage of each operator (<a href="https://github.com/apache/datafusion/issues/18217">#18217</a>).
+You can learn more about these new metrics in the <a href="https://datafusion.apache.org/user-guide/metrics.html">metrics user guide</a>. Thanks to
+<a href="https://github.com/2010YOUY01">2010YOUY01</a> for leading this effort.</p>
+<p>The <code>51.0.0</code> release adds:</p>
+<ul>
+<li><strong>Configuration</strong>: adds a new option <code>datafusion.explain.analyze_level</code>, which can be set to <code>summary</code> for a concise output or <code>dev</code> for the full set of metrics (the previous default).</li>
+<li><strong>For all major operators</strong>: adds <code>output_bytes</code>, reporting how many bytes of data each operator produces.</li>
+<li><strong>FilterExec</strong>: adds a <code>selectivity</code> metric (<code>output_rows / input_rows</code>) to show how effective the filter is.</li>
+<li><strong>AggregateExec</strong>: </li>
+<li>adds detailed timing metrics for group-ID computation, aggregate argument evaluation, aggregation work, and emitting final results.</li>
+<li>adds a <code>reduction_factor</code> metric (<code>output_rows / input_rows</code>) to show how much grouping reduces the data.</li>
+<li><strong>NestedLoopJoinExec</strong>: adds a <code>selectivity</code> metric (<code>output_rows / (left_rows * right_rows)</code>) to show how many combinations actually pass the join condition.</li>
+<li>Several display formatting improvements were added to make <code>EXPLAIN ANALYZE</code> output easier to read.</li>
+</ul>
+<p>For example, the following query:</p>
+<pre><code class="language-sql">set datafusion.explain.analyze_level = summary
+
+explain analyze 
+select count(*) 
+from 'https://datasets.clickhouse.com/hits_compatible/athena_partitioned/hits_1.parquet' 
+where "URL" &lt;&gt; '';
+</code></pre>
+<p>Now shows easier-to-understand metrics such as:</p>
+<pre><code class="language-text"> metrics=[
+   output_rows=1000000, 
+   elapsed_compute=16ns, 
+   output_bytes=222.5 MB, 
+   files_ranges_pruned_statistics=16 total → 16 matched, 
+   row_groups_pruned_statistics=3 total → 3 matched, 
+   row_groups_pruned_bloom_filter=3 total → 3 matched, 
+   page_index_rows_pruned=0 total → 0 matched,
+   bytes_scanned=33661364,
+   metadata_load_time=4.243098ms, 
+]
+</code></pre>
+<h2 id="upgrade-guide-and-changelog">Upgrade Guide and Changelog<a class="headerlink" href="#upgrade-guide-and-changelog" title="Permanent link">¶</a></h2>
+<p>Upgrading to 51.0.0 should be straightforward for most users. Please review the
+<a href="https://datafusion.apache.org/library-user-guide/upgrading.html">Upgrade Guide</a>
+for details on breaking changes and code snippets to help with the transition.
+For a comprehensive list of all changes, please refer to the <a href="https://github.com/apache/datafusion/blob/branch-51/dev/changelog/51.0.0.md">changelog</a>.</p>
+<h2 id="about-datafusion">About DataFusion<a class="headerlink" href="#about-datafusion" title="Permanent link">¶</a></h2>
+<p><a href="https://datafusion.apache.org/">Apache DataFusion</a> is an extensible query engine, written in <a href="https://www.rust-lang.org/">Rust</a>, that uses
+<a href="https://arrow.apache.org">Apache Arrow</a> as its in-memory format. DataFusion is used by developers to
+create new, fast, data-centric systems such as databases, dataframe libraries,
+and machine learning and streaming applications. While <a href="https://datafusion.apache.org/user-guide/introduction.html#project-goals">DataFusion’s primary
+design goal</a> is to accelerate the creation of other data-centric systems, it
+provides a reasonable experience directly out of the box as a <a href="https://datafusion.apache.org/user-guide/dataframe.html">dataframe
+library</a>, <a href="https://datafusion.apache.org/python/">Python library</a>, and <a href="https://datafusion.apache.org/user-guide/cli/">command-line SQL tool</a>.</p>
+<p>DataFusion's core thesis is that, as a community, together we can build much
+more advanced technology than any of us as individuals or companies could build
+alone. Without DataFusion, highly performant vectorized query engines would
+remain the domain of a few large companies and world-class research
+institutions. With DataFusion, we can all build on top of a shared foundation
+and focus on what makes our projects unique.</p>
+<h2 id="how-to-get-involved">How to Get Involved<a class="headerlink" href="#how-to-get-involved" title="Permanent link">¶</a></h2>
+<p>DataFusion is not a project built or driven by a single person, company, or
+foundation. Rather, our community of users and contributors works together to
+build a shared technology that none of us could have built alone.</p>
+<p>If you are interested in joining us, we would love to have you. You can try out
+DataFusion on some of your own data and projects and let us know how it goes,
+contribute suggestions, documentation, bug reports, or a PR with documentation,
+tests, or code. A list of open issues suitable for beginners is <a href="https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22">here</a>, and you
+can find out how to reach us on the <a href="https://datafusion.apache.org/contributor-guide/communication.html">communication doc</a>.</p>
+
+<!--
+  Comments Section
+  Loaded only after explicit visitor consent to comply with ASF policy.
+-->
+
+<div id="comments">
+  <hr>
+  <h3>Comments</h3>
+
+  <!-- Local loader script -->
+  <script src="/content/js/giscus-consent.js" defer></script>
+
+  <!-- Consent UI -->
+  <div id="giscus-consent">
+    <p>
+        We use <a href="https://giscus.app/">Giscus</a> for comments, powered by GitHub Discussions.
+        To respect your privacy, Giscus and comments will load only if you click "Show Comments"
+    </p>
+
+    <div class="consent-actions">
+      <button id="giscus-load" type="button">Show Comments</button>
+      <button id="giscus-revoke" type="button" hidden>Hide Comments</button>
+    </div>
+
+    <noscript>JavaScript is required to load comments from Giscus.</noscript>
+  </div>
+
+  <!-- Container where Giscus will render -->
+  <div id="comment-thread"></div>
+</div>      </div>
+      <aside class="toc-container d-none d-md-block col-md-4 col-xl-3 ms-xl-2">
+        <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#introduction">Introduction</a></li>
+<li><a href="#performance-improvements">Performance Improvements 🚀</a><ul>
+<li><a href="#faster-case-expression-evaluation">Faster CASE expression evaluation</a></li>
+<li><a href="#better-defaults-for-remote-parquet-reads">Better Defaults for Remote Parquet Reads</a></li>
+<li><a href="#faster-parquet-metadata-parsing">Faster Parquet metadata parsing</a></li>
+</ul>
+</li>
+<li><a href="#new-features">New Features ✨</a><ul>
+<li><a href="#decimal32decimal64-support">Decimal32/Decimal64 support</a></li>
+<li><a href="#sql-pipe-operators">SQL Pipe Operators</a></li>
+<li><a href="#io-profiling-in-datafusion-cli">I/O Profiling in datafusion-cli</a></li>
+<li><a href="#describe-query">DESCRIBE &lt;query&gt;</a></li>
+<li><a href="#named-arguments-in-sql-functions">Named arguments in SQL functions</a></li>
+<li><a href="#metrics-improvements">Metrics improvements</a></li>
+</ul>
+</li>
+<li><a href="#upgrade-guide-and-changelog">Upgrade Guide and Changelog</a></li>
+<li><a href="#about-datafusion">About DataFusion</a></li>
+<li><a href="#how-to-get-involved">How to Get Involved</a></li>
+</ul>
+</div>
+      </aside>
+    </div>
+  </div>
+</div>    
+    <!-- footer -->
+    <div class="row g-0">
+      <div class="col-12">
+        <p style="font-style: italic; font-size: 0.8rem; text-align: center;">
+          Copyright 2025, <a href="https://www.apache.org/">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a>.<br/>
+          Apache&reg; and the Apache feather logo are trademarks of The Apache Software Foundation.
+        </p>
+      </div>
+    </div>
+    <script src="/blog/js/bootstrap.bundle.min.js"></script>  </main>
+  </body>
+</html>
