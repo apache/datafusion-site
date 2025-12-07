@@ -1,18 +1,53 @@
-# **Noobs Guide To Databases**
+---
+layout: post
+title: A Noob's Guide to Database
+date: 2025-12-07
+author: Gene Bordegaray, Nga Tran, Andrew Lamb
+categories: [tutorial]
+---
 
-_By Gene Bordegaray_, _Co-Authored by Nga Tran and Andrew Lamb_
+<!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+-->
+
+<div style="display: flex; align-items: center; gap: 20px; margin-bottom: 20px;">
+<div style="flex: 1;">
 
 Databases are some of the most complex yet interesting pieces of software. They are amazing pieces of abstraction: query engines optimize and execute complex plans, storage engines provide sophisticated infrastructure as the backbone of the system, while intricate file formats lay the groundwork for particular workloads. All of this is exposed by a user-friendly interface and query languages (typically a dialect of SQL).
-
+<br><br>
 Starting a journey learning about database internals can be daunting. With so many topics that are whole PhD degrees themselves, finding a place to start is difficult. In this blog post, I will share my early journey in the database world and a quick lesson on one of the first topics I dove into. If you are new to the space, this post will help you get your first foot into the database world, and if you are already a veteran, you may still learn something new.
 
-![Image failed to load](/blog/images/database_system_diagram.png "Database System Components")
+</div>
+<div style="flex: 0 0 40%; text-align: center;">
+<img
+  src="/blog/images/avoid-consecutive-repartitions/database_system_diagram.png"
+  width="100%"
+  class="img-responsive"
+  alt="Database System Components"
+/>
+</div>
+</div>
 
 ---
 
 ## **Who Am I?**
 
-I am Gene Bordegaray, a recent computer science graduate from UCLA and software engineer at Datadog. Before starting my job, I had no real exposure to databases, only enough SQL knowledge to send CRUD requests and choose between a relational or no-SQL model in a systems design interview.
+I am Gene Bordegaray ([LinkedIn](https://www.linkedin.com/in/genebordegaray), [GitHub](https://github.com/gene-bordegaray)), a recent computer science graduate from UCLA and software engineer at Datadog. Before starting my job, I had no real exposure to databases, only enough SQL knowledge to send CRUD requests and choose between a relational or no-SQL model in a systems design interview.
 
 When I found out I would be on a team focusing on query engines and execution, I was excited but horrified. "Query engines?" From my experience, I typed SQL queries into pgAdmin and got responses without knowing the dark magic that happened under the hood.
 
@@ -22,7 +57,7 @@ With what seemed like an impossible task at hand, I began my favorite few months
 
 ## **Starting Out**
 
-I am no expert in databases or any of their subsystems, but I am someone who recently began learning about them. My goal through this series of posts is to share lessons I’ve learned through my newbie journey to encourage others to explore the database world and share the amazing community and work being done on Datafusion.
+I am no expert in databases or any of their subsystems, but I am someone who recently began learning about them.
 
 ### Build a Foundation
 
@@ -56,13 +91,25 @@ This project offered a perfect environment for my first steps into databases: cl
 
 ### Parallel Execution in Datafusion
 
+<div style="display: flex; align-items: center; gap: 20px; margin-bottom: 20px;">
+<div style="flex: 1;">
+
 Before discussing this issue, it is essential to understand how Datafusion handles parallel execution.
+<br><br>
+Datafusion implements a vectorized <a href="https://dl.acm.org/doi/10.1145/93605.98720">Volcano Model</a>, similar to other state of the art engines such as clickhouse. The Volcano Model is built on the idea that each operation is abstracted into an operator, and a DAG can represent an entire query. Each operator implements a next() function that returns a batch of tuples or a NULL marker if no data is available.
 
-Datafusion implements a vectorized [Volcano Model](https://dl.acm.org/doi/10.1145/93605.98720), similar to other state of the art engines such as clickhouse. The Volcano Model is built on the idea that each operation is abstracted into an operator, and a DAG can represent an entire query. Each operator implements a next() function that returns a batch of tuples or a NULL marker if no data is available.
+</div>
+<div style="flex: 0 0 30%; text-align: center;">
+<img
+  src="/blog/images/avoid-consecutive-repartitions/volcano_model_diagram.png"
+  width="100%"
+  class="img-responsive"
+  alt="Vectorized Volcano Model Example"
+/>
+</div>
+</div>
 
-![Image failed to load](/blog/images/volcano_model_diagram.png "Vectorized Volcano Model Example")
-
-Datafusion achieves multi-core parallelism through the use of “exchange operators.” Individual operators are implemented to use a single CPU core, and the RepartitionExec operator is responsible for distributing work across multiple processors.
+Datafusion achieves multi-core parallelism through the use of "exchange operators." Individual operators are implemented to use a single CPU core, and the RepartitionExec operator is responsible for distributing work across multiple processors.
 
 ### What is Repartitioning?
 
@@ -70,23 +117,54 @@ Partitioning is a "divide-and-conquer" approach to executing a query. Each parti
 
 #### **Round-Robin Repartitioning**
 
+<div style="display: flex; align-items: center; gap: 20px; margin-bottom: 20px;">
+<div style="flex: 1;">
+
 Round-robin repartitioning is the simplest partitioning strategy. Incoming data is processed in batches (chunks of rows), and these batches are distributed across partitions cyclically or sequentially, with each new batch assigned to the next available partition.
+<br><br>
+Round-robin repartitioning is useful when the data grouping isn't known or when aiming for an even distribution across partitions. Because it simply assigns batches in order without inspecting their contents, it is a low-overhead way to increase parallelism for downstream operations.
 
-Round-robin repartitioning is useful when the data grouping isn’t known or when aiming for an even distribution across partitions. Because it simply assigns batches in order without inspecting their contents, it is a low-overhead way to increase parallelism for downstream operations.
-
-![Image failed to load](/blog/images/round_robin_repartitioning.png "Round-Robin Repartitioning")
+</div>
+<div style="flex: 0 0 19%; text-align: center;">
+<img
+  src="/blog/images/avoid-consecutive-repartitions/round_robin_repartitioning.png"
+  width="100%"
+  class="img-responsive"
+  alt="Round-Robin Repartitioning"
+/>
+</div>
+</div>
 
 #### **Hash Repartitioning**
 
-Hash repartitioning distributes data based on a hash function applied to one or more columns, called the \*partitioning key\*. Rows with the same hash value are placed in the same partition.
+<div style="display: flex; align-items: center; gap: 20px; margin-bottom: 20px;">
+<div style="flex: 1;">
 
+Hash repartitioning distributes data based on a hash function applied to one or more columns, called the partitioning key. Rows with the same hash value are placed in the same partition.
+<br><br>
 Hash repartitioning is useful when working with grouped data. Imagine you have a database containing information on company sales, and you are looking to find the total revenue each store produced. Hash repartitioning would make this query much more efficient. Rather than iterating over the data on a single thread and keeping a running sum for each store, it would be better to hash repartition on the store column and have multiple threads calculate individual store sales.
 
-![Image failed to load](/blog/images/hash_repartitioning.png "Hash Repartitioning")
+</div>
+<div style="flex: 0 0 19%; text-align: center;">
+<img
+  src="/blog/images/avoid-consecutive-repartitions/hash_repartitioning.png"
+  width="100%"
+  class="img-responsive"
+  alt="Hash Repartitioning"
+/>
+</div>
+</div>
 
 Note, the benefit of hash opposed to round-robin partitioning in this scenario. Hash repartitioning consolidates all rows with the same store value in distinct partitions. Because of this property we can compute the complete results for each store in parallel and merge them to get the final outcome. This parallel processing wouldn’t be possible with only round-robin partitioning as the same store value may be spread across multiple partitions, making the aggregation results partial and unable to merge to produce a final outcome.
 
-![Image failed to load](/blog/images/hash_repartitioning_example.png "Hash Repartitioning Example")
+<div class="text-center">
+<img
+  src="/blog/images/avoid-consecutive-repartitions/hash_repartitioning_example.png"
+  width="50%"
+  class="img-responsive"
+  alt="Hash Repartitioning Example"
+/>
+</div>
 
 ---
 
@@ -100,7 +178,14 @@ For some queries that required repartitioning, the plan would look along the lin
 SELECT a, SUM(b) FROM data.parquet GROUP BY a;
 ```
 
-![Image failed to load](/blog/images/basic_before_query_plan.png "Consecutive Repartition Query Plan")
+<div class="text-center">
+<img
+  src="/blog/images/avoid-consecutive-repartitions/basic_before_query_plan.png"
+  width="40%"
+  class="img-responsive"
+  alt="Consecutive Repartition Query Plan"
+/>
+</div>
 
 ---
 
@@ -110,14 +195,30 @@ Repartitions would appear back-to-back in query plans, specifically a round-robi
 
 Why is this such a big deal? Well, repartitions do not process the data; their purpose is to redistribute it in ways that enable more efficient computation for other operators. Having consecutive repartitions is counterintuitive because we are redistributing data, then immediately redistributing it again, making the first repartition pointless. While this didn’t create extreme overhead for queries, since round-robin repartitioning does not copy data, just pointers to batches, the behavior was unclear and incorrect.
 
-![Image failed to load](/blog/images/in_depth_query_plan_before.png "Consecutive Repartition Query Plan With Data")
+<div class="text-center">
+<img
+  src="/blog/images/avoid-consecutive-repartitions/in_depth_query_plan_before.png"
+  width="50%"
+  class="img-responsive"
+  alt="Consecutive Repartition Query Plan With Data"
+/>
+</div>
+<br>
 
 Optimally the plan should do one of two things:
 
 1. If there is enough data to justify round-robin repartitioning, split the repartitions across a "worker" operator that leverages the redistributed data.
 2. Otherwise, don't use any round-robin repartition and keep the hash repartition only in the middle of the two-stage aggregation.
 
-![Image failed to load](/blog/images/optimal_query_plans.png "Optimal Query Plans")
+<div class="text-center">
+<img
+  src="/blog/images/avoid-consecutive-repartitions/optimal_query_plans.png"
+  width="100%"
+  class="img-responsive"
+  alt="Optimal Query Plans"
+/>
+</div>
+<br>
 
 As shown in the diagram above, in the CSV plan, the round-robin repartition takes place before the partial aggregation. This increases parallelism for this processing, which will yield great performance benefits in larger datasets.
 
@@ -143,25 +244,25 @@ we find a critical piece of information.
 
 **Physical Plan Before EnforceDistribution:**
 
-```
+```text
 1.OutputRequirementExec: order_by=[], dist_by=Unspecified
-2.--AggregateExec: mode=FinalPartitioned, gby=[a@0 as a], aggr=[sum(parquet_data.b)]
-3.----AggregateExec: mode=Partial, gby=[a@0 as a], aggr=[sum(parquet_data.b)]
-4.------DataSourceExec:
-                file_groups={1 group: [[...]]}
-                projection=[a, b]
-                file_type=parquet
+2.  AggregateExec: mode=FinalPartitioned, gby=[a@0 as a], aggr=[sum(parquet_data.b)]
+3.    AggregateExec: mode=Partial, gby=[a@0 as a], aggr=[sum(parquet_data.b)]
+4.      DataSourceExec:
+            file_groups={1 group: [[...]]}
+            projection=[a, b]
+            file_type=parquet
 ```
 
 **Physical Plan After EnforceDistribution:**
 
-```
+```text
 1.OutputRequirementExec: order_by=[], dist_by=Unspecified
-2.--AggregateExec: mode=FinalPartitioned, gby=[a@0 as a], aggr=[sum(parquet_data.b)]
-3.----RepartitionExec: partitioning=Hash([a@0], 16), input_partitions=16
-4.------RepartitionExec: partitioning=RoundRobinBatch(16), input_partitions=1
-5.--------AggregateExec: mode=Partial, gby=[a@0 as a], aggr=[sum(parquet_data.b)]
-6.----------DataSourceExec:
+2.  AggregateExec: mode=FinalPartitioned, gby=[a@0 as a], aggr=[sum(parquet_data.b)]
+3.    RepartitionExec: partitioning=Hash([a@0], 16), input_partitions=16
+4.      RepartitionExec: partitioning=RoundRobinBatch(16), input_partitions=1 -- EXTRA REPARITITON!
+5.        AggregateExec: mode=Partial, gby=[a@0 as a], aggr=[sum(parquet_data.b)]
+6.          DataSourceExec:
                 file_groups={1 group: [[...]]}
                 projection=[a, b]
                 file_type=parquet
@@ -184,7 +285,15 @@ Ok, great\! We understand the different components Datafusion uses to indicate i
 
 This logic takes place in the main loop of this rule. I find it helpful to draw algorithms like these into logic trees; this tends to make things much more straightforward and approachable:
 
-![Image failed to load](/blog/images/logic_tree_before.png "Incorrect Logic Tree")
+<div class="text-center">
+<img
+  src="/blog/images/avoid-consecutive-repartitions/logic_tree_before.png"
+  width="60%"
+  class="img-responsive"
+  alt="Incorrect Logic Tree"
+/>
+</div>
+<br>
 
 Boom\! This is the root of our problem: we are inserting a round-robin repartition, then still inserting a hash repartition afterwards. This means that if an operator indicates it would benefit from both round-robin and hash repartitioning, consecutive repartitions will occur.
 
@@ -203,7 +312,15 @@ Based on our lesson on hash repartitioning and the indicators Datafusion uses to
 
 The new logic tree looks like this:
 
-![Image failed to load](/blog/images/logic_tree_after.png "Correct Logic Tree")
+<div class="text-center">
+<img
+  src="/blog/images/avoid-consecutive-repartitions/logic_tree_after.png"
+  width="60%"
+  class="img-responsive"
+  alt="Correct Logic Tree"
+/>
+</div>
+<br>
 
 All that deep digging paid off, one condition (see [the final PR](https://github.com/apache/datafusion/pull/18521) for full details)\!
 
@@ -229,31 +346,31 @@ Plans became simpler:
 
 **Before:**
 
-```
+```text
 
 1.ProjectionExec: expr=[env@0 as env, count(Int64(1))@1 as count(*)]
-2.--AggregateExec: mode=FinalPartitioned, gby=[env@0 as env], aggr=[count(Int64(1))]
-3.----CoalesceBatchesExec: target_batch_size=8192
-4.------RepartitionExec: partitioning=Hash([env@0], 4), input_partitions=4
-5.--------RepartitionExec: partitioning=RoundRobinBatch(4), input_partitions=1
-6.----------AggregateExec: mode=Partial, gby=[env@0 as env], aggr=[count(Int64(1))]
-7.------------DataSourceExec:
-              file_groups={1 group: [[..]}
-              projection=[env]
-              file_type=parquet
+2.  AggregateExec: mode=FinalPartitioned, gby=[env@0 as env], aggr=[count(Int64(1))]
+3.    CoalesceBatchesExec: target_batch_size=8192
+4.      RepartitionExec: partitioning=Hash([env@0], 4), input_partitions=4
+5.        RepartitionExec: partitioning=RoundRobinBatch(4), input_partitions=1 -- EXTRA REPARTITION!
+6.          AggregateExec: mode=Partial, gby=[env@0 as env], aggr=[count(Int64(1))]
+7.            DataSourceExec:
+                file_groups={1 group: [[...]}
+                projection=[env]
+                file_type=parquet
 
 ```
 
 **After:**
 
-```
+```text
 1.ProjectionExec: expr=[env@0 as env, count(Int64(1))@1 as count(*)]
-2.--AggregateExec: mode=FinalPartitioned, gby=[env@0 as env], aggr=[count(Int64(1))]
-3.----CoalesceBatchesExec: target_batch_size=8192
-4.------RepartitionExec: partitioning=Hash([env@0], 4), input_partitions=1
-5.--------AggregateExec: mode=Partial, gby=[env@0 as env], aggr=[count(Int64(1))]
-6.----------DataSourceExec:
-                file_groups={1 group: [[WORKSPACE_ROOT/datafusion/sqllogictest/test_files/scratch/aggregate_repartition/dim.parquet]]}
+2.  AggregateExec: mode=FinalPartitioned, gby=[env@0 as env], aggr=[count(Int64(1))]
+3.    CoalesceBatchesExec: target_batch_size=8192
+4.      RepartitionExec: partitioning=Hash([env@0], 4), input_partitions=1
+5.        AggregateExec: mode=Partial, gby=[env@0 as env], aggr=[count(Int64(1))]
+6.          DataSourceExec:
+                file_groups={1 group: [[...]]}
                 projection=[env]
                 file_type=parquet
 ```
@@ -262,19 +379,35 @@ For the benchmarking standard, TPCH, speedups were small but consistent:
 
 **TPCH Benchmark**
 
-![Image failed to load](/blog/images/tpch_benchmark.png "TPCH Bnechmark Reults")
+<div class="text-left">
+<img
+  src="/blog/images/avoid-consecutive-repartitions/tpch_benchmark.png"
+  width="40%"
+  class="img-responsive"
+  alt="TPCH Benchmark Results"
+/>
+</div>
+<br>
 
 **TPCH10 Benchmark**
 
-![Image failed to load](/blog/images/tpch10_benchmark.png "TPCH10 Benchmark Results")
+<div class="text-left">
+<img
+  src="/blog/images/avoid-consecutive-repartitions/tpch10_benchmark.png"
+  width="40%"
+  class="img-responsive"
+  alt="TPCH10 Benchmark Results"
+/>
+</div>
+<br>
 
 And there it is, our first core contribution for a database system.
 
 From this experience there are two main points I would like to emphasize:
 
-The first is to deeply understand the system you are working on. It is not only fun to figure these things out, but it also pays off in the long run when having surface-level knowledge won't cut it.
+1. Deeply understand the system you are working on. It is not only fun to figure these things out, but it also pays off in the long run when having surface-level knowledge won't cut it.
 
-The second, which is complimentary to the first, is to narrow down the scope of your work when starting your journey into databases. Find a project that you are interested in and provides an environment that enhances your early learning process. I have found that Apache Datafusion and its community has been an amazing first step and plan to continue learning about query engines here.
+2. This is complimentary to the first, is to narrow down the scope of your work when starting your journey into databases. Find a project that you are interested in and provides an environment that enhances your early learning process. I have found that Apache Datafusion and its community has been an amazing first step and plan to continue learning about query engines here.
 
 I hope you gained something from my experience and have fun learning about databases.
 
