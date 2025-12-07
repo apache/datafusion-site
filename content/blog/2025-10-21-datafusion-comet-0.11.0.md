@@ -70,7 +70,7 @@ Spark 4.0 compatible jar files are now available on Maven Central. See the [inst
 
 ### Complex Types for Columnar Shuffle
 
-[ashdnazg](https://github.com/ashdnazg) submitted a [fantastic refactoring PR](https://github.com/apache/datafusion-comet/pull/2571) that simplified the logic for writing rows in Comet’s JVM-based, columnar shuffle. A benefit of this refactoring is better support for complex types (*e.g.,* structs, lists, and arrays) in columnar shuffle. Comet no longer falls back to Spark to shuffle these types, enabling native acceleration for queries involving nested data structures. This enhancement significantly expands the range of queries that can benefit from Comet's columnar shuffle implementation.
+[ashdnazg](https://github.com/ashdnazg) submitted a [fantastic refactoring PR](https://github.com/apache/datafusion-comet/pull/2571) that simplified the logic for writing rows in Comet’s JVM-based, columnar shuffle. A benefit of this refactoring is better support for complex types (_e.g.,_ structs, lists, and arrays) in columnar shuffle. Comet no longer falls back to Spark to shuffle these types, enabling native acceleration for queries involving nested data structures. This enhancement significantly expands the range of queries that can benefit from Comet's columnar shuffle implementation.
 
 ### RangePartitioning for Native Shuffle
 
