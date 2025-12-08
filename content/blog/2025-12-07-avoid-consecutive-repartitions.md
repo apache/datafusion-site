@@ -1,6 +1,6 @@
 ---
 layout: post
-title: A Noob's Guide to Database
+title: A Noob's Guide to Databases
 date: 2025-12-07
 author: Gene Bordegaray, Nga Tran, Andrew Lamb
 categories: [tutorial]
@@ -57,7 +57,7 @@ With what seemed like an impossible task at hand, I began my favorite few months
 
 ## **Starting Out**
 
-I am no expert in databases or any of their subsystems, but I am someone who recently began learning about them.
+I am no expert in databases or any of their subsystems, but I am someone who recently began learning about them. These are some tips I find useful when first starting.
 
 ### Build a Foundation
 
@@ -75,7 +75,17 @@ The final piece of advice when starting, and I sound like a broken record, is to
 
 When making your first contributions to an open-source project, start very small but go as deep as you can. Don't leave any stone unturned. I did this by looking for simpler issues, such as formatting or simple bug fixes, and stepping through the entire data flow that relates to the issue, noting what each component is responsible for.
 
-This will give you familiarity with the codebase and using your tools, like your debugger and environment, with the project.
+This will give you familiarity with the codebase and using your tools, like your debugger, within the project.
+
+<div class="text-center">
+<img
+  src="/blog/images/avoid-consecutive-repartitions/noot_noot_database_meme.png"
+  width="50%"
+  class="img-responsive"
+  alt="Noot Noot Database Meme"
+/>
+</div>
+<br>
 
 Now that we have some general knowledge of database internals, a niche or subsystem we want to dive deeper into, and the mindset for acquiring knowledge before contributing, let's start with our first core issue.
 
@@ -85,7 +95,7 @@ Now that we have some general knowledge of database internals, a niche or subsys
 
 As mentioned, the database subsystem I decided to explore was query engines. The query engine is responsible for interpreting, optimizing, and executing queries, aiming to do so as efficiently as possible.
 
-My team was in full-swing of adopting restructuring how query execution would work in our organization. The team decided we would use [Apache Datafusion](https://datafusion.apache.org/) at the heart of our system, chosen for its blazing fast execution time for analytical workloads and vast extendability. Datafusion is written in Rust and builds on top of [Apache Arrow](https://arrow.apache.org/) (another great project). This columnar memory format enables it to efficiently process large volumes of data in memory.
+My team was in full-swing of restructuring how query execution would work in our organization. The team decided we would use [Apache Datafusion](https://datafusion.apache.org/) at the heart of our system, chosen for its blazing fast execution time for analytical workloads and vast extendability. Datafusion is written in Rust and builds on top of [Apache Arrow](https://arrow.apache.org/) (another great project), a columnar memory format that enables it to efficiently process large volumes of data in memory.
 
 This project offered a perfect environment for my first steps into databases: clear, production-ready Rust programming, a manageable codebase, high performance for a specific use case, and a welcoming community.
 
@@ -96,10 +106,12 @@ This project offered a perfect environment for my first steps into databases: cl
 
 Before discussing this issue, it is essential to understand how Datafusion handles parallel execution.
 <br><br>
-Datafusion implements a vectorized <a href="https://dl.acm.org/doi/10.1145/93605.98720">Volcano Model</a>, similar to other state of the art engines such as clickhouse. The Volcano Model is built on the idea that each operation is abstracted into an operator, and a DAG can represent an entire query. Each operator implements a next() function that returns a batch of tuples or a NULL marker if no data is available.
+Datafusion implements a vectorized <a href="https://dl.acm.org/doi/10.1145/93605.98720">Volcano Model</a>, similar to other state of the art engines such as ClickHouse. The Volcano Model is built on the idea that each operation is abstracted into an operator, and a DAG can represent an entire query. Each operator implements a next() function that returns a batch of tuples or a NULL marker if no data is available.
+<br><br>
+Datafusion achieves multi-core parallelism through the use of "exchange operators." Individual operators are implemented to use a single CPU core, and the RepartitionExec operator is responsible for distributing work across multiple processors.
 
 </div>
-<div style="flex: 0 0 30%; text-align: center;">
+<div style="flex: 0 0 40%; text-align: center;">
 <img
   src="/blog/images/avoid-consecutive-repartitions/volcano_model_diagram.png"
   width="100%"
@@ -109,11 +121,9 @@ Datafusion implements a vectorized <a href="https://dl.acm.org/doi/10.1145/93605
 </div>
 </div>
 
-Datafusion achieves multi-core parallelism through the use of "exchange operators." Individual operators are implemented to use a single CPU core, and the RepartitionExec operator is responsible for distributing work across multiple processors.
-
 ### What is Repartitioning?
 
-Partitioning is a "divide-and-conquer" approach to executing a query. Each partition is a subset of the data that is being processed. Repartitioning is an operation that redistributes data across different partitions to balance workloads, reduce data skew, and increase parallelism. Two repartitioning methods are used in Datafusion: round-robin and hash.
+Partitioning is a "divide-and-conquer" approach to executing a query. Each partition is a subset of the data that is being processed on a single core. Repartitioning is an operation that redistributes data across different partitions to balance workloads, reduce data skew, and increase parallelism. Two repartitioning methods are used in Datafusion: round-robin and hash.
 
 #### **Round-Robin Repartitioning**
 
@@ -125,7 +135,7 @@ Round-robin repartitioning is the simplest partitioning strategy. Incoming data 
 Round-robin repartitioning is useful when the data grouping isn't known or when aiming for an even distribution across partitions. Because it simply assigns batches in order without inspecting their contents, it is a low-overhead way to increase parallelism for downstream operations.
 
 </div>
-<div style="flex: 0 0 19%; text-align: center;">
+<div style="flex: 0 0 25%; text-align: center;">
 <img
   src="/blog/images/avoid-consecutive-repartitions/round_robin_repartitioning.png"
   width="100%"
@@ -145,7 +155,7 @@ Hash repartitioning distributes data based on a hash function applied to one or 
 Hash repartitioning is useful when working with grouped data. Imagine you have a database containing information on company sales, and you are looking to find the total revenue each store produced. Hash repartitioning would make this query much more efficient. Rather than iterating over the data on a single thread and keeping a running sum for each store, it would be better to hash repartition on the store column and have multiple threads calculate individual store sales.
 
 </div>
-<div style="flex: 0 0 19%; text-align: center;">
+<div style="flex: 0 0 25%; text-align: center;">
 <img
   src="/blog/images/avoid-consecutive-repartitions/hash_repartitioning.png"
   width="100%"
@@ -155,12 +165,12 @@ Hash repartitioning is useful when working with grouped data. Imagine you have a
 </div>
 </div>
 
-Note, the benefit of hash opposed to round-robin partitioning in this scenario. Hash repartitioning consolidates all rows with the same store value in distinct partitions. Because of this property we can compute the complete results for each store in parallel and merge them to get the final outcome. This parallel processing wouldn’t be possible with only round-robin partitioning as the same store value may be spread across multiple partitions, making the aggregation results partial and unable to merge to produce a final outcome.
+Note, the benefit of hash opposed to round-robin partitioning in this scenario. Hash repartitioning consolidates all rows with the same store value in distinct partitions. Because of this property we can compute the complete results for each store in parallel and merge them to get the final outcome. This parallel processing wouldn’t be possible with only round-robin partitioning as the same store value may be spread across multiple partitions, making the aggregation results partial, unable to merge them to produce a correct final outcome.
 
 <div class="text-center">
 <img
   src="/blog/images/avoid-consecutive-repartitions/hash_repartitioning_example.png"
-  width="50%"
+  width="70%"
   class="img-responsive"
   alt="Hash Repartitioning Example"
 />
@@ -181,7 +191,7 @@ SELECT a, SUM(b) FROM data.parquet GROUP BY a;
 <div class="text-center">
 <img
   src="/blog/images/avoid-consecutive-repartitions/basic_before_query_plan.png"
-  width="40%"
+  width="65%"
   class="img-responsive"
   alt="Consecutive Repartition Query Plan"
 />
@@ -193,12 +203,12 @@ SELECT a, SUM(b) FROM data.parquet GROUP BY a;
 
 Repartitions would appear back-to-back in query plans, specifically a round-robin followed by a hash repartition.
 
-Why is this such a big deal? Well, repartitions do not process the data; their purpose is to redistribute it in ways that enable more efficient computation for other operators. Having consecutive repartitions is counterintuitive because we are redistributing data, then immediately redistributing it again, making the first repartition pointless. While this didn’t create extreme overhead for queries, since round-robin repartitioning does not copy data, just pointers to batches, the behavior was unclear and incorrect.
+Why is this such a big deal? Well, repartitions do not process the data; their purpose is to redistribute it in ways that enable more efficient computation for other operators. Having consecutive repartitions is counterintuitive because we are redistributing data, then immediately redistributing it again, making the first repartition pointless. While this didn’t create extreme overhead for queries, since round-robin repartitioning does not copy data just the pointers to batches, the behavior was unclear and incorrect.
 
 <div class="text-center">
 <img
   src="/blog/images/avoid-consecutive-repartitions/in_depth_query_plan_before.png"
-  width="50%"
+  width="65%"
   class="img-responsive"
   alt="Consecutive Repartition Query Plan With Data"
 />
@@ -220,7 +230,7 @@ Optimally the plan should do one of two things:
 </div>
 <br>
 
-As shown in the diagram above, in the CSV plan, the round-robin repartition takes place before the partial aggregation. This increases parallelism for this processing, which will yield great performance benefits in larger datasets.
+As shown in the diagram for a large query plan above, the round-robin repartition takes place before the partial aggregation. This increases parallelism for this processing, which will yield great performance benefits in larger datasets.
 
 ---
 
@@ -232,9 +242,9 @@ With an understanding of what the problem is, it is finally time to dive into is
 
 Before looking at any code, we can narrow the scope of where we should be looking. I found that tightening the boundaries of what you are looking for before reading any code is critical for being effective in large, complex codebases. If you are searching for a needle in a haystack, you will spend hours sifting through irrelevant code.
 
-We can use what we know and provide tools to pinpoint where our search should begin. So far, we know the bug only exists where repartitioning is needed. Let's see how else we can pinpoint our search.
+We can use what we know about the issue and provided tools to pinpoint where our search should begin. So far, we know the bug only exists where repartitioning is needed. Let's see how else we can narrow down our search.
 
-From previous tickets, I was aware that Datafusion offered the EXPLAIN VERBOSE keywords. When put before a query, the CLI prints the logical and physical plan at each step of planning and optimization. Running this query:
+From previous tickets, I was aware that Datafusion offered the `EXPLAIN VERBOSE` keywords. When put before a query, the CLI prints the logical and physical plan at each step of planning and optimization. Running this query:
 
 ```sql
 EXPLAIN VERBOSE SELECT a, SUM(b) FROM data.parquet GROUP BY a;
@@ -260,7 +270,7 @@ we find a critical piece of information.
 1.OutputRequirementExec: order_by=[], dist_by=Unspecified
 2.  AggregateExec: mode=FinalPartitioned, gby=[a@0 as a], aggr=[sum(parquet_data.b)]
 3.    RepartitionExec: partitioning=Hash([a@0], 16), input_partitions=16
-4.      RepartitionExec: partitioning=RoundRobinBatch(16), input_partitions=1 -- EXTRA REPARITITON!
+4.      RepartitionExec: partitioning=RoundRobinBatch(16), input_partitions=1 <-- EXTRA REPARITITON!
 5.        AggregateExec: mode=Partial, gby=[a@0 as a], aggr=[sum(parquet_data.b)]
 6.          DataSourceExec:
                 file_groups={1 group: [[...]]}
@@ -288,7 +298,7 @@ This logic takes place in the main loop of this rule. I find it helpful to draw 
 <div class="text-center">
 <img
   src="/blog/images/avoid-consecutive-repartitions/logic_tree_before.png"
-  width="60%"
+  width="75%"
   class="img-responsive"
   alt="Incorrect Logic Tree"
 />
@@ -315,7 +325,7 @@ The new logic tree looks like this:
 <div class="text-center">
 <img
   src="/blog/images/avoid-consecutive-repartitions/logic_tree_after.png"
-  width="60%"
+  width="75%"
   class="img-responsive"
   alt="Correct Logic Tree"
 />
@@ -352,7 +362,7 @@ Plans became simpler:
 2.  AggregateExec: mode=FinalPartitioned, gby=[env@0 as env], aggr=[count(Int64(1))]
 3.    CoalesceBatchesExec: target_batch_size=8192
 4.      RepartitionExec: partitioning=Hash([env@0], 4), input_partitions=4
-5.        RepartitionExec: partitioning=RoundRobinBatch(4), input_partitions=1 -- EXTRA REPARTITION!
+5.        RepartitionExec: partitioning=RoundRobinBatch(4), input_partitions=1 <-- EXTRA REPARTITION!
 6.          AggregateExec: mode=Partial, gby=[env@0 as env], aggr=[count(Int64(1))]
 7.            DataSourceExec:
                 file_groups={1 group: [[...]}
@@ -407,7 +417,7 @@ From this experience there are two main points I would like to emphasize:
 
 1. Deeply understand the system you are working on. It is not only fun to figure these things out, but it also pays off in the long run when having surface-level knowledge won't cut it.
 
-2. This is complimentary to the first, is to narrow down the scope of your work when starting your journey into databases. Find a project that you are interested in and provides an environment that enhances your early learning process. I have found that Apache Datafusion and its community has been an amazing first step and plan to continue learning about query engines here.
+2. This is complimentary to the first, narrow down the scope of your work when starting your journey into databases. Find a project that you are interested in and provides an environment that enhances your early learning process. I have found that Apache Datafusion and its community has been an amazing first step and plan to continue learning about query engines here.
 
 I hope you gained something from my experience and have fun learning about databases.
 
@@ -415,4 +425,4 @@ I hope you gained something from my experience and have fun learning about datab
 
 ## **Acknowledgements**
 
-Thank you to Nga Tran for continuous mentorship and guidance, the Datafusion community, specifically Andrew Lamb, for lending support throughout my work, and Datadog for providing the opportunity to work on such interesting systems.
+Thank you to [Nga Tran](https://github.com/NGA-TRAN) for continuous mentorship and guidance, the Datafusion community, specifically [Andrew Lamb](https://github.com/alamb), for lending me support throughout my work, and Datadog for providing the opportunity to work on such interesting systems.
