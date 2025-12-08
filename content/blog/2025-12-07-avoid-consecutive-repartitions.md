@@ -91,7 +91,7 @@ This project offered a perfect environment for my first steps into databases: cl
 
 ### Parallel Execution in Datafusion
 
-<div style="display: flex; align-items: center; gap: 20px; margin-bottom: 20px;">
+<div style="display: flex; align-items: top; gap: 20px; margin-bottom: 20px;">
 <div style="flex: 1;">
 
 Before discussing this issue, it is essential to understand how Datafusion handles parallel execution.
@@ -117,7 +117,7 @@ Partitioning is a "divide-and-conquer" approach to executing a query. Each parti
 
 #### **Round-Robin Repartitioning**
 
-<div style="display: flex; align-items: center; gap: 20px; margin-bottom: 20px;">
+<div style="display: flex; align-items: top; gap: 20px; margin-bottom: 20px;">
 <div style="flex: 1;">
 
 Round-robin repartitioning is the simplest partitioning strategy. Incoming data is processed in batches (chunks of rows), and these batches are distributed across partitions cyclically or sequentially, with each new batch assigned to the next available partition.
@@ -137,7 +137,7 @@ Round-robin repartitioning is useful when the data grouping isn't known or when 
 
 #### **Hash Repartitioning**
 
-<div style="display: flex; align-items: center; gap: 20px; margin-bottom: 20px;">
+<div style="display: flex; align-items: top; gap: 20px; margin-bottom: 20px;">
 <div style="flex: 1;">
 
 Hash repartitioning distributes data based on a hash function applied to one or more columns, called the partitioning key. Rows with the same hash value are placed in the same partition.
