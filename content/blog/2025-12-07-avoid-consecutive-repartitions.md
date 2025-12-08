@@ -203,7 +203,7 @@ SELECT a, SUM(b) FROM data.parquet GROUP BY a;
 
 Repartitions would appear back-to-back in query plans, specifically a round-robin followed by a hash repartition.
 
-Why is this such a big deal? Well, repartitions do not process the data; their purpose is to redistribute it in ways that enable more efficient computation for other operators. Having consecutive repartitions is counterintuitive because we are redistributing data, then immediately redistributing it again, making the first repartition pointless. While this didn’t create extreme overhead for queries, since round-robin repartitioning does not copy data just the pointers to batches, the behavior was unclear and incorrect.
+Why is this such a big deal? Well, repartitions do not process the data; their purpose is to redistribute it in ways that enable more efficient computation for other operators. Having consecutive repartitions is counterintuitive because we are redistributing data, then immediately redistributing it again, making the first repartition pointless. While this didn't create extreme overhead for queries, since round-robin repartitioning does not copy data, just the pointers to batches, the behavior was unclear and incorrect.
 
 <div class="text-center">
 <img
@@ -270,7 +270,7 @@ we find a critical piece of information.
 1.OutputRequirementExec: order_by=[], dist_by=Unspecified
 2.  AggregateExec: mode=FinalPartitioned, gby=[a@0 as a], aggr=[sum(parquet_data.b)]
 3.    RepartitionExec: partitioning=Hash([a@0], 16), input_partitions=16
-4.      RepartitionExec: partitioning=RoundRobinBatch(16), input_partitions=1 <-- EXTRA REPARITITON!
+4.      RepartitionExec: partitioning=RoundRobinBatch(16), input_partitions=1 <-- EXTRA REPARTITION!
 5.        AggregateExec: mode=Partial, gby=[a@0 as a], aggr=[sum(parquet_data.b)]
 6.          DataSourceExec:
                 file_groups={1 group: [[...]]}
@@ -417,7 +417,7 @@ From this experience there are two main points I would like to emphasize:
 
 1. Deeply understand the system you are working on. It is not only fun to figure these things out, but it also pays off in the long run when having surface-level knowledge won't cut it.
 
-2. This is complimentary to the first, narrow down the scope of your work when starting your journey into databases. Find a project that you are interested in and provides an environment that enhances your early learning process. I have found that Apache Datafusion and its community has been an amazing first step and plan to continue learning about query engines here.
+2. This is complementary to the first, narrow down the scope of your work when starting your journey into databases. Find a project that you are interested in and provides an environment that enhances your early learning process. I have found that Apache Datafusion and its community has been an amazing first step and plan to continue learning about query engines here.
 
 I hope you gained something from my experience and have fun learning about databases.
 
