@@ -1,7 +1,7 @@
 ---
 layout: post
-title: Optimizing Repartitions in DataFusion: How I Went From Database Nood to Core Contribution.
-date: 2025-12-07
+title: Optimizing Repartitions in DataFusion: How I Went From Database Nood to Core Contribution
+date: 2025-12-15
 author: Gene Bordegaray
 categories: [tutorial]
 ---
@@ -57,11 +57,11 @@ With what seemed like an impossible task at hand, I began my favorite few months
 
 ## **Starting Out**
 
-I am no expert in databases or any of their subsystems, but I am someone who recently began learning about them. These are some tips I found useful when first starting.
+I was no expert in databases or any of their subsystems, but I am someone who recently began learning about them. These are some tips I found useful when first starting.
 
 ### Build a Foundation
 
-The first thing I did, which I highly recommend, was watch Andy Pavlo's [Intro To Database Systems course](https://15445.courses.cs.cmu.edu/fall2025/). This laid a great foundation for understanding how a database works from end to end at a high level. It touches on topics ranging from file formats to query optimization, and it was helpful to have a general context for the whole system before diving deep into a single sector.
+The first thing I did, which I highly recommend, was watch Andy Pavlo's [Intro To Database Systems course](https://15445.courses.cs.cmu.edu/fall2025/). This laid a great foundation for understanding how a database works from end-to-end at a high-level. It touches on topics ranging from file formats to query optimization, and it was helpful to have a general context for the whole system before diving deep into a single sector.
 
 ### Narrow Your Scope
 
@@ -101,25 +101,20 @@ This project offered a perfect environment for my first steps into databases: cl
 
 ### Parallel Execution in DataFusion
 
-<div style="display: flex; align-items: top; gap: 20px; margin-bottom: 20px;">
-<div style="flex: 1;">
-
 Before discussing this issue, it is essential to understand how DataFusion handles parallel execution.
-<br><br>
-DataFusion implements a vectorized <a href="https://dl.acm.org/doi/10.1145/93605.98720">Volcano Model</a>, similar to other state of the art engines such as ClickHouse. The Volcano Model is built on the idea that each operation is abstracted into an operator, and a DAG can represent an entire query. Each operator implements a next() function that returns a batch of tuples or a NULL marker if no data is available.
-<br><br>
-DataFusion achieves multi-core parallelism through the use of "exchange operators." Individual operators are implemented to use a single CPU core, and the RepartitionExec operator is responsible for distributing work across multiple processors.
 
-</div>
-<div style="flex: 0 0 40%; text-align: center;">
+DataFusion implements a vectorized <a href="https://dl.acm.org/doi/10.1145/93605.98720">Volcano Model</a>, similar to other state of the art engines such as ClickHouse. The Volcano Model is built on the idea that each operation is abstracted into an operator, and a DAG can represent an entire query. Each operator implements a `next()` function that returns a batch of tuples or a `NULL` marker if no data is available.
+
+<div class="text-center">
 <img
   src="/blog/images/avoid-consecutive-repartitions/volcano_model_diagram.png"
-  width="100%"
+  width="60%"
   class="img-responsive"
   alt="Vectorized Volcano Model Example"
 />
 </div>
-</div>
+<br>
+DataFusion achieves multi-core parallelism through the use of "exchange operators." Individual operators are implemented to use a single CPU core, and the `RepartitionExec` operator is responsible for distributing work across multiple processors.
 
 ### What is Repartitioning?
 
@@ -170,7 +165,7 @@ Note, the benefit of hash opposed to round-robin partitioning in this scenario. 
 <div class="text-center">
 <img
   src="/blog/images/avoid-consecutive-repartitions/hash_repartitioning_example.png"
-  width="70%"
+  width="100%"
   class="img-responsive"
   alt="Hash Repartitioning Example"
 />
@@ -282,7 +277,7 @@ We have found the exact rule, [EnforceDistribution](https://github.com/apache/da
 
 ### The Root Cause
 
-With a single rule to read, isolating the issue is much simpler. The EnforceDistribution rule takes a physical query plan as input, iterates over each child analyzing its requirements, and decides where adding repartition nodes is beneficial.
+With a single rule to read, isolating the issue is much simpler. The `EnforceDistribution` rule takes a physical query plan as input, iterates over each child analyzing its requirements, and decides where adding repartition nodes is beneficial.
 
 A great place to start looking is before any repartitions are inserted, and where the program decides if adding a repartition above/below an operator is useful. With the help of handy function header comments, it was easy to identify that this is done in the [get_repartition_requirement_status](https://github.com/apache/datafusion/blob/944f7f2f2739a9d82ac66c330ea32a9c7479ee8b/datafusion/physical-optimizer/src/enforce_distribution.rs#L1108) function. Here, DataFusion sets four fields indicating how the operator would benefit from repartitioning:
 
@@ -298,7 +293,7 @@ This logic takes place in the main loop of this rule. I find it helpful to draw 
 <div class="text-center">
 <img
   src="/blog/images/avoid-consecutive-repartitions/logic_tree_before.png"
-  width="75%"
+  width="100%"
   class="img-responsive"
   alt="Incorrect Logic Tree"
 />
@@ -325,7 +320,7 @@ The new logic tree looks like this:
 <div class="text-center">
 <img
   src="/blog/images/avoid-consecutive-repartitions/logic_tree_after.png"
-  width="75%"
+  width="100%"
   class="img-responsive"
   alt="Correct Logic Tree"
 />
@@ -392,7 +387,7 @@ For the benchmarking standard, TPCH, speedups were small but consistent:
 <div class="text-left">
 <img
   src="/blog/images/avoid-consecutive-repartitions/tpch_benchmark.png"
-  width="40%"
+  width="60%"
   class="img-responsive"
   alt="TPCH Benchmark Results"
 />
@@ -404,14 +399,14 @@ For the benchmarking standard, TPCH, speedups were small but consistent:
 <div class="text-left">
 <img
   src="/blog/images/avoid-consecutive-repartitions/tpch10_benchmark.png"
-  width="40%"
+  width="60%"
   class="img-responsive"
   alt="TPCH10 Benchmark Results"
 />
 </div>
 <br>
 
-And there it is, our first core contribution for a database system.
+And there it is, our first core contribution for a database system!
 
 From this experience there are two main points I would like to emphasize:
 
