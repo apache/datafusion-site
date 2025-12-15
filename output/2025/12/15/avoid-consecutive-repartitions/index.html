@@ -1,0 +1,339 @@
+<!doctype html>
+<html class="no-js" lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Optimizing Repartitions in DataFusion: How I Went From Database Nood to Core Contribution - Apache DataFusion Blog</title>
+<link href="/blog/css/bootstrap.min.css" rel="stylesheet">
+<link href="/blog/css/fontawesome.all.min.css" rel="stylesheet">
+<link href="/blog/css/headerlink.css" rel="stylesheet">
+<link href="/blog/highlight/default.min.css" rel="stylesheet">
+<link href="/blog/css/app.css" rel="stylesheet">
+<script src="/blog/highlight/highlight.js"></script>
+<script>hljs.highlightAll();</script>  </head>
+  <body class="d-flex flex-column h-100">
+  <main class="flex-shrink-0">
+<!-- nav bar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark" aria-label="Fifth navbar example">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/blog"><img src="/blog/images/logo_original4x.png" style="height: 32px;"/> Apache DataFusion Blog</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarADP" aria-controls="navbarADP" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarADP">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/about.html">About</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/feed.xml">RSS</a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>    
+<!-- article contents -->
+<div id="contents">
+  <div class="bg-white p-4 p-md-5 rounded">
+    <div class="row justify-content-center">
+      <div class="col-12 col-md-8 main-content">
+        <h1>
+          Optimizing Repartitions in DataFusion: How I Went From Database Nood to Core Contribution
+        </h1>
+        <p>Posted on: Mon 15 December 2025 by Gene Bordegaray</p>
+
+
+        <!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+-->
+<div style="display: flex; align-items: center; gap: 20px; margin-bottom: 20px;">
+<div style="flex: 1;">
+
+Databases are some of the most complex yet interesting pieces of software. They are amazing pieces of abstraction: query engines optimize and execute complex plans, storage engines provide sophisticated infrastructure as the backbone of the system, while intricate file formats lay the groundwork for particular workloads. All of this is exposed by a user-friendly interface and query languages (typically a dialect of SQL).
+<br/><br/>
+Starting a journey learning about database internals can be daunting. With so many topics that are whole PhD degrees themselves, finding a place to start is difficult. In this blog post, I will share my early journey in the database world and a quick lesson on one of the first topics I dove into. If you are new to the space, this post will help you get your first foot into the database world, and if you are already a veteran, you may still learn something new.
+
+</div>
+<div style="flex: 0 0 40%; text-align: center;">
+<img alt="Database System Components" class="img-responsive" src="/blog/images/avoid-consecutive-repartitions/database_system_diagram.png" width="100%"/>
+</div>
+</div>
+<hr/>
+<h2 id="who-am-i"><strong>Who Am I?</strong><a class="headerlink" href="#who-am-i" title="Permanent link">&para;</a></h2>
+<p>I am Gene Bordegaray (<a href="https://www.linkedin.com/in/genebordegaray">LinkedIn</a>, <a href="https://github.com/gene-bordegaray">GitHub</a>), a recent computer science graduate from UCLA and software engineer at Datadog. Before starting my job, I had no real exposure to databases, only enough SQL knowledge to send CRUD requests and choose between a relational or no-SQL model in a systems design interview.</p>
+<p>When I found out I would be on a team focusing on query engines and execution, I was excited but horrified. "Query engines?" From my experience, I typed SQL queries into pgAdmin and got responses without knowing the dark magic that happened under the hood.</p>
+<p>With what seemed like an impossible task at hand, I began my favorite few months of learning.</p>
+<hr/>
+<h2 id="starting-out"><strong>Starting Out</strong><a class="headerlink" href="#starting-out" title="Permanent link">&para;</a></h2>
+<p>I was no expert in databases or any of their subsystems, but I am someone who recently began learning about them. These are some tips I found useful when first starting.</p>
+<h3 id="build-a-foundation">Build a Foundation<a class="headerlink" href="#build-a-foundation" title="Permanent link">&para;</a></h3>
+<p>The first thing I did, which I highly recommend, was watch Andy Pavlo's <a href="https://15445.courses.cs.cmu.edu/fall2025/">Intro To Database Systems course</a>. This laid a great foundation for understanding how a database works from end-to-end at a high-level. It touches on topics ranging from file formats to query optimization, and it was helpful to have a general context for the whole system before diving deep into a single sector.</p>
+<h3 id="narrow-your-scope">Narrow Your Scope<a class="headerlink" href="#narrow-your-scope" title="Permanent link">&para;</a></h3>
+<p>The next crucial step is to pick your niche to focus on. Database systems are so vast that trying to tackle the whole beast at once is a lost cause. If you want to effectively contribute to this space, you need to deeply understand the system you are working on, and you will have much better luck narrowing your scope.</p>
+<p>When learning about the entire database stack at a high level, note what parts stick out as particularly interesting. For me, this focus is on query engines, more specifically, the physical planner and optimizer.</p>
+<h3 id="a-slow-start">A "Slow" Start<a class="headerlink" href="#a-slow-start" title="Permanent link">&para;</a></h3>
+<p>The final piece of advice when starting, and I sound like a broken record, is to take your time to learn. This is not an easy sector of software to jump into; it will pay dividends to slow down, fully understand the system, and why it is designed the way it is.</p>
+<p>When making your first contributions to an open-source project, start very small but go as deep as you can. Don't leave any stone unturned. I did this by looking for simpler issues, such as formatting or simple bug fixes, and stepping through the entire data flow that relates to the issue, noting what each component is responsible for.</p>
+<p>This will give you familiarity with the codebase and using your tools, like your debugger, within the project.</p>
+<div class="text-center">
+<img alt="Noot Noot Database Meme" class="img-responsive" src="/blog/images/avoid-consecutive-repartitions/noot_noot_database_meme.png" width="50%"/>
+</div>
+<p><br/></p>
+<p>Now that we have some general knowledge of database internals, a niche or subsystem we want to dive deeper into, and the mindset for acquiring knowledge before contributing, let's start with our first core issue.</p>
+<hr/>
+<h2 id="intro-to-datafusion"><strong>Intro to DataFusion</strong><a class="headerlink" href="#intro-to-datafusion" title="Permanent link">&para;</a></h2>
+<p>As mentioned, the database subsystem I decided to explore was query engines. The query engine is responsible for interpreting, optimizing, and executing queries, aiming to do so as efficiently as possible.</p>
+<p>My team was in full-swing of restructuring how query execution would work in our organization. The team decided we would use <a href="https://datafusion.apache.org/">Apache DataFusion</a> at the heart of our system, chosen for its blazing fast execution time for analytical workloads and vast extendability. DataFusion is written in Rust and builds on top of <a href="https://arrow.apache.org/">Apache Arrow</a> (another great project), a columnar memory format that enables it to efficiently process large volumes of data in memory.</p>
+<p>This project offered a perfect environment for my first steps into databases: clear, production-ready Rust programming, a manageable codebase, high performance for a specific use case, and a welcoming community.</p>
+<h3 id="parallel-execution-in-datafusion">Parallel Execution in DataFusion<a class="headerlink" href="#parallel-execution-in-datafusion" title="Permanent link">&para;</a></h3>
+<p>Before discussing this issue, it is essential to understand how DataFusion handles parallel execution.</p>
+<p>DataFusion implements a vectorized <a href="https://dl.acm.org/doi/10.1145/93605.98720">Volcano Model</a>, similar to other state of the art engines such as ClickHouse. The Volcano Model is built on the idea that each operation is abstracted into an operator, and a DAG can represent an entire query. Each operator implements a <code>next()</code> function that returns a batch of tuples or a <code>NULL</code> marker if no data is available.</p>
+<div class="text-center">
+<img alt="Vectorized Volcano Model Example" class="img-responsive" src="/blog/images/avoid-consecutive-repartitions/volcano_model_diagram.png" width="60%"/>
+</div>
+<p><br/>
+DataFusion achieves multi-core parallelism through the use of "exchange operators." Individual operators are implemented to use a single CPU core, and the <code>RepartitionExec</code> operator is responsible for distributing work across multiple processors.</p>
+<h3 id="what-is-repartitioning">What is Repartitioning?<a class="headerlink" href="#what-is-repartitioning" title="Permanent link">&para;</a></h3>
+<p>Partitioning is a "divide-and-conquer" approach to executing a query. Each partition is a subset of the data that is being processed on a single core. Repartitioning is an operation that redistributes data across different partitions to balance workloads, reduce data skew, and increase parallelism. Two repartitioning methods are used in DataFusion: round-robin and hash.</p>
+<h4 id="round-robin-repartitioning"><strong>Round-Robin Repartitioning</strong><a class="headerlink" href="#round-robin-repartitioning" title="Permanent link">&para;</a></h4>
+<div style="display: flex; align-items: top; gap: 20px; margin-bottom: 20px;">
+<div style="flex: 1;">
+
+Round-robin repartitioning is the simplest partitioning strategy. Incoming data is processed in batches (chunks of rows), and these batches are distributed across partitions cyclically or sequentially, with each new batch assigned to the next available partition.
+<br/><br/>
+Round-robin repartitioning is useful when the data grouping isn't known or when aiming for an even distribution across partitions. Because it simply assigns batches in order without inspecting their contents, it is a low-overhead way to increase parallelism for downstream operations.
+
+</div>
+<div style="flex: 0 0 25%; text-align: center;">
+<img alt="Round-Robin Repartitioning" class="img-responsive" src="/blog/images/avoid-consecutive-repartitions/round_robin_repartitioning.png" width="100%"/>
+</div>
+</div>
+<h4 id="hash-repartitioning"><strong>Hash Repartitioning</strong><a class="headerlink" href="#hash-repartitioning" title="Permanent link">&para;</a></h4>
+<div style="display: flex; align-items: top; gap: 20px; margin-bottom: 20px;">
+<div style="flex: 1;">
+
+Hash repartitioning distributes data based on a hash function applied to one or more columns, called the partitioning key. Rows with the same hash value are placed in the same partition.
+<br/><br/>
+Hash repartitioning is useful when working with grouped data. Imagine you have a database containing information on company sales, and you are looking to find the total revenue each store produced. Hash repartitioning would make this query much more efficient. Rather than iterating over the data on a single thread and keeping a running sum for each store, it would be better to hash repartition on the store column and have multiple threads calculate individual store sales.
+
+</div>
+<div style="flex: 0 0 25%; text-align: center;">
+<img alt="Hash Repartitioning" class="img-responsive" src="/blog/images/avoid-consecutive-repartitions/hash_repartitioning.png" width="100%"/>
+</div>
+</div>
+<p>Note, the benefit of hash opposed to round-robin partitioning in this scenario. Hash repartitioning consolidates all rows with the same store value in distinct partitions. Because of this property we can compute the complete results for each store in parallel and merge them to get the final outcome. This parallel processing wouldn&rsquo;t be possible with only round-robin partitioning as the same store value may be spread across multiple partitions, making the aggregation results partial, unable to merge them to produce a correct final outcome.</p>
+<div class="text-center">
+<img alt="Hash Repartitioning Example" class="img-responsive" src="/blog/images/avoid-consecutive-repartitions/hash_repartitioning_example.png" width="100%"/>
+</div>
+<hr/>
+<h2 id="the-issue-consecutive-repartitions"><strong>The Issue: Consecutive Repartitions</strong><a class="headerlink" href="#the-issue-consecutive-repartitions" title="Permanent link">&para;</a></h2>
+<p>DataFusion contributors pointed out that consecutive repartition operators were being added to query plans, making them less efficient and more confusing to read (<a href="https://github.com/apache/datafusion/issues/18341">link to issue</a>). This issue had stood for over a year, with some attempts to resolve it, but they fell short.</p>
+<p>For some queries that required repartitioning, the plan would look along the lines of:</p>
+<pre><code class="language-sql">SELECT a, SUM(b) FROM data.parquet GROUP BY a;
+</code></pre>
+<div class="text-center">
+<img alt="Consecutive Repartition Query Plan" class="img-responsive" src="/blog/images/avoid-consecutive-repartitions/basic_before_query_plan.png" width="65%"/>
+</div>
+<hr/>
+<h2 id="why-dont-we-want-consecutive-repartitions"><strong>Why Don&rsquo;t We Want Consecutive Repartitions?</strong><a class="headerlink" href="#why-dont-we-want-consecutive-repartitions" title="Permanent link">&para;</a></h2>
+<p>Repartitions would appear back-to-back in query plans, specifically a round-robin followed by a hash repartition.</p>
+<p>Why is this such a big deal? Well, repartitions do not process the data; their purpose is to redistribute it in ways that enable more efficient computation for other operators. Having consecutive repartitions is counterintuitive because we are redistributing data, then immediately redistributing it again, making the first repartition pointless. While this didn't create extreme overhead for queries, since round-robin repartitioning does not copy data, just the pointers to batches, the behavior was unclear and unecessary.</p>
+<div class="text-center">
+<img alt="Consecutive Repartition Query Plan With Data" class="img-responsive" src="/blog/images/avoid-consecutive-repartitions/in_depth_before_query_plan.png" width="65%"/>
+</div>
+<p><br/></p>
+<p>Optimally the plan should do one of two things:</p>
+<ol>
+<li>If there is enough data to justify round-robin repartitioning, split the repartitions across a "worker" operator that leverages the redistributed data.</li>
+<li>Otherwise, don't use any round-robin repartition and keep the hash repartition only in the middle of the two-stage aggregation.</li>
+</ol>
+<div class="text-center">
+<img alt="Optimal Query Plans" class="img-responsive" src="/blog/images/avoid-consecutive-repartitions/optimal_query_plans.png" width="100%"/>
+</div>
+<p><br/></p>
+<p>As shown in the diagram for a large query plan above, the round-robin repartition takes place before the partial aggregation. This increases parallelism for this processing, which will yield great performance benefits in larger datasets.</p>
+<hr/>
+<h2 id="identifying-the-bug"><strong>Identifying the Bug</strong><a class="headerlink" href="#identifying-the-bug" title="Permanent link">&para;</a></h2>
+<p>With an understanding of what the problem is, it is finally time to dive into isolating and identifying the bug.</p>
+<h3 id="no-code">No Code!<a class="headerlink" href="#no-code" title="Permanent link">&para;</a></h3>
+<p>Before looking at any code, we can narrow the scope of where we should be looking. I found that tightening the boundaries of what you are looking for before reading any code is critical for being effective in large, complex codebases. If you are searching for a needle in a haystack, you will spend hours sifting through irrelevant code.</p>
+<p>We can use what we know about the issue and provided tools to pinpoint where our search should begin. So far, we know the bug only exists where repartitioning is needed. Let's see how else we can narrow down our search.</p>
+<p>From previous tickets, I was aware that DataFusion offered the <code>EXPLAIN VERBOSE</code> keywords. When put before a query, the CLI prints the logical and physical plan at each step of planning and optimization. Running this query:</p>
+<pre><code class="language-sql">EXPLAIN VERBOSE SELECT a, SUM(b) FROM data.parquet GROUP BY a;
+</code></pre>
+<p>we find a critical piece of information.</p>
+<p><strong>Physical Plan Before EnforceDistribution:</strong></p>
+<pre><code class="language-text">1.OutputRequirementExec: order_by=[], dist_by=Unspecified
+2.  AggregateExec: mode=FinalPartitioned, gby=[a@0 as a], aggr=[sum(parquet_data.b)]
+3.    AggregateExec: mode=Partial, gby=[a@0 as a], aggr=[sum(parquet_data.b)]
+4.      DataSourceExec:
+            file_groups={1 group: [[...]]}
+            projection=[a, b]
+            file_type=parquet
+</code></pre>
+<p><strong>Physical Plan After EnforceDistribution:</strong></p>
+<pre><code class="language-text">1.OutputRequirementExec: order_by=[], dist_by=Unspecified
+2.  AggregateExec: mode=FinalPartitioned, gby=[a@0 as a], aggr=[sum(parquet_data.b)]
+3.    RepartitionExec: partitioning=Hash([a@0], 16), input_partitions=16
+4.      RepartitionExec: partitioning=RoundRobinBatch(16), input_partitions=1 &lt;-- EXTRA REPARTITION!
+5.        AggregateExec: mode=Partial, gby=[a@0 as a], aggr=[sum(parquet_data.b)]
+6.          DataSourceExec:
+                file_groups={1 group: [[...]]}
+                projection=[a, b]
+                file_type=parquet
+</code></pre>
+<p>We have found the exact rule, <a href="https://github.com/apache/datafusion/blob/944f7f2f2739a9d82ac66c330ea32a9c7479ee8b/datafusion/physical-optimizer/src/enforce_distribution.rs#L66-L184">EnforceDistribution</a>, that is responsible for introducing the bug before reading a single line of code! For experienced maintainers of DataFusion, they would've known where to look before starting, but for a newbie, this is great information.</p>
+<h3 id="the-root-cause">The Root Cause<a class="headerlink" href="#the-root-cause" title="Permanent link">&para;</a></h3>
+<p>With a single rule to read, isolating the issue is much simpler. The <code>EnforceDistribution</code> rule takes a physical query plan as input, iterates over each child analyzing its requirements, and decides where adding repartition nodes is beneficial.</p>
+<p>A great place to start looking is before any repartitions are inserted, and where the program decides if adding a repartition above/below an operator is useful. With the help of handy function header comments, it was easy to identify that this is done in the <a href="https://github.com/apache/datafusion/blob/944f7f2f2739a9d82ac66c330ea32a9c7479ee8b/datafusion/physical-optimizer/src/enforce_distribution.rs#L1108">get_repartition_requirement_status</a> function. Here, DataFusion sets four fields indicating how the operator would benefit from repartitioning:</p>
+<ol>
+<li><strong>The operator's distribution requirement</strong>: what type of partitioning does it need from its children (hash, single, or unknown)?</li>
+<li><strong>If round-robin is theoretically beneficial:</strong> does the operator benefit from parallelism?</li>
+<li><strong>If our data indicates round-robin to be beneficial</strong>: do we have enough data to justify the overhead of repartitioning?</li>
+<li><strong>If hash repartitioning is necessary</strong>: is the parent an operator that requires all column values to be in the same partition, like an aggregate, and are we already hash-partitioned correctly?</li>
+</ol>
+<p>Ok, great! We understand the different components DataFusion uses to indicate if repartitioning is beneficial. Now all that's left to do is see how repartitions are inserted.</p>
+<p>This logic takes place in the main loop of this rule. I find it helpful to draw algorithms like these into logic trees; this tends to make things much more straightforward and approachable:</p>
+<div class="text-center">
+<img alt="Incorrect Logic Tree" class="img-responsive" src="/blog/images/avoid-consecutive-repartitions/logic_tree_before.png" width="100%"/>
+</div>
+<p><br/></p>
+<p>Boom! This is the root of our problem: we are inserting a round-robin repartition, then still inserting a hash repartition afterwards. This means that if an operator indicates it would benefit from both round-robin and hash repartitioning, consecutive repartitions will occur.</p>
+<hr/>
+<h2 id="the-fix"><strong>The Fix</strong><a class="headerlink" href="#the-fix" title="Permanent link">&para;</a></h2>
+<p>The logic shown before is, of course, incorrect, and the conditions for adding hash and round-robin repartitioning should be mutually exclusive since an operator will never benefit from shuffling data twice.</p>
+<p>Well, what is the correct logic?</p>
+<p>Based on our lesson on hash repartitioning and the heuristics DataFusion uses to determine when repartitioning can benefit an operator, the fix is easy. In the sub-tree where an operator's parent requires hash partitioning:</p>
+<ul>
+<li>If we are already hashed correctly, don't do anything. If we insert a round-robin, we will break out the partitioning.</li>
+<li>If a hash is required, just insert a hash repartition.</li>
+</ul>
+<p>The new logic tree looks like this:</p>
+<div class="text-center">
+<img alt="Correct Logic Tree" class="img-responsive" src="/blog/images/avoid-consecutive-repartitions/logic_tree_after.png" width="100%"/>
+</div>
+<p><br/></p>
+<p>All that deep digging paid off, one condition (see <a href="https://github.com/apache/datafusion/pull/18521">the final PR</a> for full details)!</p>
+<p><strong>Condition before:</strong></p>
+<pre><code class="language-rust"> if add_roundrobin {
+</code></pre>
+<p><strong>Condition after:</strong></p>
+<pre><code class="language-rust">if add_roundrobin &amp;&amp; !hash_necessary {
+</code></pre>
+<hr/>
+<h2 id="results"><strong>Results</strong><a class="headerlink" href="#results" title="Permanent link">&para;</a></h2>
+<p>This eliminated every consecutive repartition in the DataFusion test suite and benchmarks, reducing overhead, making plans clearer, and enabling further optimizations.</p>
+<p>Plans became simpler:</p>
+<p><strong>Before:</strong></p>
+<pre><code class="language-text">
+1.ProjectionExec: expr=[env@0 as env, count(Int64(1))@1 as count(*)]
+2.  AggregateExec: mode=FinalPartitioned, gby=[env@0 as env], aggr=[count(Int64(1))]
+3.    CoalesceBatchesExec: target_batch_size=8192
+4.      RepartitionExec: partitioning=Hash([env@0], 4), input_partitions=4
+5.        RepartitionExec: partitioning=RoundRobinBatch(4), input_partitions=1 &lt;-- EXTRA REPARTITION!
+6.          AggregateExec: mode=Partial, gby=[env@0 as env], aggr=[count(Int64(1))]
+7.            DataSourceExec:
+                file_groups={1 group: [[...]}
+                projection=[env]
+                file_type=parquet
+
+</code></pre>
+<p><strong>After:</strong></p>
+<pre><code class="language-text">1.ProjectionExec: expr=[env@0 as env, count(Int64(1))@1 as count(*)]
+2.  AggregateExec: mode=FinalPartitioned, gby=[env@0 as env], aggr=[count(Int64(1))]
+3.    CoalesceBatchesExec: target_batch_size=8192
+4.      RepartitionExec: partitioning=Hash([env@0], 4), input_partitions=1
+5.        AggregateExec: mode=Partial, gby=[env@0 as env], aggr=[count(Int64(1))]
+6.          DataSourceExec:
+                file_groups={1 group: [[...]]}
+                projection=[env]
+                file_type=parquet
+</code></pre>
+<p>For the benchmarking standard, TPCH, speedups were small but consistent:</p>
+<p><strong>TPCH Benchmark</strong></p>
+<div class="text-left">
+<img alt="TPCH Benchmark Results" class="img-responsive" src="/blog/images/avoid-consecutive-repartitions/tpch_benchmark.png" width="60%"/>
+</div>
+<p><br/></p>
+<p><strong>TPCH10 Benchmark</strong></p>
+<div class="text-left">
+<img alt="TPCH10 Benchmark Results" class="img-responsive" src="/blog/images/avoid-consecutive-repartitions/tpch10_benchmark.png" width="60%"/>
+</div>
+<p><br/></p>
+<p>And there it is, our first core contribution for a database system!</p>
+<p>From this experience there are two main points I would like to emphasize:</p>
+<ol>
+<li>
+<p>Deeply understand the system you are working on. It is not only fun to figure these things out, but it also pays off in the long run when having surface-level knowledge won't cut it.</p>
+</li>
+<li>
+<p>Narrow down the scope of your work when starting your journey into databases. Find a project that you are interested in and provides an environment that enhances your early learning process. I have found that Apache DataFusion and its community has been an amazing first step and plan to continue learning about query engines here.</p>
+</li>
+</ol>
+<p>I hope you gained something from my experience and have fun learning about databases.</p>
+<hr/>
+<h2 id="acknowledgements"><strong>Acknowledgements</strong><a class="headerlink" href="#acknowledgements" title="Permanent link">&para;</a></h2>
+<p>Thank you to <a href="https://github.com/NGA-TRAN">Nga Tran</a> for continuous mentorship and guidance, the DataFusion community, specifically <a href="https://github.com/alamb">Andrew Lamb</a>, for lending me support throughout my work, and Datadog for providing the opportunity to work on such interesting systems.</p>
+
+<!--
+  Comments Section
+  Loaded only after explicit visitor consent to comply with ASF policy.
+-->
+
+<div id="comments">
+  <hr>
+  <h3>Comments</h3>
+
+  <!-- Local loader script -->
+  <script src="/content/js/giscus-consent.js" defer></script>
+
+  <!-- Consent UI -->
+  <div id="giscus-consent">
+    <p>
+        We use <a href="https://giscus.app/">Giscus</a> for comments, powered by GitHub Discussions.
+        To respect your privacy, Giscus and comments will load only if you click "Show Comments"
+    </p>
+
+    <div class="consent-actions">
+      <button id="giscus-load" type="button">Show Comments</button>
+      <button id="giscus-revoke" type="button" hidden>Hide Comments</button>
+    </div>
+
+    <noscript>JavaScript is required to load comments from Giscus.</noscript>
+  </div>
+
+  <!-- Container where Giscus will render -->
+  <div id="comment-thread"></div>
+</div>      </div>
+    </div>
+  </div>
+</div>    
+    <!-- footer -->
+    <div class="row g-0">
+      <div class="col-12">
+        <p style="font-style: italic; font-size: 0.8rem; text-align: center;">
+          Copyright 2025, <a href="https://www.apache.org/">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a>.<br/>
+          Apache&reg; and the Apache feather logo are trademarks of The Apache Software Foundation.
+        </p>
+      </div>
+    </div>
+    <script src="/blog/js/bootstrap.bundle.min.js"></script>  </main>
+  </body>
+</html>
