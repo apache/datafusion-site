@@ -1,6 +1,6 @@
 ---
 layout: post
-title: Optimizing Repartitions in DataFusion: How I Went From Database Nood to Core Contribution
+title: Optimizing Repartitions in DataFusion: How I Went From Database Noob to Core Contribution
 date: 2025-12-15
 author: Gene Bordegaray
 categories: [tutorial]
@@ -198,7 +198,7 @@ SELECT a, SUM(b) FROM data.parquet GROUP BY a;
 
 Repartitions would appear back-to-back in query plans, specifically a round-robin followed by a hash repartition.
 
-Why is this such a big deal? Well, repartitions do not process the data; their purpose is to redistribute it in ways that enable more efficient computation for other operators. Having consecutive repartitions is counterintuitive because we are redistributing data, then immediately redistributing it again, making the first repartition pointless. While this didn't create extreme overhead for queries, since round-robin repartitioning does not copy data, just the pointers to batches, the behavior was unclear and unecessary.
+Why is this such a big deal? Well, repartitions do not process the data; their purpose is to redistribute it in ways that enable more efficient computation for other operators. Having consecutive repartitions is counterintuitive because we are redistributing data, then immediately redistributing it again, making the first repartition pointless. While this didn't create extreme overhead for queries, since round-robin repartitioning does not copy data, just the pointers to batches, the behavior was unclear and unnecessary.
 
 <div class="text-center">
 <img
