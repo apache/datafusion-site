@@ -76,7 +76,7 @@ CASE status
 END
 ```
 
-In this `CASE` expression, `status` is evaluated once per row, and then its value is checked against the values `'pending'`, `'active'`, and `'complete'` in sequence.
+In this `CASE` expression, `status` is evaluated once per row, and then its value is tested for equality with the values `'pending'`, `'active'`, and `'complete'` in that order.
 The `THEN` expression value for the first matching `WHEN` expression is returned per row.
 
 The searched `CASE` form is a more flexible variant.
@@ -93,7 +93,7 @@ CASE
 END
 ```
 
-In both forms, branches are evaluated sequentially with short-circuit semantics: for each row, once a `WHEN` condition matches, the corresponding `THEN` expression is evaluated and subsequent branches are not evaluated for that row.
+In both forms, branches are evaluated sequentially with short-circuit semantics: for each row, once a `WHEN` condition matches, the corresponding `THEN` expression is evaluated. Any further branches are not evaluated for that row.
 This lazy evaluation model is critical for correctness.
 It let's you safely write `CASE` expressions like
 
@@ -144,8 +144,8 @@ for (when_expr, then_expr) in &self.when_then_expr {
 ```
 
 While correct, this implementation had several performance issues mostly related to the usage of `evaluate_selection`.
-To understand why, we need to take dig a little deeper into the implementation of that function.
-Here's a simplified version of the original implementation that captures the relevant parts:
+To understand why, we need to dig a little deeper into the implementation of that function.
+Here's a simplified version of it that captures the relevant parts:
 
 ```rust
 pub trait PhysicalExpr {
@@ -161,20 +161,21 @@ pub trait PhysicalExpr {
 }
 ```
 
-The `evaluate_selection` method first filters the input batch to only include rows that match the `selection` mask, and then calls the regular `evaluate` method with the filtered batch.
+The `evaluate_selection` method first filters the input batch to only include rows that match the `selection` mask.
+It then calls the regular `evaluate` method using the filtered batch as input.
 Finally, to return a result array with the same number of rows as `batch`, the `scatter` function is called.
 This function produces a new array padded with `null` values for any rows that didn't match the `selection` mask.
 
-So how does this cause performance overhead when used in the way `CASE` evaluation was using it?
+So how does the simple evaluation strategy and use of `evaluate_selection` cause performance overhead?
 
 ### Problem 1: No Early Exit
 
-The loop always iterated through all branches, even when every row had already been matched.
-In queries where early branches match most rows, this meant unnecessary work checking for remaining rows.
+The case evaluation loop always iterated through all branches, even when every row had already been matched.
+In queries where early branches match many rows, this meant unnecessary work was done for remaining rows.
 
 ### Problem 2: Repeated Filtering, Scattering, and Merging
 
-Each iteration performed operations that are very well optimized, but still not cost free to execute:
+Each iteration performed operations that are very well-optimized but still not cost free to execute:
 - **Filtering**: `PhysicalExpr::evaluate_selection` filters the entire `RecordBatch` (all columns) for each branch. For the `WHEN` expression, this was done even if the selection mask was entirely empty.
 - **Scattering**: `PhysicalExpr::evaluate_selection` scatters the filtered result back to the original `RecordBatch` length.
 - **Merging**: The `zip` kernel is called once per branch to merge partial results into the output array
@@ -186,7 +187,9 @@ Each of these steps allocates new arrays and shuffles a lot of data around.
 The `PhysicalExpr::evaluate_selection` method filters the entire record batch, including columns that the current branch's `WHEN` and `THEN` expressions don't reference.
 For wide tables (many columns) with narrow expressions (few column references), this is wasteful.
 
-Consider a table with columns `a` through `z`:
+Suppose we have a table with 26 columns named `a` through `z`.
+For a simple CASE expression like:
+
 ```sql
 CASE
   WHEN a > 1000 THEN 'large'
@@ -195,10 +198,12 @@ CASE
 END
 ```
 
-The implementation would filter all columns 26 columns even though only a single column is needed for the entire `CASE` expression evaluation.
+the implementation would filter all columns 26 columns even though only a single column is needed for the entire `CASE` expression evaluation.
 Again this involves a non-negligible amount of allocation and data copying.
 
-## Optimization 1: Short-Circuit Early Exit (commit 7c215ed)
+## Performance Improvements
+
+### Optimization 1: Short-Circuit Early Exit (commit 7c215ed)
 
 The first optimization added early exit logic to the evaluation loop:
 
@@ -230,34 +235,46 @@ if let Some(else_expr) = &self.else_expr {
 
 **Impact**: For queries where early branches match all rows, this eliminates unnecessary branch evaluations and `ELSE` clause processing.
 
-[//]: # (Edited up to here)
-
-## Optimization 2: Optimized Result Merging (commit e9431fc)
+### Optimization 2: Optimized Result Merging (commit e9431fc)
 
 The second optimization fundamentally restructured how partial results are merged.
-Instead of using `zip()` after each branch to merge results into a monolithic output array, we now:
+Instead of using `zip()` after each branch to merge results into an output array, we now:
 
 1. Maintain the subset of rows still needing evaluation across loop iterations
 2. Filter the batch progressively as rows are matched
 3. Build an index structure that tracks which branch produced each row's result
 4. Perform a single merge operation at the end
 
-The key insight is that we can defer all merging until the end of the evaluation loop by tracking provenance:
+The key insight is that we can defer all merging until the end of the evaluation loop by tracking result provenance.
+When a branch matches a number of rows, instead of immediately merging with `zip()`, we:
+1. Store the partial result array
+2. Mark the cells corresponding to each row in an indices array as needing to take one value from the partial result array
 
-```rust
-struct ResultBuilder {
-    arrays: Vec<ArrayData>,           // Partial result arrays
-    indices: Vec<PartialResultIndex>, // Per-row: which array has this row's value?
-}
+In the example below, three `WHEN/THEN` branches produced results.
+The first branch produced the result `A` for 2, the second produced `B` for row 1, and the third produced `C` and `D` for rows 4 and 5.
+The final result array is obtained by running the arrays through the merge operation.
+
+```aiignore
+┌───────────┐  ┌─────────┐                             ┌─────────┐
+│┌─────────┐│  │   None  │                             │   NULL  │
+││    A    ││  ├─────────┤                             ├─────────┤
+│└─────────┘│  │    1    │                             │    B    │
+│┌─────────┐│  ├─────────┤                             ├─────────┤
+││    B    ││  │    0    │   merge_n(values, indices)  │    A    │
+│└─────────┘│  ├─────────┤  ─────────────────────────▶ ├─────────┤
+│┌─────────┐│  │   None  │                             │   NULL  │
+││    C    ││  ├─────────┤                             ├─────────┤
+│├─────────┤│  │    2    │                             │    C    │
+││    D    ││  ├─────────┤                             ├─────────┤
+│└─────────┘│  │    2    │                             │    D    │
+└───────────┘  └─────────┘                             └─────────┘
+   arrays        indices                                  result
 ```
 
-When a branch matches rows `[1, 4, 7]`, instead of immediately merging with `zip()`, we:
-1. Store the result array (containing 3 values)
-2. Mark indices `1`, `4`, and `7` in the index vector to point to this array
+The main benefits of this merge operation are that the `scatter` step is eleminated enitrely, and instead of requiring
+a `zip` per branch only a single `merge_n` is done.
 
-At the end, we use a custom "multi-zip" operation that interleaves values from all partial result arrays according to the index vector in a single pass.
-
-Additionally, we maintain a progressively filtered `remainder_batch`:
+Besides more efficient merging, we also maintain a progressively filtered `remainder_batch`.
 
 ```rust
 let mut remainder_batch = Cow::Borrowed(batch);
@@ -274,13 +291,16 @@ for branch in branches {
 }
 ```
 
-As rows are matched, the `remainder_batch` shrinks, making subsequent filter operations cheaper.
+As rows are matched, the `remainder_batch` shrinks, making subsequent filter operations a bit faster.
 
 **Impact**: This eliminates N-1 merge operations and makes filtering progressively cheaper as branches match rows.
 
-## Optimization 3: Column Projection (commit c3e49fb)
+This new operation was initially developed specifically for DataFusion's `CASE` evaluation, but in the meantime has been generalized and moved into the `arrow-rs` crate as [`arrow_select::merge::merge_n`](https://docs.rs/arrow-select/57.1.0/arrow_select/merge/fn.merge_n.html).
 
-The third optimization addresses the "filtering unused columns" problem through projection. Before evaluating a CASE expression, we:
+### Optimization 3: Column Projection (commit c3e49fb)
+
+The third optimization addresses the "filtering unused columns" problem through projection.
+Before evaluating a CASE expression, we:
 
 1. Analyze all WHEN/THEN/ELSE expressions to find referenced columns
 2. Build a projection vector containing only those column indices
@@ -300,11 +320,11 @@ struct ProjectedCaseBody {
 }
 ```
 
-The projection logic is only applied when it would be beneficial (i.e., when the number of used columns is less than the total number of columns in the batch).
+The projection logic is only applied when it would be beneficial (i.e., when the number of used columns is lower than the total number of columns in the batch).
 
-**Impact**: For wide tables with narrow CASE expressions, this dramatically reduces filtering overhead by avoiding copies of unused columns.
+**Impact**: For wide tables with narrow CASE expressions, this dramatically reduces filtering overhead by removing copying of unused columns.
 
-## Optimization 4: Eliminating Scatter in Two-Branch Case (commit 32d2618)
+### Optimization 4: Eliminating Scatter in Two-Branch Case (commit 32d2618)
 
 The final optimization targets a common pattern: `CASE WHEN condition THEN expr1 ELSE expr2 END`.
 
@@ -340,15 +360,18 @@ fn merge(mask: &BooleanArray, truthy: ColumnarValue, falsy: ColumnarValue) -> Ar
 
 **Impact**: This eliminates unnecessary scatter operations and memory allocations for one of the most common CASE expression patterns.
 
+Just like `merge_n` this operation has been moved into `arrow-rs` as [`arrow_select::merge::merge`](https://docs.rs/arrow-select/57.1.0/arrow_select/merge/fn.merge.html).
+
 ## Summary
 
-Through four targeted optimizations, we've transformed CASE expression evaluation from a simple but inefficient implementation to a highly optimized path that:
+Through four targeted optimizations, we've transformed CASE expression evaluation from a simple but inefficient implementation to a highly optimized one that:
 
 1. **Exits early** when all rows are matched
 2. **Defers merging** until the end with a single interleave operation
 3. **Projects columns** to avoid filtering unused data
 4. **Eliminates scatter** operations in common patterns
 
-These improvements compound: a CASE expression on a wide table with multiple branches and early matches benefits from all four optimizations simultaneously. The result is significantly reduced CPU time and memory allocation in one of SQL's most frequently used constructs.
+These improvements compound: a CASE expression on a wide table with multiple branches and early matches benefits from all four optimizations simultaneously.
+The result is significantly reduced CPU time and memory allocation in one of SQL's most frequently used constructs.
 
 All of these changes maintain full compatibility with DataFusion's existing semantics and are covered by the existing test suite, demonstrating that performance optimization doesn't have to compromise correctness or require API changes.
