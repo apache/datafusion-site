@@ -1,6 +1,21 @@
 
 # redirect urls to the output directory
-# https://issues.apache.org/jira/browse/INFRA-27512
+# See https://issues.apache.org/jira/browse/INFRA-27512
 RewriteEngine On
+
+# Redirect extensionless, non-output, non-slash URLs to the trailing-slash form
+# (example: /blog/2025/12/15/post -> /blog/2025/12/15/post/).
 RewriteCond %{ENV:REDIRECT_STATUS} ^$
+# Skip URLs already rewritten once to avoid loops (example: /blog/output/...).
+RewriteCond %{REQUEST_URI} !/output/
+# Skip URLs that already end with a slash (example: /blog/2025/12/15/post/).
+RewriteCond %{REQUEST_URI} !/$
+# Skip URLs that look like files (have an extension) (example: /blog/theme/css/style.css).
+RewriteCond %{REQUEST_URI} !\.[^./]+$
+# Redirect example: /blog/2025/12/15/post -> /blog/2025/12/15/post/
+RewriteRule ^(.+)$ $1/ [R=301,L]
+
+RewriteCond %{ENV:REDIRECT_STATUS} ^$
+# Rewrite all requests to the Pelican output/ directory
+# (example: /blog/2025/12/15/post/ -> /blog/output/2025/12/15/post/).
 RewriteRule ^(.*)$ output/$1 [L]
