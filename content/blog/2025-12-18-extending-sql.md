@@ -31,7 +31,7 @@ limitations under the License.
 
 If you embed [DataFusion][apache datafusion] in your product, your users will eventually run SQL that DataFusion does not recognize. Not because the query is unreasonable, but because SQL in practice includes many dialects and system-specific statements.
 
-Suppose you store data as Parquet files on S3 and want users to attach an external catalog to query them. DataFusion has `CREATE EXTERNAL TABLE` for individual tables, but no built-in equivalent for catalogs. DuckDB has `ATTACH`, SQLite has its own variant, but what you really want is something more flexible:
+Suppose you store data as Parquet files on S3 and want users to attach an external catalog to query them. DataFusion has `CREATE EXTERNAL TABLE` for individual tables, but no built-in equivalent for catalogs. DuckDB has `ATTACH`, SQLite has its own variant, and maybe you really want something even more flexible:
 
 ```sql
 CREATE EXTERNAL CATALOG my_lake
@@ -71,9 +71,9 @@ This post explains where and how to hook into each stage. For complete, working 
 
 DataFusion turns SQL into executable work in stages:
 
-1. **Parse**: SQL text is parsed into an AST (`Statement` from [sqlparser-rs])
-2. **Logical planning**: `SqlToRel` converts the AST into a `LogicalPlan`
-3. **Physical planning**: The `PhysicalPlanner` turns the logical plan into an `ExecutionPlan`
+1. **Parse**: SQL text is parsed into an AST (`[Statement]` from [sqlparser-rs])
+2. **Logical planning**: `[SqlToRel]` converts the AST into a `[LogicalPlan]`
+3. **Physical planning**: The `[PhysicalPlanner]` turns the logical plan into an `[ExecutionPlan]`
 
 Each stage has extension points.
 
@@ -98,7 +98,7 @@ We will follow that pipeline order.
 
 ## 1) Extending parsing: wrapping `DFParser` for custom statements
 
-The `CREATE EXTERNAL CATALOG` syntax from the introduction fails at the parser because DataFusion only recognizes `CREATE EXTERNAL TABLE`. To support new statement-level syntax, you can **wrap `DFParser`**. Peek ahead to detect your custom syntax, handle it yourself, and delegate everything else to DataFusion.
+The `CREATE EXTERNAL CATALOG` syntax from the introduction fails at the parser because DataFusion only recognizes `CREATE EXTERNAL TABLE`. To support new statement-level syntax, you can **wrap `DFParser`**. Peek ahead **in the token stream** to detect your custom syntax, handle it yourself, and delegate everything else to DataFusion.
 
 The [`custom_sql_parser.rs`][custom_sql_parser.rs] example demonstrates this pattern:
 
@@ -214,13 +214,7 @@ Once installed, if your `CREATE EXTERNAL CATALOG` statement exposes tables with 
 
 ## 4) Extending the FROM clause: `RelationPlanner`
 
-Some extensions change what a _relation_ means, not just expressions or types. `RelationPlanner` intercepts FROM-clause constructs while SQL is being converted into a `LogicalPlan`.
-
-`RelationPlanner` originally came out of trying to build `MATCH_RECOGNIZE` support in DataFusion as a Datadog hackathon project. `MATCH_RECOGNIZE` is a complex SQL feature for detecting patterns in sequences of rows, and it made sense to prototype as an extension first. At the time, DataFusion had no extension point at the right stage of SQL-to-rel planning to intercept and reinterpret relations.
-
-[@theirix]'s `TABLESAMPLE` work ([#13563], [#17633]) demonstrated exactly where the gap was: the extension only worked when `TABLESAMPLE` appeared at the query root and any `TABLESAMPLE` inside a CTE or JOIN would error. That limitation motivated [#17843], which introduced `RelationPlanner` to intercept relations at any nesting level. The same hook now supports `PIVOT`, `UNPIVOT`, `TABLESAMPLE`, and can translate dialect-specific FROM-clause syntax (for example, bridging Trino constructs into DataFusion plans).
-
-This is how Datadog approaches compatibility work: build features in real systems first, then upstream the building blocks. A full `MATCH_RECOGNIZE` extension is now in progress, built on top of `RelationPlanner`, with the [`match_recognize.rs`][match_recognize.rs] example as a starting point.
+Some extensions change what a _relation_ means, not just expressions or types. `RelationPlanner` (available starting in DataFusion 52) intercepts FROM-clause constructs while SQL is being converted into a `LogicalPlan`.
 
 Once you have `RelationPlanner`, there are two main approaches to implementing your extension.
 
@@ -244,7 +238,7 @@ Because the output is a standard `LogicalPlan`, DataFusion's usual optimization 
 
 ### Strategy B: custom logical + physical (TABLESAMPLE)
 
-Sometimes rewriting is not sufficient. `TABLESAMPLE` returns a random subset of rows from a tableand is useful for approximations or debugging on large datasets. Because it requires runtime randomness, you cannot express it as a rewrite to existing operators. Instead, you need a custom logical node and physical operator to execute it.
+Sometimes rewriting is not sufficient. `TABLESAMPLE` returns a random subset of rows from a table and is useful for approximations or debugging on large datasets. Because it requires runtime randomness, you cannot express it as a rewrite to existing operators. Instead, you need a custom logical node and physical operator to execute it.
 
 The approach (shown in [`table_sample.rs`][table_sample.rs]):
 
@@ -270,17 +264,23 @@ This is the general pattern for custom FROM constructs that need runtime behavio
 
 **Full working example:** [`table_sample.rs`][table_sample.rs]
 
+### Background: Origin of the API
+
+`RelationPlanner` originally came out of trying to build `MATCH_RECOGNIZE` support in DataFusion as a Datadog hackathon project. `MATCH_RECOGNIZE` is a complex SQL feature for detecting patterns in sequences of rows, and it made sense to prototype as an extension first. At the time, DataFusion had no extension point at the right stage of SQL-to-rel planning to intercept and reinterpret relations.
+
+[@theirix]'s `TABLESAMPLE` work ([#13563], [#17633]) demonstrated exactly where the gap was: their extension only worked when `TABLESAMPLE` appeared at the query root and any `TABLESAMPLE` inside a CTE or JOIN would error. That limitation motivated [#17843], which introduced `RelationPlanner` to intercept relations at any nesting level. The same hook now supports `PIVOT`, `UNPIVOT`, `TABLESAMPLE`, and can translate dialect-specific FROM-clause syntax (for example, bridging Trino constructs into DataFusion plans).
+
+This is how Datadog approaches compatibility work: build features in real systems first, then upstream the building blocks. A full `MATCH_RECOGNIZE` extension is now in progress, built on top of `RelationPlanner`, with the [`match_recognize.rs`][match_recognize.rs] example as a starting point.
+
 ---
 
-## Putting it together
+## Summary: The Extensibility Workflow
 
-When building your own dialect extension, work incrementally. First make it parse, then give it meaning, then (only if necessary) add custom execution.
+DataFusion's SQL extensibility follows its processing pipeline. When building your own dialect extension, work incrementally:
 
-**Parsing** is the entry point. Wrap `DFParser`, intercept the keywords you care about, and produce either a standard `Statement` or your own `MyStatement`.
-
-**Meaning** comes from the planner traits. Which one depends on what you are adding: `ExprPlanner` for operators and functions, `TypePlanner` for data types, `RelationPlanner` for FROM-clause constructs.
-
-**Execution** is often unnecessary. Prefer rewrites to existing operators. If you do need custom runtime behavior (randomness, state, I/O), follow the `TABLESAMPLE` pattern and wrap a custom logical node in `LogicalPlan::Extension`, then convert it to an `ExecutionPlan` via `ExtensionPlanner`.
+1.  **Parse**: Use a parser wrapper to intercept custom syntax in the token stream. Produce either a standard `Statement` or your own application-specific command.
+2.  **Plan**: Implement the planning traits (`ExprPlanner`, `TypePlanner`, `RelationPlanner`) to give your syntax meaning.
+3.  **Execute**: Prefer rewrites to existing operators (like `PIVOT` to `CASE`). Only add custom physical operators via `ExtensionPlanner` when you need specific runtime behavior like randomness or specialized I/O.
 
 ---
 
@@ -293,7 +293,7 @@ let df = ctx.sql("SELECT * FROM t TABLESAMPLE (10 PERCENT)").await?;
 println!("{}", df.logical_plan().display_indent());
 ```
 
-### Use `EXPLAIN`
+### Use [`EXPLAIN`][EXPLAIN]
 
 ```sql
 EXPLAIN SELECT * FROM t TABLESAMPLE (10 PERCENT);
@@ -305,19 +305,11 @@ If your extension is not being invoked, it is usually visible in the logical pla
 
 ## When hooks aren't enough
 
-The extension points above cover many needs, but some areas still have limited or no hooks. If you are working in these parts of the SQL surface area, you may need to contribute upstream:
+While these extension points cover the majority of dialect needs, some deep architectural areas still have limited or no hooks. If you are working in these parts of the SQL surface area, you may need to contribute upstream:
 
 - Statement-level planning: [`statement.rs`][df_statement_planning]
 - JOIN planning: [`relation/join.rs`][df_join_planning]
 - TOP / FETCH clauses: [`select.rs`][df_select_planning], [`query.rs`][df_query_planning]
-
----
-
-## Recap
-
-DataFusion's SQL extensibility follows its processing pipeline. For new statement-level syntax, wrap `DFParser`. The three planning traits (`ExprPlanner`, `TypePlanner`, `RelationPlanner`) handle expressions, types, and FROM-clause constructs respectively. When you need custom runtime behavior that cannot be expressed as a rewrite, add a physical operator via `ExtensionPlanner`.
-
-For something like `ATTACH` or `CREATE EXTERNAL CATALOG ...`, start with the parser wrapper and treat it as an application command. Add queryable behavior later if you need it.
 
 ---
 
@@ -377,3 +369,9 @@ Thank you to [@jayzhan211] for designing and implementing the original `ExprPlan
 [df_join_planning]: https://github.com/apache/datafusion/blob/main/datafusion/sql/src/relation/join.rs
 [df_select_planning]: https://github.com/apache/datafusion/blob/main/datafusion/sql/src/select.rs
 [df_query_planning]: https://github.com/apache/datafusion/blob/main/datafusion/sql/src/query.rs
+[Statement]: https://docs.rs/sqlparser/latest/sqlparser/ast/enum.Statement.html
+[SqlToRel]: https://docs.rs/datafusion/latest/datafusion/sql/planner/struct.SqlToRel.html
+[LogicalPlan]: https://docs.rs/datafusion/latest/datafusion/logical_expr/enum.LogicalPlan.html
+[PhysicalPlanner]: https://docs.rs/datafusion/latest/datafusion/physical_planner/trait.PhysicalPlanner.html
+[ExecutionPlan]: https://docs.rs/datafusion/latest/datafusion/physical_plan/trait.ExecutionPlan.html
+[EXPLAIN]: https://datafusion.apache.org/user-guide/sql/explain.html
