@@ -1,6 +1,6 @@
 ---
 layout: post
-title: Optimizing CASE Expression Evaluation
+title: Optimizing SQL `CASE` Expression Evaluation
 date: 2025-11-11
 author: Pepijn Van Eeckhoudt
 categories: [features]
