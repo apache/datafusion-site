@@ -203,7 +203,7 @@ Again this involves a non-negligible amount of allocation and data copying.
 
 ## Performance Improvements
 
-### Optimization 1: Short-Circuit Early Exit (commit 7c215ed)
+### Optimization 1: Short-Circuit Early Exit
 
 The first optimization added early exit logic to the evaluation loop:
 
@@ -235,7 +235,7 @@ if let Some(else_expr) = &self.else_expr {
 
 **Impact**: For queries where early branches match all rows, this eliminates unnecessary branch evaluations and `ELSE` clause processing.
 
-### Optimization 2: Optimized Result Merging (commit e9431fc)
+### Optimization 2: Optimized Result Merging
 
 The second optimization fundamentally restructured how partial results are merged.
 Instead of using `zip()` after each branch to merge results into an output array, we now:
@@ -297,7 +297,7 @@ As rows are matched, the `remainder_batch` shrinks, making subsequent filter ope
 
 This new operation was initially developed specifically for DataFusion's `CASE` evaluation, but in the meantime has been generalized and moved into the `arrow-rs` crate as [`arrow_select::merge::merge_n`](https://docs.rs/arrow-select/57.1.0/arrow_select/merge/fn.merge_n.html).
 
-### Optimization 3: Column Projection (commit c3e49fb)
+### Optimization 3: Column Projection
 
 The third optimization addresses the "filtering unused columns" problem through projection.
 Before evaluating a CASE expression, we:
@@ -324,7 +324,7 @@ The projection logic is only applied when it would be beneficial (i.e., when the
 
 **Impact**: For wide tables with narrow CASE expressions, this dramatically reduces filtering overhead by removing copying of unused columns.
 
-### Optimization 4: Eliminating Scatter in Two-Branch Case (commit 32d2618)
+### Optimization 4: Eliminating Scatter in Two-Branch Case
 
 The final optimization targets a common pattern: `CASE WHEN condition THEN expr1 ELSE expr2 END`.
 
