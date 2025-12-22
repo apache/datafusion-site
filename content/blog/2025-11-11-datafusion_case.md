@@ -271,7 +271,7 @@ The final result array is obtained by running the arrays through the merge opera
    arrays        indices                                  result
 ```
 
-The main benefits of this merge operation are that the `scatter` step is eleminated enitrely, and instead of requiring
+The main benefits of this merge operation are that the `scatter` step is eliminated entirely, and instead of requiring
 a `zip` per branch only a single `merge_n` is done.
 
 Besides more efficient merging, we also maintain a progressively filtered `remainder_batch`.
