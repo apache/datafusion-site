@@ -51,7 +51,7 @@ figcaption {
 
 SQL's `CASE` expression is one of the few constructs the language provides to perform conditional logic.
 Its deceptively simple syntax hides significant implementation complexity.
-Over the past few weeks, we've landed a series of improvements to DataFusion's `CASE` expression evaluator that reduce both CPU time and memory allocations.
+Over the past few releases, we've landed a series of improvements to [Apache DataFusion]'s `CASE` expression evaluator that reduce both CPU time and memory allocations.
 This post walks through the original implementation, its performance bottlenecks, and how we addressed them step by step.
 Finally we'll also take a look at some future improvements to `CASE` that are in the works.
 
@@ -62,7 +62,7 @@ SQL supports two forms of CASE expressions:
 1. **Simple**: `CASE expr WHEN value1 THEN result1 WHEN value2 THEN result2 ... END`
 2. **Searched**: `CASE WHEN condition1 THEN result1 WHEN condition2 THEN result2 ... END`
 
-The simple form evaluates an expression once for each input row and then tests that value against the constants (or expressions) in each `WHEN` clause using equality comparisons.
+The simple form evaluates an expression once for each input row and then tests that value against the expressions (typically constants) in each `WHEN` clause using equality comparisons.
 Think of it as a limited Rust `match` expression.
 
 Here's a simple example:
@@ -143,7 +143,7 @@ for (when_expr, then_expr) in &self.when_then_expr {
 }
 ```
 
-While correct, this implementation had several performance issues mostly related to the usage of `evaluate_selection`.
+While correct, this implementation has significant room for optimization, mostly related to the usage of `evaluate_selection`.
 To understand why, we need to dig a little deeper into the implementation of that function.
 Here's a simplified version of it that captures the relevant parts:
 
