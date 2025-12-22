@@ -254,7 +254,7 @@ In the example below, three `WHEN/THEN` branches produced results.
 The first branch produced the result `A` for 2, the second produced `B` for row 1, and the third produced `C` and `D` for rows 4 and 5.
 The final result array is obtained by running the arrays through the merge operation.
 
-```aiignore
+```
 ┌───────────┐  ┌─────────┐                             ┌─────────┐
 │┌─────────┐│  │   None  │                             │   NULL  │
 ││    A    ││  ├─────────┤                             ├─────────┤
@@ -373,5 +373,3 @@ Through four targeted optimizations, we've transformed CASE expression evaluatio
 
 These improvements compound: a CASE expression on a wide table with multiple branches and early matches benefits from all four optimizations simultaneously.
 The result is significantly reduced CPU time and memory allocation in one of SQL's most frequently used constructs.
-
-All of these changes maintain full compatibility with DataFusion's existing semantics and are covered by the existing test suite, demonstrating that performance optimization doesn't have to compromise correctness or require API changes.
