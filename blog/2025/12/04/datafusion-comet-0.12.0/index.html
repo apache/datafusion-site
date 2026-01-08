@@ -1,0 +1,230 @@
+<!doctype html>
+<html class="no-js" lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apache DataFusion Comet 0.12.0 Release - Apache DataFusion Blog</title>
+<link href="/blog/css/bootstrap.min.css" rel="stylesheet">
+<link href="/blog/css/fontawesome.all.min.css" rel="stylesheet">
+<link href="/blog/css/headerlink.css" rel="stylesheet">
+<link href="/blog/highlight/default.min.css" rel="stylesheet">
+<link href="/blog/css/app.css" rel="stylesheet">
+<script src="/blog/highlight/highlight.js"></script>
+<script>hljs.highlightAll();</script>  </head>
+  <body class="d-flex flex-column h-100">
+  <main class="flex-shrink-0">
+<!-- nav bar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark" aria-label="Fifth navbar example">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/blog"><img src="/blog/images/logo_original4x.png" style="height: 32px;"/> Apache DataFusion Blog</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarADP" aria-controls="navbarADP" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarADP">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/about.html">About</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/feed.xml">RSS</a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>    
+<!-- article contents -->
+<div id="contents">
+  <div class="bg-white p-4 p-md-5 rounded">
+    <div class="row justify-content-center">
+      <div class="col-12 col-md-8 main-content">
+        <h1>
+          Apache DataFusion Comet 0.12.0 Release
+        </h1>
+        <p>Posted on: Thu 04 December 2025 by pmc</p>
+
+        <aside class="toc-container d-md-none mb-2">
+          <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#release-highlights">Release Highlights</a><ul>
+<li><a href="#experimental-native-apache-iceberg-scan-support">Experimental Native Apache Iceberg Scan Support</a></li>
+<li><a href="#code-architecture-improvements">Code Architecture Improvements</a></li>
+<li><a href="#new-sql-functions">New SQL Functions</a></li>
+<li><a href="#new-operators">New Operators</a></li>
+<li><a href="#configuration-and-usability-improvements">Configuration and Usability Improvements</a></li>
+<li><a href="#bug-fixes">Bug Fixes</a></li>
+<li><a href="#documentation-improvements">Documentation Improvements</a></li>
+<li><a href="#dependency-updates">Dependency Updates</a></li>
+<li><a href="#spark-compatibility">Spark Compatibility</a></li>
+</ul>
+</li>
+<li><a href="#getting-involved">Getting Involved</a></li>
+</ul>
+</div>
+        </aside>
+
+        <!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+-->
+
+<p>The Apache DataFusion PMC is pleased to announce version 0.12.0 of the <a href="https://datafusion.apache.org/comet/">Comet</a> subproject.</p>
+<p>Comet is an accelerator for Apache Spark that translates Spark physical plans to DataFusion physical plans for
+improved performance and efficiency without requiring any code changes.</p>
+<p>This release covers approximately four weeks of development work and is the result of merging 105 PRs from 13
+contributors. See the <a href="https://github.com/apache/datafusion-comet/blob/main/dev/changelog/0.12.0.md">change log</a> for more information.</p>
+<h2 id="release-highlights">Release Highlights<a class="headerlink" href="#release-highlights" title="Permanent link">¶</a></h2>
+<h3 id="experimental-native-apache-iceberg-scan-support">Experimental Native Apache Iceberg Scan Support<a class="headerlink" href="#experimental-native-apache-iceberg-scan-support" title="Permanent link">¶</a></h3>
+<p>Comet has a new, experimental, <a href="https://github.com/apache/datafusion-comet/pull/2528">native Iceberg scan</a>. This work relies on <a href="https://github.com/apache/iceberg-rust">iceberg-rust</a> and the Parquet reader from <a href="https://github.com/apache/arrow-rs">arrow-rs</a> that Comet already uses to great effect. Comet’s <a href="https://datafusion.apache.org/comet/user-guide/0.12/iceberg.html">existing Iceberg integration</a> relies on a modified Iceberg Java build to accelerate Parquet decoding. This new approach allows unmodified Iceberg Java to handle query planning (<em>i.e.</em>, catalog access, partition pruning, etc.), then Comet serializes Iceberg <code>FileScanTask</code> objects directly to iceberg-rust, enabling native execution of Iceberg table scans through DataFusion.</p>
+<p>This represents a significant step forward in Comet's support for data lakehouse architectures and expands the range of workloads that can benefit from native acceleration. Please take a look at the PR and Comet’s documentation to understand the current limitations and try it on your workloads! We are eager for feedback on this approach.</p>
+<h3 id="code-architecture-improvements">Code Architecture Improvements<a class="headerlink" href="#code-architecture-improvements" title="Permanent link">¶</a></h3>
+<p>This release includes significant refactoring to improve code maintainability and extensibility, and we will continue those efforts into 0.13.0 development:</p>
+<ul>
+<li><strong>Unified operator serialization</strong>: The <a href="https://github.com/apache/datafusion-comet/pull/2768">CometExecRule refactor</a> unifies CometNativeExec creation with serialization through the new <code>CometOperatorSerde</code> trait</li>
+<li><strong>Expression serde refactoring</strong>: Multiple PRs (<a href="https://github.com/apache/datafusion-comet/pull/2738">#2738</a>, <a href="https://github.com/apache/datafusion-comet/pull/2741">#2741</a>, <a href="https://github.com/apache/datafusion-comet/pull/2791">#2791</a>) moved expression serialization logic out of <code>QueryPlanSerde</code> into specialized traits</li>
+<li><strong>Aggregate expression improvements</strong>: <a href="https://github.com/apache/datafusion-comet/pull/2777">Added getSupportLevel to CometAggregateExpressionSerde trait</a> for better aggregate function handling</li>
+</ul>
+<p>These architectural improvements make it easier for contributors to add new operators and expressions while reducing code complexity.</p>
+<h3 id="new-sql-functions">New SQL Functions<a class="headerlink" href="#new-sql-functions" title="Permanent link">¶</a></h3>
+<p>The following SQL functions are now supported:</p>
+<ul>
+<li><a href="https://github.com/apache/datafusion-comet/pull/2604"><code>concat</code></a> - String concatenation</li>
+<li><a href="https://github.com/apache/datafusion-comet/pull/2689"><code>abs</code></a> - Absolute value</li>
+<li><a href="https://github.com/apache/datafusion-comet/pull/2471"><code>sha1</code></a> - SHA-1 hash function</li>
+<li><a href="https://github.com/apache/datafusion-comet/pull/2755"><code>cot</code></a> - Cotangent function</li>
+<li><a href="https://github.com/apache/datafusion-comet/pull/2784">Hyperbolic trigonometric functions</a> - sinh, cosh, tanh, and their inverse functions</li>
+</ul>
+<h3 id="new-operators">New Operators<a class="headerlink" href="#new-operators" title="Permanent link">¶</a></h3>
+<ul>
+<li><a href="https://github.com/apache/datafusion-comet/pull/2735"><code>CometLocalTableScanExec</code></a> - Native support for local table scans, eliminating fallback to Spark for small, in-memory datasets</li>
+</ul>
+<h3 id="configuration-and-usability-improvements">Configuration and Usability Improvements<a class="headerlink" href="#configuration-and-usability-improvements" title="Permanent link">¶</a></h3>
+<ul>
+<li><strong>Simplified on-heap configuration</strong>: <a href="https://github.com/apache/datafusion-comet/pull/2599">Simplified on-heap memory configuration</a> for easier setup</li>
+<li><strong>Extended explain format</strong>: <a href="https://github.com/apache/datafusion-comet/pull/2644">Renamed and improved COMET_EXTENDED_EXPLAIN_FORMAT</a> with better defaults</li>
+<li><strong>Environment variable support</strong>: <a href="https://github.com/apache/datafusion-comet/pull/2722">Improved framework for setting configs with environment variables</a></li>
+<li><strong>Native config passing</strong>: <a href="https://github.com/apache/datafusion-comet/pull/2801">All Comet configs now passed to native plan</a></li>
+<li><strong>Config categorization</strong>: <a href="https://github.com/apache/datafusion-comet/pull/2740">Categorized testing configs</a> and added notes about known timezone issues</li>
+<li><strong>Removed legacy configs</strong>: <a href="https://github.com/apache/datafusion-comet/pull/2786">Removed COMET_EXPR_ALLOW_INCOMPATIBLE config</a> to simplify configuration</li>
+</ul>
+<h3 id="bug-fixes">Bug Fixes<a class="headerlink" href="#bug-fixes" title="Permanent link">¶</a></h3>
+<p>This release includes numerous bug fixes:</p>
+<ul>
+<li><a href="https://github.com/apache/datafusion-comet/pull/2606">Fixed None.get in stringDecode</a> when binary child cannot be converted</li>
+<li><a href="https://github.com/apache/datafusion-comet/pull/2630">Proper fallback for lpad/rpad with unsupported arguments</a></li>
+<li><a href="https://github.com/apache/datafusion-comet/pull/2634">Fixed trunc/date_trunc with unsupported format strings</a></li>
+<li><a href="https://github.com/apache/datafusion-comet/pull/2675">Corrected single partition handling in native_datafusion</a></li>
+<li><a href="https://github.com/apache/datafusion-comet/pull/2687">Fixed LeftSemi join handling</a> - do not replace SMJ with HJ</li>
+<li><a href="https://github.com/apache/datafusion-comet/pull/2718">Fixed CometLiteral class cast exception with arrays</a></li>
+<li><a href="https://github.com/apache/datafusion-comet/pull/2716">Fixed missing SortOrder fallback reason in range partitioning</a></li>
+<li><a href="https://github.com/apache/datafusion-comet/pull/2728">Improved checkSparkMaybeThrows to compare results in success case</a></li>
+<li><a href="https://github.com/apache/datafusion-comet/pull/2643">Fixed null handling in CometVector implementations</a></li>
+</ul>
+<h3 id="documentation-improvements">Documentation Improvements<a class="headerlink" href="#documentation-improvements" title="Permanent link">¶</a></h3>
+<ul>
+<li><a href="https://github.com/apache/datafusion-comet/pull/2668">Added FFI documentation to contributor guide</a></li>
+<li><a href="https://github.com/apache/datafusion-comet/pull/2704">Updated contributor guide for adding new expressions</a> and <a href="https://github.com/apache/datafusion-comet/pull/2758">operators</a></li>
+<li><a href="https://github.com/apache/datafusion-comet/pull/2587">Improved documentation layout</a> and <a href="https://github.com/apache/datafusion-comet/pull/2597">navigation</a></li>
+<li><a href="https://github.com/apache/datafusion-comet/pull/2783">Added prettier enforcement</a> for consistent markdown formatting</li>
+<li><a href="https://github.com/apache/datafusion-comet/pull/2779">CI check to ensure generated docs are in sync</a></li>
+<li>Various documentation updates for <a href="https://github.com/apache/datafusion-comet/pull/2694">SortOrder expressions</a>, <a href="https://github.com/apache/datafusion-comet/pull/2742">LocalTableScan and WindowExec</a>, and <a href="https://github.com/apache/datafusion-comet/pull/2712">Spark SQL tests</a></li>
+</ul>
+<h3 id="dependency-updates">Dependency Updates<a class="headerlink" href="#dependency-updates" title="Permanent link">¶</a></h3>
+<ul>
+<li><a href="https://github.com/apache/datafusion-comet/pull/2574">Upgraded to Spark 3.5.7</a></li>
+<li><a href="https://github.com/apache/datafusion-comet/pull/2605">Upgraded to DataFusion 50.3.0</a></li>
+<li><a href="https://github.com/apache/datafusion-comet/pull/2608">Upgraded Parquet from 56.0.0 to 56.2.0</a></li>
+<li>Various other dependency updates via Dependabot</li>
+</ul>
+<h3 id="spark-compatibility">Spark Compatibility<a class="headerlink" href="#spark-compatibility" title="Permanent link">¶</a></h3>
+<ul>
+<li>Spark 3.4.3 with JDK 11 &amp; 17, Scala 2.12 &amp; 2.13</li>
+<li>Spark 3.5.4 through 3.5.7 with JDK 11 &amp; 17, Scala 2.12 &amp; 2.13</li>
+<li>Spark 4.0.1 with JDK 17, Scala 2.13</li>
+</ul>
+<p>We are looking for help from the community to fully support Spark 4.0.1. See <a href="https://github.com/apache/datafusion-comet/issues/1637">EPIC: Support 4.0.0</a> for more information.</p>
+<h2 id="getting-involved">Getting Involved<a class="headerlink" href="#getting-involved" title="Permanent link">¶</a></h2>
+<p>The Comet project welcomes new contributors. We use the same <a href="https://datafusion.apache.org/contributor-guide/communication.html#slack-and-discord">Slack and Discord</a> channels as the main DataFusion
+project and have a weekly <a href="https://docs.google.com/document/d/1NBpkIAuU7O9h8Br5CbFksDhX-L9TyO9wmGLPMe0Plc8/edit?usp=sharing">DataFusion video call</a>.</p>
+<p>The easiest way to get involved is to test Comet with your current Spark jobs and file issues for any bugs or
+performance regressions that you find. See the <a href="https://datafusion.apache.org/comet/user-guide/installation.html">Getting Started</a> guide for instructions on downloading and installing
+Comet.</p>
+<p>There are also many <a href="https://github.com/apache/datafusion-comet/contribute">good first issues</a> waiting for contributions.</p>
+
+<!--
+  Comments Section
+  Loaded only after explicit visitor consent to comply with ASF policy.
+-->
+
+<div id="comments">
+  <hr>
+  <h3>Comments</h3>
+
+  <!-- Local loader script -->
+  <script src="/content/js/giscus-consent.js" defer></script>
+
+  <!-- Consent UI -->
+  <div id="giscus-consent">
+    <p>
+        We use <a href="https://giscus.app/">Giscus</a> for comments, powered by GitHub Discussions.
+        To respect your privacy, Giscus and comments will load only if you click "Show Comments"
+    </p>
+
+    <div class="consent-actions">
+      <button id="giscus-load" type="button">Show Comments</button>
+      <button id="giscus-revoke" type="button" hidden>Hide Comments</button>
+    </div>
+
+    <noscript>JavaScript is required to load comments from Giscus.</noscript>
+  </div>
+
+  <!-- Container where Giscus will render -->
+  <div id="comment-thread"></div>
+</div>      </div>
+      <aside class="toc-container d-none d-md-block col-md-4 col-xl-3 ms-xl-2">
+        <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#release-highlights">Release Highlights</a><ul>
+<li><a href="#experimental-native-apache-iceberg-scan-support">Experimental Native Apache Iceberg Scan Support</a></li>
+<li><a href="#code-architecture-improvements">Code Architecture Improvements</a></li>
+<li><a href="#new-sql-functions">New SQL Functions</a></li>
+<li><a href="#new-operators">New Operators</a></li>
+<li><a href="#configuration-and-usability-improvements">Configuration and Usability Improvements</a></li>
+<li><a href="#bug-fixes">Bug Fixes</a></li>
+<li><a href="#documentation-improvements">Documentation Improvements</a></li>
+<li><a href="#dependency-updates">Dependency Updates</a></li>
+<li><a href="#spark-compatibility">Spark Compatibility</a></li>
+</ul>
+</li>
+<li><a href="#getting-involved">Getting Involved</a></li>
+</ul>
+</div>
+      </aside>
+    </div>
+  </div>
+</div>    
+    <!-- footer -->
+    <div class="row g-0">
+      <div class="col-12">
+        <p style="font-style: italic; font-size: 0.8rem; text-align: center;">
+          Copyright 2026, <a href="https://www.apache.org/">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a>.<br/>
+          Apache&reg; and the Apache feather logo are trademarks of The Apache Software Foundation.
+        </p>
+      </div>
+    </div>
+    <script src="/blog/js/bootstrap.bundle.min.js"></script>  </main>
+  </body>
+</html>
