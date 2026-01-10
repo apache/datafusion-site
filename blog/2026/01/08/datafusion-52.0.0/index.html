@@ -225,9 +225,14 @@ own mutation logic.</p>
 </code></pre>
 <p>Related PRs: <a href="https://github.com/apache/datafusion/pull/19142">#19142</a></p>
 <h3 id="coalescebatchesexec-removal-and-integrated-batch-coalescing">CoalesceBatchesExec removal and integrated batch coalescing<a class="headerlink" href="#coalescebatchesexec-removal-and-integrated-batch-coalescing" title="Permanent link">¶</a></h3>
-<p>DataFusion continues the work to remove the standalone CoalesceBatchesExec
-operator (<a href="https://github.com/apache/datafusion/issues/18779">#18779</a>). Batch coalescing is now integrated into multiple operators,
-reducing plan complexity and avoiding unnecessary batch materialization.</p>
+<p>DataFusion continues the work from the CoalesceBatchesExec epic (<a href="https://github.com/apache/datafusion/issues/18779">#18779</a>). The
+standalone <code>CoalesceBatchesExec</code> operator existed to ensure batches were large
+enough for vectorized execution, and it was inserted after filter-like
+operators such as <code>FilterExec</code>, <code>HashJoinExec</code>, and <code>RepartitionExec</code>. However,
+it also blocked other optimizations (like pushing limits through joins) and
+made optimizer rules more complex. This release integrates coalescing into the
+operators themselves and relies on Arrow's coalesce kernels, reducing plan
+complexity while keeping batch sizes efficient.</p>
 <p>Diagram:</p>
 <pre><code>Before:
   Scan -&gt; CoalesceBatches -&gt; Filter -&gt; CoalesceBatches -&gt; Join
@@ -235,7 +240,9 @@ reducing plan complexity and avoiding unnecessary batch materialization.</p>
 After:
   Scan -&gt; Filter (coalesce inline) -&gt; Join (coalesce inline)
 </code></pre>
-<p>Related PRs: <a href="https://github.com/apache/datafusion/pull/18540">#18540</a>, <a href="https://github.com/apache/datafusion/pull/18604">#18604</a>, <a href="https://github.com/apache/datafusion/pull/18630">#18630</a>, <a href="https://github.com/apache/datafusion/pull/18972">#18972</a>, <a href="https://github.com/apache/datafusion/pull/19002">#19002</a>, <a href="https://github.com/apache/datafusion/pull/19342">#19342</a>, <a href="https://github.com/apache/datafusion/pull/19239">#19239</a></p>
+<p>Related PRs: <a href="https://github.com/apache/datafusion/pull/18540">#18540</a>, <a href="https://github.com/apache/datafusion/pull/18604">#18604</a>, <a href="https://github.com/apache/datafusion/pull/18630">#18630</a>, <a href="https://github.com/apache/datafusion/pull/18972">#18972</a>, <a href="https://github.com/apache/datafusion/pull/19002">#19002</a>, <a href="https://github.com/apache/datafusion/pull/19342">#19342</a>, <a href="https://github.com/apache/datafusion/pull/19239">#19239</a>
+Thanks to <a href="https://github.com/Tim-53">Tim-53</a>, <a href="https://github.com/Dandandan">Dandandan</a>, <a href="https://github.com/jizezhang">jizezhang</a>, and <a href="https://github.com/feniljain">feniljain</a> for implementing
+this feature.</p>
 <h2 id="upgrade-guide-and-changelog">Upgrade Guide and Changelog<a class="headerlink" href="#upgrade-guide-and-changelog" title="Permanent link">¶</a></h2>
 <p>Upgrading to 52.0.0 should be straightforward for most users. Please review the
 <a href="https://datafusion.apache.org/library-user-guide/upgrading.html">Upgrade Guide</a>
