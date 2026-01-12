@@ -1,7 +1,7 @@
 ---
 layout: post
 title: Extending SQL in DataFusion: from ->> to TABLESAMPLE
-date: 2025-12-18
+date: 2026-01-12
 author: Geoffrey Claude (Datadog)
 categories: [tutorial]
 ---
