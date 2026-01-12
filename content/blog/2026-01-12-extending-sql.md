@@ -27,8 +27,6 @@ limitations under the License.
 
 [TOC]
 
-## When standard SQL isn't enough
-
 If you embed [DataFusion][apache datafusion] in your product, your users will eventually run SQL that DataFusion does not recognize. Not because the query is unreasonable, but because SQL in practice includes many dialects and system-specific statements.
 
 Suppose you store data as Parquet files on S3 and want users to attach an external catalog to query them. DataFusion has `CREATE EXTERNAL TABLE` for individual tables, but no built-in equivalent for catalogs. DuckDB has `ATTACH`, SQLite has its own variant, and maybe you really want something even more flexible:
