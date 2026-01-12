@@ -69,9 +69,9 @@ This post explains where and how to hook into each stage. For complete, working 
 
 DataFusion turns SQL into executable work in stages:
 
-1. **Parse**: SQL text is parsed into an AST (`[Statement]` from [sqlparser-rs])
-2. **Logical planning**: `[SqlToRel]` converts the AST into a `[LogicalPlan]`
-3. **Physical planning**: The `[PhysicalPlanner]` turns the logical plan into an `[ExecutionPlan]`
+1. **Parse**: SQL text is parsed into an AST ([Statement] from [sqlparser-rs])
+2. **Logical planning**: [SqlToRel] converts the AST into a [LogicalPlan]
+3. **Physical planning**: The [PhysicalPlanner] turns the logical plan into an [ExecutionPlan]
 
 Each stage has extension points.
 
