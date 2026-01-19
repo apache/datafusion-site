@@ -18,12 +18,11 @@ limitations under the License.
 {% endcomment %}
 --&gt;
 
-&lt;h2 id="introduction"&gt;Introduction&lt;a class="headerlink" href="#introduction" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;We are proud to announce the release of &lt;a href="https://crates.io/crates/datafusion/52.0.0"&gt;DataFusion 52.0.0&lt;/a&gt;. This post highlights
 some of the major improvements since &lt;a href="https://datafusion.apache.org/blog/2025/11/25/datafusion-51.0.0/"&gt;DataFusion 51.0.0&lt;/a&gt;. The complete list of
-changes is available in the &lt;a href="https://github.com/apache/datafusion/blob/branch-52/dev/changelog/52.0.0.md"&gt;changelog&lt;/a&gt;. Thanks to the &lt;a href="https://github.com/apache/datafusion/blob/branch-52/dev/changelog/52.0.0.md#credits"&gt;120 contributors&lt;/a&gt; for
+changes is available in the &lt;a href="https://github.com/apache/datafusion/blob/branch-52/dev/changelog/52.0.0.md"&gt;changelog&lt;/a&gt;. Thanks to the [121 contributors] for
 making this release possible.&lt;/p&gt;
-&lt;p&gt;TODO: confirm the release …&lt;/p&gt;</summary><content type="html">&lt;!--
+&lt;p&gt;TODO: confirm the release date …&lt;/p&gt;</summary><content type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -42,33 +41,21 @@ limitations under the License.
 {% endcomment %}
 --&gt;
 
-&lt;h2 id="introduction"&gt;Introduction&lt;a class="headerlink" href="#introduction" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;We are proud to announce the release of &lt;a href="https://crates.io/crates/datafusion/52.0.0"&gt;DataFusion 52.0.0&lt;/a&gt;. This post highlights
 some of the major improvements since &lt;a href="https://datafusion.apache.org/blog/2025/11/25/datafusion-51.0.0/"&gt;DataFusion 51.0.0&lt;/a&gt;. The complete list of
-changes is available in the &lt;a href="https://github.com/apache/datafusion/blob/branch-52/dev/changelog/52.0.0.md"&gt;changelog&lt;/a&gt;. Thanks to the &lt;a href="https://github.com/apache/datafusion/blob/branch-52/dev/changelog/52.0.0.md#credits"&gt;120 contributors&lt;/a&gt; for
+changes is available in the &lt;a href="https://github.com/apache/datafusion/blob/branch-52/dev/changelog/52.0.0.md"&gt;changelog&lt;/a&gt;. Thanks to the [121 contributors] for
 making this release possible.&lt;/p&gt;
 &lt;p&gt;TODO: confirm the release date for 52.0.0 and update the front matter if needed.&lt;/p&gt;
 &lt;h2 id="performance-improvements"&gt;Performance Improvements 🚀&lt;a class="headerlink" href="#performance-improvements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
-&lt;p&gt;We continue to make significant performance improvements in DataFusion, both in
-the core engine and in the Parquet reader. This release includes faster &lt;code&gt;CASE&lt;/code&gt;
-expressions, better hash performance for string types, and continued string
-function optimizations.&lt;/p&gt;
+&lt;p&gt;We continue to make significant performance improvements in DataFusion. This
+release includes faster &lt;code&gt;CASE&lt;/code&gt; expressions (see below), a new SortMergeJoin,
+automatic caching of metadata, statistics, and listing results for ListingTable,
+improved hashing and grouping performance for string types, and string function
+optimizations.&lt;/p&gt;
 &lt;h3 id="performance-chart-todo"&gt;Performance Chart (TODO)&lt;a class="headerlink" href="#performance-chart-todo" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;TODO: add the 52.0.0 performance chart and update the caption.&lt;/p&gt;
 &lt;p&gt;&lt;img alt="Performance over time" class="img-responsive" src="/blog/images/datafusion-52.0.0/performance_over_time_clickbench.png" width="100%"/&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Figure 1&lt;/strong&gt;: TODO: update caption for 52.0.0 benchmarking results.&lt;/p&gt;
-&lt;h2 id="major-features"&gt;Major Features ✨&lt;a class="headerlink" href="#major-features" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
-&lt;h3 id="arrow-ipc-stream-file-support"&gt;Arrow IPC Stream file support&lt;a class="headerlink" href="#arrow-ipc-stream-file-support" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
-&lt;p&gt;DataFusion can now read Arrow IPC stream files (&lt;a href="https://github.com/apache/datafusion/pull/18457"&gt;#18457&lt;/a&gt;). This expands
-interoperability with systems that emit Arrow streams directly, making it
-simpler to ingest Arrow-native data without conversion.&lt;/p&gt;
-&lt;p&gt;Example (TODO: confirm exact syntax for IPC stream format selection):&lt;/p&gt;
-&lt;pre&gt;&lt;code class="language-sql"&gt;-- TODO: confirm whether the format name is `arrow`, `ipc_stream`, or implicit.
-CREATE EXTERNAL TABLE ipc_events
-STORED AS ARROW
-LOCATION 's3://bucket/events.arrow';
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/18457"&gt;#18457&lt;/a&gt;&lt;/p&gt;
 &lt;h3 id="faster-case-expression-evaluation"&gt;Faster &lt;code&gt;CASE&lt;/code&gt; expression evaluation&lt;a class="headerlink" href="#faster-case-expression-evaluation" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;DataFusion 52 completes major work from the CASE performance epic (&lt;a href="https://github.com/apache/datafusion/issues/18075"&gt;#18075&lt;/a&gt;).
 Lookup-table based evaluation avoids repeated expression evaluation and reduces
@@ -85,48 +72,84 @@ FROM jobs
 GROUP BY 1;
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/18183"&gt;#18183&lt;/a&gt;&lt;/p&gt;
+&lt;h3 id="rewritten-merge-join"&gt;Rewritten merge join&lt;a class="headerlink" href="#rewritten-merge-join" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;DataFusion 52 includes a rewrite of the sort-merge join output buffering to
+avoid excessive &lt;code&gt;concat_batches&lt;/code&gt; work and to use &lt;code&gt;BatchCoalescer&lt;/code&gt; internally and
+for final output. This change targets pathological slowdowns like the reported
+LeftAnti join case in &lt;a href="https://github.com/apache/datafusion/issues/18487"&gt;#18487&lt;/a&gt;, which also affected Comet workloads that rely on
+SMJ. Benchmarks in &lt;a href="https://github.com/apache/datafusion/pull/18875"&gt;#18875&lt;/a&gt; show dramatic gains for TPC-H Q21 (moving from
+minutes to milliseconds) while leaving most other queries unchanged or modestly
+faster, and the update is fully internal with no user-facing API changes.&lt;/p&gt;
+&lt;h3 id="caching-improvements"&gt;Caching Improvements&lt;a class="headerlink" href="#caching-improvements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;DataFusion also includes several additional caching improvements in this release.&lt;/p&gt;
+&lt;p&gt;First it includes a new statistics cache for Parquet Metadata that avoids repeatedly
+calculating statistics for Parquet backed files. This significantly improves
+planning time for certain queries. You can see the contents of the new cache using the
+&lt;a href="https://datafusion.apache.org/user-guide/cli/functions.html#statistics-cache"&gt;statistics_cache&lt;/a&gt; function in the CLI:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;select * from statistics_cache();
++------------------+---------------------+-----------------+------------------------+---------+-----------------+-------------+--------------------+-----------------------+
+| path             | file_modified       | file_size_bytes | e_tag                  | version | num_rows        | num_columns | table_size_bytes   | statistics_size_bytes |
++------------------+---------------------+-----------------+------------------------+---------+-----------------+-------------+--------------------+-----------------------+
+| .../hits.parquet | 2022-06-25T22:22:22 | 14779976446     | 0-5e24d1ee16380-370f48 | NULL    | Exact(99997497) | 105         | Exact(36445943240) | 0                     |
++------------------+---------------------+-----------------+------------------------+---------+-----------------+-------------+--------------------+-----------------------+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/18971"&gt;#18971&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/19054"&gt;#19054&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;DataFusion and includes a memory-bound, prefix aware list-files cache by
+default. You can see the contents of the new cache using the &lt;a href="https://datafusion.apache.org/user-guide/cli/functions.html#list-files-cache"&gt;list_files_cache&lt;/a&gt;
+function in the CLI:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;create external table overturemaps
+stored as parquet
+location 's3://overturemaps-us-west-2/release/2025-12-17.0/theme=base/type=infrastructure';
+0 row(s) fetched.
+&amp;gt; select table, path, metadata_size_bytes, expires_in, unnest(metadata_list)['file_size_bytes'] as file_size_bytes, unnest(metadata_list)['e_tag'] as e_tag from list_files_cache() limit 10;
++--------------+-----------------------------------------------------+---------------------+-----------------------------------+-----------------+---------------------------------------+
+| table        | path                                                | metadata_size_bytes | expires_in                        | file_size_bytes | e_tag                                 |
++--------------+-----------------------------------------------------+---------------------+-----------------------------------+-----------------+---------------------------------------+
+| overturemaps | release/2025-12-17.0/theme=base/type=infrastructure | 2750                | 0 days 0 hours 0 mins 25.264 secs | 999055952       | "35fc8fbe8400960b54c66fbb408c48e8-60" |
+| overturemaps | release/2025-12-17.0/theme=base/type=infrastructure | 2750                | 0 days 0 hours 0 mins 25.264 secs | 975592768       | "8a16e10b722681cdc00242564b502965-59" |
+...
+| overturemaps | release/2025-12-17.0/theme=base/type=infrastructure | 2750                | 0 days 0 hours 0 mins 25.264 secs | 1016732378      | "6d70857a0473ed9ed3fc6e149814168b-61" |
+| overturemaps | release/2025-12-17.0/theme=base/type=infrastructure | 2750                | 0 days 0 hours 0 mins 25.264 secs | 991363784       | "c9cafb42fcbb413f851691c895dd7c2b-60" |
+| overturemaps | release/2025-12-17.0/theme=base/type=infrastructure | 2750                | 0 days 0 hours 0 mins 25.264 secs | 1032469715      | "7540252d0d67158297a67038a3365e0f-62" |
++--------------+-----------------------------------------------------+---------------------+-----------------------------------+-----------------+---------------------------------------+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/18146"&gt;#18146&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/18855"&gt;#18855&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/19366"&gt;#19366&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/19298"&gt;#19298&lt;/a&gt;, &lt;/p&gt;
+&lt;h2 id="major-features"&gt;Major Features ✨&lt;a class="headerlink" href="#major-features" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;h3 id="arrow-ipc-stream-file-support"&gt;Arrow IPC Stream file support&lt;a class="headerlink" href="#arrow-ipc-stream-file-support" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;DataFusion can now read Arrow IPC stream files (&lt;a href="https://github.com/apache/datafusion/pull/18457"&gt;#18457&lt;/a&gt;). This expands
+interoperability with systems that emit Arrow streams directly, making it
+simpler to ingest Arrow-native data without conversion. Thanks to &lt;a href="https://github.com/corasaurus-hex"&gt;corasaurus-hex&lt;/a&gt;
+for implementing this feature.&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;CREATE EXTERNAL TABLE ipc_events
+STORED AS ARROW
+LOCATION 's3://bucket/events.arrow';
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/18457"&gt;#18457&lt;/a&gt;&lt;/p&gt;
 &lt;h3 id="extensible-sql-planning-with-relation-planner-extensions"&gt;Extensible SQL planning with relation planner extensions&lt;a class="headerlink" href="#extensible-sql-planning-with-relation-planner-extensions" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;DataFusion now supports relation planner extensions for custom SQL syntax and
 planning logic (&lt;a href="https://github.com/apache/datafusion/issues/17824"&gt;#17824&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/17843"&gt;#17843&lt;/a&gt;). This lets downstream projects inject their
-own planning behavior without forking the SQL planner, which is critical for
-dialect extensions and custom table references.&lt;/p&gt;
-&lt;p&gt;Diagram:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;SQL text
-  |  (custom relation planner extension)
-  v
-Logical plan
-  |  (DataFusion optimizers)
-  v
-Physical plan
+own planning behavior without forking the SQL planner. As explained in the
+&lt;a href="https://datafusion.apache.org/blog/2026/01/12/extending-sql/"&gt;Extending SQL in DataFusion Blog&lt;/a&gt;, you can now customize DataFusion with
+support for almost any SQL syntax, such as:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;-- Postgres-style JSON operators
+SELECT payload-&amp;gt;'user'-&amp;gt;&amp;gt;'id' FROM logs;
+-- MySQL-specific types
+SELECT DATETIME '2001-01-01 18:00:00';
+-- Statistical sampling
+SELECT * FROM sensor_data TABLESAMPLE BERNOULLI(10 PERCENT);
 &lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;TODO: include a short Rust snippet showing how to register a relation planner
-extension once the final API example is confirmed.&lt;/p&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/geoffreyclaude"&gt;geoffreyclaude&lt;/a&gt; for implementing relation planner extensions, and to
+&lt;a href="https://github.com/theirix"&gt;theirix&lt;/a&gt;, &lt;a href="https://github.com/alamb"&gt;alamb&lt;/a&gt;, &lt;a href="https://github.com/NGA-TRAN"&gt;NGA-TRAN&lt;/a&gt;, and &lt;a href="https://github.com/gabotechs"&gt;gabotechs&lt;/a&gt; for reviews and feedback that
+shaped the design.&lt;/p&gt;
+&lt;figure&gt;
+&lt;img alt="DataFusion SQL processing pipeline: SQL String flows through Parser to AST, then SqlToRel (with Extension Planners) to LogicalPlan, then PhysicalPlanner to ExecutionPlan" class="img-responsive" src="/blog/images/extending-sql/architecture.svg" width="100%"/&gt;
+&lt;figcaption&gt;
+&lt;b&gt;Figure 1:&lt;/b&gt; 
+        SQL processing pipeline with relation planner extensions from the 
+        &lt;a href="https://datafusion.apache.org/blog/2026/01/12/extending-sql/"&gt;Extending SQL in DataFusion Blog&lt;/a&gt;. 
+  &lt;/figcaption&gt;
+&lt;/figure&gt;
 &lt;p&gt;Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/17843"&gt;#17843&lt;/a&gt;&lt;/p&gt;
-&lt;h3 id="listingtable-object-store-usage-improvements"&gt;ListingTable object store usage improvements&lt;a class="headerlink" href="#listingtable-object-store-usage-improvements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
-&lt;p&gt;ListingTable improvements continue to reduce object store I/O and planning
-latency for partitioned datasets (&lt;a href="https://github.com/apache/datafusion/issues/17214"&gt;#17214&lt;/a&gt;). DataFusion now normalizes partition
-and flat listings, enables a memory-bound list-files cache by default, and
-makes the cache prefix-aware for partition pruning.&lt;/p&gt;
-&lt;p&gt;Diagram:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;Object store LIST
-  |  (normalized listing + cache)
-  v
-Partitioned files
-  |  (planner)
-  v
-Execution plan
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/18146"&gt;#18146&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/18855"&gt;#18855&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/19366"&gt;#19366&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/19298"&gt;#19298&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/18971"&gt;#18971&lt;/a&gt;&lt;/p&gt;
-&lt;h3 id="statistics-cache-improvements"&gt;Statistics cache improvements&lt;a class="headerlink" href="#statistics-cache-improvements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
-&lt;p&gt;The statistics cache has been improved to make pruning and planning more
-reliable in repeated workloads (&lt;a href="https://github.com/apache/datafusion/issues/19051"&gt;#19051&lt;/a&gt;). DataFusion now exposes a
-&lt;code&gt;statistics_cache&lt;/code&gt; function and improves cache memory behavior for listing
-workflows, making it easier to diagnose cache contents and reduce repeated I/O.&lt;/p&gt;
-&lt;p&gt;Example (TODO: confirm the function signature and output schema):&lt;/p&gt;
-&lt;pre&gt;&lt;code class="language-sql"&gt;-- TODO: confirm the function name and arguments.
-SELECT * FROM statistics_cache('my_table');
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/19054"&gt;#19054&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/18855"&gt;#18855&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/18971"&gt;#18971&lt;/a&gt;&lt;/p&gt;
 &lt;h3 id="pushdown-expression-evaluation-via-physicalexpradapter"&gt;Pushdown expression evaluation via PhysicalExprAdapter&lt;a class="headerlink" href="#pushdown-expression-evaluation-via-physicalexpradapter" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;DataFusion now pushes down expression evaluation into TableProviders using the
 PhysicalExprAdapter, replacing the older SchemaAdapter approach (&lt;a href="https://github.com/apache/datafusion/issues/14993"&gt;#14993&lt;/a&gt;,

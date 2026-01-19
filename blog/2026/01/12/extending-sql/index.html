@@ -1,0 +1,416 @@
+<!doctype html>
+<html class="no-js" lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Extending SQL in DataFusion: from ->> to TABLESAMPLE - Apache DataFusion Blog</title>
+<link href="/blog/css/bootstrap.min.css" rel="stylesheet">
+<link href="/blog/css/fontawesome.all.min.css" rel="stylesheet">
+<link href="/blog/css/headerlink.css" rel="stylesheet">
+<link href="/blog/highlight/default.min.css" rel="stylesheet">
+<link href="/blog/css/app.css" rel="stylesheet">
+<script src="/blog/highlight/highlight.js"></script>
+<script>hljs.highlightAll();</script>  </head>
+  <body class="d-flex flex-column h-100">
+  <main class="flex-shrink-0">
+<!-- nav bar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark" aria-label="Fifth navbar example">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/blog"><img src="/blog/images/logo_original4x.png" style="height: 32px;"/> Apache DataFusion Blog</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarADP" aria-controls="navbarADP" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarADP">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/about.html">About</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/feed.xml">RSS</a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>    
+<!-- article contents -->
+<div id="contents">
+  <div class="bg-white p-4 p-md-5 rounded">
+    <div class="row justify-content-center">
+      <div class="col-12 col-md-8 main-content">
+        <h1>
+          Extending SQL in DataFusion: from ->> to TABLESAMPLE
+        </h1>
+        <p>Posted on: Mon 12 January 2026 by Geoffrey Claude (Datadog)</p>
+
+        <aside class="toc-container d-md-none mb-2">
+          <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#parse-plan-execute">Parse → Plan → Execute</a></li>
+<li><a href="#1-extending-parsing-wrapping-dfparser-for-custom-statements">1) Extending parsing: wrapping DFParser for custom statements</a></li>
+<li><a href="#2-extending-expression-semantics-exprplanner">2) Extending expression semantics: ExprPlanner</a><ul>
+<li><a href="#example-postgres-json-operators-">Example: Postgres JSON operators (-&gt;, -&gt;&gt;)</a></li>
+</ul>
+</li>
+<li><a href="#3-extending-type-support-typeplanner">3) Extending type support: TypePlanner</a></li>
+<li><a href="#4-extending-the-from-clause-relationplanner">4) Extending the FROM clause: RelationPlanner</a><ul>
+<li><a href="#strategy-a-rewrite-to-existing-operators-pivot-unpivot">Strategy A: rewrite to existing operators (PIVOT / UNPIVOT)</a></li>
+<li><a href="#strategy-b-custom-logical-physical-tablesample">Strategy B: custom logical + physical (TABLESAMPLE)</a></li>
+<li><a href="#background-origin-of-the-api">Background: Origin of the API</a></li>
+</ul>
+</li>
+<li><a href="#summary-the-extensibility-workflow">Summary: The Extensibility Workflow</a></li>
+<li><a href="#debugging-tips">Debugging tips</a><ul>
+<li><a href="#print-the-logical-plan">Print the logical plan</a></li>
+<li><a href="#use-explain">Use EXPLAIN</a></li>
+</ul>
+</li>
+<li><a href="#when-hooks-arent-enough">When hooks aren't enough</a></li>
+<li><a href="#ideas-to-try">Ideas to try</a></li>
+<li><a href="#see-also">See also</a></li>
+<li><a href="#acknowledgements">Acknowledgements</a></li>
+<li><a href="#get-involved">Get Involved</a></li>
+</ul>
+</div>
+        </aside>
+
+        <!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+-->
+
+<p>If you embed <a href="https://datafusion.apache.org/">DataFusion</a> in your product, your users will eventually run SQL that DataFusion does not recognize. Not because the query is unreasonable, but because SQL in practice includes many dialects and system-specific statements.</p>
+<p>Suppose you store data as Parquet files on S3 and want users to attach an external catalog to query them. DataFusion has <code>CREATE EXTERNAL TABLE</code> for individual tables, but no built-in equivalent for catalogs. DuckDB has <code>ATTACH</code>, SQLite has its own variant, and maybe you really want something even more flexible:</p>
+<pre><code class="language-sql">CREATE EXTERNAL CATALOG my_lake
+STORED AS iceberg
+LOCATION 's3://my-bucket/warehouse'
+OPTIONS ('region' 'eu-west-1');
+</code></pre>
+<p>This syntax does not exist in DataFusion today, but you can add it.</p>
+<hr/>
+<p>At the same time, many dialect gaps are smaller and show up in everyday queries:</p>
+<pre><code class="language-sql">-- Postgres-style JSON operators
+SELECT payload-&gt;'user'-&gt;&gt;'id' FROM logs;
+
+-- MySQL-specific types
+SELECT DATETIME '2001-01-01 18:00:00';
+
+-- Statistical sampling
+SELECT * FROM sensor_data TABLESAMPLE BERNOULLI(10 PERCENT);
+</code></pre>
+<p>You can implement all of these <em>without forking</em> DataFusion:</p>
+<ol>
+<li><strong>Parse</strong> new syntax (custom statements / dialect quirks)</li>
+<li><strong>Plan</strong> new semantics (expressions, types, FROM-clause constructs)</li>
+<li><strong>Execute</strong> new operators when rewrites are not sufficient</li>
+</ol>
+<p>This post explains where and how to hook into each stage. For complete, working code, see the linked <code>datafusion-examples</code>.</p>
+<hr/>
+<h2 id="parse-plan-execute">Parse → Plan → Execute<a class="headerlink" href="#parse-plan-execute" title="Permanent link">¶</a></h2>
+<p>DataFusion turns SQL into executable work in stages:</p>
+<ol>
+<li><strong>Parse</strong>: SQL text is parsed into an AST (<a href="https://docs.rs/sqlparser/latest/sqlparser/ast/enum.Statement.html">Statement</a> from <a href="https://github.com/sqlparser-rs/sqlparser-rs">sqlparser-rs</a>)</li>
+<li><strong>Logical planning</strong>: <a href="https://docs.rs/datafusion/latest/datafusion/sql/planner/struct.SqlToRel.html">SqlToRel</a> converts the AST into a <a href="https://docs.rs/datafusion/latest/datafusion/logical_expr/enum.LogicalPlan.html">LogicalPlan</a></li>
+<li><strong>Physical planning</strong>: The <a href="https://docs.rs/datafusion/latest/datafusion/physical_planner/trait.PhysicalPlanner.html">PhysicalPlanner</a> turns the logical plan into an <a href="https://docs.rs/datafusion/latest/datafusion/physical_plan/trait.ExecutionPlan.html">ExecutionPlan</a></li>
+</ol>
+<p>Each stage has extension points.</p>
+<figure>
+<img alt="DataFusion SQL processing pipeline: SQL String flows through Parser to AST, then SqlToRel (with Extension Planners) to LogicalPlan, then PhysicalPlanner to ExecutionPlan" class="img-responsive" src="/blog/images/extending-sql/architecture.svg" width="100%"/>
+<figcaption>
+<b>Figure 1:</b> SQL flows through three stages: parsing, logical planning (via <code>SqlToRel</code>, where the Extension Planners hook in), and physical planning. Each stage has extension points: wrap the parser, implement planner traits, or add physical operators.
+  </figcaption>
+</figure>
+<p>To choose the right extension point, look at where the query fails.</p>
+<table class="table">
+<thead>
+<tr>
+<th>What fails?</th>
+<th>What it looks like</th>
+<th>Where to hook in</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Parsing</td>
+<td><code>Expected: TABLE, found: CATALOG</code></td>
+<td>configure dialect or wrap <code>DFParser</code></td>
+</tr>
+<tr>
+<td>Planning</td>
+<td><code>This feature is not implemented: DATETIME</code></td>
+<td><code>ExprPlanner</code>, <code>TypePlanner</code>, <code>RelationPlanner</code></td>
+</tr>
+<tr>
+<td>Execution</td>
+<td><code>No physical plan for TableSample</code></td>
+<td><code>ExtensionPlanner</code> (+ physical operator)</td>
+</tr>
+</tbody>
+</table>
+<p>We will follow that pipeline order.</p>
+<hr/>
+<h2 id="1-extending-parsing-wrapping-dfparser-for-custom-statements">1) Extending parsing: wrapping <code>DFParser</code> for custom statements<a class="headerlink" href="#1-extending-parsing-wrapping-dfparser-for-custom-statements" title="Permanent link">¶</a></h2>
+<p>The <code>CREATE EXTERNAL CATALOG</code> syntax from the introduction fails at the parser because DataFusion only recognizes <code>CREATE EXTERNAL TABLE</code>. To support new statement-level syntax, you can <strong>wrap <code>DFParser</code></strong>. Peek ahead <strong>in the token stream</strong> to detect your custom syntax, handle it yourself, and delegate everything else to DataFusion.</p>
+<p>The <a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/sql_ops/custom_sql_parser.rs"><code>custom_sql_parser.rs</code></a> example demonstrates this pattern:</p>
+<pre><code class="language-rust">struct CustomParser&lt;'a&gt; { df_parser: DFParser&lt;'a&gt; }
+
+impl&lt;'a&gt; CustomParser&lt;'a&gt; {
+  pub fn parse_statement(&amp;mut self) -&gt; Result&lt;CustomStatement&gt; {
+    // Peek tokens to detect CREATE EXTERNAL CATALOG
+    if self.is_create_external_catalog() {
+      return self.parse_create_external_catalog();
+    }
+    // Delegate everything else to DataFusion
+    Ok(CustomStatement::DFStatement(Box::new(
+      self.df_parser.parse_statement()?,
+    )))
+  }
+}
+</code></pre>
+<p>You do not need to implement a full SQL parser. Reuse DataFusion's tokenizer and parser helpers to consume tokens, parse identifiers, and handle options—the example shows how.</p>
+<p>Once parsed, the simplest integration is to treat custom statements as <strong>application commands</strong>:</p>
+<pre><code class="language-rust">match parser.parse_statement()? {
+  CustomStatement::DFStatement(stmt) =&gt; ctx.sql(&amp;stmt.to_string()).await?,
+  CustomStatement::CreateExternalCatalog(stmt) =&gt; {
+    handle_create_external_catalog(&amp;ctx, stmt).await?
+  }
+}
+</code></pre>
+<p>This keeps the extension logic in your embedding application. The example includes a complete <code>handle_create_external_catalog</code> that registers tables from a location into a catalog, making them queryable immediately.</p>
+<p><strong>Full working example:</strong> <a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/sql_ops/custom_sql_parser.rs"><code>custom_sql_parser.rs</code></a></p>
+<hr/>
+<h2 id="2-extending-expression-semantics-exprplanner">2) Extending expression semantics: <code>ExprPlanner</code><a class="headerlink" href="#2-extending-expression-semantics-exprplanner" title="Permanent link">¶</a></h2>
+<p>Once SQL <em>parses</em>, the next failure is often that DataFusion does not know what a particular expression means.</p>
+<p>This is where dialect differences show up in day-to-day queries: operators like Postgres JSON arrows, vendor-specific functions, or small syntactic sugar that users expect to keep working when you switch engines.</p>
+<p><code>ExprPlanner</code> lets you define how specific SQL expressions become DataFusion <code>Expr</code>. Common examples:</p>
+<ul>
+<li>Non-standard operators (JSON / geometry / regex operators)</li>
+<li>Custom function syntaxes</li>
+<li>Special identifier behavior</li>
+</ul>
+<h3 id="example-postgres-json-operators-">Example: Postgres JSON operators (<code>-&gt;</code>, <code>-&gt;&gt;</code>)<a class="headerlink" href="#example-postgres-json-operators-" title="Permanent link">¶</a></h3>
+<p>The Postgres <code>-&gt;</code> operator is a good illustration because it is widely used and parses only under the PostgreSQL dialect.</p>
+<p>Configure the dialect:</p>
+<pre><code class="language-rust">let config = SessionConfig::new()
+    .set_str("datafusion.sql_parser.dialect", "postgres");
+let ctx = SessionContext::new_with_config(config);
+</code></pre>
+<p>Then implement <code>ExprPlanner</code> to map the parsed operator (<code>BinaryOperator::Arrow</code>) to DataFusion semantics:</p>
+<pre><code class="language-rust">fn plan_binary_op(&amp;self, expr: RawBinaryExpr, _schema: &amp;DFSchema)
+  -&gt; Result&lt;PlannerResult&lt;RawBinaryExpr&gt;&gt; {
+  match expr.op {
+    BinaryOperator::Arrow =&gt; Ok(Planned(/* your Expr */)),
+    _ =&gt; Ok(Original(expr)),
+  }
+}
+</code></pre>
+<p>Return <code>Planned(...)</code> when you handled the expression; return <code>Original(...)</code> to pass it to the next planner.</p>
+<p>For a complete JSON implementation, see <a href="https://github.com/datafusion-contrib/datafusion-functions-json">datafusion-functions-json</a>. For a minimal end-to-end example in the DataFusion repo, see <a href="https://github.com/apache/datafusion/blob/main/datafusion/core/tests/user_defined/expr_planner.rs"><code>expr_planner_tests</code></a>.</p>
+<hr/>
+<h2 id="3-extending-type-support-typeplanner">3) Extending type support: <code>TypePlanner</code><a class="headerlink" href="#3-extending-type-support-typeplanner" title="Permanent link">¶</a></h2>
+<p>After expressions, types are often the next thing to break. Schemas and DDL may reference types that DataFusion does not support out of the box, like MySQL's <code>DATETIME</code>.</p>
+<p>Type planning tends to come up when interoperating with other systems. You want to accept DDL or infer schemas from external catalogs without forcing users to rewrite types.</p>
+<p><code>TypePlanner</code> maps SQL types to Arrow/DataFusion types:</p>
+<pre><code class="language-rust">impl TypePlanner for MyTypePlanner {
+  fn plan_type(&amp;self, sql_type: &amp;ast::DataType) -&gt; Result&lt;Option&lt;DataType&gt;&gt; {
+    match sql_type {
+      ast::DataType::Datetime(Some(3)) =&gt; Ok(Some(DataType::Timestamp(TimeUnit::Millisecond, None))),
+      _ =&gt; Ok(None), // let the default planner handle it
+    }
+  }
+}
+</code></pre>
+<p>It is installed when building session state:</p>
+<pre><code class="language-rust">let state = SessionStateBuilder::new()
+  .with_default_features()
+  .with_type_planner(Arc::new(MyTypePlanner))
+  .build();
+</code></pre>
+<p>Once installed, if your <code>CREATE EXTERNAL CATALOG</code> statement exposes tables with MySQL types, DataFusion can interpret them correctly.</p>
+<hr/>
+<h2 id="4-extending-the-from-clause-relationplanner">4) Extending the FROM clause: <code>RelationPlanner</code><a class="headerlink" href="#4-extending-the-from-clause-relationplanner" title="Permanent link">¶</a></h2>
+<p>Some extensions change what a <em>relation</em> means, not just expressions or types. <code>RelationPlanner</code> (available starting in DataFusion 52) intercepts FROM-clause constructs while SQL is being converted into a <code>LogicalPlan</code>.</p>
+<p>Once you have <code>RelationPlanner</code>, there are two main approaches to implementing your extension.</p>
+<h3 id="strategy-a-rewrite-to-existing-operators-pivot-unpivot">Strategy A: rewrite to existing operators (PIVOT / UNPIVOT)<a class="headerlink" href="#strategy-a-rewrite-to-existing-operators-pivot-unpivot" title="Permanent link">¶</a></h3>
+<p>If you can translate your syntax into relational algebra that DataFusion already supports, you can implement the feature with <strong>no custom physical operator</strong>.</p>
+<p><code>PIVOT</code> rotates rows into columns, and <code>UNPIVOT</code> does the reverse. Neither requires new execution logic: <code>PIVOT</code> is just <code>GROUP BY</code> with <code>CASE</code> expressions, and <code>UNPIVOT</code> is a <code>UNION ALL</code> of each column. The planner rewrites them accordingly:</p>
+<pre><code class="language-rust">match relation {
+  TableFactor::Pivot { .. } =&gt; /* rewrite to GROUP BY + CASE */,
+  TableFactor::Unpivot { .. } =&gt; /* rewrite to UNION ALL */,
+  other =&gt; Original(other),
+}
+</code></pre>
+<p>Because the output is a standard <code>LogicalPlan</code>, DataFusion's usual optimization and physical planning apply automatically.</p>
+<p><strong>Full working example:</strong> <a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/relation_planner/pivot_unpivot.rs"><code>pivot_unpivot.rs</code></a></p>
+<h3 id="strategy-b-custom-logical-physical-tablesample">Strategy B: custom logical + physical (TABLESAMPLE)<a class="headerlink" href="#strategy-b-custom-logical-physical-tablesample" title="Permanent link">¶</a></h3>
+<p>Sometimes rewriting is not sufficient. <code>TABLESAMPLE</code> returns a random subset of rows from a table and is useful for approximations or debugging on large datasets. Because it requires runtime randomness, you cannot express it as a rewrite to existing operators. Instead, you need a custom logical node and physical operator to execute it.</p>
+<p>The approach (shown in <a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/relation_planner/table_sample.rs"><code>table_sample.rs</code></a>):</p>
+<ol>
+<li><code>RelationPlanner</code> recognizes <code>TABLESAMPLE</code> and produces a custom logical node</li>
+<li>That node gets wrapped in <code>LogicalPlan::Extension</code></li>
+<li><code>ExtensionPlanner</code> converts it to a custom <code>ExecutionPlan</code></li>
+</ol>
+<p>In code:</p>
+<pre><code class="language-rust">// Logical planning: FROM t TABLESAMPLE (...)  -&gt;  LogicalPlan::Extension(...)
+let plan = LogicalPlan::Extension(Extension { node: Arc::new(TableSamplePlanNode { /* ... */ }) });
+</code></pre>
+<pre><code class="language-rust">// Physical planning: TableSamplePlanNode  -&gt;  SampleExec
+if let Some(sample_node) = node.as_any().downcast_ref::&lt;TableSamplePlanNode&gt;() {
+  return Ok(Some(Arc::new(SampleExec::try_new(input, /* bounds, seed */)?)));
+}
+</code></pre>
+<p>This is the general pattern for custom FROM constructs that need runtime behavior.</p>
+<p><strong>Full working example:</strong> <a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/relation_planner/table_sample.rs"><code>table_sample.rs</code></a></p>
+<h3 id="background-origin-of-the-api">Background: Origin of the API<a class="headerlink" href="#background-origin-of-the-api" title="Permanent link">¶</a></h3>
+<p><code>RelationPlanner</code> originally came out of trying to build <code>MATCH_RECOGNIZE</code> support in DataFusion as a Datadog hackathon project. <code>MATCH_RECOGNIZE</code> is a complex SQL feature for detecting patterns in sequences of rows, and it made sense to prototype as an extension first. At the time, DataFusion had no extension point at the right stage of SQL-to-rel planning to intercept and reinterpret relations.</p>
+<p><a href="https://github.com/theirix">@theirix</a>'s <code>TABLESAMPLE</code> work (<a href="https://github.com/apache/datafusion/issues/13563">#13563</a>, <a href="https://github.com/apache/datafusion/pull/17633">#17633</a>) demonstrated exactly where the gap was: their extension only worked when <code>TABLESAMPLE</code> appeared at the query root and any <code>TABLESAMPLE</code> inside a CTE or JOIN would error. That limitation motivated <a href="https://github.com/apache/datafusion/pull/17843">#17843</a>, which introduced <code>RelationPlanner</code> to intercept relations at any nesting level. The same hook now supports <code>PIVOT</code>, <code>UNPIVOT</code>, <code>TABLESAMPLE</code>, and can translate dialect-specific FROM-clause syntax (for example, bridging Trino constructs into DataFusion plans).</p>
+<p>This is how Datadog approaches compatibility work: build features in real systems first, then upstream the building blocks. A full <code>MATCH_RECOGNIZE</code> extension is now in progress, built on top of <code>RelationPlanner</code>, with the <a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/relation_planner/match_recognize.rs"><code>match_recognize.rs</code></a> example as a starting point.</p>
+<hr/>
+<h2 id="summary-the-extensibility-workflow">Summary: The Extensibility Workflow<a class="headerlink" href="#summary-the-extensibility-workflow" title="Permanent link">¶</a></h2>
+<p>DataFusion's SQL extensibility follows its processing pipeline. When building your own dialect extension, work incrementally:</p>
+<ol>
+<li><strong>Parse</strong>: Use a parser wrapper to intercept custom syntax in the token stream. Produce either a standard <code>Statement</code> or your own application-specific command.</li>
+<li><strong>Plan</strong>: Implement the planning traits (<code>ExprPlanner</code>, <code>TypePlanner</code>, <code>RelationPlanner</code>) to give your syntax meaning.</li>
+<li><strong>Execute</strong>: Prefer rewrites to existing operators (like <code>PIVOT</code> to <code>CASE</code>). Only add custom physical operators via <code>ExtensionPlanner</code> when you need specific runtime behavior like randomness or specialized I/O.</li>
+</ol>
+<hr/>
+<h2 id="debugging-tips">Debugging tips<a class="headerlink" href="#debugging-tips" title="Permanent link">¶</a></h2>
+<h3 id="print-the-logical-plan">Print the logical plan<a class="headerlink" href="#print-the-logical-plan" title="Permanent link">¶</a></h3>
+<pre><code class="language-rust">let df = ctx.sql("SELECT * FROM t TABLESAMPLE (10 PERCENT)").await?;
+println!("{}", df.logical_plan().display_indent());
+</code></pre>
+<h3 id="use-explain">Use <a href="https://datafusion.apache.org/user-guide/sql/explain.html"><code>EXPLAIN</code></a><a class="headerlink" href="#use-explain" title="Permanent link">¶</a></h3>
+<pre><code class="language-sql">EXPLAIN SELECT * FROM t TABLESAMPLE (10 PERCENT);
+</code></pre>
+<p>If your extension is not being invoked, it is usually visible in the logical plan first.</p>
+<hr/>
+<h2 id="when-hooks-arent-enough">When hooks aren't enough<a class="headerlink" href="#when-hooks-arent-enough" title="Permanent link">¶</a></h2>
+<p>While these extension points cover the majority of dialect needs, some deep architectural areas still have limited or no hooks. If you are working in these parts of the SQL surface area, you may need to contribute upstream:</p>
+<ul>
+<li>Statement-level planning: <a href="https://github.com/apache/datafusion/blob/main/datafusion/sql/src/statement.rs"><code>statement.rs</code></a></li>
+<li>JOIN planning: <a href="https://github.com/apache/datafusion/blob/main/datafusion/sql/src/relation/join.rs"><code>relation/join.rs</code></a></li>
+<li>TOP / FETCH clauses: <a href="https://github.com/apache/datafusion/blob/main/datafusion/sql/src/select.rs"><code>select.rs</code></a>, <a href="https://github.com/apache/datafusion/blob/main/datafusion/sql/src/query.rs"><code>query.rs</code></a></li>
+</ul>
+<hr/>
+<h2 id="ideas-to-try">Ideas to try<a class="headerlink" href="#ideas-to-try" title="Permanent link">¶</a></h2>
+<p>If you want to experiment with these extension points, here are a few suggestions:</p>
+<ul>
+<li>Geometry operators (for example <code>@&gt;</code>, <code>&lt;@</code>) via <code>ExprPlanner</code></li>
+<li>Oracle <code>NUMBER</code> or SQL Server <code>MONEY</code> via <code>TypePlanner</code></li>
+<li><code>JSON_TABLE</code> or semantic-layer style relations via <code>RelationPlanner</code></li>
+</ul>
+<hr/>
+<h2 id="see-also">See also<a class="headerlink" href="#see-also" title="Permanent link">¶</a></h2>
+<ul>
+<li>Extending SQL Guide: <a href="https://datafusion.apache.org/library-user-guide/extending-sql.html">Extending SQL Guide</a></li>
+<li>Parser wrapping example: <a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/sql_ops/custom_sql_parser.rs"><code>custom_sql_parser.rs</code></a></li>
+<li>
+<p>RelationPlanner examples:</p>
+</li>
+<li>
+<p><code>PIVOT</code> / <code>UNPIVOT</code>: <a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/relation_planner/pivot_unpivot.rs"><code>pivot_unpivot.rs</code></a></p>
+</li>
+<li>
+<p><code>TABLESAMPLE</code>: <a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/relation_planner/table_sample.rs"><code>table_sample.rs</code></a></p>
+</li>
+<li>
+<p>ExprPlanner test examples: <a href="https://github.com/apache/datafusion/blob/main/datafusion/core/tests/user_defined/expr_planner.rs"><code>expr_planner_tests</code></a></p>
+</li>
+</ul>
+<h2 id="acknowledgements">Acknowledgements<a class="headerlink" href="#acknowledgements" title="Permanent link">¶</a></h2>
+<p>Thank you to <a href="https://github.com/jayzhan211">@jayzhan211</a> for designing and implementing the original <code>ExprPlanner</code> API (<a href="https://github.com/apache/datafusion/pull/11180">#11180</a>), to <a href="https://github.com/goldmedal">@goldmedal</a> for adding <code>TypePlanner</code> (<a href="https://github.com/apache/datafusion/pull/13294">#13294</a>), and to <a href="https://github.com/theirix">@theirix</a> for the <code>TABLESAMPLE</code> work (<a href="https://github.com/apache/datafusion/issues/13563">#13563</a>, <a href="https://github.com/apache/datafusion/pull/17633">#17633</a>) that helped shape <code>RelationPlanner</code>. Thank you to <a href="https://github.com/alamb">@alamb</a> for driving DataFusion's extensibility philosophy and for feedback on this post.</p>
+<h2 id="get-involved">Get Involved<a class="headerlink" href="#get-involved" title="Permanent link">¶</a></h2>
+<ul>
+<li><strong>Try it out</strong>: Implement one of the extension points and share your experience</li>
+<li><strong>File issues or join the conversation</strong>: <a href="https://github.com/apache/datafusion/">GitHub</a> for bugs and feature requests, <a href="https://datafusion.apache.org/contributor-guide/communication.html">Slack or Discord</a> for discussion</li>
+</ul>
+<!-- Reference links -->
+
+<!--
+  Comments Section
+  Loaded only after explicit visitor consent to comply with ASF policy.
+-->
+
+<div id="comments">
+  <hr>
+  <h3>Comments</h3>
+
+  <!-- Local loader script -->
+  <script src="/content/js/giscus-consent.js" defer></script>
+
+  <!-- Consent UI -->
+  <div id="giscus-consent">
+    <p>
+        We use <a href="https://giscus.app/">Giscus</a> for comments, powered by GitHub Discussions.
+        To respect your privacy, Giscus and comments will load only if you click "Show Comments"
+    </p>
+
+    <div class="consent-actions">
+      <button id="giscus-load" type="button">Show Comments</button>
+      <button id="giscus-revoke" type="button" hidden>Hide Comments</button>
+    </div>
+
+    <noscript>JavaScript is required to load comments from Giscus.</noscript>
+  </div>
+
+  <!-- Container where Giscus will render -->
+  <div id="comment-thread"></div>
+</div>      </div>
+      <aside class="toc-container d-none d-md-block col-md-4 col-xl-3 ms-xl-2">
+        <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#parse-plan-execute">Parse → Plan → Execute</a></li>
+<li><a href="#1-extending-parsing-wrapping-dfparser-for-custom-statements">1) Extending parsing: wrapping DFParser for custom statements</a></li>
+<li><a href="#2-extending-expression-semantics-exprplanner">2) Extending expression semantics: ExprPlanner</a><ul>
+<li><a href="#example-postgres-json-operators-">Example: Postgres JSON operators (-&gt;, -&gt;&gt;)</a></li>
+</ul>
+</li>
+<li><a href="#3-extending-type-support-typeplanner">3) Extending type support: TypePlanner</a></li>
+<li><a href="#4-extending-the-from-clause-relationplanner">4) Extending the FROM clause: RelationPlanner</a><ul>
+<li><a href="#strategy-a-rewrite-to-existing-operators-pivot-unpivot">Strategy A: rewrite to existing operators (PIVOT / UNPIVOT)</a></li>
+<li><a href="#strategy-b-custom-logical-physical-tablesample">Strategy B: custom logical + physical (TABLESAMPLE)</a></li>
+<li><a href="#background-origin-of-the-api">Background: Origin of the API</a></li>
+</ul>
+</li>
+<li><a href="#summary-the-extensibility-workflow">Summary: The Extensibility Workflow</a></li>
+<li><a href="#debugging-tips">Debugging tips</a><ul>
+<li><a href="#print-the-logical-plan">Print the logical plan</a></li>
+<li><a href="#use-explain">Use EXPLAIN</a></li>
+</ul>
+</li>
+<li><a href="#when-hooks-arent-enough">When hooks aren't enough</a></li>
+<li><a href="#ideas-to-try">Ideas to try</a></li>
+<li><a href="#see-also">See also</a></li>
+<li><a href="#acknowledgements">Acknowledgements</a></li>
+<li><a href="#get-involved">Get Involved</a></li>
+</ul>
+</div>
+      </aside>
+    </div>
+  </div>
+</div>    
+    <!-- footer -->
+    <div class="row g-0">
+      <div class="col-12">
+        <p style="font-style: italic; font-size: 0.8rem; text-align: center;">
+          Copyright 2026, <a href="https://www.apache.org/">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a>.<br/>
+          Apache&reg; and the Apache feather logo are trademarks of The Apache Software Foundation.
+        </p>
+      </div>
+    </div>
+    <script src="/blog/js/bootstrap.bundle.min.js"></script>  </main>
+  </body>
+</html>

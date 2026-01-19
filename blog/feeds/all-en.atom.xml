@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog</title><link href="https://datafusion.apache.org/blog/" rel="alternate"></link><link href="https://datafusion.apache.org/blog/feeds/all-en.atom.xml" rel="self"></link><id>https://datafusion.apache.org/blog/</id><updated>2026-01-08T00:00:00+00:00</updated><subtitle></subtitle><entry><title>Apache DataFusion 52.0.0 Released</title><link href="https://datafusion.apache.org/blog/2026/01/08/datafusion-52.0.0" rel="alternate"></link><published>2026-01-08T00:00:00+00:00</published><updated>2026-01-08T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2026-01-08:/blog/2026/01/08/datafusion-52.0.0</id><summary type="html">&lt;!--
+<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog</title><link href="https://datafusion.apache.org/blog/" rel="alternate"></link><link href="https://datafusion.apache.org/blog/feeds/all-en.atom.xml" rel="self"></link><id>https://datafusion.apache.org/blog/</id><updated>2026-01-12T00:00:00+00:00</updated><subtitle></subtitle><entry><title>Extending SQL in DataFusion: from -&gt;&gt; to TABLESAMPLE</title><link href="https://datafusion.apache.org/blog/2026/01/12/extending-sql" rel="alternate"></link><published>2026-01-12T00:00:00+00:00</published><updated>2026-01-12T00:00:00+00:00</updated><author><name>Geoffrey Claude (Datadog)</name></author><id>tag:datafusion.apache.org,2026-01-12:/blog/2026/01/12/extending-sql</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -18,12 +18,295 @@ limitations under the License.
 {% endcomment %}
 --&gt;
 
-&lt;h2 id="introduction"&gt;Introduction&lt;a class="headerlink" href="#introduction" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;If you embed &lt;a href="https://datafusion.apache.org/"&gt;DataFusion&lt;/a&gt; in your product, your users will eventually run SQL that DataFusion does not recognize. Not because the query is unreasonable, but because SQL in practice includes many dialects and system-specific statements.&lt;/p&gt;
+&lt;p&gt;Suppose you store data as Parquet files on S3 and want users to attach an …&lt;/p&gt;</summary><content type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+
+&lt;p&gt;If you embed &lt;a href="https://datafusion.apache.org/"&gt;DataFusion&lt;/a&gt; in your product, your users will eventually run SQL that DataFusion does not recognize. Not because the query is unreasonable, but because SQL in practice includes many dialects and system-specific statements.&lt;/p&gt;
+&lt;p&gt;Suppose you store data as Parquet files on S3 and want users to attach an external catalog to query them. DataFusion has &lt;code&gt;CREATE EXTERNAL TABLE&lt;/code&gt; for individual tables, but no built-in equivalent for catalogs. DuckDB has &lt;code&gt;ATTACH&lt;/code&gt;, SQLite has its own variant, and maybe you really want something even more flexible:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;CREATE EXTERNAL CATALOG my_lake
+STORED AS iceberg
+LOCATION 's3://my-bucket/warehouse'
+OPTIONS ('region' 'eu-west-1');
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;This syntax does not exist in DataFusion today, but you can add it.&lt;/p&gt;
+&lt;hr/&gt;
+&lt;p&gt;At the same time, many dialect gaps are smaller and show up in everyday queries:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;-- Postgres-style JSON operators
+SELECT payload-&amp;gt;'user'-&amp;gt;&amp;gt;'id' FROM logs;
+
+-- MySQL-specific types
+SELECT DATETIME '2001-01-01 18:00:00';
+
+-- Statistical sampling
+SELECT * FROM sensor_data TABLESAMPLE BERNOULLI(10 PERCENT);
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;You can implement all of these &lt;em&gt;without forking&lt;/em&gt; DataFusion:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Parse&lt;/strong&gt; new syntax (custom statements / dialect quirks)&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Plan&lt;/strong&gt; new semantics (expressions, types, FROM-clause constructs)&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Execute&lt;/strong&gt; new operators when rewrites are not sufficient&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;This post explains where and how to hook into each stage. For complete, working code, see the linked &lt;code&gt;datafusion-examples&lt;/code&gt;.&lt;/p&gt;
+&lt;hr/&gt;
+&lt;h2 id="parse-plan-execute"&gt;Parse → Plan → Execute&lt;a class="headerlink" href="#parse-plan-execute" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;DataFusion turns SQL into executable work in stages:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Parse&lt;/strong&gt;: SQL text is parsed into an AST (&lt;a href="https://docs.rs/sqlparser/latest/sqlparser/ast/enum.Statement.html"&gt;Statement&lt;/a&gt; from &lt;a href="https://github.com/sqlparser-rs/sqlparser-rs"&gt;sqlparser-rs&lt;/a&gt;)&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Logical planning&lt;/strong&gt;: &lt;a href="https://docs.rs/datafusion/latest/datafusion/sql/planner/struct.SqlToRel.html"&gt;SqlToRel&lt;/a&gt; converts the AST into a &lt;a href="https://docs.rs/datafusion/latest/datafusion/logical_expr/enum.LogicalPlan.html"&gt;LogicalPlan&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Physical planning&lt;/strong&gt;: The &lt;a href="https://docs.rs/datafusion/latest/datafusion/physical_planner/trait.PhysicalPlanner.html"&gt;PhysicalPlanner&lt;/a&gt; turns the logical plan into an &lt;a href="https://docs.rs/datafusion/latest/datafusion/physical_plan/trait.ExecutionPlan.html"&gt;ExecutionPlan&lt;/a&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Each stage has extension points.&lt;/p&gt;
+&lt;figure&gt;
+&lt;img alt="DataFusion SQL processing pipeline: SQL String flows through Parser to AST, then SqlToRel (with Extension Planners) to LogicalPlan, then PhysicalPlanner to ExecutionPlan" class="img-responsive" src="/blog/images/extending-sql/architecture.svg" width="100%"/&gt;
+&lt;figcaption&gt;
+&lt;b&gt;Figure 1:&lt;/b&gt; SQL flows through three stages: parsing, logical planning (via &lt;code&gt;SqlToRel&lt;/code&gt;, where the Extension Planners hook in), and physical planning. Each stage has extension points: wrap the parser, implement planner traits, or add physical operators.
+  &lt;/figcaption&gt;
+&lt;/figure&gt;
+&lt;p&gt;To choose the right extension point, look at where the query fails.&lt;/p&gt;
+&lt;table class="table"&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;What fails?&lt;/th&gt;
+&lt;th&gt;What it looks like&lt;/th&gt;
+&lt;th&gt;Where to hook in&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;Parsing&lt;/td&gt;
+&lt;td&gt;&lt;code&gt;Expected: TABLE, found: CATALOG&lt;/code&gt;&lt;/td&gt;
+&lt;td&gt;configure dialect or wrap &lt;code&gt;DFParser&lt;/code&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Planning&lt;/td&gt;
+&lt;td&gt;&lt;code&gt;This feature is not implemented: DATETIME&lt;/code&gt;&lt;/td&gt;
+&lt;td&gt;&lt;code&gt;ExprPlanner&lt;/code&gt;, &lt;code&gt;TypePlanner&lt;/code&gt;, &lt;code&gt;RelationPlanner&lt;/code&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Execution&lt;/td&gt;
+&lt;td&gt;&lt;code&gt;No physical plan for TableSample&lt;/code&gt;&lt;/td&gt;
+&lt;td&gt;&lt;code&gt;ExtensionPlanner&lt;/code&gt; (+ physical operator)&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;We will follow that pipeline order.&lt;/p&gt;
+&lt;hr/&gt;
+&lt;h2 id="1-extending-parsing-wrapping-dfparser-for-custom-statements"&gt;1) Extending parsing: wrapping &lt;code&gt;DFParser&lt;/code&gt; for custom statements&lt;a class="headerlink" href="#1-extending-parsing-wrapping-dfparser-for-custom-statements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;The &lt;code&gt;CREATE EXTERNAL CATALOG&lt;/code&gt; syntax from the introduction fails at the parser because DataFusion only recognizes &lt;code&gt;CREATE EXTERNAL TABLE&lt;/code&gt;. To support new statement-level syntax, you can &lt;strong&gt;wrap &lt;code&gt;DFParser&lt;/code&gt;&lt;/strong&gt;. Peek ahead &lt;strong&gt;in the token stream&lt;/strong&gt; to detect your custom syntax, handle it yourself, and delegate everything else to DataFusion.&lt;/p&gt;
+&lt;p&gt;The &lt;a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/sql_ops/custom_sql_parser.rs"&gt;&lt;code&gt;custom_sql_parser.rs&lt;/code&gt;&lt;/a&gt; example demonstrates this pattern:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;struct CustomParser&amp;lt;'a&amp;gt; { df_parser: DFParser&amp;lt;'a&amp;gt; }
+
+impl&amp;lt;'a&amp;gt; CustomParser&amp;lt;'a&amp;gt; {
+  pub fn parse_statement(&amp;amp;mut self) -&amp;gt; Result&amp;lt;CustomStatement&amp;gt; {
+    // Peek tokens to detect CREATE EXTERNAL CATALOG
+    if self.is_create_external_catalog() {
+      return self.parse_create_external_catalog();
+    }
+    // Delegate everything else to DataFusion
+    Ok(CustomStatement::DFStatement(Box::new(
+      self.df_parser.parse_statement()?,
+    )))
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;You do not need to implement a full SQL parser. Reuse DataFusion's tokenizer and parser helpers to consume tokens, parse identifiers, and handle options—the example shows how.&lt;/p&gt;
+&lt;p&gt;Once parsed, the simplest integration is to treat custom statements as &lt;strong&gt;application commands&lt;/strong&gt;:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;match parser.parse_statement()? {
+  CustomStatement::DFStatement(stmt) =&amp;gt; ctx.sql(&amp;amp;stmt.to_string()).await?,
+  CustomStatement::CreateExternalCatalog(stmt) =&amp;gt; {
+    handle_create_external_catalog(&amp;amp;ctx, stmt).await?
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;This keeps the extension logic in your embedding application. The example includes a complete &lt;code&gt;handle_create_external_catalog&lt;/code&gt; that registers tables from a location into a catalog, making them queryable immediately.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Full working example:&lt;/strong&gt; &lt;a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/sql_ops/custom_sql_parser.rs"&gt;&lt;code&gt;custom_sql_parser.rs&lt;/code&gt;&lt;/a&gt;&lt;/p&gt;
+&lt;hr/&gt;
+&lt;h2 id="2-extending-expression-semantics-exprplanner"&gt;2) Extending expression semantics: &lt;code&gt;ExprPlanner&lt;/code&gt;&lt;a class="headerlink" href="#2-extending-expression-semantics-exprplanner" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Once SQL &lt;em&gt;parses&lt;/em&gt;, the next failure is often that DataFusion does not know what a particular expression means.&lt;/p&gt;
+&lt;p&gt;This is where dialect differences show up in day-to-day queries: operators like Postgres JSON arrows, vendor-specific functions, or small syntactic sugar that users expect to keep working when you switch engines.&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;ExprPlanner&lt;/code&gt; lets you define how specific SQL expressions become DataFusion &lt;code&gt;Expr&lt;/code&gt;. Common examples:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Non-standard operators (JSON / geometry / regex operators)&lt;/li&gt;
+&lt;li&gt;Custom function syntaxes&lt;/li&gt;
+&lt;li&gt;Special identifier behavior&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id="example-postgres-json-operators-"&gt;Example: Postgres JSON operators (&lt;code&gt;-&amp;gt;&lt;/code&gt;, &lt;code&gt;-&amp;gt;&amp;gt;&lt;/code&gt;)&lt;a class="headerlink" href="#example-postgres-json-operators-" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;The Postgres &lt;code&gt;-&amp;gt;&lt;/code&gt; operator is a good illustration because it is widely used and parses only under the PostgreSQL dialect.&lt;/p&gt;
+&lt;p&gt;Configure the dialect:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;let config = SessionConfig::new()
+    .set_str("datafusion.sql_parser.dialect", "postgres");
+let ctx = SessionContext::new_with_config(config);
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Then implement &lt;code&gt;ExprPlanner&lt;/code&gt; to map the parsed operator (&lt;code&gt;BinaryOperator::Arrow&lt;/code&gt;) to DataFusion semantics:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;fn plan_binary_op(&amp;amp;self, expr: RawBinaryExpr, _schema: &amp;amp;DFSchema)
+  -&amp;gt; Result&amp;lt;PlannerResult&amp;lt;RawBinaryExpr&amp;gt;&amp;gt; {
+  match expr.op {
+    BinaryOperator::Arrow =&amp;gt; Ok(Planned(/* your Expr */)),
+    _ =&amp;gt; Ok(Original(expr)),
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Return &lt;code&gt;Planned(...)&lt;/code&gt; when you handled the expression; return &lt;code&gt;Original(...)&lt;/code&gt; to pass it to the next planner.&lt;/p&gt;
+&lt;p&gt;For a complete JSON implementation, see &lt;a href="https://github.com/datafusion-contrib/datafusion-functions-json"&gt;datafusion-functions-json&lt;/a&gt;. For a minimal end-to-end example in the DataFusion repo, see &lt;a href="https://github.com/apache/datafusion/blob/main/datafusion/core/tests/user_defined/expr_planner.rs"&gt;&lt;code&gt;expr_planner_tests&lt;/code&gt;&lt;/a&gt;.&lt;/p&gt;
+&lt;hr/&gt;
+&lt;h2 id="3-extending-type-support-typeplanner"&gt;3) Extending type support: &lt;code&gt;TypePlanner&lt;/code&gt;&lt;a class="headerlink" href="#3-extending-type-support-typeplanner" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;After expressions, types are often the next thing to break. Schemas and DDL may reference types that DataFusion does not support out of the box, like MySQL's &lt;code&gt;DATETIME&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;Type planning tends to come up when interoperating with other systems. You want to accept DDL or infer schemas from external catalogs without forcing users to rewrite types.&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;TypePlanner&lt;/code&gt; maps SQL types to Arrow/DataFusion types:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;impl TypePlanner for MyTypePlanner {
+  fn plan_type(&amp;amp;self, sql_type: &amp;amp;ast::DataType) -&amp;gt; Result&amp;lt;Option&amp;lt;DataType&amp;gt;&amp;gt; {
+    match sql_type {
+      ast::DataType::Datetime(Some(3)) =&amp;gt; Ok(Some(DataType::Timestamp(TimeUnit::Millisecond, None))),
+      _ =&amp;gt; Ok(None), // let the default planner handle it
+    }
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;It is installed when building session state:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;let state = SessionStateBuilder::new()
+  .with_default_features()
+  .with_type_planner(Arc::new(MyTypePlanner))
+  .build();
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Once installed, if your &lt;code&gt;CREATE EXTERNAL CATALOG&lt;/code&gt; statement exposes tables with MySQL types, DataFusion can interpret them correctly.&lt;/p&gt;
+&lt;hr/&gt;
+&lt;h2 id="4-extending-the-from-clause-relationplanner"&gt;4) Extending the FROM clause: &lt;code&gt;RelationPlanner&lt;/code&gt;&lt;a class="headerlink" href="#4-extending-the-from-clause-relationplanner" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Some extensions change what a &lt;em&gt;relation&lt;/em&gt; means, not just expressions or types. &lt;code&gt;RelationPlanner&lt;/code&gt; (available starting in DataFusion 52) intercepts FROM-clause constructs while SQL is being converted into a &lt;code&gt;LogicalPlan&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;Once you have &lt;code&gt;RelationPlanner&lt;/code&gt;, there are two main approaches to implementing your extension.&lt;/p&gt;
+&lt;h3 id="strategy-a-rewrite-to-existing-operators-pivot-unpivot"&gt;Strategy A: rewrite to existing operators (PIVOT / UNPIVOT)&lt;a class="headerlink" href="#strategy-a-rewrite-to-existing-operators-pivot-unpivot" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;If you can translate your syntax into relational algebra that DataFusion already supports, you can implement the feature with &lt;strong&gt;no custom physical operator&lt;/strong&gt;.&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;PIVOT&lt;/code&gt; rotates rows into columns, and &lt;code&gt;UNPIVOT&lt;/code&gt; does the reverse. Neither requires new execution logic: &lt;code&gt;PIVOT&lt;/code&gt; is just &lt;code&gt;GROUP BY&lt;/code&gt; with &lt;code&gt;CASE&lt;/code&gt; expressions, and &lt;code&gt;UNPIVOT&lt;/code&gt; is a &lt;code&gt;UNION ALL&lt;/code&gt; of each column. The planner rewrites them accordingly:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;match relation {
+  TableFactor::Pivot { .. } =&amp;gt; /* rewrite to GROUP BY + CASE */,
+  TableFactor::Unpivot { .. } =&amp;gt; /* rewrite to UNION ALL */,
+  other =&amp;gt; Original(other),
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Because the output is a standard &lt;code&gt;LogicalPlan&lt;/code&gt;, DataFusion's usual optimization and physical planning apply automatically.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Full working example:&lt;/strong&gt; &lt;a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/relation_planner/pivot_unpivot.rs"&gt;&lt;code&gt;pivot_unpivot.rs&lt;/code&gt;&lt;/a&gt;&lt;/p&gt;
+&lt;h3 id="strategy-b-custom-logical-physical-tablesample"&gt;Strategy B: custom logical + physical (TABLESAMPLE)&lt;a class="headerlink" href="#strategy-b-custom-logical-physical-tablesample" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Sometimes rewriting is not sufficient. &lt;code&gt;TABLESAMPLE&lt;/code&gt; returns a random subset of rows from a table and is useful for approximations or debugging on large datasets. Because it requires runtime randomness, you cannot express it as a rewrite to existing operators. Instead, you need a custom logical node and physical operator to execute it.&lt;/p&gt;
+&lt;p&gt;The approach (shown in &lt;a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/relation_planner/table_sample.rs"&gt;&lt;code&gt;table_sample.rs&lt;/code&gt;&lt;/a&gt;):&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;code&gt;RelationPlanner&lt;/code&gt; recognizes &lt;code&gt;TABLESAMPLE&lt;/code&gt; and produces a custom logical node&lt;/li&gt;
+&lt;li&gt;That node gets wrapped in &lt;code&gt;LogicalPlan::Extension&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;ExtensionPlanner&lt;/code&gt; converts it to a custom &lt;code&gt;ExecutionPlan&lt;/code&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;In code:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;// Logical planning: FROM t TABLESAMPLE (...)  -&amp;gt;  LogicalPlan::Extension(...)
+let plan = LogicalPlan::Extension(Extension { node: Arc::new(TableSamplePlanNode { /* ... */ }) });
+&lt;/code&gt;&lt;/pre&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;// Physical planning: TableSamplePlanNode  -&amp;gt;  SampleExec
+if let Some(sample_node) = node.as_any().downcast_ref::&amp;lt;TableSamplePlanNode&amp;gt;() {
+  return Ok(Some(Arc::new(SampleExec::try_new(input, /* bounds, seed */)?)));
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;This is the general pattern for custom FROM constructs that need runtime behavior.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Full working example:&lt;/strong&gt; &lt;a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/relation_planner/table_sample.rs"&gt;&lt;code&gt;table_sample.rs&lt;/code&gt;&lt;/a&gt;&lt;/p&gt;
+&lt;h3 id="background-origin-of-the-api"&gt;Background: Origin of the API&lt;a class="headerlink" href="#background-origin-of-the-api" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;&lt;code&gt;RelationPlanner&lt;/code&gt; originally came out of trying to build &lt;code&gt;MATCH_RECOGNIZE&lt;/code&gt; support in DataFusion as a Datadog hackathon project. &lt;code&gt;MATCH_RECOGNIZE&lt;/code&gt; is a complex SQL feature for detecting patterns in sequences of rows, and it made sense to prototype as an extension first. At the time, DataFusion had no extension point at the right stage of SQL-to-rel planning to intercept and reinterpret relations.&lt;/p&gt;
+&lt;p&gt;&lt;a href="https://github.com/theirix"&gt;@theirix&lt;/a&gt;'s &lt;code&gt;TABLESAMPLE&lt;/code&gt; work (&lt;a href="https://github.com/apache/datafusion/issues/13563"&gt;#13563&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/17633"&gt;#17633&lt;/a&gt;) demonstrated exactly where the gap was: their extension only worked when &lt;code&gt;TABLESAMPLE&lt;/code&gt; appeared at the query root and any &lt;code&gt;TABLESAMPLE&lt;/code&gt; inside a CTE or JOIN would error. That limitation motivated &lt;a href="https://github.com/apache/datafusion/pull/17843"&gt;#17843&lt;/a&gt;, which introduced &lt;code&gt;RelationPlanner&lt;/code&gt; to intercept relations at any nesting level. The same hook now supports &lt;code&gt;PIVOT&lt;/code&gt;, &lt;code&gt;UNPIVOT&lt;/code&gt;, &lt;code&gt;TABLESAMPLE&lt;/code&gt;, and can translate dialect-specific FROM-clause syntax (for example, bridging Trino constructs into DataFusion plans).&lt;/p&gt;
+&lt;p&gt;This is how Datadog approaches compatibility work: build features in real systems first, then upstream the building blocks. A full &lt;code&gt;MATCH_RECOGNIZE&lt;/code&gt; extension is now in progress, built on top of &lt;code&gt;RelationPlanner&lt;/code&gt;, with the &lt;a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/relation_planner/match_recognize.rs"&gt;&lt;code&gt;match_recognize.rs&lt;/code&gt;&lt;/a&gt; example as a starting point.&lt;/p&gt;
+&lt;hr/&gt;
+&lt;h2 id="summary-the-extensibility-workflow"&gt;Summary: The Extensibility Workflow&lt;a class="headerlink" href="#summary-the-extensibility-workflow" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;DataFusion's SQL extensibility follows its processing pipeline. When building your own dialect extension, work incrementally:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Parse&lt;/strong&gt;: Use a parser wrapper to intercept custom syntax in the token stream. Produce either a standard &lt;code&gt;Statement&lt;/code&gt; or your own application-specific command.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Plan&lt;/strong&gt;: Implement the planning traits (&lt;code&gt;ExprPlanner&lt;/code&gt;, &lt;code&gt;TypePlanner&lt;/code&gt;, &lt;code&gt;RelationPlanner&lt;/code&gt;) to give your syntax meaning.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Execute&lt;/strong&gt;: Prefer rewrites to existing operators (like &lt;code&gt;PIVOT&lt;/code&gt; to &lt;code&gt;CASE&lt;/code&gt;). Only add custom physical operators via &lt;code&gt;ExtensionPlanner&lt;/code&gt; when you need specific runtime behavior like randomness or specialized I/O.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;hr/&gt;
+&lt;h2 id="debugging-tips"&gt;Debugging tips&lt;a class="headerlink" href="#debugging-tips" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;h3 id="print-the-logical-plan"&gt;Print the logical plan&lt;a class="headerlink" href="#print-the-logical-plan" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;let df = ctx.sql("SELECT * FROM t TABLESAMPLE (10 PERCENT)").await?;
+println!("{}", df.logical_plan().display_indent());
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id="use-explain"&gt;Use &lt;a href="https://datafusion.apache.org/user-guide/sql/explain.html"&gt;&lt;code&gt;EXPLAIN&lt;/code&gt;&lt;/a&gt;&lt;a class="headerlink" href="#use-explain" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;EXPLAIN SELECT * FROM t TABLESAMPLE (10 PERCENT);
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;If your extension is not being invoked, it is usually visible in the logical plan first.&lt;/p&gt;
+&lt;hr/&gt;
+&lt;h2 id="when-hooks-arent-enough"&gt;When hooks aren't enough&lt;a class="headerlink" href="#when-hooks-arent-enough" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;While these extension points cover the majority of dialect needs, some deep architectural areas still have limited or no hooks. If you are working in these parts of the SQL surface area, you may need to contribute upstream:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Statement-level planning: &lt;a href="https://github.com/apache/datafusion/blob/main/datafusion/sql/src/statement.rs"&gt;&lt;code&gt;statement.rs&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;JOIN planning: &lt;a href="https://github.com/apache/datafusion/blob/main/datafusion/sql/src/relation/join.rs"&gt;&lt;code&gt;relation/join.rs&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;TOP / FETCH clauses: &lt;a href="https://github.com/apache/datafusion/blob/main/datafusion/sql/src/select.rs"&gt;&lt;code&gt;select.rs&lt;/code&gt;&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/blob/main/datafusion/sql/src/query.rs"&gt;&lt;code&gt;query.rs&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;hr/&gt;
+&lt;h2 id="ideas-to-try"&gt;Ideas to try&lt;a class="headerlink" href="#ideas-to-try" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;If you want to experiment with these extension points, here are a few suggestions:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Geometry operators (for example &lt;code&gt;@&amp;gt;&lt;/code&gt;, &lt;code&gt;&amp;lt;@&lt;/code&gt;) via &lt;code&gt;ExprPlanner&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;Oracle &lt;code&gt;NUMBER&lt;/code&gt; or SQL Server &lt;code&gt;MONEY&lt;/code&gt; via &lt;code&gt;TypePlanner&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;JSON_TABLE&lt;/code&gt; or semantic-layer style relations via &lt;code&gt;RelationPlanner&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;hr/&gt;
+&lt;h2 id="see-also"&gt;See also&lt;a class="headerlink" href="#see-also" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;Extending SQL Guide: &lt;a href="https://datafusion.apache.org/library-user-guide/extending-sql.html"&gt;Extending SQL Guide&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Parser wrapping example: &lt;a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/sql_ops/custom_sql_parser.rs"&gt;&lt;code&gt;custom_sql_parser.rs&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;RelationPlanner examples:&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;PIVOT&lt;/code&gt; / &lt;code&gt;UNPIVOT&lt;/code&gt;: &lt;a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/relation_planner/pivot_unpivot.rs"&gt;&lt;code&gt;pivot_unpivot.rs&lt;/code&gt;&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;TABLESAMPLE&lt;/code&gt;: &lt;a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/relation_planner/table_sample.rs"&gt;&lt;code&gt;table_sample.rs&lt;/code&gt;&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;ExprPlanner test examples: &lt;a href="https://github.com/apache/datafusion/blob/main/datafusion/core/tests/user_defined/expr_planner.rs"&gt;&lt;code&gt;expr_planner_tests&lt;/code&gt;&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id="acknowledgements"&gt;Acknowledgements&lt;a class="headerlink" href="#acknowledgements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Thank you to &lt;a href="https://github.com/jayzhan211"&gt;@jayzhan211&lt;/a&gt; for designing and implementing the original &lt;code&gt;ExprPlanner&lt;/code&gt; API (&lt;a href="https://github.com/apache/datafusion/pull/11180"&gt;#11180&lt;/a&gt;), to &lt;a href="https://github.com/goldmedal"&gt;@goldmedal&lt;/a&gt; for adding &lt;code&gt;TypePlanner&lt;/code&gt; (&lt;a href="https://github.com/apache/datafusion/pull/13294"&gt;#13294&lt;/a&gt;), and to &lt;a href="https://github.com/theirix"&gt;@theirix&lt;/a&gt; for the &lt;code&gt;TABLESAMPLE&lt;/code&gt; work (&lt;a href="https://github.com/apache/datafusion/issues/13563"&gt;#13563&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/17633"&gt;#17633&lt;/a&gt;) that helped shape &lt;code&gt;RelationPlanner&lt;/code&gt;. Thank you to &lt;a href="https://github.com/alamb"&gt;@alamb&lt;/a&gt; for driving DataFusion's extensibility philosophy and for feedback on this post.&lt;/p&gt;
+&lt;h2 id="get-involved"&gt;Get Involved&lt;a class="headerlink" href="#get-involved" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Try it out&lt;/strong&gt;: Implement one of the extension points and share your experience&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;File issues or join the conversation&lt;/strong&gt;: &lt;a href="https://github.com/apache/datafusion/"&gt;GitHub&lt;/a&gt; for bugs and feature requests, &lt;a href="https://datafusion.apache.org/contributor-guide/communication.html"&gt;Slack or Discord&lt;/a&gt; for discussion&lt;/li&gt;
+&lt;/ul&gt;
+&lt;!-- Reference links --&gt;</content><category term="blog"></category></entry><entry><title>Apache DataFusion 52.0.0 Released</title><link href="https://datafusion.apache.org/blog/2026/01/08/datafusion-52.0.0" rel="alternate"></link><published>2026-01-08T00:00:00+00:00</published><updated>2026-01-08T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2026-01-08:/blog/2026/01/08/datafusion-52.0.0</id><summary type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+
 &lt;p&gt;We are proud to announce the release of &lt;a href="https://crates.io/crates/datafusion/52.0.0"&gt;DataFusion 52.0.0&lt;/a&gt;. This post highlights
 some of the major improvements since &lt;a href="https://datafusion.apache.org/blog/2025/11/25/datafusion-51.0.0/"&gt;DataFusion 51.0.0&lt;/a&gt;. The complete list of
-changes is available in the &lt;a href="https://github.com/apache/datafusion/blob/branch-52/dev/changelog/52.0.0.md"&gt;changelog&lt;/a&gt;. Thanks to the &lt;a href="https://github.com/apache/datafusion/blob/branch-52/dev/changelog/52.0.0.md#credits"&gt;120 contributors&lt;/a&gt; for
+changes is available in the &lt;a href="https://github.com/apache/datafusion/blob/branch-52/dev/changelog/52.0.0.md"&gt;changelog&lt;/a&gt;. Thanks to the [121 contributors] for
 making this release possible.&lt;/p&gt;
-&lt;p&gt;TODO: confirm the release …&lt;/p&gt;</summary><content type="html">&lt;!--
+&lt;p&gt;TODO: confirm the release date …&lt;/p&gt;</summary><content type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -42,33 +325,21 @@ limitations under the License.
 {% endcomment %}
 --&gt;
 
-&lt;h2 id="introduction"&gt;Introduction&lt;a class="headerlink" href="#introduction" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;We are proud to announce the release of &lt;a href="https://crates.io/crates/datafusion/52.0.0"&gt;DataFusion 52.0.0&lt;/a&gt;. This post highlights
 some of the major improvements since &lt;a href="https://datafusion.apache.org/blog/2025/11/25/datafusion-51.0.0/"&gt;DataFusion 51.0.0&lt;/a&gt;. The complete list of
-changes is available in the &lt;a href="https://github.com/apache/datafusion/blob/branch-52/dev/changelog/52.0.0.md"&gt;changelog&lt;/a&gt;. Thanks to the &lt;a href="https://github.com/apache/datafusion/blob/branch-52/dev/changelog/52.0.0.md#credits"&gt;120 contributors&lt;/a&gt; for
+changes is available in the &lt;a href="https://github.com/apache/datafusion/blob/branch-52/dev/changelog/52.0.0.md"&gt;changelog&lt;/a&gt;. Thanks to the [121 contributors] for
 making this release possible.&lt;/p&gt;
 &lt;p&gt;TODO: confirm the release date for 52.0.0 and update the front matter if needed.&lt;/p&gt;
 &lt;h2 id="performance-improvements"&gt;Performance Improvements 🚀&lt;a class="headerlink" href="#performance-improvements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
-&lt;p&gt;We continue to make significant performance improvements in DataFusion, both in
-the core engine and in the Parquet reader. This release includes faster &lt;code&gt;CASE&lt;/code&gt;
-expressions, better hash performance for string types, and continued string
-function optimizations.&lt;/p&gt;
+&lt;p&gt;We continue to make significant performance improvements in DataFusion. This
+release includes faster &lt;code&gt;CASE&lt;/code&gt; expressions (see below), a new SortMergeJoin,
+automatic caching of metadata, statistics, and listing results for ListingTable,
+improved hashing and grouping performance for string types, and string function
+optimizations.&lt;/p&gt;
 &lt;h3 id="performance-chart-todo"&gt;Performance Chart (TODO)&lt;a class="headerlink" href="#performance-chart-todo" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;TODO: add the 52.0.0 performance chart and update the caption.&lt;/p&gt;
 &lt;p&gt;&lt;img alt="Performance over time" class="img-responsive" src="/blog/images/datafusion-52.0.0/performance_over_time_clickbench.png" width="100%"/&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Figure 1&lt;/strong&gt;: TODO: update caption for 52.0.0 benchmarking results.&lt;/p&gt;
-&lt;h2 id="major-features"&gt;Major Features ✨&lt;a class="headerlink" href="#major-features" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
-&lt;h3 id="arrow-ipc-stream-file-support"&gt;Arrow IPC Stream file support&lt;a class="headerlink" href="#arrow-ipc-stream-file-support" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
-&lt;p&gt;DataFusion can now read Arrow IPC stream files (&lt;a href="https://github.com/apache/datafusion/pull/18457"&gt;#18457&lt;/a&gt;). This expands
-interoperability with systems that emit Arrow streams directly, making it
-simpler to ingest Arrow-native data without conversion.&lt;/p&gt;
-&lt;p&gt;Example (TODO: confirm exact syntax for IPC stream format selection):&lt;/p&gt;
-&lt;pre&gt;&lt;code class="language-sql"&gt;-- TODO: confirm whether the format name is `arrow`, `ipc_stream`, or implicit.
-CREATE EXTERNAL TABLE ipc_events
-STORED AS ARROW
-LOCATION 's3://bucket/events.arrow';
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/18457"&gt;#18457&lt;/a&gt;&lt;/p&gt;
 &lt;h3 id="faster-case-expression-evaluation"&gt;Faster &lt;code&gt;CASE&lt;/code&gt; expression evaluation&lt;a class="headerlink" href="#faster-case-expression-evaluation" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;DataFusion 52 completes major work from the CASE performance epic (&lt;a href="https://github.com/apache/datafusion/issues/18075"&gt;#18075&lt;/a&gt;).
 Lookup-table based evaluation avoids repeated expression evaluation and reduces
@@ -85,48 +356,84 @@ FROM jobs
 GROUP BY 1;
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/18183"&gt;#18183&lt;/a&gt;&lt;/p&gt;
+&lt;h3 id="rewritten-merge-join"&gt;Rewritten merge join&lt;a class="headerlink" href="#rewritten-merge-join" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;DataFusion 52 includes a rewrite of the sort-merge join output buffering to
+avoid excessive &lt;code&gt;concat_batches&lt;/code&gt; work and to use &lt;code&gt;BatchCoalescer&lt;/code&gt; internally and
+for final output. This change targets pathological slowdowns like the reported
+LeftAnti join case in &lt;a href="https://github.com/apache/datafusion/issues/18487"&gt;#18487&lt;/a&gt;, which also affected Comet workloads that rely on
+SMJ. Benchmarks in &lt;a href="https://github.com/apache/datafusion/pull/18875"&gt;#18875&lt;/a&gt; show dramatic gains for TPC-H Q21 (moving from
+minutes to milliseconds) while leaving most other queries unchanged or modestly
+faster, and the update is fully internal with no user-facing API changes.&lt;/p&gt;
+&lt;h3 id="caching-improvements"&gt;Caching Improvements&lt;a class="headerlink" href="#caching-improvements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;DataFusion also includes several additional caching improvements in this release.&lt;/p&gt;
+&lt;p&gt;First it includes a new statistics cache for Parquet Metadata that avoids repeatedly
+calculating statistics for Parquet backed files. This significantly improves
+planning time for certain queries. You can see the contents of the new cache using the
+&lt;a href="https://datafusion.apache.org/user-guide/cli/functions.html#statistics-cache"&gt;statistics_cache&lt;/a&gt; function in the CLI:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;select * from statistics_cache();
++------------------+---------------------+-----------------+------------------------+---------+-----------------+-------------+--------------------+-----------------------+
+| path             | file_modified       | file_size_bytes | e_tag                  | version | num_rows        | num_columns | table_size_bytes   | statistics_size_bytes |
++------------------+---------------------+-----------------+------------------------+---------+-----------------+-------------+--------------------+-----------------------+
+| .../hits.parquet | 2022-06-25T22:22:22 | 14779976446     | 0-5e24d1ee16380-370f48 | NULL    | Exact(99997497) | 105         | Exact(36445943240) | 0                     |
++------------------+---------------------+-----------------+------------------------+---------+-----------------+-------------+--------------------+-----------------------+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/18971"&gt;#18971&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/19054"&gt;#19054&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;DataFusion and includes a memory-bound, prefix aware list-files cache by
+default. You can see the contents of the new cache using the &lt;a href="https://datafusion.apache.org/user-guide/cli/functions.html#list-files-cache"&gt;list_files_cache&lt;/a&gt;
+function in the CLI:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;create external table overturemaps
+stored as parquet
+location 's3://overturemaps-us-west-2/release/2025-12-17.0/theme=base/type=infrastructure';
+0 row(s) fetched.
+&amp;gt; select table, path, metadata_size_bytes, expires_in, unnest(metadata_list)['file_size_bytes'] as file_size_bytes, unnest(metadata_list)['e_tag'] as e_tag from list_files_cache() limit 10;
++--------------+-----------------------------------------------------+---------------------+-----------------------------------+-----------------+---------------------------------------+
+| table        | path                                                | metadata_size_bytes | expires_in                        | file_size_bytes | e_tag                                 |
++--------------+-----------------------------------------------------+---------------------+-----------------------------------+-----------------+---------------------------------------+
+| overturemaps | release/2025-12-17.0/theme=base/type=infrastructure | 2750                | 0 days 0 hours 0 mins 25.264 secs | 999055952       | "35fc8fbe8400960b54c66fbb408c48e8-60" |
+| overturemaps | release/2025-12-17.0/theme=base/type=infrastructure | 2750                | 0 days 0 hours 0 mins 25.264 secs | 975592768       | "8a16e10b722681cdc00242564b502965-59" |
+...
+| overturemaps | release/2025-12-17.0/theme=base/type=infrastructure | 2750                | 0 days 0 hours 0 mins 25.264 secs | 1016732378      | "6d70857a0473ed9ed3fc6e149814168b-61" |
+| overturemaps | release/2025-12-17.0/theme=base/type=infrastructure | 2750                | 0 days 0 hours 0 mins 25.264 secs | 991363784       | "c9cafb42fcbb413f851691c895dd7c2b-60" |
+| overturemaps | release/2025-12-17.0/theme=base/type=infrastructure | 2750                | 0 days 0 hours 0 mins 25.264 secs | 1032469715      | "7540252d0d67158297a67038a3365e0f-62" |
++--------------+-----------------------------------------------------+---------------------+-----------------------------------+-----------------+---------------------------------------+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/18146"&gt;#18146&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/18855"&gt;#18855&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/19366"&gt;#19366&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/19298"&gt;#19298&lt;/a&gt;, &lt;/p&gt;
+&lt;h2 id="major-features"&gt;Major Features ✨&lt;a class="headerlink" href="#major-features" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;h3 id="arrow-ipc-stream-file-support"&gt;Arrow IPC Stream file support&lt;a class="headerlink" href="#arrow-ipc-stream-file-support" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;DataFusion can now read Arrow IPC stream files (&lt;a href="https://github.com/apache/datafusion/pull/18457"&gt;#18457&lt;/a&gt;). This expands
+interoperability with systems that emit Arrow streams directly, making it
+simpler to ingest Arrow-native data without conversion. Thanks to &lt;a href="https://github.com/corasaurus-hex"&gt;corasaurus-hex&lt;/a&gt;
+for implementing this feature.&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;CREATE EXTERNAL TABLE ipc_events
+STORED AS ARROW
+LOCATION 's3://bucket/events.arrow';
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/18457"&gt;#18457&lt;/a&gt;&lt;/p&gt;
 &lt;h3 id="extensible-sql-planning-with-relation-planner-extensions"&gt;Extensible SQL planning with relation planner extensions&lt;a class="headerlink" href="#extensible-sql-planning-with-relation-planner-extensions" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;DataFusion now supports relation planner extensions for custom SQL syntax and
 planning logic (&lt;a href="https://github.com/apache/datafusion/issues/17824"&gt;#17824&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/17843"&gt;#17843&lt;/a&gt;). This lets downstream projects inject their
-own planning behavior without forking the SQL planner, which is critical for
-dialect extensions and custom table references.&lt;/p&gt;
-&lt;p&gt;Diagram:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;SQL text
-  |  (custom relation planner extension)
-  v
-Logical plan
-  |  (DataFusion optimizers)
-  v
-Physical plan
+own planning behavior without forking the SQL planner. As explained in the
+&lt;a href="https://datafusion.apache.org/blog/2026/01/12/extending-sql/"&gt;Extending SQL in DataFusion Blog&lt;/a&gt;, you can now customize DataFusion with
+support for almost any SQL syntax, such as:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;-- Postgres-style JSON operators
+SELECT payload-&amp;gt;'user'-&amp;gt;&amp;gt;'id' FROM logs;
+-- MySQL-specific types
+SELECT DATETIME '2001-01-01 18:00:00';
+-- Statistical sampling
+SELECT * FROM sensor_data TABLESAMPLE BERNOULLI(10 PERCENT);
 &lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;TODO: include a short Rust snippet showing how to register a relation planner
-extension once the final API example is confirmed.&lt;/p&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/geoffreyclaude"&gt;geoffreyclaude&lt;/a&gt; for implementing relation planner extensions, and to
+&lt;a href="https://github.com/theirix"&gt;theirix&lt;/a&gt;, &lt;a href="https://github.com/alamb"&gt;alamb&lt;/a&gt;, &lt;a href="https://github.com/NGA-TRAN"&gt;NGA-TRAN&lt;/a&gt;, and &lt;a href="https://github.com/gabotechs"&gt;gabotechs&lt;/a&gt; for reviews and feedback that
+shaped the design.&lt;/p&gt;
+&lt;figure&gt;
+&lt;img alt="DataFusion SQL processing pipeline: SQL String flows through Parser to AST, then SqlToRel (with Extension Planners) to LogicalPlan, then PhysicalPlanner to ExecutionPlan" class="img-responsive" src="/blog/images/extending-sql/architecture.svg" width="100%"/&gt;
+&lt;figcaption&gt;
+&lt;b&gt;Figure 1:&lt;/b&gt; 
+        SQL processing pipeline with relation planner extensions from the 
+        &lt;a href="https://datafusion.apache.org/blog/2026/01/12/extending-sql/"&gt;Extending SQL in DataFusion Blog&lt;/a&gt;. 
+  &lt;/figcaption&gt;
+&lt;/figure&gt;
 &lt;p&gt;Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/17843"&gt;#17843&lt;/a&gt;&lt;/p&gt;
-&lt;h3 id="listingtable-object-store-usage-improvements"&gt;ListingTable object store usage improvements&lt;a class="headerlink" href="#listingtable-object-store-usage-improvements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
-&lt;p&gt;ListingTable improvements continue to reduce object store I/O and planning
-latency for partitioned datasets (&lt;a href="https://github.com/apache/datafusion/issues/17214"&gt;#17214&lt;/a&gt;). DataFusion now normalizes partition
-and flat listings, enables a memory-bound list-files cache by default, and
-makes the cache prefix-aware for partition pruning.&lt;/p&gt;
-&lt;p&gt;Diagram:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;Object store LIST
-  |  (normalized listing + cache)
-  v
-Partitioned files
-  |  (planner)
-  v
-Execution plan
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/18146"&gt;#18146&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/18855"&gt;#18855&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/19366"&gt;#19366&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/19298"&gt;#19298&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/18971"&gt;#18971&lt;/a&gt;&lt;/p&gt;
-&lt;h3 id="statistics-cache-improvements"&gt;Statistics cache improvements&lt;a class="headerlink" href="#statistics-cache-improvements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
-&lt;p&gt;The statistics cache has been improved to make pruning and planning more
-reliable in repeated workloads (&lt;a href="https://github.com/apache/datafusion/issues/19051"&gt;#19051&lt;/a&gt;). DataFusion now exposes a
-&lt;code&gt;statistics_cache&lt;/code&gt; function and improves cache memory behavior for listing
-workflows, making it easier to diagnose cache contents and reduce repeated I/O.&lt;/p&gt;
-&lt;p&gt;Example (TODO: confirm the function signature and output schema):&lt;/p&gt;
-&lt;pre&gt;&lt;code class="language-sql"&gt;-- TODO: confirm the function name and arguments.
-SELECT * FROM statistics_cache('my_table');
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/19054"&gt;#19054&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/18855"&gt;#18855&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/18971"&gt;#18971&lt;/a&gt;&lt;/p&gt;
 &lt;h3 id="pushdown-expression-evaluation-via-physicalexpradapter"&gt;Pushdown expression evaluation via PhysicalExprAdapter&lt;a class="headerlink" href="#pushdown-expression-evaluation-via-physicalexpradapter" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;DataFusion now pushes down expression evaluation into TableProviders using the
 PhysicalExprAdapter, replacing the older SchemaAdapter approach (&lt;a href="https://github.com/apache/datafusion/issues/14993"&gt;#14993&lt;/a&gt;,
