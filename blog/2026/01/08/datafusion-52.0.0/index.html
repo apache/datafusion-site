@@ -96,7 +96,7 @@ making this release possible.</p>
 <p>TODO: confirm the release date for 52.0.0 and update the front matter if needed.</p>
 <h2 id="performance-improvements">Performance Improvements 🚀<a class="headerlink" href="#performance-improvements" title="Permanent link">¶</a></h2>
 <p>We continue to make significant performance improvements in DataFusion. This
-release includes faster <code>CASE</code> expressions (see below), a new SortMergeJoin,
+release includes faster <code>CASE</code> expressions (see below), SortMergeJoin buffering optimizations,
 automatic caching of metadata, statistics, and listing results for ListingTable,
 improved hashing and grouping performance for string types, and string function
 optimizations.</p>
@@ -105,7 +105,7 @@ optimizations.</p>
 <p><img alt="Performance over time" class="img-responsive" src="/blog/images/datafusion-52.0.0/performance_over_time_clickbench.png" width="100%"/></p>
 <p><strong>Figure 1</strong>: TODO: update caption for 52.0.0 benchmarking results.</p>
 <h3 id="faster-case-expression-evaluation">Faster <code>CASE</code> expression evaluation<a class="headerlink" href="#faster-case-expression-evaluation" title="Permanent link">¶</a></h3>
-<p>DataFusion 52 completes major work from the CASE performance epic (<a href="https://github.com/apache/datafusion/issues/18075">#18075</a>).
+<p>DataFusion 52 completes major work from the <code>CASE</code> performance epic (<a href="https://github.com/apache/datafusion/issues/18075">#18075</a>).
 Lookup-table based evaluation avoids repeated expression evaluation and reduces
 branching overhead, accelerating common ETL patterns.</p>
 <p>Example:</p>
@@ -121,7 +121,7 @@ GROUP BY 1;
 </code></pre>
 <p>Related PRs: <a href="https://github.com/apache/datafusion/pull/18183">#18183</a></p>
 <h3 id="rewritten-merge-join">Rewritten merge join<a class="headerlink" href="#rewritten-merge-join" title="Permanent link">¶</a></h3>
-<p>DataFusion 52 includes a rewrite of the sort-merge join output buffering to
+<p>DataFusion 52 includes a rewrite of the sort-merge join (SMJ) output buffering to
 avoid excessive <code>concat_batches</code> work and to use <code>BatchCoalescer</code> internally and
 for final output. This change targets pathological slowdowns like the reported
 LeftAnti join case in <a href="https://github.com/apache/datafusion/issues/18487">#18487</a>, which also affected Comet workloads that rely on
