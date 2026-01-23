@@ -47,25 +47,28 @@
         <aside class="toc-container d-md-none mb-2">
           <div class="toc"><span class="toctitle">Contents</span><ul>
 <li><a href="#performance-improvements">Performance Improvements 🚀</a><ul>
-<li><a href="#performance-chart-todo">Performance Chart (TODO)</a></li>
-<li><a href="#faster-case-expression-evaluation">Faster CASE expression evaluation</a></li>
-<li><a href="#rewritten-merge-join">Rewritten merge join</a></li>
-<li><a href="#caching-improvements">Caching Improvements</a></li>
+<li><a href="#faster-case-expressions">Faster CASE Expressions</a></li>
+<li><a href="#new-merge-join">New Merge Join</a></li>
 </ul>
 </li>
+<li><a href="#mbutrovich-httpsgithubcommbutrovich">[mbutrovich]: https://github.com/mbutrovich</a><ul>
+<li><a href="#rewritten-merge-join">Rewritten merge join</a></li>
+<li><a href="#caching-improvements">Caching Improvements</a></li>
+<li><a href="#improved-hash-join-filter-pushdown">Improved Hash Join Filter Pushdown</a></li>
 <li><a href="#major-features">Major Features ✨</a><ul>
 <li><a href="#arrow-ipc-stream-file-support">Arrow IPC Stream file support</a></li>
-<li><a href="#extensible-sql-planning-with-relation-planner-extensions">Extensible SQL planning with relation planner extensions</a></li>
-<li><a href="#pushdown-expression-evaluation-via-physicalexpradapter">Pushdown expression evaluation via PhysicalExprAdapter</a></li>
-<li><a href="#hash-join-build-side-pushdown">Hash join build-side pushdown</a></li>
-<li><a href="#sort-pushdown-to-sources">Sort pushdown to sources</a></li>
-<li><a href="#deleteupdate-hooks-in-tableprovider">DELETE/UPDATE hooks in TableProvider</a></li>
-<li><a href="#coalescebatchesexec-removal-and-integrated-batch-coalescing">CoalesceBatchesExec removal and integrated batch coalescing</a></li>
+<li><a href="#more-extensible-sql-planning-with-relationplanner">More Extensible SQL Planning with RelationPlanner</a></li>
+<li><a href="#expression-evaluation-pushdown-to-scans">Expression Evaluation Pushdown to Scans</a></li>
+<li><a href="#sort-pushdown-to-scans">Sort Pushdown to Scans</a></li>
+<li><a href="#tableprovider-supports-delete-and-update-statements">TableProvider supports DELETE and UPDATE statements</a></li>
+<li><a href="#coalescebatchesexec-removed">CoalesceBatchesExec Removed</a></li>
 </ul>
 </li>
 <li><a href="#upgrade-guide-and-changelog">Upgrade Guide and Changelog</a></li>
 <li><a href="#about-datafusion">About DataFusion</a></li>
 <li><a href="#how-to-get-involved">How to Get Involved</a></li>
+</ul>
+</li>
 </ul>
 </div>
         </aside>
@@ -91,35 +94,34 @@ limitations under the License.
 
 <p>We are proud to announce the release of <a href="https://crates.io/crates/datafusion/52.0.0">DataFusion 52.0.0</a>. This post highlights
 some of the major improvements since <a href="https://datafusion.apache.org/blog/2025/11/25/datafusion-51.0.0/">DataFusion 51.0.0</a>. The complete list of
-changes is available in the <a href="https://github.com/apache/datafusion/blob/branch-52/dev/changelog/52.0.0.md">changelog</a>. Thanks to the [121 contributors] for
+changes is available in the <a href="https://github.com/apache/datafusion/blob/branch-52/dev/changelog/52.0.0.md">changelog</a>. Thanks to the <a href="https://github.com/apache/datafusion/blob/branch-52/dev/changelog/52.0.0.md#credits">121 contributors</a> for
 making this release possible.</p>
 <p>TODO: confirm the release date for 52.0.0 and update the front matter if needed.</p>
 <h2 id="performance-improvements">Performance Improvements 🚀<a class="headerlink" href="#performance-improvements" title="Permanent link">¶</a></h2>
-<p>We continue to make significant performance improvements in DataFusion. This
-release includes faster <code>CASE</code> expressions (see below), SortMergeJoin buffering optimizations,
-automatic caching of metadata, statistics, and listing results for ListingTable,
-improved hashing and grouping performance for string types, and string function
-optimizations.</p>
-<h3 id="performance-chart-todo">Performance Chart (TODO)<a class="headerlink" href="#performance-chart-todo" title="Permanent link">¶</a></h3>
-<p>TODO: add the 52.0.0 performance chart and update the caption.</p>
-<p><img alt="Performance over time" class="img-responsive" src="/blog/images/datafusion-52.0.0/performance_over_time_clickbench.png" width="100%"/></p>
-<p><strong>Figure 1</strong>: TODO: update caption for 52.0.0 benchmarking results.</p>
-<h3 id="faster-case-expression-evaluation">Faster <code>CASE</code> expression evaluation<a class="headerlink" href="#faster-case-expression-evaluation" title="Permanent link">¶</a></h3>
-<p>DataFusion 52 completes major work from the <code>CASE</code> performance epic (<a href="https://github.com/apache/datafusion/issues/18075">#18075</a>).
-Lookup-table based evaluation avoids repeated expression evaluation and reduces
-branching overhead, accelerating common ETL patterns.</p>
-<p>Example:</p>
-<pre><code class="language-sql">SELECT
-  CASE
-    WHEN status IN ('NEW', 'READY', 'STAGED') THEN 'PENDING'
-    WHEN status IN ('DONE', 'COMPLETE') THEN 'FINISHED'
-    ELSE 'OTHER'
-  END AS status_bucket,
-  count(*)
-FROM jobs
-GROUP BY 1;
+<p>We continue to make significant performance improvements in DataFusion as explained below.</p>
+<h3 id="faster-case-expressions">Faster <code>CASE</code> Expressions<a class="headerlink" href="#faster-case-expressions" title="Permanent link">¶</a></h3>
+<p>DataFusion 52 has lookup-table-based evaluation for certain <code>CASE</code> expressions
+to avoid repeated evaluation for accelerating common ETL patterns such as</p>
+<pre><code class="language-sql">CASE company
+    WHEN 1 THEN 'Apple'
+    WHEN 5 THEN 'Samsung'
+    WHEN 2 THEN 'Motorola'
+    WHEN 3 THEN 'LG'
+    ELSE 'Other'
+END
 </code></pre>
-<p>Related PRs: <a href="https://github.com/apache/datafusion/pull/18183">#18183</a></p>
+<p>This is the final work in our <code>CASE</code> performance epic (<a href="https://github.com/apache/datafusion/issues/18075">#18075</a>), which has
+improved <code>CASE</code> evaluation significantly. Related PRs <a href="https://github.com/apache/datafusion/pull/18183">#18183</a>. Thanks to
+<a href="https://github.com/rluvaton">rluvaton</a> and <a href="https://github.com/pepijnve">pepijnve</a> for the implementation.</p>
+<h3 id="new-merge-join">New Merge Join<a class="headerlink" href="#new-merge-join" title="Permanent link">¶</a></h3>
+<p>DataFusion 52 includes a rewrite of the sort-merge join (SMJ) operator, with
+speedups of three orders of magnitude in some pathological cases such as the
+case in <a href="https://github.com/apache/datafusion/issues/18487">#18487</a>, which also affected <a href="https://datafusion.apache.org/comet/">Apache Comet</a> workloads. Benchmarks in
+<a href="https://github.com/apache/datafusion/pull/18875">#18875</a> show dramatic gains for TPC-H Q21 (minutes to milliseconds) while
+leaving other queries unchanged or modestly faster. Thanks to [mbutrovich] for
+the implementation and reviews from <a href="https://github.com/Dandandan">Dandandan</a>.</p>
+<p>&lt;&lt;&lt;&lt;&lt;&lt;&lt; HEAD</p>
+<h1 id="mbutrovich-httpsgithubcommbutrovich">[mbutrovich]: https://github.com/mbutrovich<a class="headerlink" href="#mbutrovich-httpsgithubcommbutrovich" title="Permanent link">¶</a></h1>
 <h3 id="rewritten-merge-join">Rewritten merge join<a class="headerlink" href="#rewritten-merge-join" title="Permanent link">¶</a></h3>
 <p>DataFusion 52 includes a rewrite of the sort-merge join (SMJ) output buffering to
 avoid excessive <code>concat_batches</code> work and to use <code>BatchCoalescer</code> internally and
@@ -128,10 +130,25 @@ LeftAnti join case in <a href="https://github.com/apache/datafusion/issues/18487
 SMJ. Benchmarks in <a href="https://github.com/apache/datafusion/pull/18875">#18875</a> show dramatic gains for TPC-H Q21 (moving from
 minutes to milliseconds) while leaving most other queries unchanged or modestly
 faster, and the update is fully internal with no user-facing API changes.</p>
+<blockquote>
+<blockquote>
+<blockquote>
+<blockquote>
+<blockquote>
+<blockquote>
+<blockquote>
+<p>ccc5d4296951810f48e133fe70948d34c4b4f9bd</p>
+</blockquote>
+</blockquote>
+</blockquote>
+</blockquote>
+</blockquote>
+</blockquote>
+</blockquote>
 <h3 id="caching-improvements">Caching Improvements<a class="headerlink" href="#caching-improvements" title="Permanent link">¶</a></h3>
-<p>DataFusion also includes several additional caching improvements in this release.</p>
+<p>This release also includes several additional caching improvements.</p>
 <p>First it includes a new statistics cache for Parquet Metadata that avoids repeatedly
-calculating statistics for Parquet backed files. This significantly improves
+(re)calculating statistics for Parquet backed files. This significantly improves
 planning time for certain queries. You can see the contents of the new cache using the
 <a href="https://datafusion.apache.org/user-guide/cli/functions.html#statistics-cache">statistics_cache</a> function in the CLI:</p>
 <pre><code class="language-sql">select * from statistics_cache();
@@ -141,10 +158,19 @@ planning time for certain queries. You can see the contents of the new cache usi
 | .../hits.parquet | 2022-06-25T22:22:22 | 14779976446     | 0-5e24d1ee16380-370f48 | NULL    | Exact(99997497) | 105         | Exact(36445943240) | 0                     |
 +------------------+---------------------+-----------------+------------------------+---------+-----------------+-------------+--------------------+-----------------------+
 </code></pre>
-<p>Related PRs: <a href="https://github.com/apache/datafusion/pull/18971">#18971</a>, <a href="https://github.com/apache/datafusion/pull/19054">#19054</a></p>
-<p>DataFusion and includes a memory-bound, prefix aware list-files cache by
-default. You can see the contents of the new cache using the <a href="https://datafusion.apache.org/user-guide/cli/functions.html#list-files-cache">list_files_cache</a>
-function in the CLI:</p>
+<p>Thanks to <a href="https://github.com/bharath-techie">bharath-techie</a> and <a href="https://github.com/nuno-faria">nuno-faria</a> for implementing the statistics cache,
+with reviews from <a href="https://github.com/martin-g">martin-g</a>, <a href="https://github.com/alamb">alamb</a>, and <a href="https://github.com/alchemist51">alchemist51</a>.
+Related PRs: <a href="https://github.com/apache/datafusion/pull/18971">#18971</a>, <a href="https://github.com/apache/datafusion/pull/19054">#19054</a></p>
+<p>It also includes a prefix-aware list-files cache by default which accelerates
+evaluating partition predicates for Hive partitioned tables.</p>
+<pre><code class="language-sql">-- Read the hive partitioned dataset from Overture Maps (100s of Parquet files)
+CREATE EXTERNAL TABLE overturemaps
+STORED AS PARQUET LOCATION 's3://overturemaps-us-west-2/release/2025-12-17.0/';
+-- Find all files where the path contains `theme=base without requiring another LIST call
+select count(*) from overturemaps where theme='base';
+</code></pre>
+<p>You can see the
+contents of the new cache using the <a href="https://datafusion.apache.org/user-guide/cli/functions.html#list-files-cache">list_files_cache</a> function in the CLI:</p>
 <pre><code class="language-sql">create external table overturemaps
 stored as parquet
 location 's3://overturemaps-us-west-2/release/2025-12-17.0/theme=base/type=infrastructure';
@@ -161,24 +187,36 @@ location 's3://overturemaps-us-west-2/release/2025-12-17.0/theme=base/type=infra
 | overturemaps | release/2025-12-17.0/theme=base/type=infrastructure | 2750                | 0 days 0 hours 0 mins 25.264 secs | 1032469715      | "7540252d0d67158297a67038a3365e0f-62" |
 +--------------+-----------------------------------------------------+---------------------+-----------------------------------+-----------------+---------------------------------------+
 </code></pre>
-<p>Related PRs: <a href="https://github.com/apache/datafusion/pull/18146">#18146</a>, <a href="https://github.com/apache/datafusion/pull/18855">#18855</a>, <a href="https://github.com/apache/datafusion/pull/19366">#19366</a>, <a href="https://github.com/apache/datafusion/pull/19298">#19298</a>, </p>
+<p>Thanks to <a href="https://github.com/BlakeOrth">BlakeOrth</a> and <a href="https://github.com/Yuvraj-cyborg">Yuvraj-cyborg</a> for implementing the list-files cache work,
+with reviews from <a href="https://github.com/gabotechs">gabotechs</a>, <a href="https://github.com/alamb">alamb</a>, <a href="https://github.com/alchemist51">alchemist51</a>, <a href="https://github.com/martin-g">martin-g</a>, and <a href="https://github.com/BlakeOrth">BlakeOrth</a>.
+Related PRs: <a href="https://github.com/apache/datafusion/pull/18146">#18146</a>, <a href="https://github.com/apache/datafusion/pull/18855">#18855</a>, <a href="https://github.com/apache/datafusion/pull/19366">#19366</a>, <a href="https://github.com/apache/datafusion/pull/19298">#19298</a>, </p>
+<h3 id="improved-hash-join-filter-pushdown">Improved Hash Join Filter Pushdown<a class="headerlink" href="#improved-hash-join-filter-pushdown" title="Permanent link">¶</a></h3>
+<p>Starting in DataFusion 51, filtering information from <code>HashJoinExec</code> is passed
+dynamically to scans, as explained in the <a href="https://datafusion.apache.org/blog/2025/09/10/dynamic-filters/#hash-join-dynamic-filters">Dynamic Filtering Blog</a> using a
+technique referred to as <a href="https://dl.acm.org/doi/10.1109/ICDE.2008.4497486">Sideways Information Passing</a> in Database research
+literature. The initial implementation passed min/max values for the join keys.
+DataFusion 52 extends the optimization (<a href="https://github.com/apache/datafusion/issues/17171">#17171</a> / <a href="https://github.com/apache/datafusion/pull/18393">#18393</a>) to use an <code>IN</code> list when the
+build size is small such as when the join is very selective. The <code>IN</code> list is
+pushed down to the probe side scan and is used to prune files, row groups, and
+individual rows.  Thanks to <a href="https://github.com/adriangb">adriangb</a> for implementing this feature, with
+reviews from <a href="https://github.com/LiaCastaneda">LiaCastaneda</a>, <a href="https://github.com/asolimando">asolimando</a>, <a href="https://github.com/comphead">comphead</a>, and [mbutrovich].</p>
 <h2 id="major-features">Major Features ✨<a class="headerlink" href="#major-features" title="Permanent link">¶</a></h2>
 <h3 id="arrow-ipc-stream-file-support">Arrow IPC Stream file support<a class="headerlink" href="#arrow-ipc-stream-file-support" title="Permanent link">¶</a></h3>
 <p>DataFusion can now read Arrow IPC stream files (<a href="https://github.com/apache/datafusion/pull/18457">#18457</a>). This expands
 interoperability with systems that emit Arrow streams directly, making it
 simpler to ingest Arrow-native data without conversion. Thanks to <a href="https://github.com/corasaurus-hex">corasaurus-hex</a>
-for implementing this feature.</p>
+for implementing this feature, with reviews from <a href="https://github.com/martin-g">martin-g</a>, <a href="https://github.com/Jefffrey">Jefffrey</a>,
+<a href="https://github.com/jdcasale">jdcasale</a>, <a href="https://github.com/2010YOUY01">2010YOUY01</a>, and <a href="https://github.com/timsaucer">timsaucer</a>.</p>
 <pre><code class="language-sql">CREATE EXTERNAL TABLE ipc_events
 STORED AS ARROW
 LOCATION 's3://bucket/events.arrow';
 </code></pre>
 <p>Related PRs: <a href="https://github.com/apache/datafusion/pull/18457">#18457</a></p>
-<h3 id="extensible-sql-planning-with-relation-planner-extensions">Extensible SQL planning with relation planner extensions<a class="headerlink" href="#extensible-sql-planning-with-relation-planner-extensions" title="Permanent link">¶</a></h3>
-<p>DataFusion now supports relation planner extensions for custom SQL syntax and
-planning logic (<a href="https://github.com/apache/datafusion/issues/17824">#17824</a>, <a href="https://github.com/apache/datafusion/pull/17843">#17843</a>). This lets downstream projects inject their
-own planning behavior without forking the SQL planner. As explained in the
-<a href="https://datafusion.apache.org/blog/2026/01/12/extending-sql/">Extending SQL in DataFusion Blog</a>, you can now customize DataFusion with
-support for almost any SQL syntax, such as:</p>
+<h3 id="more-extensible-sql-planning-with-relationplanner">More Extensible SQL Planning with <code>RelationPlanner</code><a class="headerlink" href="#more-extensible-sql-planning-with-relationplanner" title="Permanent link">¶</a></h3>
+<p>DataFusion now has an API for extending the SQL planner for relations, as
+explained in the <a href="https://datafusion.apache.org/blog/2026/01/12/extending-sql/">Extending SQL in DataFusion Blog</a>. With this new API, you can
+customize DataFusion to support almost any SQL syntax, such as the following
+(which are not supported by default):</p>
 <pre><code class="language-sql">-- Postgres-style JSON operators
 SELECT payload-&gt;'user'-&gt;&gt;'id' FROM logs;
 -- MySQL-specific types
@@ -187,87 +225,47 @@ SELECT DATETIME '2001-01-01 18:00:00';
 SELECT * FROM sensor_data TABLESAMPLE BERNOULLI(10 PERCENT);
 </code></pre>
 <p>Thanks to <a href="https://github.com/geoffreyclaude">geoffreyclaude</a> for implementing relation planner extensions, and to
-<a href="https://github.com/theirix">theirix</a>, <a href="https://github.com/alamb">alamb</a>, <a href="https://github.com/NGA-TRAN">NGA-TRAN</a>, and <a href="https://github.com/gabotechs">gabotechs</a> for reviews and feedback that
-shaped the design.</p>
-<figure>
-<img alt="DataFusion SQL processing pipeline: SQL String flows through Parser to AST, then SqlToRel (with Extension Planners) to LogicalPlan, then PhysicalPlanner to ExecutionPlan" class="img-responsive" src="/blog/images/extending-sql/architecture.svg" width="100%"/>
-<figcaption>
-<b>Figure 1:</b> 
-        SQL processing pipeline with relation planner extensions from the 
-        <a href="https://datafusion.apache.org/blog/2026/01/12/extending-sql/">Extending SQL in DataFusion Blog</a>. 
-  </figcaption>
-</figure>
-<p>Related PRs: <a href="https://github.com/apache/datafusion/pull/17843">#17843</a></p>
-<h3 id="pushdown-expression-evaluation-via-physicalexpradapter">Pushdown expression evaluation via PhysicalExprAdapter<a class="headerlink" href="#pushdown-expression-evaluation-via-physicalexpradapter" title="Permanent link">¶</a></h3>
-<p>DataFusion now pushes down expression evaluation into TableProviders using the
-PhysicalExprAdapter, replacing the older SchemaAdapter approach (<a href="https://github.com/apache/datafusion/issues/14993">#14993</a>,
-<a href="https://github.com/apache/datafusion/issues/16800">#16800</a>). This enables richer pushdown (expressions and projections) and
-improves consistency between logical and physical planning.</p>
-<p>Diagram:</p>
-<pre><code>SQL filter/projection
-  |  (PhysicalExprAdapter)
-  v
-TableProvider pushdown
-  |  (scan)
-  v
-Reduced data
-</code></pre>
-<p>Related PRs: <a href="https://github.com/apache/datafusion/pull/18998">#18998</a>, <a href="https://github.com/apache/datafusion/pull/19345">#19345</a></p>
-<h3 id="hash-join-build-side-pushdown">Hash join build-side pushdown<a class="headerlink" href="#hash-join-build-side-pushdown" title="Permanent link">¶</a></h3>
-<p>DataFusion can now push down build-side hash tables from HashJoinExec into scans
-(<a href="https://github.com/apache/datafusion/issues/17171">#17171</a>). When the build side is small, DataFusion converts the hash table to
-an <code>IN</code> list or hash lookup that can be evaluated during scans, reducing the
-join input size early.</p>
-<p>Example:</p>
-<pre><code class="language-sql">SELECT *
-FROM orders o
-JOIN small_dim d
-ON o.dim_id = d.id;
-</code></pre>
-<p>TODO: include a physical plan snippet that shows the pushdown filter once a
-canonical example is selected.</p>
-<p>Related PRs: <a href="https://github.com/apache/datafusion/pull/18393">#18393</a></p>
-<h3 id="sort-pushdown-to-sources">Sort pushdown to sources<a class="headerlink" href="#sort-pushdown-to-sources" title="Permanent link">¶</a></h3>
-<p>DataFusion now supports sort pushdown into data sources, allowing scans to
-return sorted data or leverage reversed row groups when possible (<a href="https://github.com/apache/datafusion/issues/10433">#10433</a>,
-<a href="https://github.com/apache/datafusion/pull/19064">#19064</a>). This reduces memory pressure and can eliminate explicit sort stages
-for partitioned or pre-sorted data.</p>
-<p>Example:</p>
-<pre><code class="language-sql">SELECT *
-FROM parquet_table
-ORDER BY event_time DESC;
-</code></pre>
-<p>Related PRs: <a href="https://github.com/apache/datafusion/pull/19064">#19064</a></p>
-<h3 id="deleteupdate-hooks-in-tableprovider">DELETE/UPDATE hooks in TableProvider<a class="headerlink" href="#deleteupdate-hooks-in-tableprovider" title="Permanent link">¶</a></h3>
-<p>TableProvider now includes DELETE and UPDATE hooks, with MemTable providing the
-first implementation (<a href="https://github.com/apache/datafusion/pull/19142">#19142</a>). This is an important step toward fully
-featured DML support and enables downstream storage engines to plug in their
-own mutation logic.</p>
+<a href="https://github.com/theirix">theirix</a>, <a href="https://github.com/alamb">alamb</a>, <a href="https://github.com/NGA-TRAN">NGA-TRAN</a>, and <a href="https://github.com/gabotechs">gabotechs</a> for reviews and feedback on the
+design. Related PRs: <a href="https://github.com/apache/datafusion/pull/17843">#17843</a></p>
+<h3 id="expression-evaluation-pushdown-to-scans">Expression Evaluation Pushdown to Scans<a class="headerlink" href="#expression-evaluation-pushdown-to-scans" title="Permanent link">¶</a></h3>
+<p>DataFusion now pushes down expression evaluation into TableProviders using 
+<a href="https://docs.rs/datafusion/52.0.0/datafusion/physical_expr_adapter/trait.PhysicalExprAdapter.html">PhysicalExprAdapter</a>, replacing the older SchemaAdapter approach (<a href="https://github.com/apache/datafusion/issues/14993">#14993</a>,
+<a href="https://github.com/apache/datafusion/issues/16800">#16800</a>). This work means predicates and expressions can be customized for each
+individual file schema, opening additional optimization such as support for
+<a href="https://github.com/apache/datafusion/issues/16116">Variant shredding</a>. Thanks to <a href="https://github.com/adriangb">adriangb</a> for implementing PhysicalExprAdapter
+and reworking pushdown to use it. Related PRs: <a href="https://github.com/apache/datafusion/pull/18998">#18998</a>, <a href="https://github.com/apache/datafusion/pull/19345">#19345</a></p>
+<h3 id="sort-pushdown-to-scans">Sort Pushdown to Scans<a class="headerlink" href="#sort-pushdown-to-scans" title="Permanent link">¶</a></h3>
+<p>DataFusion can now push sorts all the way to data sources (<a href="https://github.com/apache/datafusion/issues/10433">#10433</a>, <a href="https://github.com/apache/datafusion/pull/19064">#19064</a>).
+This allows table provider implementations to take better advantage of existing sort 
+information such as to reorder files or row groups to satisfy <code>LIMIT</code> clauses more
+efficiently. Thanks to <a href="https://github.com/zhuqi-lucas">zhuqi-lucas</a> for this feature. </p>
+<h3 id="tableprovider-supports-delete-and-update-statements"><code>TableProvider</code> supports <code>DELETE</code> and <code>UPDATE</code> statements<a class="headerlink" href="#tableprovider-supports-delete-and-update-statements" title="Permanent link">¶</a></h3>
+<p>The <a href="https://docs.rs/datafusion/52.0.0/datafusion/datasource/trait.TableProvider.html">TableProvider</a> trait now includes hooks for <code>DELETE</code> and <code>UPDATE</code>
+statements and the basic MemTable implements them (<a href="https://github.com/apache/datafusion/pull/19142">#19142</a>). This lets
+downstream implementations and storage engines plug in their own mutation logic.
+See <a href="https://docs.rs/datafusion/52.0.0/datafusion/datasource/trait.TableProvider.html#method.delete_from">TableProvider::delete_from</a> and <a href="https://docs.rs/datafusion/52.0.0/datafusion/datasource/trait.TableProvider.html#method.update">TableProvider::update</a> for more details.</p>
 <p>Example:</p>
 <pre><code class="language-sql">DELETE FROM mem_table WHERE status = 'obsolete';
 </code></pre>
-<p>Related PRs: <a href="https://github.com/apache/datafusion/pull/19142">#19142</a></p>
-<h3 id="coalescebatchesexec-removal-and-integrated-batch-coalescing">CoalesceBatchesExec removal and integrated batch coalescing<a class="headerlink" href="#coalescebatchesexec-removal-and-integrated-batch-coalescing" title="Permanent link">¶</a></h3>
-<p>DataFusion continues the work from the CoalesceBatchesExec epic (<a href="https://github.com/apache/datafusion/issues/18779">#18779</a>). The
-standalone <code>CoalesceBatchesExec</code> operator existed to ensure batches were large
-enough for vectorized execution, and it was inserted after filter-like
-operators such as <code>FilterExec</code>, <code>HashJoinExec</code>, and <code>RepartitionExec</code>. However,
-it also blocked other optimizations (like pushing limits through joins) and
-made optimizer rules more complex. This release integrates coalescing into the
-operators themselves and relies on Arrow's coalesce kernels, reducing plan
-complexity while keeping batch sizes efficient.</p>
-<p>Diagram:</p>
-<pre><code>Before:
-  Scan -&gt; CoalesceBatches -&gt; Filter -&gt; CoalesceBatches -&gt; Join
-
-After:
-  Scan -&gt; Filter (coalesce inline) -&gt; Join (coalesce inline)
-</code></pre>
+<p>Thanks to <a href="https://github.com/ethan-tyler">ethan-tyler</a> for the implementation and <a href="https://github.com/alamb">alamb</a> and <a href="https://github.com/adriangb">adriangb</a> for
+reviews.</p>
+<h3 id="coalescebatchesexec-removed"><code>CoalesceBatchesExec</code> Removed<a class="headerlink" href="#coalescebatchesexec-removed" title="Permanent link">¶</a></h3>
+<p>The standalone <code>CoalesceBatchesExec</code> operator existed to ensure batches were
+large enough for subsequent vectorized execution, and was inserted after
+filter-like operators such as <code>FilterExec</code>, <code>HashJoinExec</code>, and
+<code>RepartitionExec</code>. However, using a separate operator also blocks other
+optimizations such as pushing <code>LIMIT</code> through joins and made optimizer rules
+more complex. In this release, we  integrated the coalescing into the operators
+themselves (<a href="https://github.com/apache/datafusion/issues/18779">#18779</a>) using Arrow's <a href="https://docs.rs/arrow/57.2.0/arrow/compute/kernels/coalesce/">coalesce kernel</a>. This reduces plan
+complexity while keeping batch sizes efficient, and allows additional focused
+optimization work in the Arrow kernel, such as <a href="https://github.com/Dandandan">Dandandan</a>'s recent work with
+filtering in <a href="https://github.com/apache/arrow-rs/pull/8951">arrow-rs/#8951</a>.</p>
 <p>Related PRs: <a href="https://github.com/apache/datafusion/pull/18540">#18540</a>, <a href="https://github.com/apache/datafusion/pull/18604">#18604</a>, <a href="https://github.com/apache/datafusion/pull/18630">#18630</a>, <a href="https://github.com/apache/datafusion/pull/18972">#18972</a>, <a href="https://github.com/apache/datafusion/pull/19002">#19002</a>, <a href="https://github.com/apache/datafusion/pull/19342">#19342</a>, <a href="https://github.com/apache/datafusion/pull/19239">#19239</a>
 Thanks to <a href="https://github.com/Tim-53">Tim-53</a>, <a href="https://github.com/Dandandan">Dandandan</a>, <a href="https://github.com/jizezhang">jizezhang</a>, and <a href="https://github.com/feniljain">feniljain</a> for implementing
-this feature.</p>
+this feature, with reviews from <a href="https://github.com/Jefffrey">Jefffrey</a>, <a href="https://github.com/alamb">alamb</a>, <a href="https://github.com/martin-g">martin-g</a>,
+<a href="https://github.com/geoffreyclaude">geoffreyclaude</a>, <a href="https://github.com/milenkovicm">milenkovicm</a>, and <a href="https://github.com/jizezhang">jizezhang</a>.</p>
 <h2 id="upgrade-guide-and-changelog">Upgrade Guide and Changelog<a class="headerlink" href="#upgrade-guide-and-changelog" title="Permanent link">¶</a></h2>
-<p>Upgrading to 52.0.0 should be straightforward for most users. Please review the
+<p>As always, upgrading to 52.0.0 should be straightforward for most users. Please review the
 <a href="https://datafusion.apache.org/library-user-guide/upgrading.html">Upgrade Guide</a>
 for details on breaking changes and code snippets to help with the transition.
 For a comprehensive list of all changes, please refer to the <a href="https://github.com/apache/datafusion/blob/branch-52/dev/changelog/52.0.0.md">changelog</a>.</p>
@@ -322,25 +320,28 @@ can find out how to reach us on the <a href="https://datafusion.apache.org/contr
       <aside class="toc-container d-none d-md-block col-md-4 col-xl-3 ms-xl-2">
         <div class="toc"><span class="toctitle">Contents</span><ul>
 <li><a href="#performance-improvements">Performance Improvements 🚀</a><ul>
-<li><a href="#performance-chart-todo">Performance Chart (TODO)</a></li>
-<li><a href="#faster-case-expression-evaluation">Faster CASE expression evaluation</a></li>
-<li><a href="#rewritten-merge-join">Rewritten merge join</a></li>
-<li><a href="#caching-improvements">Caching Improvements</a></li>
+<li><a href="#faster-case-expressions">Faster CASE Expressions</a></li>
+<li><a href="#new-merge-join">New Merge Join</a></li>
 </ul>
 </li>
+<li><a href="#mbutrovich-httpsgithubcommbutrovich">[mbutrovich]: https://github.com/mbutrovich</a><ul>
+<li><a href="#rewritten-merge-join">Rewritten merge join</a></li>
+<li><a href="#caching-improvements">Caching Improvements</a></li>
+<li><a href="#improved-hash-join-filter-pushdown">Improved Hash Join Filter Pushdown</a></li>
 <li><a href="#major-features">Major Features ✨</a><ul>
 <li><a href="#arrow-ipc-stream-file-support">Arrow IPC Stream file support</a></li>
-<li><a href="#extensible-sql-planning-with-relation-planner-extensions">Extensible SQL planning with relation planner extensions</a></li>
-<li><a href="#pushdown-expression-evaluation-via-physicalexpradapter">Pushdown expression evaluation via PhysicalExprAdapter</a></li>
-<li><a href="#hash-join-build-side-pushdown">Hash join build-side pushdown</a></li>
-<li><a href="#sort-pushdown-to-sources">Sort pushdown to sources</a></li>
-<li><a href="#deleteupdate-hooks-in-tableprovider">DELETE/UPDATE hooks in TableProvider</a></li>
-<li><a href="#coalescebatchesexec-removal-and-integrated-batch-coalescing">CoalesceBatchesExec removal and integrated batch coalescing</a></li>
+<li><a href="#more-extensible-sql-planning-with-relationplanner">More Extensible SQL Planning with RelationPlanner</a></li>
+<li><a href="#expression-evaluation-pushdown-to-scans">Expression Evaluation Pushdown to Scans</a></li>
+<li><a href="#sort-pushdown-to-scans">Sort Pushdown to Scans</a></li>
+<li><a href="#tableprovider-supports-delete-and-update-statements">TableProvider supports DELETE and UPDATE statements</a></li>
+<li><a href="#coalescebatchesexec-removed">CoalesceBatchesExec Removed</a></li>
 </ul>
 </li>
 <li><a href="#upgrade-guide-and-changelog">Upgrade Guide and Changelog</a></li>
 <li><a href="#about-datafusion">About DataFusion</a></li>
 <li><a href="#how-to-get-involved">How to Get Involved</a></li>
+</ul>
+</li>
 </ul>
 </div>
       </aside>
