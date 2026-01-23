@@ -49,12 +49,11 @@
 <li><a href="#performance-improvements">Performance Improvements 🚀</a><ul>
 <li><a href="#faster-case-expressions">Faster CASE Expressions</a></li>
 <li><a href="#new-merge-join">New Merge Join</a></li>
-</ul>
-</li>
-<li><a href="#mbutrovich-httpsgithubcommbutrovich">[mbutrovich]: https://github.com/mbutrovich</a><ul>
 <li><a href="#rewritten-merge-join">Rewritten merge join</a></li>
 <li><a href="#caching-improvements">Caching Improvements</a></li>
 <li><a href="#improved-hash-join-filter-pushdown">Improved Hash Join Filter Pushdown</a></li>
+</ul>
+</li>
 <li><a href="#major-features">Major Features ✨</a><ul>
 <li><a href="#arrow-ipc-stream-file-support">Arrow IPC Stream file support</a></li>
 <li><a href="#more-extensible-sql-planning-with-relationplanner">More Extensible SQL Planning with RelationPlanner</a></li>
@@ -67,8 +66,6 @@
 <li><a href="#upgrade-guide-and-changelog">Upgrade Guide and Changelog</a></li>
 <li><a href="#about-datafusion">About DataFusion</a></li>
 <li><a href="#how-to-get-involved">How to Get Involved</a></li>
-</ul>
-</li>
 </ul>
 </div>
         </aside>
@@ -118,10 +115,8 @@ improved <code>CASE</code> evaluation significantly. Related PRs <a href="https:
 speedups of three orders of magnitude in some pathological cases such as the
 case in <a href="https://github.com/apache/datafusion/issues/18487">#18487</a>, which also affected <a href="https://datafusion.apache.org/comet/">Apache Comet</a> workloads. Benchmarks in
 <a href="https://github.com/apache/datafusion/pull/18875">#18875</a> show dramatic gains for TPC-H Q21 (minutes to milliseconds) while
-leaving other queries unchanged or modestly faster. Thanks to [mbutrovich] for
+leaving other queries unchanged or modestly faster. Thanks to <a href="https://github.com/mbutrovich">mbutrovich</a> for
 the implementation and reviews from <a href="https://github.com/Dandandan">Dandandan</a>.</p>
-<p>&lt;&lt;&lt;&lt;&lt;&lt;&lt; HEAD</p>
-<h1 id="mbutrovich-httpsgithubcommbutrovich">[mbutrovich]: https://github.com/mbutrovich<a class="headerlink" href="#mbutrovich-httpsgithubcommbutrovich" title="Permanent link">¶</a></h1>
 <h3 id="rewritten-merge-join">Rewritten merge join<a class="headerlink" href="#rewritten-merge-join" title="Permanent link">¶</a></h3>
 <p>DataFusion 52 includes a rewrite of the sort-merge join (SMJ) output buffering to
 avoid excessive <code>concat_batches</code> work and to use <code>BatchCoalescer</code> internally and
@@ -130,26 +125,11 @@ LeftAnti join case in <a href="https://github.com/apache/datafusion/issues/18487
 SMJ. Benchmarks in <a href="https://github.com/apache/datafusion/pull/18875">#18875</a> show dramatic gains for TPC-H Q21 (moving from
 minutes to milliseconds) while leaving most other queries unchanged or modestly
 faster, and the update is fully internal with no user-facing API changes.</p>
-<blockquote>
-<blockquote>
-<blockquote>
-<blockquote>
-<blockquote>
-<blockquote>
-<blockquote>
-<p>ccc5d4296951810f48e133fe70948d34c4b4f9bd</p>
-</blockquote>
-</blockquote>
-</blockquote>
-</blockquote>
-</blockquote>
-</blockquote>
-</blockquote>
 <h3 id="caching-improvements">Caching Improvements<a class="headerlink" href="#caching-improvements" title="Permanent link">¶</a></h3>
 <p>This release also includes several additional caching improvements.</p>
-<p>First it includes a new statistics cache for Parquet Metadata that avoids repeatedly
-(re)calculating statistics for Parquet backed files. This significantly improves
-planning time for certain queries. You can see the contents of the new cache using the
+<p>A new statistics cache for Parquet Metadata avoids repeatedly (re)calculating
+statistics for Parquet backed files. This significantly improves planning time
+for certain queries. You can see the contents of the new cache using the
 <a href="https://datafusion.apache.org/user-guide/cli/functions.html#statistics-cache">statistics_cache</a> function in the CLI:</p>
 <pre><code class="language-sql">select * from statistics_cache();
 +------------------+---------------------+-----------------+------------------------+---------+-----------------+-------------+--------------------+-----------------------+
@@ -161,8 +141,8 @@ planning time for certain queries. You can see the contents of the new cache usi
 <p>Thanks to <a href="https://github.com/bharath-techie">bharath-techie</a> and <a href="https://github.com/nuno-faria">nuno-faria</a> for implementing the statistics cache,
 with reviews from <a href="https://github.com/martin-g">martin-g</a>, <a href="https://github.com/alamb">alamb</a>, and <a href="https://github.com/alchemist51">alchemist51</a>.
 Related PRs: <a href="https://github.com/apache/datafusion/pull/18971">#18971</a>, <a href="https://github.com/apache/datafusion/pull/19054">#19054</a></p>
-<p>It also includes a prefix-aware list-files cache by default which accelerates
-evaluating partition predicates for Hive partitioned tables.</p>
+<p>A prefix-aware list-files cache accelerates evaluating partition predicates for
+Hive partitioned tables.</p>
 <pre><code class="language-sql">-- Read the hive partitioned dataset from Overture Maps (100s of Parquet files)
 CREATE EXTERNAL TABLE overturemaps
 STORED AS PARQUET LOCATION 's3://overturemaps-us-west-2/release/2025-12-17.0/';
@@ -199,7 +179,7 @@ DataFusion 52 extends the optimization (<a href="https://github.com/apache/dataf
 build size is small such as when the join is very selective. The <code>IN</code> list is
 pushed down to the probe side scan and is used to prune files, row groups, and
 individual rows.  Thanks to <a href="https://github.com/adriangb">adriangb</a> for implementing this feature, with
-reviews from <a href="https://github.com/LiaCastaneda">LiaCastaneda</a>, <a href="https://github.com/asolimando">asolimando</a>, <a href="https://github.com/comphead">comphead</a>, and [mbutrovich].</p>
+reviews from <a href="https://github.com/LiaCastaneda">LiaCastaneda</a>, <a href="https://github.com/asolimando">asolimando</a>, <a href="https://github.com/comphead">comphead</a>, and <a href="https://github.com/mbutrovich">mbutrovich</a>.</p>
 <h2 id="major-features">Major Features ✨<a class="headerlink" href="#major-features" title="Permanent link">¶</a></h2>
 <h3 id="arrow-ipc-stream-file-support">Arrow IPC Stream file support<a class="headerlink" href="#arrow-ipc-stream-file-support" title="Permanent link">¶</a></h3>
 <p>DataFusion can now read Arrow IPC stream files (<a href="https://github.com/apache/datafusion/pull/18457">#18457</a>). This expands
@@ -230,15 +210,16 @@ design. Related PRs: <a href="https://github.com/apache/datafusion/pull/17843">#
 <h3 id="expression-evaluation-pushdown-to-scans">Expression Evaluation Pushdown to Scans<a class="headerlink" href="#expression-evaluation-pushdown-to-scans" title="Permanent link">¶</a></h3>
 <p>DataFusion now pushes down expression evaluation into TableProviders using 
 <a href="https://docs.rs/datafusion/52.0.0/datafusion/physical_expr_adapter/trait.PhysicalExprAdapter.html">PhysicalExprAdapter</a>, replacing the older SchemaAdapter approach (<a href="https://github.com/apache/datafusion/issues/14993">#14993</a>,
-<a href="https://github.com/apache/datafusion/issues/16800">#16800</a>). This work means predicates and expressions can be customized for each
+<a href="https://github.com/apache/datafusion/issues/16800">#16800</a>). Predicates and expressions can now be customized for each
 individual file schema, opening additional optimization such as support for
 <a href="https://github.com/apache/datafusion/issues/16116">Variant shredding</a>. Thanks to <a href="https://github.com/adriangb">adriangb</a> for implementing PhysicalExprAdapter
 and reworking pushdown to use it. Related PRs: <a href="https://github.com/apache/datafusion/pull/18998">#18998</a>, <a href="https://github.com/apache/datafusion/pull/19345">#19345</a></p>
 <h3 id="sort-pushdown-to-scans">Sort Pushdown to Scans<a class="headerlink" href="#sort-pushdown-to-scans" title="Permanent link">¶</a></h3>
-<p>DataFusion can now push sorts all the way to data sources (<a href="https://github.com/apache/datafusion/issues/10433">#10433</a>, <a href="https://github.com/apache/datafusion/pull/19064">#19064</a>).
+<p>DataFusion can now push sorts into data sources (<a href="https://github.com/apache/datafusion/issues/10433">#10433</a>, <a href="https://github.com/apache/datafusion/pull/19064">#19064</a>).
 This allows table provider implementations to take better advantage of existing sort 
-information such as to reorder files or row groups to satisfy <code>LIMIT</code> clauses more
-efficiently. Thanks to <a href="https://github.com/zhuqi-lucas">zhuqi-lucas</a> for this feature. </p>
+information based on the query pattern, such as to reorder files or row groups to 
+satisfy <code>LIMIT</code> clauses more
+efficiently. Thanks to <a href="https://github.com/zhuqi-lucas">zhuqi-lucas</a> and <a href="https://github.com/xudong963">xudong963</a> for this feature. </p>
 <h3 id="tableprovider-supports-delete-and-update-statements"><code>TableProvider</code> supports <code>DELETE</code> and <code>UPDATE</code> statements<a class="headerlink" href="#tableprovider-supports-delete-and-update-statements" title="Permanent link">¶</a></h3>
 <p>The <a href="https://docs.rs/datafusion/52.0.0/datafusion/datasource/trait.TableProvider.html">TableProvider</a> trait now includes hooks for <code>DELETE</code> and <code>UPDATE</code>
 statements and the basic MemTable implements them (<a href="https://github.com/apache/datafusion/pull/19142">#19142</a>). This lets
@@ -322,12 +303,11 @@ can find out how to reach us on the <a href="https://datafusion.apache.org/contr
 <li><a href="#performance-improvements">Performance Improvements 🚀</a><ul>
 <li><a href="#faster-case-expressions">Faster CASE Expressions</a></li>
 <li><a href="#new-merge-join">New Merge Join</a></li>
-</ul>
-</li>
-<li><a href="#mbutrovich-httpsgithubcommbutrovich">[mbutrovich]: https://github.com/mbutrovich</a><ul>
 <li><a href="#rewritten-merge-join">Rewritten merge join</a></li>
 <li><a href="#caching-improvements">Caching Improvements</a></li>
 <li><a href="#improved-hash-join-filter-pushdown">Improved Hash Join Filter Pushdown</a></li>
+</ul>
+</li>
 <li><a href="#major-features">Major Features ✨</a><ul>
 <li><a href="#arrow-ipc-stream-file-support">Arrow IPC Stream file support</a></li>
 <li><a href="#more-extensible-sql-planning-with-relationplanner">More Extensible SQL Planning with RelationPlanner</a></li>
@@ -340,8 +320,6 @@ can find out how to reach us on the <a href="https://datafusion.apache.org/contr
 <li><a href="#upgrade-guide-and-changelog">Upgrade Guide and Changelog</a></li>
 <li><a href="#about-datafusion">About DataFusion</a></li>
 <li><a href="#how-to-get-involved">How to Get Involved</a></li>
-</ul>
-</li>
 </ul>
 </div>
       </aside>
