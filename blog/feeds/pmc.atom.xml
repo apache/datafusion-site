@@ -71,8 +71,8 @@ leaving other queries unchanged or modestly faster. Thanks to &lt;a href="https:
 the implementation and reviews from &lt;a href="https://github.com/Dandandan"&gt;Dandandan&lt;/a&gt;.&lt;/p&gt;
 &lt;h3 id="caching-improvements"&gt;Caching Improvements&lt;a class="headerlink" href="#caching-improvements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;This release also includes several additional caching improvements.&lt;/p&gt;
-&lt;p&gt;A new statistics cache for Parquet Metadata avoids repeatedly (re)calculating
-statistics for Parquet backed files. This significantly improves planning time
+&lt;p&gt;A new statistics cache for File Metadata avoids repeatedly (re)calculating
+statistics for files. This significantly improves planning time
 for certain queries. You can see the contents of the new cache using the
 &lt;a href="https://datafusion.apache.org/user-guide/cli/functions.html#statistics-cache"&gt;statistics_cache&lt;/a&gt; function in the CLI:&lt;/p&gt;
 &lt;pre&gt;&lt;code class="language-sql"&gt;select * from statistics_cache();
@@ -119,13 +119,14 @@ Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/18146"&gt;#18
 dynamically to scans, as explained in the &lt;a href="https://datafusion.apache.org/blog/2025/09/10/dynamic-filters/#hash-join-dynamic-filters"&gt;Dynamic Filtering Blog&lt;/a&gt; using a
 technique referred to as &lt;a href="https://dl.acm.org/doi/10.1109/ICDE.2008.4497486"&gt;Sideways Information Passing&lt;/a&gt; in Database research
 literature. The initial implementation passed min/max values for the join keys.
-DataFusion 52 extends the optimization (&lt;a href="https://github.com/apache/datafusion/issues/17171"&gt;#17171&lt;/a&gt; / &lt;a href="https://github.com/apache/datafusion/pull/18393"&gt;#18393&lt;/a&gt;) to use an &lt;code&gt;IN&lt;/code&gt; list when the
-build size is small such as when the join is very selective or a reference to the build side hash map when the build side is larger.
-These new expressions are pushed down to the probe side scan and is used to prune files, row groups, and
-individual rows.
-When the build side is small enough (&amp;lt;=20 rows but configurable) the pushed down filters can even participate in statistics pruning to avoid even reading the join keys from row groups that will not match.&lt;/p&gt;
-&lt;p&gt;Thanks to &lt;a href="https://github.com/adriangb"&gt;adriangb&lt;/a&gt; for implementing this feature, with
-reviews from &lt;a href="https://github.com/LiaCastaneda"&gt;LiaCastaneda&lt;/a&gt;, &lt;a href="https://github.com/asolimando"&gt;asolimando&lt;/a&gt;, &lt;a href="https://github.com/comphead"&gt;comphead&lt;/a&gt;, and &lt;a href="https://github.com/mbutrovich"&gt;mbutrovich&lt;/a&gt;.&lt;/p&gt;
+DataFusion 52 extends the optimization (&lt;a href="https://github.com/apache/datafusion/issues/17171"&gt;#17171&lt;/a&gt; / &lt;a href="https://github.com/apache/datafusion/pull/18393"&gt;#18393&lt;/a&gt;) to pass the
+contents of the build side hash map. These filters are evaluated on the probe
+side scan to prune files, row groups, and individual rows. When the build side
+contains &lt;code&gt;20&lt;/code&gt; or fewer rows (configurable) the contents of the hash map are
+transformed to an &lt;code&gt;IN&lt;/code&gt; expression and used for &lt;a href="https://docs.rs/datafusion/latest/datafusion/physical_optimizer/pruning/struct.PruningPredicate.html"&gt;statistics-based pruning&lt;/a&gt; which
+can avoid reading entire files or row groups that contain no matching join keys.
+Thanks to &lt;a href="https://github.com/adriangb"&gt;adriangb&lt;/a&gt; for implementing this feature, with reviews from
+&lt;a href="https://github.com/LiaCastaneda"&gt;LiaCastaneda&lt;/a&gt;, &lt;a href="https://github.com/asolimando"&gt;asolimando&lt;/a&gt;, &lt;a href="https://github.com/comphead"&gt;comphead&lt;/a&gt;, and &lt;a href="https://github.com/mbutrovich"&gt;mbutrovich&lt;/a&gt;.&lt;/p&gt;
 &lt;h2 id="major-features"&gt;Major Features ✨&lt;a class="headerlink" href="#major-features" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;h3 id="arrow-ipc-stream-file-support"&gt;Arrow IPC Stream file support&lt;a class="headerlink" href="#arrow-ipc-stream-file-support" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;DataFusion can now read Arrow IPC stream files (&lt;a href="https://github.com/apache/datafusion/pull/18457"&gt;#18457&lt;/a&gt;). This expands

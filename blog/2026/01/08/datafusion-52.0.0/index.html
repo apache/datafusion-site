@@ -117,8 +117,8 @@ leaving other queries unchanged or modestly faster. Thanks to <a href="https://g
 the implementation and reviews from <a href="https://github.com/Dandandan">Dandandan</a>.</p>
 <h3 id="caching-improvements">Caching Improvements<a class="headerlink" href="#caching-improvements" title="Permanent link">¶</a></h3>
 <p>This release also includes several additional caching improvements.</p>
-<p>A new statistics cache for Parquet Metadata avoids repeatedly (re)calculating
-statistics for Parquet backed files. This significantly improves planning time
+<p>A new statistics cache for File Metadata avoids repeatedly (re)calculating
+statistics for files. This significantly improves planning time
 for certain queries. You can see the contents of the new cache using the
 <a href="https://datafusion.apache.org/user-guide/cli/functions.html#statistics-cache">statistics_cache</a> function in the CLI:</p>
 <pre><code class="language-sql">select * from statistics_cache();
@@ -165,13 +165,14 @@ Related PRs: <a href="https://github.com/apache/datafusion/pull/18146">#18146</a
 dynamically to scans, as explained in the <a href="https://datafusion.apache.org/blog/2025/09/10/dynamic-filters/#hash-join-dynamic-filters">Dynamic Filtering Blog</a> using a
 technique referred to as <a href="https://dl.acm.org/doi/10.1109/ICDE.2008.4497486">Sideways Information Passing</a> in Database research
 literature. The initial implementation passed min/max values for the join keys.
-DataFusion 52 extends the optimization (<a href="https://github.com/apache/datafusion/issues/17171">#17171</a> / <a href="https://github.com/apache/datafusion/pull/18393">#18393</a>) to use an <code>IN</code> list when the
-build size is small such as when the join is very selective or a reference to the build side hash map when the build side is larger.
-These new expressions are pushed down to the probe side scan and is used to prune files, row groups, and
-individual rows.
-When the build side is small enough (&lt;=20 rows but configurable) the pushed down filters can even participate in statistics pruning to avoid even reading the join keys from row groups that will not match.</p>
-<p>Thanks to <a href="https://github.com/adriangb">adriangb</a> for implementing this feature, with
-reviews from <a href="https://github.com/LiaCastaneda">LiaCastaneda</a>, <a href="https://github.com/asolimando">asolimando</a>, <a href="https://github.com/comphead">comphead</a>, and <a href="https://github.com/mbutrovich">mbutrovich</a>.</p>
+DataFusion 52 extends the optimization (<a href="https://github.com/apache/datafusion/issues/17171">#17171</a> / <a href="https://github.com/apache/datafusion/pull/18393">#18393</a>) to pass the
+contents of the build side hash map. These filters are evaluated on the probe
+side scan to prune files, row groups, and individual rows. When the build side
+contains <code>20</code> or fewer rows (configurable) the contents of the hash map are
+transformed to an <code>IN</code> expression and used for <a href="https://docs.rs/datafusion/latest/datafusion/physical_optimizer/pruning/struct.PruningPredicate.html">statistics-based pruning</a> which
+can avoid reading entire files or row groups that contain no matching join keys.
+Thanks to <a href="https://github.com/adriangb">adriangb</a> for implementing this feature, with reviews from
+<a href="https://github.com/LiaCastaneda">LiaCastaneda</a>, <a href="https://github.com/asolimando">asolimando</a>, <a href="https://github.com/comphead">comphead</a>, and <a href="https://github.com/mbutrovich">mbutrovich</a>.</p>
 <h2 id="major-features">Major Features ✨<a class="headerlink" href="#major-features" title="Permanent link">¶</a></h2>
 <h3 id="arrow-ipc-stream-file-support">Arrow IPC Stream file support<a class="headerlink" href="#arrow-ipc-stream-file-support" title="Permanent link">¶</a></h3>
 <p>DataFusion can now read Arrow IPC stream files (<a href="https://github.com/apache/datafusion/pull/18457">#18457</a>). This expands
