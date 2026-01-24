@@ -48,6 +48,7 @@
           <div class="toc"><span class="toctitle">Contents</span><ul>
 <li><a href="#performance-improvements">Performance Improvements 🚀</a><ul>
 <li><a href="#faster-case-expressions">Faster CASE Expressions</a></li>
+<li><a href="#minmax-aggregate-dynamic-filters">MIN/MAX Aggregate Dynamic Filters</a></li>
 <li><a href="#new-merge-join">New Merge Join</a></li>
 <li><a href="#caching-improvements">Caching Improvements</a></li>
 <li><a href="#improved-hash-join-filter-pushdown">Improved Hash Join Filter Pushdown</a></li>
@@ -108,6 +109,23 @@ END
 <p>This is the final work in our <code>CASE</code> performance epic (<a href="https://github.com/apache/datafusion/issues/18075">#18075</a>), which has
 improved <code>CASE</code> evaluation significantly. Related PRs <a href="https://github.com/apache/datafusion/pull/18183">#18183</a>. Thanks to
 <a href="https://github.com/rluvaton">rluvaton</a> and <a href="https://github.com/pepijnve">pepijnve</a> for the implementation.</p>
+<h3 id="minmax-aggregate-dynamic-filters"><code>MIN</code>/<code>MAX</code> Aggregate Dynamic Filters<a class="headerlink" href="#minmax-aggregate-dynamic-filters" title="Permanent link">¶</a></h3>
+<p>DataFusion now creates dynamic filters for queries with <code>MIN</code>/<code>MAX</code> aggregates
+that have filters, but no <code>GROUP BY</code>. These dynamic filters are used during scan
+to prune files and rows as tighter bounds are discovered during execution, as
+explained in the <a href="https://datafusion.apache.org/blog/2025/09/10/dynamic-filters/#hash-join-dynamic-filters">Dynamic Filtering blog</a>. For example, the following query:</p>
+<pre><code class="language-sql">SELECT min(l_shipdate)
+FROM lineitem
+WHERE l_returnflag = 'R';
+</code></pre>
+<p>Is now executed like this  </p>
+<pre><code class="language-sql">SELECT min(l_shipdate)
+FROM lineitem
+--  '__current_min' is updated dynamically during execution
+WHERE l_returnflag = 'R' AND l_shipdate &gt; __current_min;
+</code></pre>
+<p>Thanks to <a href="https://github.com/2010YOUY01">2010YOUY01</a> for implementing this feature, with reviews from
+<a href="https://github.com/martin-g">martin-g</a>, <a href="https://github.com/adriangb">adriangb</a>, and <a href="https://github.com/LiaCastaneda">LiaCastaneda</a>. Related PRs: <a href="https://github.com/apache/datafusion/pull/18644">#18644</a></p>
 <h3 id="new-merge-join">New Merge Join<a class="headerlink" href="#new-merge-join" title="Permanent link">¶</a></h3>
 <p>DataFusion 52 includes a rewrite of the sort-merge join (SMJ) operator, with
 speedups of three orders of magnitude in some pathological cases such as the
@@ -296,6 +314,7 @@ can find out how to reach us on the <a href="https://datafusion.apache.org/contr
         <div class="toc"><span class="toctitle">Contents</span><ul>
 <li><a href="#performance-improvements">Performance Improvements 🚀</a><ul>
 <li><a href="#faster-case-expressions">Faster CASE Expressions</a></li>
+<li><a href="#minmax-aggregate-dynamic-filters">MIN/MAX Aggregate Dynamic Filters</a></li>
 <li><a href="#new-merge-join">New Merge Join</a></li>
 <li><a href="#caching-improvements">Caching Improvements</a></li>
 <li><a href="#improved-hash-join-filter-pushdown">Improved Hash Join Filter Pushdown</a></li>

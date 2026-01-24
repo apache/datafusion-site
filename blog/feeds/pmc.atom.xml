@@ -62,6 +62,23 @@ END
 &lt;p&gt;This is the final work in our &lt;code&gt;CASE&lt;/code&gt; performance epic (&lt;a href="https://github.com/apache/datafusion/issues/18075"&gt;#18075&lt;/a&gt;), which has
 improved &lt;code&gt;CASE&lt;/code&gt; evaluation significantly. Related PRs &lt;a href="https://github.com/apache/datafusion/pull/18183"&gt;#18183&lt;/a&gt;. Thanks to
 &lt;a href="https://github.com/rluvaton"&gt;rluvaton&lt;/a&gt; and &lt;a href="https://github.com/pepijnve"&gt;pepijnve&lt;/a&gt; for the implementation.&lt;/p&gt;
+&lt;h3 id="minmax-aggregate-dynamic-filters"&gt;&lt;code&gt;MIN&lt;/code&gt;/&lt;code&gt;MAX&lt;/code&gt; Aggregate Dynamic Filters&lt;a class="headerlink" href="#minmax-aggregate-dynamic-filters" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;DataFusion now creates dynamic filters for queries with &lt;code&gt;MIN&lt;/code&gt;/&lt;code&gt;MAX&lt;/code&gt; aggregates
+that have filters, but no &lt;code&gt;GROUP BY&lt;/code&gt;. These dynamic filters are used during scan
+to prune files and rows as tighter bounds are discovered during execution, as
+explained in the &lt;a href="https://datafusion.apache.org/blog/2025/09/10/dynamic-filters/#hash-join-dynamic-filters"&gt;Dynamic Filtering blog&lt;/a&gt;. For example, the following query:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT min(l_shipdate)
+FROM lineitem
+WHERE l_returnflag = 'R';
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Is now executed like this  &lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT min(l_shipdate)
+FROM lineitem
+--  '__current_min' is updated dynamically during execution
+WHERE l_returnflag = 'R' AND l_shipdate &amp;gt; __current_min;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/2010YOUY01"&gt;2010YOUY01&lt;/a&gt; for implementing this feature, with reviews from
+&lt;a href="https://github.com/martin-g"&gt;martin-g&lt;/a&gt;, &lt;a href="https://github.com/adriangb"&gt;adriangb&lt;/a&gt;, and &lt;a href="https://github.com/LiaCastaneda"&gt;LiaCastaneda&lt;/a&gt;. Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/18644"&gt;#18644&lt;/a&gt;&lt;/p&gt;
 &lt;h3 id="new-merge-join"&gt;New Merge Join&lt;a class="headerlink" href="#new-merge-join" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;DataFusion 52 includes a rewrite of the sort-merge join (SMJ) operator, with
 speedups of three orders of magnitude in some pathological cases such as the
