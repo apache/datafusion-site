@@ -47,15 +47,16 @@ figcaption {
 }
 </style>
 
-# Optimizing CASE Expression Evaluation in DataFusion
+## Optimizing CASE Expression Evaluation in DataFusion
 
-SQL's `CASE` expression is one of the few constructs the language provides to perform conditional logic.
+SQL's `CASE` expression is one of the few explicit conditional evaluation constructs the language provides.
+It lets you control which expression from a set of expressions is evaluated for each row based on arbitrary boolean expressions.
 Its deceptively simple syntax hides significant implementation complexity.
 Over the past few releases, we've landed a series of improvements to [Apache DataFusion]'s `CASE` expression evaluator that reduce both CPU time and memory allocations.
 This post walks through the original implementation, its performance bottlenecks, and how we addressed them step by step.
-Finally we'll also take a look at some future improvements to `CASE` that are in the works.
 
-## Background: CASE Expression Evaluation
+
+### Background: CASE Expression Evaluation
 
 SQL supports two forms of CASE expressions:
 
@@ -65,7 +66,7 @@ SQL supports two forms of CASE expressions:
 The simple form evaluates an expression once for each input row and then tests that value against the expressions (typically constants) in each `WHEN` clause using equality comparisons.
 Think of it as a limited Rust `match` expression.
 
-Here's a simple example:
+Here's an example of the simple form:
 
 ```sql
 CASE status
@@ -77,11 +78,10 @@ END
 ```
 
 In this `CASE` expression, `status` is evaluated once per row, and then its value is tested for equality with the values `'pending'`, `'active'`, and `'complete'` in that order.
-The `THEN` expression value for the first matching `WHEN` expression is returned per row.
+The `CASE` expression evaluates to the value of the `THEN` expression corresponding to the first matching `WHEN` expression.
 
 The searched `CASE` form is a more flexible variant.
 It evaluates completely independent boolean expressions for each branch.
-
 This allows you to test different columns with different operators per branch as can be seen in the following example:
 
 ```sql
@@ -93,7 +93,8 @@ CASE
 END
 ```
 
-In both forms, branches are evaluated sequentially with short-circuit semantics: for each row, once a `WHEN` condition matches, the corresponding `THEN` expression is evaluated. Any further branches are not evaluated for that row.
+In both forms, branches are evaluated sequentially with short-circuit semantics: for each row, once a `WHEN` condition matches, the corresponding `THEN` expression is evaluated.
+Any further branches are not evaluated for that row.
 This lazy evaluation model is critical for correctness.
 It let's you safely write `CASE` expressions like
 
@@ -106,9 +107,26 @@ END
 
 that are guaranteed to not trigger divide-by-zero errors.
 
-## `CASE` Evaluation in DataFusion 50.0.0
+Besides `CASE`, there are a few [conditional scalar functions](https://datafusion.apache.org/user-guide/sql/scalar_functions.html#conditional-functions) that provide similiar, more restricted capabilities.
+These include `COALESCE`, `IFNULL`, and `NVL2`.
 
-For the rest of this post we'll be looking at 'searched case' evaluation.
+Each of these functions can be seen as the equivalent of a macro for `CASE`.
+`COALESCE(expr1, expr2, expr3)` for instance, would expand to:
+
+```sql
+CASE
+  WHEN expr1 IS NOT NULL THEN expr1
+  WHEN expr2 IS NOT NULL THEN expr2
+  ELSE expr3
+END
+```
+
+[Apache DataFusion] implements these conditional functions by rewriting them to their equivalent `CASE` expression.
+As a consequence, any optimisations related to `CASE` described in this post also apply to conditional function evaluation.
+
+### `CASE` Evaluation in DataFusion 50.0.0
+
+For the remainder of this post we'll be looking at 'searched case' evaluation.
 'Simple case' uses a distinct, but very similar implementation.
 The same set of improvements has been applied to both.
 
@@ -116,36 +134,51 @@ The baseline implementation in DataFusion 50.0.0 evaluated `CASE` using a straig
 
 1. Start with an output array `out` with the same length as the input batch, filled with nulls. Additionally, create a bit vector `remainder` with the same length and each value set to `true`.
 2. For each `WHEN`/`THEN` branch:
-  - Evaluate the `WHEN` condition for remaining unmatched rows using `PhysicalExpr::evaluate_selection`, passing in the input batch and the `remainder` mask
+  - Evaluate the `WHEN` condition for remaining unmatched rows using [`PhysicalExpr::evaluate_selection`](https://docs.rs/datafusion/latest/datafusion/physical_expr/trait.PhysicalExpr.html#method.evaluate_selection), passing in the input batch and the `remainder` mask
   - If any rows matched, evaluate the `THEN` expression for those rows using `PhysicalExpr::evaluate_selection`
-  - Merge the results into the `out` using the `zip` kernel
+  - Merge the results into the `out` using the [`zip`](https://docs.rs/arrow/latest/arrow/compute/kernels/zip/fn.zip.html) kernel
   - Update the `remainder` mask to exclude matched rows
-3. If there's an `ELSE` clause, evaluate it for any remaining unmatched rows and merge using `zip`
+3. If there's an `ELSE` clause, evaluate it for any remaining unmatched rows and merge using [`zip`](https://docs.rs/arrow/latest/arrow/compute/kernels/zip/fn.zip.html)
 
 Here's a simplified version of the original loop:
 
+<figure>
+<img src="/blog/images/case/original_loop.png" alt="Parquet pruning pipeline in DataFusion" width="100%" class="img-responsive">
+<figcaption>One iteration of the `CASE` evaluation loop</figcaption>
+</figure>
+
 ```rust
-let mut current_value = new_null_array(&return_type, batch.num_rows());
+let mut out = new_null_array(&return_type, batch.num_rows());
 let mut remainder = BooleanArray::from(vec![true; batch.num_rows()]);
 
 for (when_expr, then_expr) in &self.when_then_expr {
-    let when_value = when_expr.evaluate_selection(batch, &remainder)?
+    // Determine for which remaining rows the WHEN condition matches
+    let when = when_expr.evaluate_selection(batch, &remainder)?
         .into_array(batch.num_rows())?;
-    let when_value = and(&when_value, &remainder)?;
+    // Ensure any `NULL` values are treated as false
+    let when_and_rem = and(&when, &remainder)?;
 
-    if when_value.true_count() == 0 {
+    if when_and_rem.true_count() == 0 {
         continue;
     }
 
-    let then_value = then_expr.evaluate_selection(batch, &when_value)?;
-    current_value = zip(&when_value, &then_value, &current_value)?;
-    remainder = and_not(&remainder, &when_value)?;
+    // Evaluate the THEN expression for matching rows
+    let then = then_expr.evaluate_selection(batch, &when_and_rem)?;
+    // Merge results into output array
+    out = zip(&when_value, &then_value, &out)?;
+    // Update remainder mask to exclude matched rows
+    remainder = and_not(&remainder, &when_and_rem)?;
 }
 ```
 
 While correct, this implementation has significant room for optimization, mostly related to the usage of `evaluate_selection`.
 To understand why, we need to dig a little deeper into the implementation of that function.
 Here's a simplified version of it that captures the relevant parts:
+
+<figure>
+<img src="/blog/images/case/evaluate_selection.png" alt="Schematic representation of `evaluate_selection` evaluation" width="100%" class="img-responsive">
+<figcaption>Evaluate selection data flow</figcaption>
+</figure>
 
 ```rust
 pub trait PhysicalExpr {
@@ -154,8 +187,11 @@ pub trait PhysicalExpr {
         batch: &RecordBatch,
         selection: &BooleanArray,
     ) -> Result<ColumnarValue> {
+        // Reduce record batch to only include rows that match selection
         let filtered_batch = filter_record_batch(batch, selection)?;
+        // Perform regular evaluation on filtered batch
         let filtered_result = self.evaluate(&filtered_batch)?;
+        // Expand result array to match original batch length
         scatter(selection, filtered_result)
     }
 }
@@ -168,21 +204,22 @@ This function produces a new array padded with `null` values for any rows that d
 
 So how does the simple evaluation strategy and use of `evaluate_selection` cause performance overhead?
 
-### Problem 1: No Early Exit
+#### Observation 1: No Early Exit
 
 The case evaluation loop always iterated through all branches, even when every row had already been matched.
 In queries where early branches match many rows, this meant unnecessary work was done for remaining rows.
 
-### Problem 2: Repeated Filtering, Scattering, and Merging
+#### Observation 2: Repeated Filtering, Scattering, and Merging
 
-Each iteration performed operations that are very well-optimized but still not cost free to execute:
-- **Filtering**: `PhysicalExpr::evaluate_selection` filters the entire `RecordBatch` (all columns) for each branch. For the `WHEN` expression, this was done even if the selection mask was entirely empty.
+Each iteration performed operations that are very well-optimized, but still consumer precious CPU time:
+
+- **Filtering**: `PhysicalExpr::evaluate_selection` filters the entire `RecordBatch` for each branch. For the `WHEN` expression, this was done even if the selection mask was entirely empty.
 - **Scattering**: `PhysicalExpr::evaluate_selection` scatters the filtered result back to the original `RecordBatch` length.
 - **Merging**: The `zip` kernel is called once per branch to merge partial results into the output array
 
 Each of these steps allocates new arrays and shuffles a lot of data around. 
 
-### Problem 3: Filtering Unused Columns
+#### Observation 3: Filtering Unused Columns
 
 The `PhysicalExpr::evaluate_selection` method filters the entire record batch, including columns that the current branch's `WHEN` and `THEN` expressions don't reference.
 For wide tables (many columns) with narrow expressions (few column references), this is wasteful.
@@ -198,14 +235,15 @@ CASE
 END
 ```
 
-the implementation would filter all columns 26 columns even though only a single column is needed for the entire `CASE` expression evaluation.
+the implementation would filter all 26 columns even though only a single column is needed for the entire `CASE` expression evaluation.
 Again this involves a non-negligible amount of allocation and data copying.
 
-## Performance Improvements
+### Performance Improvements
 
-### Optimization 1: Short-Circuit Early Exit
+#### Optimization 1: Short-Circuit Early Exit
 
-The first optimization added early exit logic to the evaluation loop:
+The first optimization is an easy one.
+As soon as we can detect that all rows of the batch have been matched we break out of the evaluation loop:
 
 ```rust
 let mut remainder_count = batch.num_rows();
@@ -233,80 +271,72 @@ if let Some(else_expr) = &self.else_expr {
 }
 ```
 
-**Impact**: For queries where early branches match all rows, this eliminates unnecessary branch evaluations and `ELSE` clause processing.
+For queries where early branches match all rows, this eliminates unnecessary branch evaluations and `ELSE` clause processing.
 
-### Optimization 2: Optimized Result Merging
+#### Optimization 2: Optimized Result Merging
 
-The second optimization fundamentally restructured how partial results are merged.
-Instead of using `zip()` after each branch to merge results into an output array, we now:
+The second optimization fundamentally restructured how the results of each loop iteration are merged.
+The diagram below illustrates the optimized data flow when evaluating the expression:
 
-1. Maintain the subset of rows still needing evaluation across loop iterations
-2. Filter the batch progressively as rows are matched
-3. Build an index structure that tracks which branch produced each row's result
-4. Perform a single merge operation at the end
+```sql
+CASE
+    WHEN col = 'b' THEN 100
+    ELSE 200
+END
+```
+
+<figure>
+<img src="/blog/images/case/merging.png" alt="Schematic representation of optimised evaluation loop" width="100%" class="img-responsive">
+<figcaption>Optimised evaluation loop</figcaption>
+</figure>
+
+In the reworked implementation, `evaluate_selection` is no longer used.
+Instead, the same result as the original loop is achieved by:
+
+1. Filtering the batch progressively as rows are matched
+2. Building an index structure that tracks which branch produced each row's result
+3. Performing a single merge operation at the end instead of a `zip` operation in after each loop iteration 
 
 The key insight is that we can defer all merging until the end of the evaluation loop by tracking result provenance.
-When a branch matches a number of rows, instead of immediately merging with `zip()`, we:
-1. Store the partial result array
-2. Mark the cells corresponding to each row in an indices array as needing to take one value from the partial result array
+That's a fancy way of saying that for each calculated result value, we also record the index of the row in the input batch that it was computed for.
 
-In the example below, three `WHEN/THEN` branches produced results.
+When a branch matches a number of rows, we:
+
+1. Evaluate the `THEN` expression for the matching rows to obtain a partial result array
+2. Store the partial result array without expanding it using `scatter`.
+3. Mark the cells corresponding to each row in an indices array as needing to take one value from the partial result array
+
+When all rows have been matched, we can then merge the partial results using [`arrow_select::merge::merge_n`](https://docs.rs/arrow-select/57.1.0/arrow_select/merge/fn.merge_n.html).
+
+To see how this final merge steps works, let's look at a more detailed example.
+In the illustration below, three `WHEN/THEN` branches produced results.
 The first branch produced the result `A` for 2, the second produced `B` for row 1, and the third produced `C` and `D` for rows 4 and 5.
-The final result array is obtained by running the arrays through the merge operation.
 
-```
-┌───────────┐  ┌─────────┐                             ┌─────────┐
-│┌─────────┐│  │   None  │                             │   NULL  │
-││    A    ││  ├─────────┤                             ├─────────┤
-│└─────────┘│  │    1    │                             │    B    │
-│┌─────────┐│  ├─────────┤                             ├─────────┤
-││    B    ││  │    0    │   merge_n(values, indices)  │    A    │
-│└─────────┘│  ├─────────┤  ─────────────────────────▶ ├─────────┤
-│┌─────────┐│  │   None  │                             │   NULL  │
-││    C    ││  ├─────────┤                             ├─────────┤
-│├─────────┤│  │    2    │                             │    C    │
-││    D    ││  ├─────────┤                             ├─────────┤
-│└─────────┘│  │    2    │                             │    D    │
-└───────────┘  └─────────┘                             └─────────┘
-   arrays        indices                                  result
-```
+<figure></figure>
+<img src="/blog/images/case/merge_n.png" alt="Schematic illustration of the merge_n algorithm" width="100%" class="img-responsive">
+<figcaption>Optimised evaluation loop</figcaption>
+</figure>
 
-The main benefits of this merge operation are that the `scatter` step is eliminated entirely, and instead of requiring
-a `zip` per branch only a single `merge_n` is done.
+The `merge_n` algorithm works by scanning through the indices array.
+For each non-empty cell, it takes one value from the corresponding values array.
+In the example above, we first encounter `1`.
+This takes the first element from the values array with index `1`, resulting in `B`.
+The next cell contains `0` which takes `A`, from the first array.
+Finally, we encounter `2` twice.
+This takes the first and second element from the last values array respectively.
 
-Besides more efficient merging, we also maintain a progressively filtered `remainder_batch`.
+This algorithm was initially implemented in DataFusion for `CASE` evaluation, but in the meantime has been generalized and moved into the `arrow-rs` crate as [`arrow_select::merge::merge_n`](https://docs.rs/arrow-select/57.1.0/arrow_select/merge/fn.merge_n.html).
 
-```rust
-let mut remainder_batch = Cow::Borrowed(batch);
-let mut remainder_rows = UInt32Array::from_iter_values(0..batch.num_rows());
+#### Optimization 3: Column Projection
 
-for branch in branches {
-    // Evaluate on progressively smaller batch
-    let when_value = evaluate_on(&remainder_batch)?;
-
-    // Filter remainder_batch for next iteration
-    let next_filter = create_filter(&not(&when_value)?);
-    remainder_batch = Cow::Owned(filter_record_batch(&remainder_batch, &next_filter)?);
-    remainder_rows = filter_array(&remainder_rows, &next_filter)?;
-}
-```
-
-As rows are matched, the `remainder_batch` shrinks, making subsequent filter operations a bit faster.
-
-**Impact**: This eliminates N-1 merge operations and makes filtering progressively cheaper as branches match rows.
-
-This new operation was initially developed specifically for DataFusion's `CASE` evaluation, but in the meantime has been generalized and moved into the `arrow-rs` crate as [`arrow_select::merge::merge_n`](https://docs.rs/arrow-select/57.1.0/arrow_select/merge/fn.merge_n.html).
-
-### Optimization 3: Column Projection
-
-The third optimization addresses the "filtering unused columns" problem through projection.
+The third optimization addresses the "filtering unused columns" overhead through projection.
 Before evaluating a CASE expression, we:
 
-1. Analyze all WHEN/THEN/ELSE expressions to find referenced columns
+1. Analyze all `WHEN`/`THEN`/`ELSE` expressions to find referenced columns
 2. Build a projection vector containing only those column indices
 3. Derive new versions of the expressions with updated column references
 
-For example, if the original CASE references columns at indices `[1, 5, 8]` in a 20-column batch:
+For example, if the original `CASE` references columns at indices `[1, 5, 8]` in a 20-column batch:
 - Project the batch to a 3-column batch with those columns
 - Rewrite expressions from `col@1, col@5, col@8` to `col@0, col@1, col@2`
 - Evaluate using the projected batch
@@ -324,7 +354,7 @@ The projection logic is only applied when it would be beneficial (i.e., when the
 
 **Impact**: For wide tables with narrow CASE expressions, this dramatically reduces filtering overhead by removing copying of unused columns.
 
-### Optimization 4: Eliminating Scatter in Two-Branch Case
+#### Optimization 4: Eliminating Scatter in Two-Branch Case
 
 The final optimization targets a common pattern: `CASE WHEN condition THEN expr1 ELSE expr2 END`.
 
@@ -362,7 +392,7 @@ fn merge(mask: &BooleanArray, truthy: ColumnarValue, falsy: ColumnarValue) -> Ar
 
 Just like `merge_n` this operation has been moved into `arrow-rs` as [`arrow_select::merge::merge`](https://docs.rs/arrow-select/57.1.0/arrow_select/merge/fn.merge.html).
 
-## Summary
+### Summary
 
 Through four targeted optimizations, we've transformed CASE expression evaluation from a simple but inefficient implementation to a highly optimized one that:
 
