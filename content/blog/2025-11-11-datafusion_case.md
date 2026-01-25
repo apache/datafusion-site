@@ -142,11 +142,6 @@ The baseline implementation in DataFusion 50.0.0 evaluated `CASE` using a straig
 
 Here's a simplified version of the original loop:
 
-<figure>
-<img src="/blog/images/case/original_loop.png" alt="Parquet pruning pipeline in DataFusion" width="100%" class="img-responsive">
-<figcaption>One iteration of the `CASE` evaluation loop</figcaption>
-</figure>
-
 ```rust
 let mut out = new_null_array(&return_type, batch.num_rows());
 let mut remainder = BooleanArray::from(vec![true; batch.num_rows()]);
@@ -171,14 +166,25 @@ for (when_expr, then_expr) in &self.when_then_expr {
 }
 ```
 
+Schematically, one iteration of this loop for the case expression
+
+```sql
+CASE
+    WHEN col = 'b' THEN 100
+    ELSE 200
+END
+```
+
+looks like this:
+
+<figure>
+<img src="/blog/images/case/original_loop.svg" alt="Parquet pruning pipeline in DataFusion" width="100%" class="img-responsive">
+<figcaption>One iteration of the `CASE` evaluation loop</figcaption>
+</figure>
+
 While correct, this implementation has significant room for optimization, mostly related to the usage of `evaluate_selection`.
 To understand why, we need to dig a little deeper into the implementation of that function.
 Here's a simplified version of it that captures the relevant parts:
-
-<figure>
-<img src="/blog/images/case/evaluate_selection.png" alt="Schematic representation of `evaluate_selection` evaluation" width="100%" class="img-responsive">
-<figcaption>Evaluate selection data flow</figcaption>
-</figure>
 
 ```rust
 pub trait PhysicalExpr {
@@ -197,6 +203,13 @@ pub trait PhysicalExpr {
 }
 ```
 
+Going back to the same example as before, the data flow looks like this:
+
+<figure>
+<img src="/blog/images/case/evaluate_selection.svg" alt="Schematic representation of `evaluate_selection` evaluation" width="100%" class="img-responsive">
+<figcaption>evaluate_selection data flow</figcaption>
+</figure>
+
 The `evaluate_selection` method first filters the input batch to only include rows that match the `selection` mask.
 It then calls the regular `evaluate` method using the filtered batch as input.
 Finally, to return a result array with the same number of rows as `batch`, the `scatter` function is called.
@@ -211,13 +224,13 @@ In queries where early branches match many rows, this meant unnecessary work was
 
 #### Observation 2: Repeated Filtering, Scattering, and Merging
 
-Each iteration performed operations that are very well-optimized, but still consumer precious CPU time:
+Each iteration performed a number of operations that are very well-optimized, but still take up a significant amount of CPU time:
 
 - **Filtering**: `PhysicalExpr::evaluate_selection` filters the entire `RecordBatch` for each branch. For the `WHEN` expression, this was done even if the selection mask was entirely empty.
 - **Scattering**: `PhysicalExpr::evaluate_selection` scatters the filtered result back to the original `RecordBatch` length.
 - **Merging**: The `zip` kernel is called once per branch to merge partial results into the output array
 
-Each of these steps allocates new arrays and shuffles a lot of data around. 
+Each of these operations needs to allocate memory for new arrays and shuffle quite a bit of data around. 
 
 #### Observation 3: Filtering Unused Columns
 
@@ -276,48 +289,34 @@ For queries where early branches match all rows, this eliminates unnecessary bra
 #### Optimization 2: Optimized Result Merging
 
 The second optimization fundamentally restructured how the results of each loop iteration are merged.
-The diagram below illustrates the optimized data flow when evaluating the expression:
-
-```sql
-CASE
-    WHEN col = 'b' THEN 100
-    ELSE 200
-END
-```
+The diagram below illustrates the optimized data flow when evaluating the `CASE WHEN col = 'b' THEN 100 ELSE 200 END` from before:
 
 <figure>
-<img src="/blog/images/case/merging.png" alt="Schematic representation of optimised evaluation loop" width="100%" class="img-responsive">
+<img src="/blog/images/case/merging.svg" alt="Schematic representation of optimised evaluation loop" width="100%" class="img-responsive">
 <figcaption>Optimised evaluation loop</figcaption>
 </figure>
 
 In the reworked implementation, `evaluate_selection` is no longer used.
-Instead, the same result as the original loop is achieved by:
-
-1. Filtering the batch progressively as rows are matched
-2. Building an index structure that tracks which branch produced each row's result
-3. Performing a single merge operation at the end instead of a `zip` operation in after each loop iteration 
-
 The key insight is that we can defer all merging until the end of the evaluation loop by tracking result provenance.
-That's a fancy way of saying that for each calculated result value, we also record the index of the row in the input batch that it was computed for.
+This was implemented with the following changes:
 
-When a branch matches a number of rows, we:
+1. Augment the input batch with a column containing row indices
+2. Reduce the augmented batch after each loop iteration to only contain the remaining rows
+3. Use the row index column to track which partial result array contains the value for each row 
+4. Perform a single merge operation at the end instead of a `zip` operation in after each loop iteration 
 
-1. Evaluate the `THEN` expression for the matching rows to obtain a partial result array
-2. Store the partial result array without expanding it using `scatter`.
-3. Mark the cells corresponding to each row in an indices array as needing to take one value from the partial result array
+With these changes it is no longer neccessary to `scatter` and `zip` results in each loop iteration.
+Instead, when all rows have been matched, we can then merge the partial results using [`arrow_select::merge::merge_n`](https://docs.rs/arrow-select/57.1.0/arrow_select/merge/fn.merge_n.html).
 
-When all rows have been matched, we can then merge the partial results using [`arrow_select::merge::merge_n`](https://docs.rs/arrow-select/57.1.0/arrow_select/merge/fn.merge_n.html).
-
-To see how this final merge steps works, let's look at a more detailed example.
-In the illustration below, three `WHEN/THEN` branches produced results.
+The diagram below illustrated how `merge_n` works for an example where three `WHEN/THEN` branches produced results.
 The first branch produced the result `A` for 2, the second produced `B` for row 1, and the third produced `C` and `D` for rows 4 and 5.
 
 <figure></figure>
-<img src="/blog/images/case/merge_n.png" alt="Schematic illustration of the merge_n algorithm" width="100%" class="img-responsive">
-<figcaption>Optimised evaluation loop</figcaption>
+<img src="/blog/images/case/merge_n.svg" alt="Schematic illustration of the merge_n algorithm" width="100%" class="img-responsive">
+<figcaption>merge_n example</figcaption>
 </figure>
 
-The `merge_n` algorithm works by scanning through the indices array.
+The `merge_n` algorithm scans through the indices array.
 For each non-empty cell, it takes one value from the corresponding values array.
 In the example above, we first encounter `1`.
 This takes the first element from the values array with index `1`, resulting in `B`.
@@ -335,6 +334,21 @@ Before evaluating a CASE expression, we:
 1. Analyze all `WHEN`/`THEN`/`ELSE` expressions to find referenced columns
 2. Build a projection vector containing only those column indices
 3. Derive new versions of the expressions with updated column references
+
+Let's look at what this means in more detail in an example.
+
+```sql
+SELECT *, CASE WHEN country = 'US' THEN state ELSE country END AS region
+FROM mailing_address 
+```
+
+where the `addresses` table has columns `name`, `surname`, `street`, `number`, `city`, `state`, `country`.
+
+The case expression in this query compiles to
+
+```
+CASE WHEN country@6 = US THEN state@5 ELSE country@6 END as region
+```
 
 For example, if the original `CASE` references columns at indices `[1, 5, 8]` in a 20-column batch:
 - Project the batch to a 3-column batch with those columns
