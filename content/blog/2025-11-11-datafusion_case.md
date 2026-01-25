@@ -329,42 +329,35 @@ This algorithm was initially implemented in DataFusion for `CASE` evaluation, bu
 #### Optimization 3: Column Projection
 
 The third optimization addresses the "filtering unused columns" overhead through projection.
-Before evaluating a CASE expression, we:
 
-1. Analyze all `WHEN`/`THEN`/`ELSE` expressions to find referenced columns
-2. Build a projection vector containing only those column indices
-3. Derive new versions of the expressions with updated column references
-
-Let's look at what this means in more detail in an example.
+Suppose we have a query like:
 
 ```sql
-SELECT *, CASE WHEN country = 'US' THEN state ELSE country END AS region
+SELECT *, CASE WHEN country = 'USA' THEN state ELSE country END AS region
 FROM mailing_address 
 ```
 
-where the `addresses` table has columns `name`, `surname`, `street`, `number`, `city`, `state`, `country`.
+where the `mailing_address` table has columns `name`, `surname`, `street`, `number`, `city`, `state`, `country`.
+We can see that the `CASE` expression only references columns `country` and `state`, but because all columns are being queried, projection pushdown cannot reduce the number of columns being fed in to the projection operator.
 
-The case expression in this query compiles to
+<figure></figure>
+<img src="/blog/images/case/no_projection.svg" alt="Schematic illustration of CASE evaluation without projection" width="100%" class="img-responsive">
+<figcaption>CASE evaluation without projection</figcaption>
+</figure>
 
-```
-CASE WHEN country@6 = US THEN state@5 ELSE country@6 END as region
-```
+During `CASE` evaluation, the batch needs to be filtered using the `WHEN` expression in order to evaluate the `THEN` expression values.
+As the diagram above shows, this filtering creates a reduced copy of all columns.
 
-For example, if the original `CASE` references columns at indices `[1, 5, 8]` in a 20-column batch:
-- Project the batch to a 3-column batch with those columns
-- Rewrite expressions from `col@1, col@5, col@8` to `col@0, col@1, col@2`
-- Evaluate using the projected batch
+This unnecessary copying can be avoided by first narrowing the batch to only include the columns that are actually needed.
 
-This is encapsulated in a `ProjectedCaseBody` structure:
+<figure></figure>
+<img src="/blog/images/case/projection.svg" alt="Schematic illustration of CASE evaluation with projection" width="100%" class="img-responsive">
+<figcaption>CASE evaluation with projection</figcaption>
+</figure>
 
-```rust
-struct ProjectedCaseBody {
-    projection: Vec<usize>,     // [1, 5, 8]
-    body: CaseBody,             // Expressions with rewritten column indices
-}
-```
-
-The projection logic is only applied when it would be beneficial (i.e., when the number of used columns is lower than the total number of columns in the batch).
+At first glance this might not seem beneficial, since we're introducing an additional processing step.
+Luckily projection of a record batch only requires a shallow copy of the record batch.
+The column arrays themselves are not copied, and the only work that is actually done is incrementing the reference counts of the columns.
 
 **Impact**: For wide tables with narrow CASE expressions, this dramatically reduces filtering overhead by removing copying of unused columns.
 
