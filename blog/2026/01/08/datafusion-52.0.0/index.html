@@ -113,7 +113,7 @@ improved <code>CASE</code> evaluation significantly. Related PRs <a href="https:
 <p>DataFusion now creates dynamic filters for queries with <code>MIN</code>/<code>MAX</code> aggregates
 that have filters, but no <code>GROUP BY</code>. These dynamic filters are used during scan
 to prune files and rows as tighter bounds are discovered during execution, as
-explained in the <a href="https://datafusion.apache.org/blog/2025/09/10/dynamic-filters/#hash-join-dynamic-filters">Dynamic Filtering blog</a>. For example, the following query:</p>
+explained in the <a href="https://datafusion.apache.org/blog/2025/09/10/dynamic-filters/#hash-join-dynamic-filters">Dynamic Filtering Blog</a>. For example, the following query:</p>
 <pre><code class="language-sql">SELECT min(l_shipdate)
 FROM lineitem
 WHERE l_returnflag = 'R';
@@ -228,10 +228,16 @@ individual file schema, opening additional optimization such as support for
 and reworking pushdown to use it. Related PRs: <a href="https://github.com/apache/datafusion/pull/18998">#18998</a>, <a href="https://github.com/apache/datafusion/pull/19345">#19345</a></p>
 <h3 id="sort-pushdown-to-scans">Sort Pushdown to Scans<a class="headerlink" href="#sort-pushdown-to-scans" title="Permanent link">¶</a></h3>
 <p>DataFusion can now push sorts into data sources (<a href="https://github.com/apache/datafusion/issues/10433">#10433</a>, <a href="https://github.com/apache/datafusion/pull/19064">#19064</a>).
-This allows table provider implementations to take better advantage of existing sort 
-information based on the query pattern, such as to reorder files or row groups to 
-satisfy <code>LIMIT</code> clauses more
-efficiently. Thanks to <a href="https://github.com/zhuqi-lucas">zhuqi-lucas</a> and <a href="https://github.com/xudong963">xudong963</a> for this feature. </p>
+This allows table provider implementations to optimize based on
+sort knowledge for certain query patterns. For example, the provided Parquet
+data source now reverses the scan order of row groups and files when queried
+for the opposite of the file's natural sort (e.g. <code>DESC</code> when the files are sorted <code>ASC</code>).
+This reversal, combined with dynamic filtering, allows top-K queries with <code>LIMIT</code>
+on pre-sorted data to find the requested rows very quickly, pruning more files and row groups
+without even scanning them. We have seen a ~30x performance improvement on
+benchmark queries with pre-sorted data.
+Thanks to <a href="https://github.com/zhuqi-lucas">zhuqi-lucas</a> and <a href="https://github.com/xudong963">xudong963</a> for this feature, with reviews from
+<a href="https://github.com/martin-g">martin-g</a>, <a href="https://github.com/adriangb">adriangb</a>, and <a href="https://github.com/alamb">alamb</a>.</p>
 <h3 id="tableprovider-supports-delete-and-update-statements"><code>TableProvider</code> supports <code>DELETE</code> and <code>UPDATE</code> statements<a class="headerlink" href="#tableprovider-supports-delete-and-update-statements" title="Permanent link">¶</a></h3>
 <p>The <a href="https://docs.rs/datafusion/52.0.0/datafusion/datasource/trait.TableProvider.html">TableProvider</a> trait now includes hooks for <code>DELETE</code> and <code>UPDATE</code>
 statements and the basic MemTable implements them (<a href="https://github.com/apache/datafusion/pull/19142">#19142</a>). This lets
