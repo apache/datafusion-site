@@ -311,7 +311,7 @@ Instead, when all rows have been matched, we can then merge the partial results 
 The diagram below illustrated how `merge_n` works for an example where three `WHEN/THEN` branches produced results.
 The first branch produced the result `A` for 2, the second produced `B` for row 1, and the third produced `C` and `D` for rows 4 and 5.
 
-<figure></figure>
+<figure>
 <img src="/blog/images/case/merge_n.svg" alt="Schematic illustration of the merge_n algorithm" width="100%" class="img-responsive">
 <figcaption>merge_n example</figcaption>
 </figure>
@@ -340,7 +340,7 @@ FROM mailing_address
 where the `mailing_address` table has columns `name`, `surname`, `street`, `number`, `city`, `state`, `country`.
 We can see that the `CASE` expression only references columns `country` and `state`, but because all columns are being queried, projection pushdown cannot reduce the number of columns being fed in to the projection operator.
 
-<figure></figure>
+<figure>
 <img src="/blog/images/case/no_projection.svg" alt="Schematic illustration of CASE evaluation without projection" width="100%" class="img-responsive">
 <figcaption>CASE evaluation without projection</figcaption>
 </figure>
@@ -350,7 +350,7 @@ As the diagram above shows, this filtering creates a reduced copy of all columns
 
 This unnecessary copying can be avoided by first narrowing the batch to only include the columns that are actually needed.
 
-<figure></figure>
+<figure>
 <img src="/blog/images/case/projection.svg" alt="Schematic illustration of CASE evaluation with projection" width="100%" class="img-responsive">
 <figcaption>CASE evaluation with projection</figcaption>
 </figure>
@@ -387,7 +387,7 @@ This produces two compact arrays (one for THEN values, one for ELSE values) whic
 In contrast to `zip`, `merge` does not require both of its value input to have the same length.
 Instead it requires that the sum of the length of the value inputs matches the length of the mask array.
 
-<figure></figure>
+<figure>
 <img src="/blog/images/case/merge_n.svg" alt="Schematic illustration of the merge algorithm" width="100%" class="img-responsive">
 <figcaption>merge example</figcaption>
 </figure>
@@ -417,7 +417,37 @@ During evaluation, rather than evaluating the `WHEN` and `THEN` expressions, the
 
 ### Results
 
-To be completed
+The degree to which the performance optimizations described in this post will benefit your queries is highly dependent on both your data and your queries.
+To give some idea of the impact we ran the following query on the TPC_H `orders` table with a scale factory of 100:
+
+```sql
+SELECT
+    *,
+    case o_orderstatus
+        when 'O' then 'ordered'
+        when 'F' then 'filled'
+        when 'P' then 'pending'
+        else 'other'
+    end
+from orders
+```
+
+This query was first run with DataFusion 50.0.0 to get a baseline measurement.
+The same query was then run with each optimization applied in turn.
+The recorded times are presented as the blue series in the chart below.
+The green series shows the time measurement for the `SELECT * from orders` to give an idea of the cost the addition of a `CASE` expression in a query incurs.
+All measurements were made with a target partition count of `1`.
+
+<figure>
+<img src="/blog/images/case/results.png" alt="Performance measurements chart" width="100%" class="img-responsive">
+<figcaption>Performance measurements</figcaption>
+</figure>
+
+What can be seen in the chart is that the effect of the various optimizations compounds up to the `project` measurement.
+Up to that point these results are applicable to any `CASE` expression.
+Then final `hash` measurement represents a final improvement, but is only applicable to simple `CASE` expressions with constant `WHEN` and `THEN` expressions.
+
+The cumulative effect of these optimizations is a 63-71% reduction in CPU time spent evaluating `CASE` expressions compared to the baseline. 
 
 ### Summary
 
