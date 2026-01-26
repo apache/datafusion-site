@@ -79,10 +79,6 @@ Sum and average aggregate expressions now support ANSI mode for both integer and
 - Spill metrics are now reported correctly
 - Configurable shuffle writer buffer size via `spark.comet.shuffle.write.bufferSize`
 
-### Native Columnar to Row Conversion
-
-Phase 1 implementation of native columnar to row conversion reduces JVM overhead when transitioning between native and Spark execution.
-
 ## Performance Improvements
 
 This release includes extensive performance optimizations:
