@@ -1,7 +1,7 @@
 ---
 layout: post
-title: Optimizing SQL `CASE` Expression Evaluation
-date: 2025-11-11
+title: Optimizing SQL CASE Expression Evaluation
+date: 2026-01-26
 author: Pepijn Van Eeckhoudt
 categories: [features]
 ---
@@ -49,8 +49,6 @@ figcaption {
 
 [Apache DataFusion]: https://datafusion.apache.org/
 
-## Optimizing CASE Expression Evaluation in DataFusion
-
 SQL's `CASE` expression is one of the few explicit conditional evaluation constructs the language provides.
 It lets you control which expression from a set of expressions is evaluated for each row based on arbitrary boolean expressions.
 Its deceptively simple syntax hides significant implementation complexity.
@@ -58,7 +56,7 @@ Over the past few releases, we've landed a series of improvements to [Apache Dat
 This post walks through the original implementation, its performance bottlenecks, and how we addressed them step by step.
 
 
-### Background: CASE Expression Evaluation
+## Background: CASE Expression Evaluation
 
 SQL supports two forms of CASE expressions:
 
@@ -126,7 +124,7 @@ END
 [Apache DataFusion] implements these conditional functions by rewriting them to their equivalent `CASE` expression.
 As a consequence, any optimizations related to `CASE` described in this post also apply to conditional function evaluation.
 
-### `CASE` Evaluation in DataFusion 50.0.0
+## `CASE` Evaluation in DataFusion 50.0.0
 
 For the remainder of this post we'll be looking at 'searched case' evaluation.
 'Simple case' uses a distinct, but very similar implementation.
@@ -219,12 +217,12 @@ This function produces a new array padded with `null` values for any rows that d
 
 So how does the simple evaluation strategy and use of `evaluate_selection` cause performance overhead?
 
-#### Observation 1: No Early Exit
+### Observation 1: No Early Exit
 
 The case evaluation loop always iterated through all branches, even when every row had already been matched.
 In queries where early branches match many rows, this meant unnecessary work was done for remaining rows.
 
-#### Observation 2: Repeated Filtering, Scattering, and Merging
+### Observation 2: Repeated Filtering, Scattering, and Merging
 
 Each iteration performed a number of operations that are very well-optimized, but still take up a significant amount of CPU time:
 
@@ -234,7 +232,7 @@ Each iteration performed a number of operations that are very well-optimized, bu
 
 Each of these operations needs to allocate memory for new arrays and shuffle quite a bit of data around. 
 
-#### Observation 3: Filtering Unused Columns
+### Observation 3: Filtering Unused Columns
 
 The `PhysicalExpr::evaluate_selection` method filters the entire record batch, including columns that the current branch's `WHEN` and `THEN` expressions don't reference.
 For wide tables (many columns) with narrow expressions (few column references), this is wasteful.
@@ -253,9 +251,9 @@ END
 the implementation would filter all 26 columns even though only a single column is needed for the entire `CASE` expression evaluation.
 Again this involves a non-negligible amount of allocation and data copying.
 
-### Performance Optimizations
+## Performance Optimizations
 
-#### Optimization 1: Short-Circuit Early Exit
+### Optimization 1: Short-Circuit Early Exit
 
 The first optimization is an easy one.
 As soon as we can detect that all rows of the batch have been matched we break out of the evaluation loop:
@@ -288,7 +286,7 @@ if let Some(else_expr) = &self.else_expr {
 
 For queries where early branches match all rows, this eliminates unnecessary branch evaluations and `ELSE` clause processing.
 
-#### Optimization 2: Optimized Result Merging
+### Optimization 2: Optimized Result Merging
 
 The second optimization fundamentally restructured how the results of each loop iteration are merged.
 The diagram below illustrates the optimized data flow when evaluating the `CASE WHEN col = 'b' THEN 100 ELSE 200 END` from before:
@@ -328,7 +326,7 @@ This takes the first and second element from the last values array respectively.
 
 This algorithm was initially implemented in DataFusion for `CASE` evaluation, but in the meantime has been generalized and moved into the `arrow-rs` crate as [`arrow_select::merge::merge_n`](https://docs.rs/arrow-select/57.1.0/arrow_select/merge/fn.merge_n.html).
 
-#### Optimization 3: Column Projection
+### Optimization 3: Column Projection
 
 The third optimization addresses the "filtering unused columns" overhead through projection.
 
@@ -363,7 +361,7 @@ The column arrays themselves are not copied, and the only work that is actually 
 
 **Impact**: For wide tables with narrow CASE expressions, this dramatically reduces filtering overhead by removing copying of unused columns.
 
-#### Optimization 4: Eliminating Scatter in Two-Branch Case
+### Optimization 4: Eliminating Scatter in Two-Branch Case
 
 Some of the earlier examples in this post used an expression of the form `CASE WHEN condition THEN expr1 ELSE expr2 END` to explain how the general evaluation loop works.
 For this kind of two-branch `CASE` expression, [Apache DataFusion] has a more optimized implementation that unrolls the loop.
@@ -398,7 +396,7 @@ This eliminates unnecessary scatter operations and memory allocations for one of
 
 Just like `merge_n` this operation has been moved into `arrow-rs` as [`arrow_select::merge::merge`](https://docs.rs/arrow-select/57.1.0/arrow_select/merge/fn.merge.html).
 
-#### Optimization 5: Table Lookup of Constants
+### Optimization 5: Table Lookup of Constants
 
 Up until now we've been discussing the implementations for generic `CASE` expressions that use non-constant expressions for both `WHEN` and `THEN`.
 Another common use of `CASE` though is to perform a mapping from one set of constants to another.
@@ -417,7 +415,7 @@ END
 A final `CASE` optimization recognizes this pattern and compiles the `CASE` expression into a hash table.
 During evaluation, rather than evaluating the `WHEN` and `THEN` expressions, the input expression is evaluated once, and the result array is computed using a vectorized hash table lookup.
 
-### Results
+## Results
 
 The degree to which the performance optimizations described in this post will benefit your queries is highly dependent on both your data and your queries.
 To give some idea of the impact we ran the following query on the TPC_H `orders` table with a scale factory of 100:
@@ -451,7 +449,7 @@ Then final `hash` measurement represents a final improvement, but is only applic
 
 The cumulative effect of these optimizations is a 63-71% reduction in CPU time spent evaluating `CASE` expressions compared to the baseline. 
 
-### Summary
+## Summary
 
 Through a number of targeted optimizations, we've transformed `CASE` expression evaluation from a simple, but unoptimized implementation to a highly optimized one.
 The optimizations described in this post compound: a `CASE` expression on a wide table with multiple branches and early matches benefits from all four optimizations simultaneously.
