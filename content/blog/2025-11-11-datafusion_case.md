@@ -47,6 +47,8 @@ figcaption {
 }
 </style>
 
+[Apache DataFusion]: https://datafusion.apache.org/
+
 ## Optimizing CASE Expression Evaluation in DataFusion
 
 SQL's `CASE` expression is one of the few explicit conditional evaluation constructs the language provides.
@@ -96,7 +98,7 @@ END
 In both forms, branches are evaluated sequentially with short-circuit semantics: for each row, once a `WHEN` condition matches, the corresponding `THEN` expression is evaluated.
 Any further branches are not evaluated for that row.
 This lazy evaluation model is critical for correctness.
-It let's you safely write `CASE` expressions like
+It lets you safely write `CASE` expressions like
 
 ```sql
 CASE
@@ -107,7 +109,7 @@ END
 
 that are guaranteed to not trigger divide-by-zero errors.
 
-Besides `CASE`, there are a few [conditional scalar functions](https://datafusion.apache.org/user-guide/sql/scalar_functions.html#conditional-functions) that provide similiar, more restricted capabilities.
+Besides `CASE`, there are a few [conditional scalar functions](https://datafusion.apache.org/user-guide/sql/scalar_functions.html#conditional-functions) that provide similar, more restricted capabilities.
 These include `COALESCE`, `IFNULL`, and `NVL2`.
 
 Each of these functions can be seen as the equivalent of a macro for `CASE`.
@@ -122,7 +124,7 @@ END
 ```
 
 [Apache DataFusion] implements these conditional functions by rewriting them to their equivalent `CASE` expression.
-As a consequence, any optimisations related to `CASE` described in this post also apply to conditional function evaluation.
+As a consequence, any optimizations related to `CASE` described in this post also apply to conditional function evaluation.
 
 ### `CASE` Evaluation in DataFusion 50.0.0
 
@@ -160,7 +162,7 @@ for (when_expr, then_expr) in &self.when_then_expr {
     // Evaluate the THEN expression for matching rows
     let then = then_expr.evaluate_selection(batch, &when_and_rem)?;
     // Merge results into output array
-    out = zip(&when_value, &then_value, &out)?;
+    out = zip(&when_and_rem, &then_value, &out)?;
     // Update remainder mask to exclude matched rows
     remainder = and_not(&remainder, &when_and_rem)?;
 }
@@ -178,7 +180,7 @@ END
 looks like this:
 
 <figure>
-<img src="/blog/images/case/original_loop.svg" alt="Parquet pruning pipeline in DataFusion" width="100%" class="img-responsive">
+<img src="/blog/images/case/original_loop.svg" alt="Schematic representation of data flow in the original CASE implementation" width="100%" class="img-responsive">
 <figcaption>One iteration of the `CASE` evaluation loop</figcaption>
 </figure>
 
@@ -292,8 +294,8 @@ The second optimization fundamentally restructured how the results of each loop 
 The diagram below illustrates the optimized data flow when evaluating the `CASE WHEN col = 'b' THEN 100 ELSE 200 END` from before:
 
 <figure>
-<img src="/blog/images/case/merging.svg" alt="Schematic representation of optimised evaluation loop" width="100%" class="img-responsive">
-<figcaption>Optimised evaluation loop</figcaption>
+<img src="/blog/images/case/merging.svg" alt="Schematic representation of optimized evaluation loop" width="100%" class="img-responsive">
+<figcaption>optimized evaluation loop</figcaption>
 </figure>
 
 In the reworked implementation, `evaluate_selection` is no longer used.
@@ -305,7 +307,7 @@ This was implemented with the following changes:
 3. Use the row index column to track which partial result array contains the value for each row 
 4. Perform a single merge operation at the end instead of a `zip` operation in after each loop iteration 
 
-With these changes it is no longer neccessary to `scatter` and `zip` results in each loop iteration.
+With these changes it is no longer necessary to `scatter` and `zip` results in each loop iteration.
 Instead, when all rows have been matched, we can then merge the partial results using [`arrow_select::merge::merge_n`](https://docs.rs/arrow-select/57.1.0/arrow_select/merge/fn.merge_n.html).
 
 The diagram below illustrated how `merge_n` works for an example where three `WHEN/THEN` branches produced results.
@@ -388,7 +390,7 @@ In contrast to `zip`, `merge` does not require both of its value input to have t
 Instead it requires that the sum of the length of the value inputs matches the length of the mask array.
 
 <figure>
-<img src="/blog/images/case/merge_n.svg" alt="Schematic illustration of the merge algorithm" width="100%" class="img-responsive">
+<img src="/blog/images/case/merge.svg" alt="Schematic illustration of the merge algorithm" width="100%" class="img-responsive">
 <figcaption>merge example</figcaption>
 </figure>
 
@@ -412,7 +414,7 @@ CASE status
 END
 ```
 
-A final `CASE` optimisation recognizes this pattern and compiles the `CASE` expression into a hash table.
+A final `CASE` optimization recognizes this pattern and compiles the `CASE` expression into a hash table.
 During evaluation, rather than evaluating the `WHEN` and `THEN` expressions, the input expression is evaluated once, and the result array is computed using a vectorized hash table lookup.
 
 ### Results
@@ -452,5 +454,5 @@ The cumulative effect of these optimizations is a 63-71% reduction in CPU time s
 ### Summary
 
 Through a number of targeted optimizations, we've transformed `CASE` expression evaluation from a simple, but unoptimized implementation to a highly optimized one.
-The optimisations described in this post compound: a `CASE` expression on a wide table with multiple branches and early matches benefits from all four optimizations simultaneously.
-The result is significantly reduced CPU time and memory allocation in a SQL that's essential for ETL-like queries.
+The optimizations described in this post compound: a `CASE` expression on a wide table with multiple branches and early matches benefits from all four optimizations simultaneously.
+The result is significantly reduced CPU time and memory allocation in a SQL constructs that are essential for ETL-like queries.
