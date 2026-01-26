@@ -286,6 +286,8 @@ if let Some(else_expr) = &self.else_expr {
 
 For queries where early branches match all rows, this eliminates unnecessary branch evaluations and `ELSE` clause processing.
 
+This optimization was implemented by Pepijn Van Eeckhoudt ([`@pepijnve`](https://github.com/pepijnve)) in [PR #17898](https://github.com/apache/datafusion/pull/17898)
+
 ### Optimization 2: Optimized Result Merging
 
 The second optimization fundamentally restructured how the results of each loop iteration are merged.
@@ -326,6 +328,8 @@ This takes the first and second element from the last values array respectively.
 
 This algorithm was initially implemented in DataFusion for `CASE` evaluation, but in the meantime has been generalized and moved into the `arrow-rs` crate as [`arrow_select::merge::merge_n`](https://docs.rs/arrow-select/57.1.0/arrow_select/merge/fn.merge_n.html).
 
+This optimization was implemented by Pepijn Van Eeckhoudt ([`@pepijnve`](https://github.com/pepijnve)) in [PR #18152](https://github.com/apache/datafusion/pull/18152)
+
 ### Optimization 3: Column Projection
 
 The third optimization addresses the "filtering unused columns" overhead through projection.
@@ -360,6 +364,8 @@ Luckily projection of a record batch only requires a shallow copy of the record 
 The column arrays themselves are not copied, and the only work that is actually done is incrementing the reference counts of the columns.
 
 **Impact**: For wide tables with narrow CASE expressions, this dramatically reduces filtering overhead by removing copying of unused columns.
+
+This optimization was implemented by Pepijn Van Eeckhoudt ([`@pepijnve`](https://github.com/pepijnve)) in [PR #18329](https://github.com/apache/datafusion/pull/18329)
 
 ### Optimization 4: Eliminating Scatter in Two-Branch Case
 
@@ -396,6 +402,8 @@ This eliminates unnecessary scatter operations and memory allocations for one of
 
 Just like `merge_n` this operation has been moved into `arrow-rs` as [`arrow_select::merge::merge`](https://docs.rs/arrow-select/57.1.0/arrow_select/merge/fn.merge.html).
 
+This optimization was implemented by Pepijn Van Eeckhoudt ([`@pepijnve`](https://github.com/pepijnve)) in [PR #18444](https://github.com/apache/datafusion/pull/18444)
+
 ### Optimization 5: Table Lookup of Constants
 
 Up until now we've been discussing the implementations for generic `CASE` expressions that use non-constant expressions for both `WHEN` and `THEN`.
@@ -413,7 +421,11 @@ END
 ```
 
 A final `CASE` optimization recognizes this pattern and compiles the `CASE` expression into a hash table.
-During evaluation, rather than evaluating the `WHEN` and `THEN` expressions, the input expression is evaluated once, and the result array is computed using a vectorized hash table lookup.
+Rather than evaluating the `WHEN` and `THEN` expressions, the input expression is evaluated once, and the result array is computed using a vectorized hash table lookup.
+This approach avoids the need to filter the input batch and combine partial results entirely.
+Instead the result array is computed in a single pass over the input values and the computation time is independent of the number of `WHEN` branches in the `CASE expression.
+
+This optimization was implemented by Raz Luvaton ([`@rluvaton`](https://github.com/rluvaton)) in [PR #18183](https://github.com/apache/datafusion/pull/18183)
 
 ## Results
 
@@ -445,7 +457,7 @@ All measurements were made with a target partition count of `1`.
 
 What can be seen in the chart is that the effect of the various optimizations compounds up to the `project` measurement.
 Up to that point these results are applicable to any `CASE` expression.
-Then final `hash` measurement represents a final improvement, but is only applicable to simple `CASE` expressions with constant `WHEN` and `THEN` expressions.
+The final improvement in the `hash` measurement is only applicable to simple `CASE` expressions with constant `WHEN` and `THEN` expressions.
 
 The cumulative effect of these optimizations is a 63-71% reduction in CPU time spent evaluating `CASE` expressions compared to the baseline. 
 
