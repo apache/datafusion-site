@@ -251,7 +251,7 @@ END
 the implementation would filter all 26 columns even though only a single column is needed for the entire `CASE` expression evaluation.
 Again this involves a non-negligible amount of allocation and data copying.
 
-### Performance Improvements
+### Performance Optimizations
 
 #### Optimization 1: Short-Circuit Early Exit
 
@@ -363,50 +363,64 @@ The column arrays themselves are not copied, and the only work that is actually 
 
 #### Optimization 4: Eliminating Scatter in Two-Branch Case
 
-The final optimization targets a common pattern: `CASE WHEN condition THEN expr1 ELSE expr2 END`.
+Some of the earlier examples in this post used an expression of the form `CASE WHEN condition THEN expr1 ELSE expr2 END` to explain how the general evaluation loop works.
+For this kind of two-branch `CASE` expression, [Apache DataFusion] has a more optimized implementation that unrolls the loop.
+This specialized `ExpressionOrExpression` fast path still used `evaluate_selection()` for both branches which uses `scatter` and `zip` to combine the results incurring the same performance overhead as the general implementation.
 
-Previously, this used the specialized `ExpressionOrExpression` fast path, but still used `evaluate_selection()` which produces scattered results:
-
-```rust
-// Old approach: produces scattered array with batch.num_rows() elements
-let then_value = then_expr.evaluate_selection(batch, &when_value)?
-    .into_array(batch.num_rows())?;
-```
-
-The new approach filters the batch first, then evaluates:
+The revised implementation eliminates the use of `evaluate_selection` as follows:
 
 ```rust
-// New approach: filter to only matching rows
+// Compute the `WHEN` condition for the entire batch
 let when_filter = create_filter(&when_value);
-let then_batch = filter_record_batch(batch, &when_filter)?;
-let then_value = then_expr.evaluate(&then_batch)?;  // Produces compact array
 
+// Compute a compact array of `THEN` values for the matching rows
+let then_batch = filter_record_batch(batch, &when_filter)?;
+let then_value = then_expr.evaluate(&then_batch)?;
+
+// Compute a compact array of `ELSE` values for the non-matching rows
 let else_filter = create_filter(&not(&when_value)?);
 let else_batch = filter_record_batch(batch, &else_filter)?;
 let else_value = else_expr.evaluate(&else_batch)?;
 ```
 
-This produces two compact arrays (one for THEN values, one for ELSE values) which are then merged with a custom merge function that doesn't require pre-scattered inputs:
+This produces two compact arrays (one for THEN values, one for ELSE values) which are then merged with the `merge` function.
+In contrast to `zip`, `merge` does not require both of its value input to have the same length.
+Instead it requires that the sum of the length of the value inputs matches the length of the mask array.
 
-```rust
-fn merge(mask: &BooleanArray, truthy: ColumnarValue, falsy: ColumnarValue) -> ArrayRef {
-    // Interleave truthy and falsy values directly using mask
-    // without requiring pre-alignment
-}
-```
+<figure></figure>
+<img src="/blog/images/case/merge_n.svg" alt="Schematic illustration of the merge algorithm" width="100%" class="img-responsive">
+<figcaption>merge example</figcaption>
+</figure>
 
-**Impact**: This eliminates unnecessary scatter operations and memory allocations for one of the most common CASE expression patterns.
+This eliminates unnecessary scatter operations and memory allocations for one of the most common `CASE` expression patterns.
 
 Just like `merge_n` this operation has been moved into `arrow-rs` as [`arrow_select::merge::merge`](https://docs.rs/arrow-select/57.1.0/arrow_select/merge/fn.merge.html).
 
+#### Optimization 5: Table Lookup of Constants
+
+Up until now we've been discussing the implementations for generic `CASE` expressions that use non-constant expressions for both `WHEN` and `THEN`.
+Another common use of `CASE` though is to perform a mapping from one set of constants to another.
+For instance, expanding numeric constants to human-readable strings can be done using
+
+```sql
+CASE status
+  WHEN 0 THEN 'idle'
+  WHEN 1 THEN 'running'
+  WHEN 2 THEN 'paused'
+  WHEN 3 THEN 'stopped'
+  ELSE 'unknown'
+END
+```
+
+A final `CASE` optimisation recognizes this pattern and compiles the `CASE` expression into a hash table.
+During evaluation, rather than evaluating the `WHEN` and `THEN` expressions, the input expression is evaluated once, and the result array is computed using a vectorized hash table lookup.
+
+### Results
+
+To be completed
+
 ### Summary
 
-Through four targeted optimizations, we've transformed CASE expression evaluation from a simple but inefficient implementation to a highly optimized one that:
-
-1. **Exits early** when all rows are matched
-2. **Defers merging** until the end with a single interleave operation
-3. **Projects columns** to avoid filtering unused data
-4. **Eliminates scatter** operations in common patterns
-
-These improvements compound: a CASE expression on a wide table with multiple branches and early matches benefits from all four optimizations simultaneously.
-The result is significantly reduced CPU time and memory allocation in one of SQL's most frequently used constructs.
+Through a number of targeted optimizations, we've transformed `CASE` expression evaluation from a simple, but unoptimized implementation to a highly optimized one.
+The optimisations described in this post compound: a `CASE` expression on a wide table with multiple branches and early matches benefits from all four optimizations simultaneously.
+The result is significantly reduced CPU time and memory allocation in a SQL that's essential for ETL-like queries.
