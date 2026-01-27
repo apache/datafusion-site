@@ -337,9 +337,12 @@ The third optimization addresses the "filtering unused columns" overhead through
 Suppose we have a query like:
 
 ```sql
-SELECT *, CASE WHEN country = 'USA' THEN state ELSE country END AS region
+SELECT *, 
+  CASE 
+    WHEN country = 'USA' THEN state 
+    ELSE country 
+  END AS region
 FROM mailing_address 
-```
 
 where the `mailing_address` table has columns `name`, `surname`, `street`, `number`, `city`, `state`, `country`.
 We can see that the `CASE` expression only references columns `country` and `state`, but because all columns are being queried, projection pushdown cannot reduce the number of columns being fed in to the projection operator.
