@@ -340,7 +340,8 @@ SELECT *,
     WHEN country = 'USA' THEN state 
     ELSE country 
   END AS region
-FROM mailing_address 
+FROM mailing_address
+```
 
 where the `mailing_address` table has columns `name`, `surname`, `street`, `number`, `city`, `state`, `country`.
 We can see that the `CASE` expression only references columns `country` and `state`, but because all columns are being queried, projection pushdown cannot reduce the number of columns being fed in to the projection operator.
