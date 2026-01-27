@@ -215,7 +215,7 @@ It then calls the regular `evaluate` method using the filtered batch as input.
 Finally, to return a result array with the same number of rows as `batch`, the `scatter` function is called.
 This function produces a new array padded with `null` values for any rows that didn't match the `selection` mask.
 
-So how does the simple evaluation strategy and use of `evaluate_selection` cause performance overhead?
+So how can we improve the performance of the simple evaluation strategy and use of `evaluate_selection`?
 
 ### Observation 1: No Early Exit
 
