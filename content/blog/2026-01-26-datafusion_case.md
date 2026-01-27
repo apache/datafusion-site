@@ -47,8 +47,6 @@ figcaption {
 }
 </style>
 
-[Apache DataFusion]: https://datafusion.apache.org/
-
 SQL's `CASE` expression is one of the few explicit conditional evaluation constructs the language provides.
 It lets you control which expression from a set of expressions is evaluated for each row based on arbitrary boolean expressions.
 Its deceptively simple syntax hides significant implementation complexity.
@@ -469,3 +467,32 @@ The cumulative effect of these optimizations is a 63-71% reduction in CPU time s
 Through a number of targeted optimizations, we've transformed `CASE` expression evaluation from a simple, but unoptimized implementation to a highly optimized one.
 The optimizations described in this post compound: a `CASE` expression on a wide table with multiple branches and early matches benefits from all four optimizations simultaneously.
 The result is significantly reduced CPU time and memory allocation in SQL constructs that are essential for ETL-like queries.
+
+## About DataFusion
+
+[Apache DataFusion] is an extensible query engine, written in [Rust], that uses [Apache Arrow] as its in-memory format. DataFusion is used by developers to create new, fast, data-centric systems such as databases, dataframe libraries,
+and machine learning and streaming applications.
+While [DataFusion’s primary design goal] is to accelerate the creation of other data-centric systems, it provides a reasonable experience directly out of the box as a [dataframe library], [Python library], and [command-line SQL tool].
+
+[apache datafusion]: https://datafusion.apache.org/
+[rust]: https://www.rust-lang.org/
+[apache arrow]: https://arrow.apache.org
+[DataFusion’s primary design goal]: https://datafusion.apache.org/user-guide/introduction.html#project-goals
+[dataframe library]: https://datafusion.apache.org/user-guide/dataframe.html
+[python library]: https://datafusion.apache.org/python/
+[command-line SQL tool]: https://datafusion.apache.org/user-guide/cli/
+
+DataFusion's core thesis is that, as a community, together we can build much more advanced technology than any of us as individuals or companies could build alone.
+Without DataFusion, highly performant vectorized query engines would remain the domain of a few large companies and world-class research institutions.
+With DataFusion, we can all build on top of a shared foundation and focus on what makes our projects unique.
+
+## How to Get Involved
+
+DataFusion is not a project built or driven by a single person, company, or foundation.
+Rather, our community of users and contributors works together to build a shared technology that none of us could have built alone.
+
+If you are interested in joining us, we would love to have you. You can try out DataFusion on some of your own data and projects and let us know how it goes, contribute suggestions, documentation, bug reports, or a PR with documentation, tests, or code.
+A list of open issues suitable for beginners is [here], and you can find out how to reach us on the [communication doc].
+
+[here]: https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22
+[communication doc]: https://datafusion.apache.org/contributor-guide/communication.html
