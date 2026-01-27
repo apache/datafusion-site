@@ -130,7 +130,7 @@ For the remainder of this post, we'll be looking at `searched CASE` evaluation.
 `Simple CASE` uses a distinct, but very similar implementation.
 The same set of improvements has been applied to both.
 
-The baseline implementation in DataFusion 50.0.0 evaluated `CASE` using a straightforward approach:
+DataFusion 50.0.0 uses a common, straightforward approach to evaluate `CASE`:
 
 1. Start with an output array `out` with the same length as the input batch, filled with nulls. Additionally, create a bit vector `remainder` with the same length and each value set to `true`.
 2. For each `WHEN`/`THEN` branch:
