@@ -409,7 +409,7 @@ This optimization was implemented by Pepijn Van Eeckhoudt ([`@pepijnve`](https:/
 
 ### Optimization 5: Table Lookup of Constants
 
-Up until now we've been discussing the implementations for generic `CASE` expressions that use non-constant expressions for both `WHEN` and `THEN`.
+Up until now we've been discussing the implementations for generic `CASE` expressions with arbitrary expressions for both `WHEN` and `THEN`.
 Another common use of `CASE` though is to perform a mapping from one set of constants to another.
 For instance, expanding numeric constants to human-readable strings can be done using
 
