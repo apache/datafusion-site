@@ -124,7 +124,7 @@ END
 [Apache DataFusion] implements these conditional functions by rewriting them to their equivalent `CASE` expression.
 As a consequence, any optimizations related to `CASE` described in this post also apply to conditional function evaluation.
 
-## `CASE` Evaluation in DataFusion 50.0.0
+## Basic `CASE` Evaluation
 
 For the remainder of this post, we'll be looking at `searched CASE` evaluation.
 `Simple CASE` uses a distinct, but very similar implementation.
