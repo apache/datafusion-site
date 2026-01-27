@@ -215,12 +215,12 @@ This function produces a new array padded with `null` values for any rows that d
 
 So how can we improve the performance of the simple evaluation strategy and use of `evaluate_selection`?
 
-### Observation 1: No Early Exit
+### Opportunity 1: Early Exit
 
 The case evaluation loop always iterated through all branches, even when every row had already been matched.
 In queries where early branches match many rows, this meant unnecessary work was done for remaining rows.
 
-### Observation 2: Repeated Filtering, Scattering, and Merging
+### Opportunity 2: Optimize Repeated Filtering, Scattering, and Merging
 
 Each iteration performed a number of operations that are very well-optimized, but still take up a significant amount of CPU time:
 
@@ -230,7 +230,7 @@ Each iteration performed a number of operations that are very well-optimized, bu
 
 Each of these operations needs to allocate memory for new arrays and shuffle quite a bit of data around. 
 
-### Observation 3: Filtering Unused Columns
+### Opportunity 3: Filter only Necessary Columns
 
 The `PhysicalExpr::evaluate_selection` method filters the entire record batch, including columns that the current branch's `WHEN` and `THEN` expressions don't reference.
 For wide tables (many columns) with narrow expressions (few column references), this is wasteful.
