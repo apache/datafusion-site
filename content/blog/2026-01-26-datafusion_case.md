@@ -82,7 +82,7 @@ The `CASE` expression evaluates to the value of the `THEN` expression correspond
 
 The searched `CASE` form is a more flexible variant.
 It evaluates completely independent boolean expressions for each branch.
-This allows you to test different columns with different operators per branch as can be seen in the following example:
+This allows you to test different columns with different operators per branch, as can be seen in the following example:
 
 ```sql
 CASE
@@ -101,7 +101,7 @@ It lets you safely write `CASE` expressions like
 ```sql
 CASE
     WHEN denominator == 0 THEN NULL
-    ELSE nominator / denominator
+    ELSE numerator / denominator
 END
 ```
 
@@ -126,8 +126,8 @@ As a consequence, any optimizations related to `CASE` described in this post als
 
 ## `CASE` Evaluation in DataFusion 50.0.0
 
-For the remainder of this post we'll be looking at 'searched case' evaluation.
-'Simple case' uses a distinct, but very similar implementation.
+For the remainder of this post, we'll be looking at `searched CASE` evaluation.
+`Simple CASE` uses a distinct, but very similar implementation.
 The same set of improvements has been applied to both.
 
 The baseline implementation in DataFusion 50.0.0 evaluated `CASE` using a straightforward approach:
@@ -305,12 +305,12 @@ This was implemented with the following changes:
 1. Augment the input batch with a column containing row indices
 2. Reduce the augmented batch after each loop iteration to only contain the remaining rows
 3. Use the row index column to track which partial result array contains the value for each row 
-4. Perform a single merge operation at the end instead of a `zip` operation in after each loop iteration 
+4. Perform a single merge operation at the end instead of a `zip` operation after each loop iteration 
 
 With these changes it is no longer necessary to `scatter` and `zip` results in each loop iteration.
 Instead, when all rows have been matched, we can then merge the partial results using [`arrow_select::merge::merge_n`](https://docs.rs/arrow-select/57.1.0/arrow_select/merge/fn.merge_n.html).
 
-The diagram below illustrated how `merge_n` works for an example where three `WHEN/THEN` branches produced results.
+The diagram below illustrates how `merge_n` works for an example where three `WHEN/THEN` branches produced results.
 The first branch produced the result `A` for 2, the second produced `B` for row 1, and the third produced `C` and `D` for rows 4 and 5.
 
 <figure>
@@ -390,7 +390,7 @@ let else_value = else_expr.evaluate(&else_batch)?;
 ```
 
 This produces two compact arrays (one for THEN values, one for ELSE values) which are then merged with the `merge` function.
-In contrast to `zip`, `merge` does not require both of its value input to have the same length.
+In contrast to `zip`, `merge` does not require both of its value inputs to have the same length.
 Instead it requires that the sum of the length of the value inputs matches the length of the mask array.
 
 <figure>
@@ -423,14 +423,14 @@ END
 A final `CASE` optimization recognizes this pattern and compiles the `CASE` expression into a hash table.
 Rather than evaluating the `WHEN` and `THEN` expressions, the input expression is evaluated once, and the result array is computed using a vectorized hash table lookup.
 This approach avoids the need to filter the input batch and combine partial results entirely.
-Instead the result array is computed in a single pass over the input values and the computation time is independent of the number of `WHEN` branches in the `CASE expression.
+Instead the result array is computed in a single pass over the input values and the computation time is independent of the number of `WHEN` branches in the `CASE` expression.
 
 This optimization was implemented by Raz Luvaton ([`@rluvaton`](https://github.com/rluvaton)) in [PR #18183](https://github.com/apache/datafusion/pull/18183)
 
 ## Results
 
 The degree to which the performance optimizations described in this post will benefit your queries is highly dependent on both your data and your queries.
-To give some idea of the impact we ran the following query on the TPC_H `orders` table with a scale factory of 100:
+To give some idea of the impact we ran the following query on the TPC_H `orders` table with a scale factor of 100:
 
 ```sql
 SELECT
@@ -447,7 +447,7 @@ from orders
 This query was first run with DataFusion 50.0.0 to get a baseline measurement.
 The same query was then run with each optimization applied in turn.
 The recorded times are presented as the blue series in the chart below.
-The green series shows the time measurement for the `SELECT * from orders` to give an idea of the cost the addition of a `CASE` expression in a query incurs.
+The green series shows the time measurement for the `SELECT * FROM orders` to give an idea of the cost the addition of a `CASE` expression in a query incurs.
 All measurements were made with a target partition count of `1`.
 
 <figure>
@@ -465,4 +465,4 @@ The cumulative effect of these optimizations is a 63-71% reduction in CPU time s
 
 Through a number of targeted optimizations, we've transformed `CASE` expression evaluation from a simple, but unoptimized implementation to a highly optimized one.
 The optimizations described in this post compound: a `CASE` expression on a wide table with multiple branches and early matches benefits from all four optimizations simultaneously.
-The result is significantly reduced CPU time and memory allocation in a SQL constructs that are essential for ETL-like queries.
+The result is significantly reduced CPU time and memory allocation in SQL constructs that are essential for ETL-like queries.
