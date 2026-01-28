@@ -1,5 +1,243 @@
 <?xml version="1.0" encoding="utf-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - pmc</title><link href="https://datafusion.apache.org/blog/" rel="alternate"></link><link href="https://datafusion.apache.org/blog/feeds/pmc.atom.xml" rel="self"></link><id>https://datafusion.apache.org/blog/</id><updated>2025-12-04T00:00:00+00:00</updated><subtitle></subtitle><entry><title>Apache DataFusion Comet 0.12.0 Release</title><link href="https://datafusion.apache.org/blog/2025/12/04/datafusion-comet-0.12.0" rel="alternate"></link><published>2025-12-04T00:00:00+00:00</published><updated>2025-12-04T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2025-12-04:/blog/2025/12/04/datafusion-comet-0.12.0</id><summary type="html">&lt;!--
+<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - pmc</title><link href="https://datafusion.apache.org/blog/" rel="alternate"></link><link href="https://datafusion.apache.org/blog/feeds/pmc.atom.xml" rel="self"></link><id>https://datafusion.apache.org/blog/</id><updated>2026-01-08T00:00:00+00:00</updated><subtitle></subtitle><entry><title>Apache DataFusion 52.0.0 Released</title><link href="https://datafusion.apache.org/blog/2026/01/08/datafusion-52.0.0" rel="alternate"></link><published>2026-01-08T00:00:00+00:00</published><updated>2026-01-08T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2026-01-08:/blog/2026/01/08/datafusion-52.0.0</id><summary type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+
+&lt;p&gt;We are proud to announce the release of &lt;a href="https://crates.io/crates/datafusion/52.0.0"&gt;DataFusion 52.0.0&lt;/a&gt;. This post highlights
+some of the major improvements since &lt;a href="https://datafusion.apache.org/blog/2025/11/25/datafusion-51.0.0/"&gt;DataFusion 51.0.0&lt;/a&gt;. The complete list of
+changes is available in the &lt;a href="https://github.com/apache/datafusion/blob/branch-52/dev/changelog/52.0.0.md"&gt;changelog&lt;/a&gt;. Thanks to the &lt;a href="https://github.com/apache/datafusion/blob/branch-52/dev/changelog/52.0.0.md#credits"&gt;121 contributors&lt;/a&gt; for
+making this release possible.&lt;/p&gt;
+&lt;h2 id="performance-improvements"&gt;Performance Improvements 🚀&lt;a class="headerlink" href="#performance-improvements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;We continue to …&lt;/p&gt;</summary><content type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+
+&lt;p&gt;We are proud to announce the release of &lt;a href="https://crates.io/crates/datafusion/52.0.0"&gt;DataFusion 52.0.0&lt;/a&gt;. This post highlights
+some of the major improvements since &lt;a href="https://datafusion.apache.org/blog/2025/11/25/datafusion-51.0.0/"&gt;DataFusion 51.0.0&lt;/a&gt;. The complete list of
+changes is available in the &lt;a href="https://github.com/apache/datafusion/blob/branch-52/dev/changelog/52.0.0.md"&gt;changelog&lt;/a&gt;. Thanks to the &lt;a href="https://github.com/apache/datafusion/blob/branch-52/dev/changelog/52.0.0.md#credits"&gt;121 contributors&lt;/a&gt; for
+making this release possible.&lt;/p&gt;
+&lt;h2 id="performance-improvements"&gt;Performance Improvements 🚀&lt;a class="headerlink" href="#performance-improvements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;We continue to make significant performance improvements in DataFusion as explained below.&lt;/p&gt;
+&lt;h3 id="faster-case-expressions"&gt;Faster &lt;code&gt;CASE&lt;/code&gt; Expressions&lt;a class="headerlink" href="#faster-case-expressions" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;DataFusion 52 has lookup-table-based evaluation for certain &lt;code&gt;CASE&lt;/code&gt; expressions
+to avoid repeated evaluation for accelerating common ETL patterns such as&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;CASE company
+    WHEN 1 THEN 'Apple'
+    WHEN 5 THEN 'Samsung'
+    WHEN 2 THEN 'Motorola'
+    WHEN 3 THEN 'LG'
+    ELSE 'Other'
+END
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;This is the final work in our &lt;code&gt;CASE&lt;/code&gt; performance epic (&lt;a href="https://github.com/apache/datafusion/issues/18075"&gt;#18075&lt;/a&gt;), which has
+improved &lt;code&gt;CASE&lt;/code&gt; evaluation significantly. Related PRs &lt;a href="https://github.com/apache/datafusion/pull/18183"&gt;#18183&lt;/a&gt;. Thanks to
+&lt;a href="https://github.com/rluvaton"&gt;rluvaton&lt;/a&gt; and &lt;a href="https://github.com/pepijnve"&gt;pepijnve&lt;/a&gt; for the implementation.&lt;/p&gt;
+&lt;h3 id="minmax-aggregate-dynamic-filters"&gt;&lt;code&gt;MIN&lt;/code&gt;/&lt;code&gt;MAX&lt;/code&gt; Aggregate Dynamic Filters&lt;a class="headerlink" href="#minmax-aggregate-dynamic-filters" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;DataFusion now creates dynamic filters for queries with &lt;code&gt;MIN&lt;/code&gt;/&lt;code&gt;MAX&lt;/code&gt; aggregates
+that have filters, but no &lt;code&gt;GROUP BY&lt;/code&gt;. These dynamic filters are used during scan
+to prune files and rows as tighter bounds are discovered during execution, as
+explained in the &lt;a href="https://datafusion.apache.org/blog/2025/09/10/dynamic-filters/#hash-join-dynamic-filters"&gt;Dynamic Filtering Blog&lt;/a&gt;. For example, the following query:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT min(l_shipdate)
+FROM lineitem
+WHERE l_returnflag = 'R';
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Is now executed like this  &lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT min(l_shipdate)
+FROM lineitem
+--  '__current_min' is updated dynamically during execution
+WHERE l_returnflag = 'R' AND l_shipdate &amp;lt; __current_min;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/2010YOUY01"&gt;2010YOUY01&lt;/a&gt; for implementing this feature, with reviews from
+&lt;a href="https://github.com/martin-g"&gt;martin-g&lt;/a&gt;, &lt;a href="https://github.com/adriangb"&gt;adriangb&lt;/a&gt;, and &lt;a href="https://github.com/LiaCastaneda"&gt;LiaCastaneda&lt;/a&gt;. Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/18644"&gt;#18644&lt;/a&gt;&lt;/p&gt;
+&lt;h3 id="new-merge-join"&gt;New Merge Join&lt;a class="headerlink" href="#new-merge-join" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;DataFusion 52 includes a rewrite of the sort-merge join (SMJ) operator, with
+speedups of three orders of magnitude in some pathological cases such as the
+case in &lt;a href="https://github.com/apache/datafusion/issues/18487"&gt;#18487&lt;/a&gt;, which also affected &lt;a href="https://datafusion.apache.org/comet/"&gt;Apache Comet&lt;/a&gt; workloads. Benchmarks in
+&lt;a href="https://github.com/apache/datafusion/pull/18875"&gt;#18875&lt;/a&gt; show dramatic gains for TPC-H Q21 (minutes to milliseconds) while
+leaving other queries unchanged or modestly faster. Thanks to &lt;a href="https://github.com/mbutrovich"&gt;mbutrovich&lt;/a&gt; for
+the implementation and reviews from &lt;a href="https://github.com/Dandandan"&gt;Dandandan&lt;/a&gt;.&lt;/p&gt;
+&lt;h3 id="caching-improvements"&gt;Caching Improvements&lt;a class="headerlink" href="#caching-improvements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;This release also includes several additional caching improvements.&lt;/p&gt;
+&lt;p&gt;A new statistics cache for File Metadata avoids repeatedly (re)calculating
+statistics for files. This significantly improves planning time
+for certain queries. You can see the contents of the new cache using the
+&lt;a href="https://datafusion.apache.org/user-guide/cli/functions.html#statistics-cache"&gt;statistics_cache&lt;/a&gt; function in the CLI:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;select * from statistics_cache();
++------------------+---------------------+-----------------+------------------------+---------+-----------------+-------------+--------------------+-----------------------+
+| path             | file_modified       | file_size_bytes | e_tag                  | version | num_rows        | num_columns | table_size_bytes   | statistics_size_bytes |
++------------------+---------------------+-----------------+------------------------+---------+-----------------+-------------+--------------------+-----------------------+
+| .../hits.parquet | 2022-06-25T22:22:22 | 14779976446     | 0-5e24d1ee16380-370f48 | NULL    | Exact(99997497) | 105         | Exact(36445943240) | 0                     |
++------------------+---------------------+-----------------+------------------------+---------+-----------------+-------------+--------------------+-----------------------+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/bharath-techie"&gt;bharath-techie&lt;/a&gt; and &lt;a href="https://github.com/nuno-faria"&gt;nuno-faria&lt;/a&gt; for implementing the statistics cache,
+with reviews from &lt;a href="https://github.com/martin-g"&gt;martin-g&lt;/a&gt;, &lt;a href="https://github.com/alamb"&gt;alamb&lt;/a&gt;, and &lt;a href="https://github.com/alchemist51"&gt;alchemist51&lt;/a&gt;.
+Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/18971"&gt;#18971&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/19054"&gt;#19054&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;A prefix-aware list-files cache accelerates evaluating partition predicates for
+Hive partitioned tables.&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;-- Read the hive partitioned dataset from Overture Maps (100s of Parquet files)
+CREATE EXTERNAL TABLE overturemaps
+STORED AS PARQUET LOCATION 's3://overturemaps-us-west-2/release/2025-12-17.0/';
+-- Find all files where the path contains `theme=base without requiring another LIST call
+select count(*) from overturemaps where theme='base';
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;You can see the
+contents of the new cache using the &lt;a href="https://datafusion.apache.org/user-guide/cli/functions.html#list-files-cache"&gt;list_files_cache&lt;/a&gt; function in the CLI:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;create external table overturemaps
+stored as parquet
+location 's3://overturemaps-us-west-2/release/2025-12-17.0/theme=base/type=infrastructure';
+0 row(s) fetched.
+&amp;gt; select table, path, metadata_size_bytes, expires_in, unnest(metadata_list)['file_size_bytes'] as file_size_bytes, unnest(metadata_list)['e_tag'] as e_tag from list_files_cache() limit 10;
++--------------+-----------------------------------------------------+---------------------+-----------------------------------+-----------------+---------------------------------------+
+| table        | path                                                | metadata_size_bytes | expires_in                        | file_size_bytes | e_tag                                 |
++--------------+-----------------------------------------------------+---------------------+-----------------------------------+-----------------+---------------------------------------+
+| overturemaps | release/2025-12-17.0/theme=base/type=infrastructure | 2750                | 0 days 0 hours 0 mins 25.264 secs | 999055952       | "35fc8fbe8400960b54c66fbb408c48e8-60" |
+| overturemaps | release/2025-12-17.0/theme=base/type=infrastructure | 2750                | 0 days 0 hours 0 mins 25.264 secs | 975592768       | "8a16e10b722681cdc00242564b502965-59" |
+...
+| overturemaps | release/2025-12-17.0/theme=base/type=infrastructure | 2750                | 0 days 0 hours 0 mins 25.264 secs | 1016732378      | "6d70857a0473ed9ed3fc6e149814168b-61" |
+| overturemaps | release/2025-12-17.0/theme=base/type=infrastructure | 2750                | 0 days 0 hours 0 mins 25.264 secs | 991363784       | "c9cafb42fcbb413f851691c895dd7c2b-60" |
+| overturemaps | release/2025-12-17.0/theme=base/type=infrastructure | 2750                | 0 days 0 hours 0 mins 25.264 secs | 1032469715      | "7540252d0d67158297a67038a3365e0f-62" |
++--------------+-----------------------------------------------------+---------------------+-----------------------------------+-----------------+---------------------------------------+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/BlakeOrth"&gt;BlakeOrth&lt;/a&gt; and &lt;a href="https://github.com/Yuvraj-cyborg"&gt;Yuvraj-cyborg&lt;/a&gt; for implementing the list-files cache work,
+with reviews from &lt;a href="https://github.com/gabotechs"&gt;gabotechs&lt;/a&gt;, &lt;a href="https://github.com/alamb"&gt;alamb&lt;/a&gt;, &lt;a href="https://github.com/alchemist51"&gt;alchemist51&lt;/a&gt;, &lt;a href="https://github.com/martin-g"&gt;martin-g&lt;/a&gt;, and &lt;a href="https://github.com/BlakeOrth"&gt;BlakeOrth&lt;/a&gt;.
+Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/18146"&gt;#18146&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/18855"&gt;#18855&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/19366"&gt;#19366&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/19298"&gt;#19298&lt;/a&gt;, &lt;/p&gt;
+&lt;h3 id="improved-hash-join-filter-pushdown"&gt;Improved Hash Join Filter Pushdown&lt;a class="headerlink" href="#improved-hash-join-filter-pushdown" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Starting in DataFusion 51, filtering information from &lt;code&gt;HashJoinExec&lt;/code&gt; is passed
+dynamically to scans, as explained in the &lt;a href="https://datafusion.apache.org/blog/2025/09/10/dynamic-filters/#hash-join-dynamic-filters"&gt;Dynamic Filtering Blog&lt;/a&gt; using a
+technique referred to as &lt;a href="https://dl.acm.org/doi/10.1109/ICDE.2008.4497486"&gt;Sideways Information Passing&lt;/a&gt; in Database research
+literature. The initial implementation passed min/max values for the join keys.
+DataFusion 52 extends the optimization (&lt;a href="https://github.com/apache/datafusion/issues/17171"&gt;#17171&lt;/a&gt; / &lt;a href="https://github.com/apache/datafusion/pull/18393"&gt;#18393&lt;/a&gt;) to pass the
+contents of the build side hash map. These filters are evaluated on the probe
+side scan to prune files, row groups, and individual rows. When the build side
+contains &lt;code&gt;20&lt;/code&gt; or fewer rows (configurable) the contents of the hash map are
+transformed to an &lt;code&gt;IN&lt;/code&gt; expression and used for &lt;a href="https://docs.rs/datafusion/latest/datafusion/physical_optimizer/pruning/struct.PruningPredicate.html"&gt;statistics-based pruning&lt;/a&gt; which
+can avoid reading entire files or row groups that contain no matching join keys.
+Thanks to &lt;a href="https://github.com/adriangb"&gt;adriangb&lt;/a&gt; for implementing this feature, with reviews from
+&lt;a href="https://github.com/LiaCastaneda"&gt;LiaCastaneda&lt;/a&gt;, &lt;a href="https://github.com/asolimando"&gt;asolimando&lt;/a&gt;, &lt;a href="https://github.com/comphead"&gt;comphead&lt;/a&gt;, and &lt;a href="https://github.com/mbutrovich"&gt;mbutrovich&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id="major-features"&gt;Major Features ✨&lt;a class="headerlink" href="#major-features" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;h3 id="arrow-ipc-stream-file-support"&gt;Arrow IPC Stream file support&lt;a class="headerlink" href="#arrow-ipc-stream-file-support" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;DataFusion can now read Arrow IPC stream files (&lt;a href="https://github.com/apache/datafusion/pull/18457"&gt;#18457&lt;/a&gt;). This expands
+interoperability with systems that emit Arrow streams directly, making it
+simpler to ingest Arrow-native data without conversion. Thanks to &lt;a href="https://github.com/corasaurus-hex"&gt;corasaurus-hex&lt;/a&gt;
+for implementing this feature, with reviews from &lt;a href="https://github.com/martin-g"&gt;martin-g&lt;/a&gt;, &lt;a href="https://github.com/Jefffrey"&gt;Jefffrey&lt;/a&gt;,
+&lt;a href="https://github.com/jdcasale"&gt;jdcasale&lt;/a&gt;, &lt;a href="https://github.com/2010YOUY01"&gt;2010YOUY01&lt;/a&gt;, and &lt;a href="https://github.com/timsaucer"&gt;timsaucer&lt;/a&gt;.&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;CREATE EXTERNAL TABLE ipc_events
+STORED AS ARROW
+LOCATION 's3://bucket/events.arrow';
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/18457"&gt;#18457&lt;/a&gt;&lt;/p&gt;
+&lt;h3 id="more-extensible-sql-planning-with-relationplanner"&gt;More Extensible SQL Planning with &lt;code&gt;RelationPlanner&lt;/code&gt;&lt;a class="headerlink" href="#more-extensible-sql-planning-with-relationplanner" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;DataFusion now has an API for extending the SQL planner for relations, as
+explained in the &lt;a href="https://datafusion.apache.org/blog/2026/01/12/extending-sql/"&gt;Extending SQL in DataFusion Blog&lt;/a&gt;. In addition to the existing
+expression and types extension points, this new API now allows extending &lt;code&gt;FROM&lt;/code&gt;
+clauses. Using these APIs it is straightforward to provide SQL support for
+almost any dialect, including vendor-specific syntax. Example use cases include:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;-- Postgres-style JSON operators
+SELECT payload-&amp;gt;'user'-&amp;gt;&amp;gt;'id' FROM logs;
+-- MySQL-specific types
+SELECT DATETIME '2001-01-01 18:00:00';
+-- Statistical sampling
+SELECT * FROM sensor_data TABLESAMPLE BERNOULLI(10 PERCENT);
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/geoffreyclaude"&gt;geoffreyclaude&lt;/a&gt; for implementing relation planner extensions, and to
+&lt;a href="https://github.com/theirix"&gt;theirix&lt;/a&gt;, &lt;a href="https://github.com/alamb"&gt;alamb&lt;/a&gt;, &lt;a href="https://github.com/NGA-TRAN"&gt;NGA-TRAN&lt;/a&gt;, and &lt;a href="https://github.com/gabotechs"&gt;gabotechs&lt;/a&gt; for reviews and feedback on the
+design. Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/17843"&gt;#17843&lt;/a&gt;&lt;/p&gt;
+&lt;h3 id="expression-evaluation-pushdown-to-scans"&gt;Expression Evaluation Pushdown to Scans&lt;a class="headerlink" href="#expression-evaluation-pushdown-to-scans" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;DataFusion now pushes down expression evaluation into TableProviders using 
+&lt;a href="https://docs.rs/datafusion/52.0.0/datafusion/physical_expr_adapter/trait.PhysicalExprAdapter.html"&gt;PhysicalExprAdapter&lt;/a&gt;, replacing the older SchemaAdapter approach (&lt;a href="https://github.com/apache/datafusion/issues/14993"&gt;#14993&lt;/a&gt;,
+&lt;a href="https://github.com/apache/datafusion/issues/16800"&gt;#16800&lt;/a&gt;). Predicates and expressions can now be customized for each
+individual file schema, opening additional optimization such as support for
+&lt;a href="https://github.com/apache/datafusion/issues/16116"&gt;Variant shredding&lt;/a&gt;. Thanks to &lt;a href="https://github.com/adriangb"&gt;adriangb&lt;/a&gt; for implementing PhysicalExprAdapter
+and reworking pushdown to use it. Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/18998"&gt;#18998&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/19345"&gt;#19345&lt;/a&gt;&lt;/p&gt;
+&lt;h3 id="sort-pushdown-to-scans"&gt;Sort Pushdown to Scans&lt;a class="headerlink" href="#sort-pushdown-to-scans" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;DataFusion can now push sorts into data sources (&lt;a href="https://github.com/apache/datafusion/issues/10433"&gt;#10433&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/19064"&gt;#19064&lt;/a&gt;).
+This allows table provider implementations to optimize based on
+sort knowledge for certain query patterns. For example, the provided Parquet
+data source now reverses the scan order of row groups and files when queried
+for the opposite of the file's natural sort (e.g. &lt;code&gt;DESC&lt;/code&gt; when the files are sorted &lt;code&gt;ASC&lt;/code&gt;).
+This reversal, combined with dynamic filtering, allows top-K queries with &lt;code&gt;LIMIT&lt;/code&gt;
+on pre-sorted data to find the requested rows very quickly, pruning more files and row groups
+without even scanning them. We have seen a ~30x performance improvement on
+benchmark queries with pre-sorted data.
+Thanks to &lt;a href="https://github.com/zhuqi-lucas"&gt;zhuqi-lucas&lt;/a&gt; and &lt;a href="https://github.com/xudong963"&gt;xudong963&lt;/a&gt; for this feature, with reviews from
+&lt;a href="https://github.com/martin-g"&gt;martin-g&lt;/a&gt;, &lt;a href="https://github.com/adriangb"&gt;adriangb&lt;/a&gt;, and &lt;a href="https://github.com/alamb"&gt;alamb&lt;/a&gt;.&lt;/p&gt;
+&lt;h3 id="tableprovider-supports-delete-and-update-statements"&gt;&lt;code&gt;TableProvider&lt;/code&gt; supports &lt;code&gt;DELETE&lt;/code&gt; and &lt;code&gt;UPDATE&lt;/code&gt; statements&lt;a class="headerlink" href="#tableprovider-supports-delete-and-update-statements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;The &lt;a href="https://docs.rs/datafusion/52.0.0/datafusion/datasource/trait.TableProvider.html"&gt;TableProvider&lt;/a&gt; trait now includes hooks for &lt;code&gt;DELETE&lt;/code&gt; and &lt;code&gt;UPDATE&lt;/code&gt;
+statements and the basic MemTable implements them (&lt;a href="https://github.com/apache/datafusion/pull/19142"&gt;#19142&lt;/a&gt;). This lets
+downstream implementations and storage engines plug in their own mutation logic.
+See &lt;a href="https://docs.rs/datafusion/52.0.0/datafusion/datasource/trait.TableProvider.html#method.delete_from"&gt;TableProvider::delete_from&lt;/a&gt; and &lt;a href="https://docs.rs/datafusion/52.0.0/datafusion/datasource/trait.TableProvider.html#method.update"&gt;TableProvider::update&lt;/a&gt; for more details.&lt;/p&gt;
+&lt;p&gt;Example:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;DELETE FROM mem_table WHERE status = 'obsolete';
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/ethan-tyler"&gt;ethan-tyler&lt;/a&gt; for the implementation and &lt;a href="https://github.com/alamb"&gt;alamb&lt;/a&gt; and &lt;a href="https://github.com/adriangb"&gt;adriangb&lt;/a&gt; for
+reviews.&lt;/p&gt;
+&lt;h3 id="coalescebatchesexec-removed"&gt;&lt;code&gt;CoalesceBatchesExec&lt;/code&gt; Removed&lt;a class="headerlink" href="#coalescebatchesexec-removed" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;The standalone &lt;code&gt;CoalesceBatchesExec&lt;/code&gt; operator existed to ensure batches were
+large enough for subsequent vectorized execution, and was inserted after
+filter-like operators such as &lt;code&gt;FilterExec&lt;/code&gt;, &lt;code&gt;HashJoinExec&lt;/code&gt;, and
+&lt;code&gt;RepartitionExec&lt;/code&gt;. However, using a separate operator also blocks other
+optimizations such as pushing &lt;code&gt;LIMIT&lt;/code&gt; through joins and made optimizer rules
+more complex. In this release, we  integrated the coalescing into the operators
+themselves (&lt;a href="https://github.com/apache/datafusion/issues/18779"&gt;#18779&lt;/a&gt;) using Arrow's &lt;a href="https://docs.rs/arrow/57.2.0/arrow/compute/kernels/coalesce/"&gt;coalesce kernel&lt;/a&gt;. This reduces plan
+complexity while keeping batch sizes efficient, and allows additional focused
+optimization work in the Arrow kernel, such as &lt;a href="https://github.com/Dandandan"&gt;Dandandan&lt;/a&gt;'s recent work with
+filtering in &lt;a href="https://github.com/apache/arrow-rs/pull/8951"&gt;arrow-rs/#8951&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/18540"&gt;#18540&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/18604"&gt;#18604&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/18630"&gt;#18630&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/18972"&gt;#18972&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/19002"&gt;#19002&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/19342"&gt;#19342&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/19239"&gt;#19239&lt;/a&gt;
+Thanks to &lt;a href="https://github.com/Tim-53"&gt;Tim-53&lt;/a&gt;, &lt;a href="https://github.com/Dandandan"&gt;Dandandan&lt;/a&gt;, &lt;a href="https://github.com/jizezhang"&gt;jizezhang&lt;/a&gt;, and &lt;a href="https://github.com/feniljain"&gt;feniljain&lt;/a&gt; for implementing
+this feature, with reviews from &lt;a href="https://github.com/Jefffrey"&gt;Jefffrey&lt;/a&gt;, &lt;a href="https://github.com/alamb"&gt;alamb&lt;/a&gt;, &lt;a href="https://github.com/martin-g"&gt;martin-g&lt;/a&gt;,
+&lt;a href="https://github.com/geoffreyclaude"&gt;geoffreyclaude&lt;/a&gt;, &lt;a href="https://github.com/milenkovicm"&gt;milenkovicm&lt;/a&gt;, and &lt;a href="https://github.com/jizezhang"&gt;jizezhang&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id="upgrade-guide-and-changelog"&gt;Upgrade Guide and Changelog&lt;a class="headerlink" href="#upgrade-guide-and-changelog" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;As always, upgrading to 52.0.0 should be straightforward for most users. Please review the
+&lt;a href="https://datafusion.apache.org/library-user-guide/upgrading.html"&gt;Upgrade Guide&lt;/a&gt;
+for details on breaking changes and code snippets to help with the transition.
+For a comprehensive list of all changes, please refer to the &lt;a href="https://github.com/apache/datafusion/blob/branch-52/dev/changelog/52.0.0.md"&gt;changelog&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id="about-datafusion"&gt;About DataFusion&lt;a class="headerlink" href="#about-datafusion" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;&lt;a href="https://datafusion.apache.org/"&gt;Apache DataFusion&lt;/a&gt; is an extensible query engine, written in &lt;a href="https://www.rust-lang.org/"&gt;Rust&lt;/a&gt;, that uses
+&lt;a href="https://arrow.apache.org"&gt;Apache Arrow&lt;/a&gt; as its in-memory format. DataFusion is used by developers to
+create new, fast, data-centric systems such as databases, dataframe libraries,
+and machine learning and streaming applications. While &lt;a href="https://datafusion.apache.org/user-guide/introduction.html#project-goals"&gt;DataFusion's primary
+design goal&lt;/a&gt; is to accelerate the creation of other data-centric systems, it
+provides a reasonable experience directly out of the box as a &lt;a href="https://datafusion.apache.org/user-guide/dataframe.html"&gt;dataframe
+library&lt;/a&gt;, &lt;a href="https://datafusion.apache.org/python/"&gt;Python library&lt;/a&gt;, and &lt;a href="https://datafusion.apache.org/user-guide/cli/"&gt;command-line SQL tool&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id="how-to-get-involved"&gt;How to Get Involved&lt;a class="headerlink" href="#how-to-get-involved" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;DataFusion is not a project built or driven by a single person, company, or
+foundation. Rather, our community of users and contributors works together to
+build a shared technology that none of us could have built alone.&lt;/p&gt;
+&lt;p&gt;If you are interested in joining us, we would love to have you. You can try out
+DataFusion on some of your own data and projects and let us know how it goes,
+contribute suggestions, documentation, bug reports, or a PR with documentation,
+tests, or code. A list of open issues suitable for beginners is &lt;a href="https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22"&gt;here&lt;/a&gt;, and you
+can find out how to reach us on the &lt;a href="https://datafusion.apache.org/contributor-guide/communication.html"&gt;communication doc&lt;/a&gt;.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Apache DataFusion Comet 0.12.0 Release</title><link href="https://datafusion.apache.org/blog/2025/12/04/datafusion-comet-0.12.0" rel="alternate"></link><published>2025-12-04T00:00:00+00:00</published><updated>2025-12-04T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2025-12-04:/blog/2025/12/04/datafusion-comet-0.12.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
