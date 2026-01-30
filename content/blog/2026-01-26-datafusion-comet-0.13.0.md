@@ -73,6 +73,7 @@ Comet's fully-native Iceberg integration received significant enhancements in th
 **Session Token Authentication**: Added support for session tokens in native Iceberg scans for secure S3 access.
 
 **Performance Optimizations**:
+
 - Deduplicated serialized metadata reducing memory overhead
 - Switched from JSON to protobuf for partition value serialization
 - Removed IcebergFileStream in favor of iceberg-rust's built-in parallelization
@@ -94,6 +95,7 @@ Experimental support for native CSV file reading has been added, expanding Comet
 ### New Expressions
 
 The release adds support for numerous expressions:
+
 - Array functions: `explode`, `explode_outer`, `size`
 - Date/time functions: `unix_date`, `date_format`, `datediff`, `last_day`, `unix_timestamp`
 - String functions: `left`
