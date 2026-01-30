@@ -1,12 +1,41 @@
 ---
 layout: post
-title: Apache DataFusion Comet 0.13.0 Release
-date: 2026-01-26
+title: Apache DataFusion Comet 0.12.0 Release
+date: 2025-12-04
 author: pmc
 categories: [subprojects]
 ---
 
-The Apache DataFusion PMC has released version 0.13.0 of Comet, an accelerator for Apache Spark. This version represents approximately eight weeks of development work encompassing 169 merged pull requests from 15 contributors.
+<!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+-->
+
+[TOC]
+
+The Apache DataFusion PMC is pleased to announce version 0.13.0 of the [Comet](https://datafusion.apache.org/comet/) subproject.
+
+Comet is an accelerator for Apache Spark that translates Spark physical plans to DataFusion physical plans for
+improved performance and efficiency without requiring any code changes.
+
+This release covers approximately eight weeks of development work and is the result of merging 160 PRs from 15
+contributors. See the [change log] for more information.
+
+[change log]: https://github.com/apache/datafusion-comet/blob/main/dev/changelog/0.13.0.md
 
 ## Key Features
 
@@ -22,6 +51,7 @@ This release introduces experimental native Parquet write capabilities, allowing
 To enable native Parquet writes, set:
 
 ```
+spark.comet.allowIncompatibleOp.DataWritingCommandExec=true
 spark.comet.parquet.write.enabled=true
 ```
 
@@ -78,10 +108,6 @@ Sum and average aggregate expressions now support ANSI mode for both integer and
 - Round-robin partitioning is now supported in native shuffle
 - Spill metrics are now reported correctly
 - Configurable shuffle writer buffer size via `spark.comet.shuffle.write.bufferSize`
-
-### Native Columnar to Row Conversion
-
-Phase 1 implementation of native columnar to row conversion reduces JVM overhead when transitioning between native and Spark execution.
 
 ## Performance Improvements
 
