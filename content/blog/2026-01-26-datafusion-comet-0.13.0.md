@@ -32,7 +32,7 @@ The Apache DataFusion PMC is pleased to announce version 0.13.0 of the [Comet](h
 Comet is an accelerator for Apache Spark that translates Spark physical plans to DataFusion physical plans for
 improved performance and efficiency without requiring any code changes.
 
-This release covers approximately eight weeks of development work and is the result of merging 160 PRs from 15
+This release covers approximately eight weeks of development work and is the result of merging 169 PRs from 15
 contributors. See the [change log] for more information.
 
 [change log]: https://github.com/apache/datafusion-comet/blob/main/dev/changelog/0.13.0.md
@@ -73,6 +73,7 @@ Comet's fully-native Iceberg integration received significant enhancements in th
 **Session Token Authentication**: Added support for session tokens in native Iceberg scans for secure S3 access.
 
 **Performance Optimizations**:
+
 - Deduplicated serialized metadata reducing memory overhead
 - Switched from JSON to protobuf for partition value serialization
 - Removed IcebergFileStream in favor of iceberg-rust's built-in parallelization
@@ -94,6 +95,7 @@ Experimental support for native CSV file reading has been added, expanding Comet
 ### New Expressions
 
 The release adds support for numerous expressions:
+
 - Array functions: `explode`, `explode_outer`, `size`
 - Date/time functions: `unix_date`, `date_format`, `datediff`, `last_day`, `unix_timestamp`
 - String functions: `left`
