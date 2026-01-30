@@ -126,10 +126,6 @@ This release includes extensive performance optimizations:
 
 The `native_comet` scan mode is now deprecated in favor of `native_iceberg_compat` and will be removed in a future release. The `auto` scan mode no longer falls back to `native_comet`.
 
-## Bug Fixes and Documentation
-
-The release addresses issues including decimal modulus type mismatches, shuffle manager hang scenarios, native write fallbacks for non-Arrow inputs, and various Iceberg-related fixes. Documentation improvements include comprehensive guidance on native Iceberg scans, shuffle implementation details, datetime rebasing behavior, and common development pitfalls.
-
 ## Compatibility
 
 This release upgrades to DataFusion 51, Arrow 57, and the latest iceberg-rust. The minimum supported Rust version is now 1.88.
