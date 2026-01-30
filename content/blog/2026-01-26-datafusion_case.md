@@ -425,7 +425,7 @@ END
 A final `CASE` optimization recognizes this pattern and compiles the `CASE` expression into a hash table.
 Rather than evaluating the `WHEN` and `THEN` expressions, the input expression is evaluated once, and the result array is computed using a vectorized hash table lookup.
 This approach avoids the need to filter the input batch and combine partial results entirely.
-Instead the result array is computed in a single pass over the input values and the computation time is independent of the number of `WHEN` branches in the `CASE` expression.
+Instead the result array is computed in a single pass over the input values and the computation time does not grow significantly with the number of `WHEN` branches in the `CASE` expression.
 
 This optimization was implemented by Raz Luvaton ([`@rluvaton`](https://github.com/rluvaton)) in [PR #18183](https://github.com/apache/datafusion/pull/18183)
 
