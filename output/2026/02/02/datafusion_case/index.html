@@ -47,7 +47,7 @@
         <aside class="toc-container d-md-none mb-2">
           <div class="toc"><span class="toctitle">Contents</span><ul>
 <li><a href="#background-case-expression-evaluation">Background: CASE Expression Evaluation</a></li>
-<li><a href="#basic-case-evaluation">Basic CASE Evaluation</a><ul>
+<li><a href="#case-evaluation-in-datafusion-5000">CASE Evaluation in DataFusion 50.0.0</a><ul>
 <li><a href="#opportunity-1-early-exit">Opportunity 1: Early Exit</a></li>
 <li><a href="#opportunity-2-optimize-repeated-filtering-scattering-and-merging">Opportunity 2: Optimize Repeated Filtering, Scattering, and Merging</a></li>
 <li><a href="#opportunity-3-filter-only-necessary-columns">Opportunity 3: Filter only Necessary Columns</a></li>
@@ -109,18 +109,17 @@ figcaption {
 }
 </style>
 <p>SQL's <code>CASE</code> expression is one of the few explicit conditional evaluation constructs the language provides.
-It lets you control which expression from a set of expressions is evaluated for each row based on arbitrary boolean expressions.
+It allows you to control which expression from a set of expressions is evaluated for each row based on arbitrary boolean expressions.
 Its deceptively simple syntax hides significant implementation complexity.
-Over the past few releases, we've landed a series of improvements to <a href="https://datafusion.apache.org/">Apache DataFusion</a>'s <code>CASE</code> expression evaluator that reduce both CPU time and memory allocations.
-This post walks through the original implementation, its performance bottlenecks, and how we addressed them step by step.</p>
+Over the past few <a href="https://datafusion.apache.org/">Apache DataFusion</a> releases, a series of improvements to <code>CASE</code> expression evaluator have been merged that reduce both CPU time and memory allocations.
+This post provides an overview of the original implementation, its performance bottlenecks, and the steps taken to address them.</p>
 <h2 id="background-case-expression-evaluation">Background: CASE Expression Evaluation<a class="headerlink" href="#background-case-expression-evaluation" title="Permanent link">¶</a></h2>
 <p>SQL supports two forms of CASE expressions:</p>
 <ol>
 <li><strong>Simple</strong>: <code>CASE expr WHEN value1 THEN result1 WHEN value2 THEN result2 ... END</code></li>
 <li><strong>Searched</strong>: <code>CASE WHEN condition1 THEN result1 WHEN condition2 THEN result2 ... END</code></li>
 </ol>
-<p>The simple form evaluates an expression once for each input row and then tests that value against the expressions (typically constants) in each <code>WHEN</code> clause using equality comparisons.
-Think of it as a limited Rust <code>match</code> expression.</p>
+<p>The simple form evaluates an expression once for each input row and then tests that value against the expressions (typically constants) in each <code>WHEN</code> clause using equality comparisons.</p>
 <p>Here's an example of the simple form:</p>
 <pre><code class="language-sql">CASE status
     WHEN 'pending' THEN 1
@@ -133,7 +132,7 @@ END
 The <code>CASE</code> expression evaluates to the value of the <code>THEN</code> expression corresponding to the first matching <code>WHEN</code> expression.</p>
 <p>The searched <code>CASE</code> form is a more flexible variant.
 It evaluates completely independent boolean expressions for each branch.
-This allows you to test different columns with different operators per branch, as can be seen in the following example:</p>
+This allows you to test different columns with different operators per branch as shown in the following example:</p>
 <pre><code class="language-sql">CASE
     WHEN age &gt; 65 THEN 'senior'
     WHEN childCount != 0 THEN 'parent'
@@ -144,40 +143,35 @@ END
 <p>In both forms, branches are evaluated sequentially with short-circuit semantics: for each row, once a <code>WHEN</code> condition matches, the corresponding <code>THEN</code> expression is evaluated.
 Any further branches are not evaluated for that row.
 This lazy evaluation model is critical for correctness.
-It lets you safely write <code>CASE</code> expressions like</p>
-<pre><code class="language-sql">CASE
-    WHEN denominator == 0 THEN NULL
-    ELSE numerator / denominator
-END
-</code></pre>
-<p>that are guaranteed to not trigger divide-by-zero errors.</p>
+It lets you safely write <code>CASE</code> expressions like <code>CASE WHEN d != 0 THEN n / d ELSE NULL END</code> that are guaranteed to not trigger divide-by-zero errors.</p>
 <p>Besides <code>CASE</code>, there are a few <a href="https://datafusion.apache.org/user-guide/sql/scalar_functions.html#conditional-functions">conditional scalar functions</a> that provide similar, more restricted capabilities.
-These include <code>COALESCE</code>, <code>IFNULL</code>, and <code>NVL2</code>.</p>
-<p>Each of these functions can be seen as the equivalent of a macro for <code>CASE</code>.
-<code>COALESCE(expr1, expr2, expr3)</code> for instance, would expand to:</p>
+These include <code>COALESCE</code>, <code>IFNULL</code>, and <code>NVL2</code>.
+You can consider each of these functions as the equivalent of a macro for <code>CASE</code>.
+For example, <code>COALESCE(expr1, expr2, expr3)</code> expands to:</p>
 <pre><code class="language-sql">CASE
   WHEN expr1 IS NOT NULL THEN expr1
   WHEN expr2 IS NOT NULL THEN expr2
   ELSE expr3
 END
 </code></pre>
-<p><a href="https://datafusion.apache.org/">Apache DataFusion</a> implements these conditional functions by rewriting them to their equivalent <code>CASE</code> expression.
-As a consequence, any optimizations related to <code>CASE</code> described in this post also apply to conditional function evaluation.</p>
-<h2 id="basic-case-evaluation">Basic <code>CASE</code> Evaluation<a class="headerlink" href="#basic-case-evaluation" title="Permanent link">¶</a></h2>
-<p>For the remainder of this post, we'll be looking at <code>searched CASE</code> evaluation.
-<code>Simple CASE</code> uses a distinct, but very similar implementation.
+<p>Since <a href="https://datafusion.apache.org/">Apache DataFusion</a> rewrites these conditional functions to their equivalent <code>CASE</code> expression, any optimizations related to <code>CASE</code> described in this post also apply to conditional function evaluation.</p>
+<h2 id="case-evaluation-in-datafusion-5000"><code>CASE</code> Evaluation in DataFusion 50.0.0<a class="headerlink" href="#case-evaluation-in-datafusion-5000" title="Permanent link">¶</a></h2>
+<p>For the remainder of this post, we'll be looking at 'searched CASE' evaluation.
+'Simple CASE' uses a distinct, but very similar implementation.
 The same set of improvements has been applied to both.</p>
-<p>DataFusion 50.0.0 uses a common, straightforward approach to evaluate <code>CASE</code>:</p>
+<p>The baseline implementation in DataFusion 50.0.0 evaluated <code>CASE</code> using a common, straightforward approach:</p>
 <ol>
 <li>Start with an output array <code>out</code> with the same length as the input batch, filled with nulls. Additionally, create a bit vector <code>remainder</code> with the same length and each value set to <code>true</code>.</li>
-<li>For each <code>WHEN</code>/<code>THEN</code> branch:</li>
-<li>Evaluate the <code>WHEN</code> condition for remaining unmatched rows using <a href="https://docs.rs/datafusion/latest/datafusion/physical_expr/trait.PhysicalExpr.html#method.evaluate_selection"><code>PhysicalExpr::evaluate_selection</code></a>, passing in the input batch and the <code>remainder</code> mask</li>
-<li>If any rows matched, evaluate the <code>THEN</code> expression for those rows using <code>PhysicalExpr::evaluate_selection</code></li>
-<li>Merge the results into the <code>out</code> using the <a href="https://docs.rs/arrow/latest/arrow/compute/kernels/zip/fn.zip.html"><code>zip</code></a> kernel</li>
-<li>Update the <code>remainder</code> mask to exclude matched rows</li>
-<li>If there's an <code>ELSE</code> clause, evaluate it for any remaining unmatched rows and merge using <a href="https://docs.rs/arrow/latest/arrow/compute/kernels/zip/fn.zip.html"><code>zip</code></a></li>
+<li>For each <code>WHEN</code>/<code>THEN</code> branch:<ul>
+<li>Evaluate the <code>WHEN</code> condition for the remaining unmatched rows using <a href="https://docs.rs/datafusion/latest/datafusion/physical_expr/trait.PhysicalExpr.html#method.evaluate_selection"><code>PhysicalExpr::evaluate_selection</code></a>, passing in the input batch and the <code>remainder</code> mask.</li>
+<li>If any rows matched, evaluate the <code>THEN</code> expression for those rows using <code>PhysicalExpr::evaluate_selection</code>.</li>
+<li>Merge the results into the <code>out</code> array using the <a href="https://docs.rs/arrow/latest/arrow/compute/kernels/zip/fn.zip.html"><code>zip</code></a> kernel.</li>
+<li>Update the <code>remainder</code> mask to exclude the matched rows.</li>
+</ul>
+</li>
+<li>If there's an <code>ELSE</code> clause, evaluate it for any remaining unmatched rows and merge using <a href="https://docs.rs/arrow/latest/arrow/compute/kernels/zip/fn.zip.html"><code>zip</code></a>.</li>
 </ol>
-<p>Here's a simplified version of the original loop:</p>
+<p>Here's a simplified version of the Rust code for the original loop:</p>
 <pre><code class="language-rust">let mut out = new_null_array(&amp;return_type, batch.num_rows());
 let mut remainder = BooleanArray::from(vec![true; batch.num_rows()]);
 
@@ -200,18 +194,18 @@ for (when_expr, then_expr) in &amp;self.when_then_expr {
     remainder = and_not(&amp;remainder, &amp;when_and_rem)?;
 }
 </code></pre>
-<p>Schematically, one iteration of this loop for the case expression</p>
+<p>Let's examine one iteration of this loop for the following <code>CASE</code> expression:</p>
 <pre><code class="language-sql">CASE
     WHEN col = 'b' THEN 100
     ELSE 200
 END
 </code></pre>
-<p>looks like this:</p>
+<p>Schematically, it will look as follows:</p>
 <figure>
 <img alt="Schematic representation of data flow in the original CASE implementation" class="img-responsive" src="/blog/images/case/original_loop.svg" width="100%"/>
 <figcaption>One iteration of the `CASE` evaluation loop</figcaption>
 </figure>
-<p>While correct, this implementation has significant room for optimization, mostly related to the usage of <code>evaluate_selection</code>.
+<p>This implementation works perfectly fine, but there's significant room for optimization, mostly related to the usage of <code>evaluate_selection</code>.
 To understand why, we need to dig a little deeper into the implementation of that function.
 Here's a simplified version of it that captures the relevant parts:</p>
 <pre><code class="language-rust">pub trait PhysicalExpr {
@@ -229,7 +223,7 @@ Here's a simplified version of it that captures the relevant parts:</p>
     }
 }
 </code></pre>
-<p>Going back to the same example as before, the data flow looks like this:</p>
+<p>Going back to the same example as before, the data flow in <code>evaluate_selection</code> looks like this:</p>
 <figure>
 <img alt="Schematic representation of `evaluate_selection` evaluation" class="img-responsive" src="/blog/images/case/evaluate_selection.svg" width="100%"/>
 <figcaption>evaluate_selection data flow</figcaption>
@@ -240,33 +234,32 @@ Finally, to return a result array with the same number of rows as <code>batch</c
 This function produces a new array padded with <code>null</code> values for any rows that didn't match the <code>selection</code> mask.</p>
 <p>So how can we improve the performance of the simple evaluation strategy and use of <code>evaluate_selection</code>?</p>
 <h3 id="opportunity-1-early-exit">Opportunity 1: Early Exit<a class="headerlink" href="#opportunity-1-early-exit" title="Permanent link">¶</a></h3>
-<p>The case evaluation loop always iterated through all branches, even when every row had already been matched.
-In queries where early branches match many rows, this meant unnecessary work was done for remaining rows.</p>
+<p>The <code>CASE</code> evaluation loop always iterates through all branches, even when every row has already been matched.
+In queries where early branches match all rows, this results in unnecessary work being done for the remaining branches.</p>
 <h3 id="opportunity-2-optimize-repeated-filtering-scattering-and-merging">Opportunity 2: Optimize Repeated Filtering, Scattering, and Merging<a class="headerlink" href="#opportunity-2-optimize-repeated-filtering-scattering-and-merging" title="Permanent link">¶</a></h3>
-<p>Each iteration performed a number of operations that are very well-optimized, but still take up a significant amount of CPU time:</p>
+<p>Each iteration performs a number of operations that are very well-optimized, but still take up a significant amount of CPU time:</p>
 <ul>
-<li><strong>Filtering</strong>: <code>PhysicalExpr::evaluate_selection</code> filters the entire <code>RecordBatch</code> for each branch. For the <code>WHEN</code> expression, this was done even if the selection mask was entirely empty.</li>
+<li><strong>Filtering</strong>: <code>PhysicalExpr::evaluate_selection</code> filters the entire <code>RecordBatch</code> for each branch. For the <code>WHEN</code> expression, this is done even if the selection mask was entirely empty.</li>
 <li><strong>Scattering</strong>: <code>PhysicalExpr::evaluate_selection</code> scatters the filtered result back to the original <code>RecordBatch</code> length.</li>
 <li><strong>Merging</strong>: The <code>zip</code> kernel is called once per branch to merge partial results into the output array</li>
 </ul>
-<p>Each of these operations needs to allocate memory for new arrays and shuffle quite a bit of data around. </p>
+<p>Each of these operations needs to allocate memory for new arrays and shuffle quite a bit of data around.</p>
 <h3 id="opportunity-3-filter-only-necessary-columns">Opportunity 3: Filter only Necessary Columns<a class="headerlink" href="#opportunity-3-filter-only-necessary-columns" title="Permanent link">¶</a></h3>
 <p>The <code>PhysicalExpr::evaluate_selection</code> method filters the entire record batch, including columns that the current branch's <code>WHEN</code> and <code>THEN</code> expressions don't reference.
 For wide tables (many columns) with narrow expressions (few column references), this is wasteful.</p>
-<p>Suppose we have a table with 26 columns named <code>a</code> through <code>z</code>.
-For a simple CASE expression like:</p>
+<p>Suppose you have a table with 26 columns named <code>a</code> through <code>z</code>, and the following simple <code>CASE</code> expression:</p>
 <pre><code class="language-sql">CASE
   WHEN a &gt; 1000 THEN 'large'
   WHEN a &gt;= 0 THEN 'positive'
   ELSE 'negative'
 END
 </code></pre>
-<p>the implementation would filter all 26 columns even though only a single column is needed for the entire <code>CASE</code> expression evaluation.
+<p>The implementation would filter all 26 columns even though only a single column is needed for the entire <code>CASE</code> expression evaluation.
 Again this involves a non-negligible amount of allocation and data copying.</p>
 <h2 id="performance-optimizations">Performance Optimizations<a class="headerlink" href="#performance-optimizations" title="Permanent link">¶</a></h2>
 <h3 id="optimization-1-short-circuit-early-exit">Optimization 1: Short-Circuit Early Exit<a class="headerlink" href="#optimization-1-short-circuit-early-exit" title="Permanent link">¶</a></h3>
-<p>The first optimization is an easy one.
-As soon as we can detect that all rows of the batch have been matched we break out of the evaluation loop:</p>
+<p>The first optimization is straightforward.
+As soon as we detect that all rows of the batch have been matched, we break out of the evaluation loop:</p>
 <pre><code class="language-rust">let mut remainder_count = batch.num_rows();
 
 for (when_expr, then_expr) in &amp;self.when_then_expr {
@@ -291,25 +284,25 @@ for (when_expr, then_expr) in &amp;self.when_then_expr {
 <p>For queries where early branches match all rows, this eliminates unnecessary branch evaluations and <code>ELSE</code> clause processing.</p>
 <p>This optimization was implemented by Pepijn Van Eeckhoudt (<a href="https://github.com/pepijnve"><code>@pepijnve</code></a>) in <a href="https://github.com/apache/datafusion/pull/17898">PR #17898</a></p>
 <h3 id="optimization-2-optimized-result-merging">Optimization 2: Optimized Result Merging<a class="headerlink" href="#optimization-2-optimized-result-merging" title="Permanent link">¶</a></h3>
-<p>The second optimization fundamentally restructured how the results of each loop iteration are merged.
+<p>The second optimization fundamentally restructures how the results of each loop iteration will be merged.
 The diagram below illustrates the optimized data flow when evaluating the <code>CASE WHEN col = 'b' THEN 100 ELSE 200 END</code> from before:</p>
 <figure>
 <img alt="Schematic representation of optimized evaluation loop" class="img-responsive" src="/blog/images/case/merging.svg" width="100%"/>
 <figcaption>optimized evaluation loop</figcaption>
 </figure>
-<p>In the reworked implementation, <code>evaluate_selection</code> is no longer used.
+<p>In the reworked implementation, the <code>evaluate_selection</code> function is no longer used.
 The key insight is that we can defer all merging until the end of the evaluation loop by tracking result provenance.
 This was implemented with the following changes:</p>
 <ol>
-<li>Augment the input batch with a column containing row indices</li>
-<li>Reduce the augmented batch after each loop iteration to only contain the remaining rows</li>
-<li>Use the row index column to track which partial result array contains the value for each row </li>
-<li>Perform a single merge operation at the end instead of a <code>zip</code> operation after each loop iteration </li>
+<li>Augment the input batch with a column containing row indices.</li>
+<li>Reduce the augmented batch after each loop iteration to only contain the remaining rows.</li>
+<li>Use the row index column to track which partial result array contains the value for each row.</li>
+<li>Perform a single merge operation at the end instead of a <code>zip</code> operation after each loop iteration.</li>
 </ol>
-<p>With these changes it is no longer necessary to <code>scatter</code> and <code>zip</code> results in each loop iteration.
-Instead, when all rows have been matched, we can then merge the partial results using <a href="https://docs.rs/arrow-select/57.1.0/arrow_select/merge/fn.merge_n.html"><code>arrow_select::merge::merge_n</code></a>.</p>
+<p>These changes make it unnecessary to <code>scatter</code> and <code>zip</code> results in each loop iteration.
+Instead, when all rows have been matched, we then merge the partial results using <a href="https://docs.rs/arrow-select/57.1.0/arrow_select/merge/fn.merge_n.html"><code>arrow_select::merge::merge_n</code></a>.</p>
 <p>The diagram below illustrates how <code>merge_n</code> works for an example where three <code>WHEN/THEN</code> branches produced results.
-The first branch produced the result <code>A</code> for 2, the second produced <code>B</code> for row 1, and the third produced <code>C</code> and <code>D</code> for rows 4 and 5.</p>
+The first branch produced the result <code>A</code> for row 2, the second produced <code>B</code> for row 1, and the third produced <code>C</code> and <code>D</code> for rows 4 and 5.</p>
 <figure>
 <img alt="Schematic illustration of the merge_n algorithm" class="img-responsive" src="/blog/images/case/merge_n.svg" width="100%"/>
 <figcaption>merge_n example</figcaption>
@@ -321,38 +314,33 @@ This takes the first element from the values array with index <code>1</code>, re
 The next cell contains <code>0</code> which takes <code>A</code>, from the first array.
 Finally, we encounter <code>2</code> twice.
 This takes the first and second element from the last values array respectively.</p>
-<p>This algorithm was initially implemented in DataFusion for <code>CASE</code> evaluation, but in the meantime has been generalized and moved into the <code>arrow-rs</code> crate as <a href="https://docs.rs/arrow-select/57.1.0/arrow_select/merge/fn.merge_n.html"><code>arrow_select::merge::merge_n</code></a>.</p>
+<p>This algorithm was initially implemented in DataFusion for the <code>CASE</code> implementation, but in the meantime has been generalized and moved into the <code>arrow-rs</code> crate as <a href="https://docs.rs/arrow-select/57.1.0/arrow_select/merge/fn.merge_n.html"><code>arrow_select::merge::merge_n</code></a>.</p>
 <p>This optimization was implemented by Pepijn Van Eeckhoudt (<a href="https://github.com/pepijnve"><code>@pepijnve</code></a>) in <a href="https://github.com/apache/datafusion/pull/18152">PR #18152</a></p>
 <h3 id="optimization-3-column-projection">Optimization 3: Column Projection<a class="headerlink" href="#optimization-3-column-projection" title="Permanent link">¶</a></h3>
 <p>The third optimization addresses the "filtering unused columns" overhead through projection.</p>
-<p>Suppose we have a query like:</p>
-<pre><code class="language-sql">SELECT *, 
-  CASE 
-    WHEN country = 'USA' THEN state 
-    ELSE country 
-  END AS region
-FROM mailing_address
+<p>Look at the following query example where the <code>mailing_address</code> table has the columns <code>name</code>, <code>surname</code>, <code>street</code>, <code>number</code>, <code>city</code>, <code>state</code>, <code>country</code>:</p>
+<pre><code class="language-sql">SELECT *, CASE WHEN country = 'USA' THEN state ELSE country END AS region
+FROM mailing_address 
 </code></pre>
-<p>where the <code>mailing_address</code> table has columns <code>name</code>, <code>surname</code>, <code>street</code>, <code>number</code>, <code>city</code>, <code>state</code>, <code>country</code>.
-We can see that the <code>CASE</code> expression only references columns <code>country</code> and <code>state</code>, but because all columns are being queried, projection pushdown cannot reduce the number of columns being fed in to the projection operator.</p>
+<p>You can see that the <code>CASE</code> expression only references the columns <code>country</code> and <code>state</code>, but because all columns are being queried, projection pushdown cannot reduce the number of columns being fed in to the projection operator.</p>
 <figure>
 <img alt="Schematic illustration of CASE evaluation without projection" class="img-responsive" src="/blog/images/case/no_projection.svg" width="100%"/>
 <figcaption>CASE evaluation without projection</figcaption>
 </figure>
-<p>During <code>CASE</code> evaluation, the batch needs to be filtered using the <code>WHEN</code> expression in order to evaluate the <code>THEN</code> expression values.
+<p>During <code>CASE</code> evaluation, the batch must be filtered using the <code>WHEN</code> expression to evaluate the <code>THEN</code> expression values.
 As the diagram above shows, this filtering creates a reduced copy of all columns.</p>
 <p>This unnecessary copying can be avoided by first narrowing the batch to only include the columns that are actually needed.</p>
 <figure>
 <img alt="Schematic illustration of CASE evaluation with projection" class="img-responsive" src="/blog/images/case/projection.svg" width="100%"/>
 <figcaption>CASE evaluation with projection</figcaption>
 </figure>
-<p>At first glance this might not seem beneficial, since we're introducing an additional processing step.
+<p>At first glance, this might not seem beneficial, since we're introducing an additional processing step.
 Luckily projection of a record batch only requires a shallow copy of the record batch.
 The column arrays themselves are not copied, and the only work that is actually done is incrementing the reference counts of the columns.</p>
-<p><strong>Impact</strong>: For wide tables with narrow CASE expressions, this dramatically reduces filtering overhead by removing copying of unused columns.</p>
+<p><strong>Impact</strong>: For wide tables with narrow CASE expressions, this dramatically reduces filtering overhead by removing the copying of unused columns.</p>
 <p>This optimization was implemented by Pepijn Van Eeckhoudt (<a href="https://github.com/pepijnve"><code>@pepijnve</code></a>) in <a href="https://github.com/apache/datafusion/pull/18329">PR #18329</a></p>
 <h3 id="optimization-4-eliminating-scatter-in-two-branch-case">Optimization 4: Eliminating Scatter in Two-Branch Case<a class="headerlink" href="#optimization-4-eliminating-scatter-in-two-branch-case" title="Permanent link">¶</a></h3>
-<p>Some of the earlier examples in this post used an expression of the form <code>CASE WHEN condition THEN expr1 ELSE expr2 END</code> to explain how the general evaluation loop works.
+<p>Some of the earlier examples in this post use expressions of the form <code>CASE WHEN condition THEN expr1 ELSE expr2 END</code> to explain how the general evaluation loop works.
 For this kind of two-branch <code>CASE</code> expression, <a href="https://datafusion.apache.org/">Apache DataFusion</a> has a more optimized implementation that unrolls the loop.
 This specialized <code>ExpressionOrExpression</code> fast path still used <code>evaluate_selection()</code> for both branches which uses <code>scatter</code> and <code>zip</code> to combine the results incurring the same performance overhead as the general implementation.</p>
 <p>The revised implementation eliminates the use of <code>evaluate_selection</code> as follows:</p>
@@ -368,20 +356,20 @@ let else_filter = create_filter(&amp;not(&amp;when_value)?);
 let else_batch = filter_record_batch(batch, &amp;else_filter)?;
 let else_value = else_expr.evaluate(&amp;else_batch)?;
 </code></pre>
-<p>This produces two compact arrays (one for THEN values, one for ELSE values) which are then merged with the <code>merge</code> function.
+<p>This produces two compact arrays, one for the THEN values and one for the ELSE values, which are then merged with the <code>merge</code> function.
 In contrast to <code>zip</code>, <code>merge</code> does not require both of its value inputs to have the same length.
 Instead it requires that the sum of the length of the value inputs matches the length of the mask array.</p>
 <figure>
 <img alt="Schematic illustration of the merge algorithm" class="img-responsive" src="/blog/images/case/merge.svg" width="100%"/>
 <figcaption>merge example</figcaption>
 </figure>
-<p>This eliminates unnecessary scatter operations and memory allocations for one of the most common <code>CASE</code> expression patterns.</p>
-<p>Just like <code>merge_n</code> this operation has been moved into <code>arrow-rs</code> as <a href="https://docs.rs/arrow-select/57.1.0/arrow_select/merge/fn.merge.html"><code>arrow_select::merge::merge</code></a>.</p>
+<p>This eliminates unnecessary <code>scatter</code> operations and memory allocations for one of the most common <code>CASE</code> expression patterns.</p>
+<p>Just like <code>merge_n</code>, this operation has been moved into <code>arrow-rs</code> as <a href="https://docs.rs/arrow-select/57.1.0/arrow_select/merge/fn.merge.html"><code>arrow_select::merge::merge</code></a>.</p>
 <p>This optimization was implemented by Pepijn Van Eeckhoudt (<a href="https://github.com/pepijnve"><code>@pepijnve</code></a>) in <a href="https://github.com/apache/datafusion/pull/18444">PR #18444</a></p>
 <h3 id="optimization-5-table-lookup-of-constants">Optimization 5: Table Lookup of Constants<a class="headerlink" href="#optimization-5-table-lookup-of-constants" title="Permanent link">¶</a></h3>
-<p>Up until now we've been discussing the implementations for generic <code>CASE</code> expressions with arbitrary expressions for both <code>WHEN</code> and <code>THEN</code>.
-Another common use of <code>CASE</code> though is to perform a mapping from one set of constants to another.
-For instance, expanding numeric constants to human-readable strings can be done using</p>
+<p>Up until now, we've discussed the implementations for generic <code>CASE</code> expressions that use non-constant expressions for both <code>WHEN</code> and <code>THEN</code>.
+Another common use of <code>CASE</code> is to perform a mapping from one set of constants to another.
+For instance, you can expand numeric constants to human-readable strings using the following <code>CASE</code> example.</p>
 <pre><code class="language-sql">CASE status
   WHEN 0 THEN 'idle'
   WHEN 1 THEN 'running'
@@ -393,11 +381,11 @@ END
 <p>A final <code>CASE</code> optimization recognizes this pattern and compiles the <code>CASE</code> expression into a hash table.
 Rather than evaluating the <code>WHEN</code> and <code>THEN</code> expressions, the input expression is evaluated once, and the result array is computed using a vectorized hash table lookup.
 This approach avoids the need to filter the input batch and combine partial results entirely.
-Instead the result array is computed in a single pass over the input values and the computation time does not grow significantly with the number of <code>WHEN</code> branches in the <code>CASE</code> expression.</p>
+The result array is computed in a single pass over the input values, and the computation time does not grow significantly with the number of <code>WHEN</code> branches in the <code>CASE</code> expression.</p>
 <p>This optimization was implemented by Raz Luvaton (<a href="https://github.com/rluvaton"><code>@rluvaton</code></a>) in <a href="https://github.com/apache/datafusion/pull/18183">PR #18183</a></p>
 <h2 id="results">Results<a class="headerlink" href="#results" title="Permanent link">¶</a></h2>
 <p>The degree to which the performance optimizations described in this post will benefit your queries is highly dependent on both your data and your queries.
-To give some idea of the impact we ran the following query on the TPC_H <code>orders</code> table with a scale factor of 100:</p>
+To give some idea of the impact, we ran the following query on the TPC_H <code>orders</code> table with a scale factor of 100:</p>
 <pre><code class="language-sql">SELECT
     *,
     case o_orderstatus
@@ -417,12 +405,12 @@ All measurements were made with a target partition count of <code>1</code>.</p>
 <img alt="Performance measurements chart" class="img-responsive" src="/blog/images/case/results.png" width="100%"/>
 <figcaption>Performance measurements</figcaption>
 </figure>
-<p>What can be seen in the chart is that the effect of the various optimizations compounds up to the <code>project</code> measurement.
+<p>What you can see in the chart is that the effect of the various optimizations compounds up to the <code>project</code> measurement.
 Up to that point these results are applicable to any <code>CASE</code> expression.
 The final improvement in the <code>hash</code> measurement is only applicable to simple <code>CASE</code> expressions with constant <code>WHEN</code> and <code>THEN</code> expressions.</p>
-<p>The cumulative effect of these optimizations is a 63-71% reduction in CPU time spent evaluating <code>CASE</code> expressions compared to the baseline. </p>
+<p>The cumulative effect of these optimizations is a 63-71% reduction in CPU time spent evaluating <code>CASE</code> expressions compared to the baseline.</p>
 <h2 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">¶</a></h2>
-<p>Through a number of targeted optimizations, we've transformed <code>CASE</code> expression evaluation from a simple, but unoptimized implementation to a highly optimized one.
+<p>Through a number of targeted optimizations, we've transformed <code>CASE</code> expression evaluation from a simple, but unoptimized implementation into a highly optimized one.
 The optimizations described in this post compound: a <code>CASE</code> expression on a wide table with multiple branches and early matches benefits from all four optimizations simultaneously.
 The result is significantly reduced CPU time and memory allocation in SQL constructs that are essential for ETL-like queries.</p>
 <h2 id="about-datafusion">About DataFusion<a class="headerlink" href="#about-datafusion" title="Permanent link">¶</a></h2>
@@ -471,7 +459,7 @@ A list of open issues suitable for beginners is <a href="https://github.com/apac
       <aside class="toc-container d-none d-md-block col-md-4 col-xl-3 ms-xl-2">
         <div class="toc"><span class="toctitle">Contents</span><ul>
 <li><a href="#background-case-expression-evaluation">Background: CASE Expression Evaluation</a></li>
-<li><a href="#basic-case-evaluation">Basic CASE Evaluation</a><ul>
+<li><a href="#case-evaluation-in-datafusion-5000">CASE Evaluation in DataFusion 50.0.0</a><ul>
 <li><a href="#opportunity-1-early-exit">Opportunity 1: Early Exit</a></li>
 <li><a href="#opportunity-2-optimize-repeated-filtering-scattering-and-merging">Opportunity 2: Optimize Repeated Filtering, Scattering, and Merging</a></li>
 <li><a href="#opportunity-3-filter-only-necessary-columns">Opportunity 3: Filter only Necessary Columns</a></li>
