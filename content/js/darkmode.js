@@ -33,11 +33,14 @@
      * Set the theme on the document
      */
     function setTheme(theme) {
-        if (theme === THEME_DARK) {
-            document.documentElement.setAttribute('data-theme', THEME_DARK);
-        } else {
-            document.documentElement.removeAttribute('data-theme');
-        }
+        // Use requestAnimationFrame for smoother transition
+        requestAnimationFrame(() => {
+            if (theme === THEME_DARK) {
+                document.documentElement.setAttribute('data-theme', THEME_DARK);
+            } else {
+                document.documentElement.removeAttribute('data-theme');
+            }
+        });
         localStorage.setItem(THEME_KEY, theme);
     }
 
