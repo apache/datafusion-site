@@ -95,7 +95,7 @@ The following section highlights some of the improvements in this release. Of co
   - Switch from `std::sync::Mutex` to `parking_lot::Mutex` [#1720](https://github.com/apache/arrow-datafusion/pull/1720)
 - New Features
   - Support for memory tracking and spilling to disk
-    - MemoryMananger and DiskManager [#1526](https://github.com/apache/arrow-datafusion/pull/1526)
+    - MemoryManager and DiskManager [#1526](https://github.com/apache/arrow-datafusion/pull/1526)
     - Out of core sort [#1526](https://github.com/apache/arrow-datafusion/pull/1526)
     - New metrics
       - `Gauge` and `CurrentMemoryUsage` [#1682](https://github.com/apache/arrow-datafusion/pull/1682)

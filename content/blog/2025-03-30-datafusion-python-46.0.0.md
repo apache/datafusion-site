@@ -84,7 +84,7 @@ ctx.register_view("view1", df1)
 ```
 
 And then in another portion of your code which has access to the same session context
-you can retrive the DataFrame with:
+you can retrieve the DataFrame with:
 
 ```
 df2 = ctx.table("view1")
