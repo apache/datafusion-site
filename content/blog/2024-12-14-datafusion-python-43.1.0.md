@@ -54,7 +54,7 @@ consistent method for exposing these data structures across libraries.
 In [PR #825], we introduced support for both importing and exporting Arrow data in
 `datafusion-python`. With this improvement, you can now use a single function call to import
 a table from **any** Python library that implements the [Arrow PyCapsule Interface].
-Many popular libaries, such as [Pandas](https://pandas.pydata.org/) and [Polars](https://pola.rs/)
+Many popular libraries, such as [Pandas](https://pandas.pydata.org/) and [Polars](https://pola.rs/)
 already support these interfaces.
 
 Suppose you have a Pandas and Polars DataFrames named `df_pandas` or `df_polars`, respectively:
@@ -146,7 +146,7 @@ gains in some tests.
 
 During our testing we identified some cases where we needed to adjust workflows to
 account for the fact that StringView is now the default type for string based operations.
-First, when performing manipulations on string objects there is a perfomance loss when
+First, when performing manipulations on string objects there is a performance loss when
 needing to cast from string to string view or vice versa. To reap the best performance,
 ideally all of your string type data will use StringView. For most users this should be
 transparent. However if you specify a schema for reading or creating data, then you

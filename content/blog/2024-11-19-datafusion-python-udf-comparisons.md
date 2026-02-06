@@ -107,7 +107,7 @@ I have a DataFrame with many values that I want to aggregate. I have already ana
 determined there is a noise level below which I do not want to include in my analysis. I want to
 compute a sum of only values that are above my noise threshold.
 
-This can be done fairly easy without leaning on a User Defined Aggegate Function (UDAF). You can
+This can be done fairly easy without leaning on a User Defined Aggregate Function (UDAF). You can
 simply filter the DataFrame and then aggregate using the built-in `sum` function. Here, we
 demonstrate doing this as a UDF primarily as an example of how to write UDAFs. We will use the
 PyArrow compute approach.
@@ -293,7 +293,7 @@ transition. In the second implementation you can see how we can iterate through 
 ourselves.
 
 In this first example, we are hard coding the values of interest, but in the following section
-we demonstrate passing these in during initalization.
+we demonstrate passing these in during initialization.
 
 ```rust
 #[pyfunction]
@@ -540,13 +540,13 @@ from datafusion import Accumulator, udaf
 import pyarrow as pa
 import pyarrow.compute as pc
 
-IGNORE_THESHOLD = 5000.0
+IGNORE_THRESHOLD = 5000.0
 class AboveThresholdAccum(Accumulator):
     def __init__(self) -> None:
         self._sum = 0.0
 
     def update(self, values: pa.Array) -> None:
-        over_threshold = pc.greater(values, pa.scalar(IGNORE_THESHOLD))
+        over_threshold = pc.greater(values, pa.scalar(IGNORE_THRESHOLD))
         sum_above = pc.sum(values.filter(over_threshold)).as_py()
         if sum_above is None:
             sum_above = 0.0
