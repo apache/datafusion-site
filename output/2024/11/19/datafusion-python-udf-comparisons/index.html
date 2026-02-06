@@ -149,7 +149,7 @@ than a join can be significantly faster. This is worth profiling for your specif
 <p>I have a DataFrame with many values that I want to aggregate. I have already analyzed it and
 determined there is a noise level below which I do not want to include in my analysis. I want to
 compute a sum of only values that are above my noise threshold.</p>
-<p>This can be done fairly easy without leaning on a User Defined Aggegate Function (UDAF). You can
+<p>This can be done fairly easy without leaning on a User Defined Aggregate Function (UDAF). You can
 simply filter the DataFrame and then aggregate using the built-in <code>sum</code> function. Here, we
 demonstrate doing this as a UDF primarily as an example of how to write UDAFs. We will use the
 PyArrow compute approach.</p>
@@ -310,7 +310,7 @@ Python, is to primarily demonstrate how to make the Python to Rust with Python w
 transition. In the second implementation you can see how we can iterate through all of the arrays
 ourselves.</p>
 <p>In this first example, we are hard coding the values of interest, but in the following section
-we demonstrate passing these in during initalization.</p>
+we demonstrate passing these in during initialization.</p>
 <pre><code class="language-rust">#[pyfunction]
 pub fn tuple_filter_fn(
     py: Python&lt;'_&gt;,
@@ -533,13 +533,13 @@ how much they have ordered total. We want to ignore small orders, which we defin
 import pyarrow as pa
 import pyarrow.compute as pc
 
-IGNORE_THESHOLD = 5000.0
+IGNORE_THRESHOLD = 5000.0
 class AboveThresholdAccum(Accumulator):
     def __init__(self) -&gt; None:
         self._sum = 0.0
 
     def update(self, values: pa.Array) -&gt; None:
-        over_threshold = pc.greater(values, pa.scalar(IGNORE_THESHOLD))
+        over_threshold = pc.greater(values, pa.scalar(IGNORE_THRESHOLD))
         sum_above = pc.sum(values.filter(over_threshold)).as_py()
         if sum_above is None:
             sum_above = 0.0
