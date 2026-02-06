@@ -48,15 +48,25 @@ github:
       required_pull_request_reviews:
         required_approving_review_count: 1
 
-# publishes the content of the `asf-site` branch to
+# Publishes the content of the `asf-site` branch to
 # https://datafusion.apache.org/blog
 publish:
   whoami: asf-site
   subdir: blog
 
-# Publishes the content of `asf-staging` branch to
-# http://datafusion.staged.apache.org
+# Automatically builds branches matching `site/*`
+# and pushes the output to `site/<name>-staging`.
+# For example, `site/foo` → `site/foo-staging`
+pelican:
+  whoami: ~
+  autobuild: site/*
+
+# Automatically stages the output of autobuild branches.
+# For example:
+#   - A push to `site/foo` triggers an autobuild to `site/foo-staging`
+#   - `site/foo-staging` matches the `autostage` pattern
+#   - The site is then staged at: https://datafusion-foo.staged.apache.org
 staging:
-  whoami: asf-staging
-  profile: ~
+  whoami: ~
+  subdir: blog
   autostage: site/*
