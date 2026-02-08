@@ -18,7 +18,7 @@
 IMAGE_NAME = df-site-build
 REPO_NAME = infrastructure-actions
 
-.PHONY: clone-repo checkout-commit build-image build
+.PHONY: clone-repo sync-repo build-image build
 
 all: build
 
@@ -31,11 +31,17 @@ clone-repo:
 		echo "$(REPO_NAME) already exists, skipping clone."; \
 	fi
 
-# pulls the latest changes from the main branch
-checkout-commit: clone-repo
+# syncs the repository with the latest changes from the main branch
+sync-repo: clone-repo
 	@cd $(REPO_NAME) && \
-	echo "Pulling latest changes from main branch..."; \
-	git fetch origin main && git checkout main && git pull origin main
+	if [ -n "$$(git status --porcelain)" ]; then \
+		echo "Error: Repository has uncommitted changes. Please clean the repository first."; \
+		exit 1; \
+	fi; \
+	echo "Syncing with origin/main..."; \
+	git fetch --depth 1 origin main && \
+	git checkout main && \
+	git reset --hard origin/main
 
 # builds the Docker image with pelicanasf installed
 build-image:
@@ -47,6 +53,6 @@ build-image:
 	fi
 
 # runs the Docker container to build the site
-build: checkout-commit build-image
+build: sync-repo build-image
 	docker run -it --rm -p8000:8000 -v $(PWD):/site --entrypoint /bin/bash $(IMAGE_NAME) -c \
 		"pelicanasf content -o blog && python3 -m http.server 8000"
