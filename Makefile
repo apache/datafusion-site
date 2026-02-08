@@ -17,7 +17,6 @@
 
 IMAGE_NAME = df-site-build
 REPO_NAME = infrastructure-actions
-COMMIT_HASH = 8aee7a080268198548d8d1b4f1315a4fb94bffea
 
 .PHONY: clone-repo checkout-commit build-image build
 
@@ -32,15 +31,11 @@ clone-repo:
 		echo "$(REPO_NAME) already exists, skipping clone."; \
 	fi
 
-# checks out the specific commit due to https://github.com/apache/infrastructure-actions/issues/218
+# pulls the latest changes from the main branch
 checkout-commit: clone-repo
 	@cd $(REPO_NAME) && \
-	if [ "$$(git rev-parse HEAD)" = "$(COMMIT_HASH)" ]; then \
-		echo "Repository is already at commit $(COMMIT_HASH), skipping checkout."; \
-	else \
-		echo "Checking out commit $(COMMIT_HASH)..."; \
-		git fetch --depth 1 origin $(COMMIT_HASH) && git checkout $(COMMIT_HASH); \
-	fi
+	echo "Pulling latest changes from main branch..."; \
+	git fetch origin main && git checkout main && git pull origin main
 
 # builds the Docker image with pelicanasf installed
 build-image:
