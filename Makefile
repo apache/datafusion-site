@@ -39,9 +39,9 @@ sync-repo: clone-repo
 		exit 1; \
 	fi; \
 	echo "Syncing with origin/main..."; \
-	git fetch --depth 1 origin main && \
-	git checkout main && \
-	git reset --hard origin/main
+    git fetch origin main && \
+    git checkout main
+
 
 # builds the Docker image with pelicanasf installed
 build-image:
