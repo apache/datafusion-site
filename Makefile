@@ -17,23 +17,19 @@
 
 IMAGE_NAME = df-site-build
 
-.PHONY: build-image build clean
+.PHONY: build clean
 
 # runs the Docker container to build the site
-build: build-image
+build:
+	@if ! docker image inspect $(IMAGE_NAME) > /dev/null 2>&1; then \
+		docker build -t $(IMAGE_NAME) https://github.com/apache/infrastructure-actions.git#main:pelican; \
+	fi
 	docker run -it --rm -p8000:8000 -v $(PWD):/site --entrypoint /bin/bash $(IMAGE_NAME) -c \
 		"pelicanasf content -o blog && python3 -m http.server 8000"
 
-# builds the Docker image with pelicanasf installed
-build-image:
-	@if ! docker image inspect $(IMAGE_NAME) > /dev/null 2>&1; then \
-		echo "Building Docker image $(IMAGE_NAME)..."; \
-		docker build -t $(IMAGE_NAME) https://github.com/apache/infrastructure-actions.git#main:pelican; \
-	else \
-		echo "Docker image $(IMAGE_NAME) already exists, skipping build."; \
-	fi
-
 # removes the Docker image
 clean:
-	@docker image rm -f $(IMAGE_NAME) >/dev/null 2>&1 || true
-	@echo "Removed Docker image $(IMAGE_NAME) (if it existed)."
+	@if docker image inspect $(IMAGE_NAME) > /dev/null 2>&1; then \
+		docker image rm -f $(IMAGE_NAME) >/dev/null 2>&1 && \
+		echo "Removed Docker image $(IMAGE_NAME)."; \
+	fi
