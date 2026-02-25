@@ -30,6 +30,6 @@ build:
 # removes the Docker image
 clean:
 	@if docker image inspect $(IMAGE_NAME) > /dev/null 2>&1; then \
-		docker image rm -f $(IMAGE_NAME) >/dev/null 2>&1 && \
+		docker image rm -f $(IMAGE_NAME) > /dev/null 2>&1 && \
 		echo "Removed Docker image $(IMAGE_NAME)."; \
 	fi
