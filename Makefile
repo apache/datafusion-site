@@ -16,43 +16,20 @@
 # under the License.
 
 IMAGE_NAME = df-site-build
-REPO_NAME = infrastructure-actions
 
-.PHONY: clone-repo sync-repo build-image build
-
-all: build
-
-# clones the infrastructure-actions repository
-clone-repo:
-	@if [ ! -d "$(REPO_NAME)" ]; then \
-		echo "Cloning $(REPO_NAME)..."; \
-		git clone --depth 1 https://github.com/apache/infrastructure-actions.git $(REPO_NAME); \
-	else \
-		echo "$(REPO_NAME) already exists, skipping clone."; \
-	fi
-
-# syncs the repository with the latest changes from the main branch
-sync-repo: clone-repo
-	@cd $(REPO_NAME) && \
-	if [ -n "$$(git status --porcelain)" ]; then \
-		echo "Error: Repository has uncommitted changes. Please clean the repository first."; \
-		exit 1; \
-	fi; \
-	echo "Syncing with origin/main..."; \
-    git fetch origin main && \
-    git checkout main
-
-
-# builds the Docker image with pelicanasf installed
-build-image:
-	@if ! docker image inspect $(IMAGE_NAME) > /dev/null 2>&1; then \
-		echo "Building Docker image $(IMAGE_NAME)..."; \
-		docker build -t $(IMAGE_NAME) $(REPO_NAME)/pelican; \
-	else \
-		echo "Docker image $(IMAGE_NAME) already exists, skipping build."; \
-	fi
+.PHONY: build clean
 
 # runs the Docker container to build the site
-build: sync-repo build-image
+build:
+	@if ! docker image inspect $(IMAGE_NAME) > /dev/null 2>&1; then \
+		docker build -t $(IMAGE_NAME) https://github.com/apache/infrastructure-actions.git#main:pelican; \
+	fi
 	docker run -it --rm -p8000:8000 -v $(PWD):/site --entrypoint /bin/bash $(IMAGE_NAME) -c \
 		"pelicanasf content -o blog && python3 -m http.server 8000"
+
+# removes the Docker image
+clean:
+	@if docker image inspect $(IMAGE_NAME) > /dev/null 2>&1; then \
+		docker image rm -f $(IMAGE_NAME) > /dev/null 2>&1 && \
+		echo "Removed Docker image $(IMAGE_NAME)."; \
+	fi
