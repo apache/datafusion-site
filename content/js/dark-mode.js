@@ -1,47 +1,39 @@
-// Dark Mode Toggle Functionality
 (function() {
     'use strict';
-    
-    // Get the current theme from localStorage or default to 'light'
+
+    const root = document.documentElement;
+
     function getTheme() {
         return localStorage.getItem('theme') || 'light';
     }
-    
-    // Set the theme immediately
-    function setTheme(theme) {
-        // Use requestAnimationFrame for smooth, immediate visual update
-        requestAnimationFrame(() => {
-            document.documentElement.setAttribute('data-theme', theme);
-        });
+
+    function setButtonState(theme) {
+        const toggleButton = document.getElementById('dark-mode-toggle');
+        if (toggleButton) {
+            toggleButton.setAttribute('aria-pressed', theme === 'dark' ? 'true' : 'false');
+        }
+    }
+
+    function applyTheme(theme) {
+        root.setAttribute('data-theme', theme);
         localStorage.setItem('theme', theme);
+        setButtonState(theme);
     }
-    
-    // Toggle between light and dark themes
+
     function toggleTheme() {
-        const currentTheme = getTheme();
-        const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-        setTheme(newTheme);
+        applyTheme(getTheme() === 'dark' ? 'light' : 'dark');
     }
-    
-    // Initialize theme on page load (before DOM renders to prevent flash)
-    function initTheme() {
-        const theme = getTheme();
-        // Set immediately, before any rendering
-        document.documentElement.setAttribute('data-theme', theme);
-    }
-    
-    // Set up the toggle button
+
     function setupToggleButton() {
         const toggleButton = document.getElementById('dark-mode-toggle');
         if (toggleButton) {
+            setButtonState(getTheme());
             toggleButton.addEventListener('click', toggleTheme);
         }
     }
-    
-    // Initialize immediately to prevent flash
-    initTheme();
-    
-    // Set up button when DOM is ready
+
+    root.setAttribute('data-theme', getTheme());
+
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', setupToggleButton);
     } else {
