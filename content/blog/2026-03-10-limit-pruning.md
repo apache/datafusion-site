@@ -66,12 +66,12 @@ Before diving into limit pruning, let's understand the full pruning pipeline. Da
 
 ### Phase 1: High-Level Discovery
 
-- **Partition Pruning**: The `ListingTable` component evaluates filters that depend only on partition columns — things like `year`, `month`, or `region` encoded in directory paths (e.g., `s3://data/year=2024/month=01/`). Irrelevant directories are eliminated before we even open a file.
-- **File Stats Pruning**: The `FilePruner` checks file-level min/max and null-count statistics. If these statistics prove that a file cannot satisfy the predicate, we drop it entirely — no need to read row group metadata.
+- **Partition Pruning**: The [ListingTable](https://docs.rs/datafusion/latest/datafusion/datasource/listing/struct.ListingTable.html) component evaluates filters that depend only on partition columns — things like `year`, `month`, or `region` encoded in directory paths (e.g., `s3://data/year=2024/month=01/`). Irrelevant directories are eliminated before we even open a file.
+- **File Stats Pruning**: The [FilePruner](https://docs.rs/datafusion/latest/datafusion/physical_optimizer/pruning/struct.FilePruner.html) checks file-level min/max and null-count statistics. If these statistics prove that a file cannot satisfy the predicate, we drop it entirely — no need to read row group metadata.
 
 ### Phase 2: Row Group Statistics
 
-For each surviving file, DataFusion reads row group metadata and classifies each row group into one of three states:
+For each surviving file, DataFusion reads row group metadata and potentially [bloom filters](https://parquet.apache.org/docs/file-format/bloomfilter/) and classifies each row group into one of three states (the example data shown in the figures below, such as "Snow Vole" and "Alpine Ibex", is adapted from the [Snowflake pruning paper](https://arxiv.org/pdf/2504.11540)):
 
 <figure>
 <img src="/blog/images/limit-pruning/row-group-states.svg" width="80%" alt="Row group classification: not matching, partially matching, fully matching"/>
@@ -82,14 +82,12 @@ For each surviving file, DataFusion reads row group metadata and classifies each
 - **Partially Matching**: Statistics cannot rule out matching rows, but also cannot guarantee them. These groups might be scanned and verified row by row later.
 - **Fully Matching**: Statistics prove that *every single row* in the group satisfies the predicate. This state is key to making limit pruning possible.
 
-Additionally, **bloom filters** could eliminate row groups for equality and `IN`-list predicates at this stage.
-
 ### Phase 3: Granular Pruning
 
 The final phase goes even deeper:
 
-- **Page Index Pruning**: Parquet pages have their own min/max statistics. DataFusion uses these to skip individual data pages within a surviving row group.
-- **Late Materialization (Row Filtering)**: Instead of decoding all columns at once, DataFusion decodes the cheapest, most selective columns first. It filters rows using those columns, then only decodes the remaining columns for surviving rows.
+- **[Page Index Pruning](https://parquet.apache.org/docs/file-format/pageindex/)**: Parquet pages have their own min/max statistics. DataFusion uses these to skip individual data pages within a surviving row group.
+- **[Late Materialization](https://arrow.apache.org/blog/2025/12/11/parquet-late-materialization-deep-dive/) (Row Filtering)**: Instead of decoding all columns at once, DataFusion decodes the cheapest, most selective columns first. It filters rows using those columns, then only decodes the remaining columns for surviving rows.
 
 ## The Problem: LIMIT Was Ignored
 
@@ -101,11 +99,11 @@ WHERE species LIKE 'Alpine%' AND s >= 50
 LIMIT 3
 ```
 
-Even when fully matched row groups alone contain enough rows to satisfy the `LIMIT`, the scan would still visit partially matching groups — decoding data that might contribute zero qualifying rows.
+Even when fully matched row groups alone contain enough rows to satisfy the `LIMIT`, DataFusion would still decode partially matching groups and filter out rows that did not match, wasting resources decoding rows just to immediately discard them.
 
 <figure>
 <img src="/blog/images/limit-pruning/wasted-io.svg" width="80%" alt="Traditional pruning decodes partially matching groups with no LIMIT awareness"/>
-<figcaption>Figure 3: Without limit awareness, partially matching groups are scanned even when fully matched groups already have enough rows.</figcaption>
+<figcaption>Figure 3: Without limit awareness, partially matching groups are scanned and filtered even when fully matched groups already have enough rows.</figcaption>
 </figure>
 
 If five fully matched rows in a fully matched group already satisfy `LIMIT 5`, why bother decoding groups where we're not even sure any rows qualify?
@@ -138,6 +136,8 @@ The core insight is **predicate negation**. To determine if every row in a row g
 2. Simplify the negated expression
 3. Evaluate the negation against the row group's statistics
 4. If the negation is *pruned* (proven impossible), then the original predicate holds for every row
+
+Since DataFusion already had expression simplification (step 2) and statistics-based pruning (step 3), implementing this was relatively straightforward — the key addition was composing these existing capabilities with predicate negation.
 
 <figure>
 <img src="/blog/images/limit-pruning/fully-matched-detection.svg" width="80%" alt="Fully matched detection via predicate negation"/>
@@ -242,7 +242,7 @@ Key properties of this algorithm:
 
 ## Case Study: Alpine Wildlife Query
 
-Let's walk through a concrete example. Given a wildlife tracking dataset with four row groups:
+Let's walk through a concrete example adapted from the [Snowflake pruning paper](https://arxiv.org/pdf/2504.11540). Given a wildlife tracking dataset with four row groups:
 
 ```sql
 SELECT * FROM tracking_data
@@ -283,9 +283,9 @@ This tells us:
 
 There are two natural extensions of this work:
 
-**Page-Level Limit Pruning**: Today, "fully matched" detection operates at the row group level. If we extend this to use page index statistics, we could stop decoding pages *within* a row group once the limit is met. This would pay dividends for wide row groups where only a few pages hold matching data.
+**[Page-Level Limit Pruning](https://github.com/apache/datafusion/issues/19193)**: Today, "fully matched" detection operates at the row group level. If we extend this to use page index statistics, we could stop decoding pages *within* a row group once the limit is met. This would pay dividends for wide row groups where only a few pages hold matching data.
 
-**Row Filter Hints**: Even when a row group is fully matched, the current row filter still evaluates predicates row by row. If we pass the fully matched groups info into the row filter builder, we can skip predicate evaluation entirely for guaranteed groups — saving CPU cycles on predicate evaluation.
+**[Row Filter Hints](https://github.com/apache/datafusion/issues/19028)**: Even when a row group is fully matched, the current row filter still evaluates predicates row by row. If we pass the fully matched groups info into the row filter builder, we can skip predicate evaluation entirely for guaranteed groups — saving CPU cycles on predicate evaluation.
 
 ## Summary
 
@@ -295,5 +295,19 @@ The key insights are:
 1. **Predicate negation** can identify row groups where *all* rows match — not just "some might match"
 2. **Row count accumulation** across fully matched groups enables early termination
 
+## About DataFusion
+
+[Apache DataFusion] is an extensible query engine, written in [Rust], that uses [Apache Arrow] as its in-memory format. DataFusion is used by developers to create new, fast, data-centric systems such as databases, dataframe libraries, and machine learning and streaming applications.
+
+DataFusion's core thesis is that, as a community, together we can build much more advanced technology than any of us as individuals or companies could build alone.
+
+## How to Get Involved
+
+If you are interested in contributing, we would love to have you. You can try out DataFusion on some of your own data and projects and let us know how it goes, contribute suggestions, documentation, bug reports, or a PR with documentation, tests, or code. A list of open issues suitable for beginners is [here], and you can find out how to reach us on the [communication doc].
+
 [Apache DataFusion]: https://datafusion.apache.org/
+[Rust]: https://www.rust-lang.org/
+[Apache Arrow]: https://arrow.apache.org
+[here]: https://github.com/apache/datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22
+[communication doc]: https://datafusion.apache.org/contributor-guide/communication.html
 [row_group_filter.rs]: https://github.com/apache/datafusion/blob/main/datafusion/datasource-parquet/src/row_group_filter.rs
