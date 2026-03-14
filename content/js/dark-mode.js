@@ -20,7 +20,7 @@
 
     function applyTheme(theme) {
         root.setAttribute('data-theme', theme);
-        localStorage.setItem('theme', theme);
+        try { localStorage.setItem('theme', theme); } catch { }
         setButtonState(theme);
     }
 
