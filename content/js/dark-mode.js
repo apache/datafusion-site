@@ -4,7 +4,11 @@
     const root = document.documentElement;
 
     function getTheme() {
-        return localStorage.getItem('theme') || 'light';
+        try {
+            return localStorage.getItem('theme') || 'light';
+        } catch {
+            return 'light';
+        }
     }
 
     function setButtonState(theme) {
