@@ -4,7 +4,11 @@
     const root = document.documentElement;
 
     function getTheme() {
-        return localStorage.getItem('theme') || 'light';
+        try {
+            return localStorage.getItem('theme') || 'light';
+        } catch (e) {
+            return 'light';
+        }
     }
 
     function setButtonState(theme) {
@@ -16,7 +20,11 @@
 
     function applyTheme(theme) {
         root.setAttribute('data-theme', theme);
-        localStorage.setItem('theme', theme);
+        try {
+            localStorage.setItem('theme', theme);
+        } catch (e) {
+            // Ignore storage errors; theme will not be persisted.
+        }
         setButtonState(theme);
     }
 
