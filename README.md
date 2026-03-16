@@ -40,8 +40,8 @@ make
 This will build the site using the [`ASF-Pelican`](https://github.com/apache/infrastructure-actions/tree/main/pelican) docker container.
 
 Navigate in your web browser to [http://localhost:8000/blog](http://localhost:8000/blog) to view the live
-website. In your terminal you can press Ctrl+C and rerun the last two commands
-to rebuild and publish the site.
+website. While `make` is running, changes under `content/` will automatically
+trigger a rebuild. Refresh the browser to see the updated site.
 
 ## Publish site
 
