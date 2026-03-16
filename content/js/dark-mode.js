@@ -6,7 +6,7 @@
     function getTheme() {
         try {
             return localStorage.getItem('theme') || 'light';
-        } catch (e) {
+        } catch {
             return 'light';
         }
     }
@@ -20,11 +20,7 @@
 
     function applyTheme(theme) {
         root.setAttribute('data-theme', theme);
-        try {
-            localStorage.setItem('theme', theme);
-        } catch (e) {
-            // Ignore storage errors; theme will not be persisted.
-        }
+        try { localStorage.setItem('theme', theme); } catch { }
         setButtonState(theme);
     }
 
