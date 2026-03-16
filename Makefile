@@ -25,7 +25,8 @@ build:
 		docker build -t $(IMAGE_NAME) https://github.com/apache/infrastructure-actions.git#main:pelican; \
 	fi
 	docker run -it --rm -p8000:8000 -v $(PWD):/site --entrypoint /bin/bash $(IMAGE_NAME) -c \
-		"pelicanasf content -o blog && python3 -m http.server 8000"
+		"pelicanasf content -o blog --autoreload & \
+		python3 -m http.server 8000"
 
 # removes the Docker image
 clean:
