@@ -2,7 +2,7 @@
 layout: post
 title: Writing Custom Table Providers in Apache DataFusion
 date: 2026-03-20
-author: timsaucer
+author: Tim Saucer (rerun.io)
 categories: [tutorial]
 ---
 <!--
@@ -626,6 +626,14 @@ For most integrations, [`StreamTable`] combined with
 [`RecordBatchStreamAdapter`] provides a good balance of simplicity and
 flexibility. You provide a closure that returns a stream, and DataFusion handles
 the rest.
+
+## Acknowledgements
+
+I would like to thank [Rerun.io] for sponsoring the development of this work. [Rerun.io]
+is building a data visualization system for Physical AI and makes heavy use of DataFusion
+table providers for working with data analytics.
+
+[Rerun.io]: https://rerun.io
 
 ## Further Reading
 
