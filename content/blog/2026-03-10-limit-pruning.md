@@ -53,6 +53,16 @@ Reading data efficiently means touching as little data as possible. The fastest 
 
 In this post, we describe a new optimization called **limit pruning** that makes this pipeline aware of SQL `LIMIT` clauses. By identifying row groups where *every* row is guaranteed to match the predicate, DataFusion can satisfy a `LIMIT` query without ever touching partially matching row groups — eliminating wasted I/O entirely.
 
+For example, given a query like:
+
+```sql
+SELECT * FROM tracking_data
+WHERE species LIKE 'Alpine%' AND s >= 50
+LIMIT 3
+```
+
+If the pruning pipeline already knows that certain row groups fully satisfy the `WHERE` clause, those groups alone may contain enough rows to fill the `LIMIT` — making it unnecessary to scan anything else.
+
 This work was inspired by the "Pruning for LIMIT Queries" section of Snowflake's paper [*Pruning in Snowflake: Working Smarter, Not Harder*](https://arxiv.org/pdf/2504.11540).
 
 ## DataFusion's Pruning Pipeline
@@ -103,7 +113,7 @@ Even when fully matched row groups alone contain enough rows to satisfy the `LIM
 
 <figure>
 <img src="/blog/images/limit-pruning/wasted-io.svg" width="80%" alt="Traditional pruning decodes partially matching groups with no LIMIT awareness"/>
-<figcaption>Figure 3: Without limit awareness, partially matching groups are scanned and filtered even when fully matched groups already have enough rows.</figcaption>
+<figcaption>Figure 3: Without limit awareness, partially matching groups are scanned and filtered even when fully matched groups already have enough rows. The left section shows 5 fully matched rows (enough to satisfy <code>LIMIT 5</code>), while the right section with the dashed red border represents a partially matching group that is still decoded — wasting CPU and I/O on rows that may not match at all.</figcaption>
 </figure>
 
 If five fully matched rows in a fully matched group already satisfy `LIMIT 5`, why bother decoding groups where we're not even sure any rows qualify?
@@ -272,12 +282,12 @@ DataFusion exposes limit pruning activity through query metrics. When running a 
 
 ```
 row_groups_pruned_statistics=4 total → 3 matched -> 1 fully matched
-limit_pruned_row_groups=2 total → 0 matched
+limit_pruned_row_groups=3 total → 1 matched
 ```
 
 This tells us:
 - 4 row groups were evaluated, 3 survived statistics pruning, 1 was identified as fully matching
-- 2 additional row groups were pruned by the limit optimization
+- Of the 3 row groups that entered limit pruning, only 1 survived — 2 were pruned by the limit optimization
 
 ## Future Directions
 
