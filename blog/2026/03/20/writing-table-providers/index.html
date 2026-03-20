@@ -1,0 +1,743 @@
+<!doctype html>
+<html class="no-js" lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>"Writing Custom Table Providers in Apache DataFusion" - Apache DataFusion Blog</title>
+<link href="/blog/css/bootstrap.min.css" rel="stylesheet">
+<link href="/blog/css/fontawesome.all.min.css" rel="stylesheet">
+<link href="/blog/css/headerlink.css" rel="stylesheet">
+<link href="/blog/highlight/default.min.css" rel="stylesheet">
+<link href="/blog/css/app.css" rel="stylesheet">
+<link href="/blog/css/dark-mode.css" rel="stylesheet">
+<script src="/blog/js/dark-mode.js"></script>
+<script src="/blog/highlight/highlight.js"></script>
+<script>hljs.highlightAll();</script>  </head>
+  <body class="d-flex flex-column h-100">
+  <main class="flex-shrink-0">
+<!-- nav bar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark" aria-label="Fifth navbar example">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/blog/"><img src="/blog/images/logo_original4x.png" style="height: 32px;"/> Apache DataFusion Blog</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarADP" aria-controls="navbarADP" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarADP">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/about.html">About</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/feed.xml">RSS</a>
+                </li>
+            </ul>
+            <button id="dark-mode-toggle" type="button" class="dark-mode-toggle" aria-label="Toggle dark mode" aria-pressed="false" title="Toggle dark mode">
+                <span class="sun-icon" aria-hidden="true">☀</span>
+                <span class="moon-icon" aria-hidden="true">☾</span>
+            </button>
+        </div>
+    </div>
+</nav>    
+<!-- article contents -->
+<div id="contents">
+  <div class="bg-white p-4 p-md-5 rounded">
+    <div class="row justify-content-center">
+      <div class="col-12 col-md-8 main-content">
+        <h1>
+          "Writing Custom Table Providers in Apache DataFusion"
+        </h1>
+        <p>Posted on: Fri 20 March 2026 by Tim Saucer</p>
+
+        <aside class="toc-container d-md-none mb-2">
+          <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#the-three-layers">The Three Layers</a></li>
+<li><a href="#layer-1-tableprovider">Layer 1: TableProvider</a><ul>
+<li><a href="#keep-scan-lightweight">Keep scan() Lightweight</a></li>
+<li><a href="#existing-implementations-to-learn-from">Existing Implementations to Learn From</a></li>
+</ul>
+</li>
+<li><a href="#layer-2-executionplan">Layer 2: ExecutionPlan</a><ul>
+<li><a href="#partitioning-strategies">Partitioning Strategies</a></li>
+<li><a href="#keep-execute-lightweight-too">Keep execute() Lightweight Too</a></li>
+<li><a href="#existing-implementations-to-learn-from_1">Existing Implementations to Learn From</a></li>
+</ul>
+</li>
+<li><a href="#layer-3-sendablerecordbatchstream">Layer 3: SendableRecordBatchStream</a><ul>
+<li><a href="#using-recordbatchstreamadapter">Using RecordBatchStreamAdapter</a></li>
+<li><a href="#cpu-intensive-work-use-a-separate-thread-pool">CPU-Intensive Work: Use a Separate Thread Pool</a></li>
+</ul>
+</li>
+<li><a href="#where-should-the-work-happen">Where Should the Work Happen?</a><ul>
+<li><a href="#why-this-matters">Why This Matters</a></li>
+</ul>
+</li>
+<li><a href="#filter-pushdown-doing-less-work">Filter Pushdown: Doing Less Work</a><ul>
+<li><a href="#how-filter-pushdown-works">How Filter Pushdown Works</a></li>
+<li><a href="#why-filter-pushdown-matters">Why Filter Pushdown Matters</a></li>
+<li><a href="#using-explain-to-debug-your-table-provider">Using EXPLAIN to Debug Your Table Provider</a></li>
+</ul>
+</li>
+<li><a href="#putting-it-all-together">Putting It All Together</a></li>
+<li><a href="#choosing-the-right-starting-point">Choosing the Right Starting Point</a></li>
+<li><a href="#further-reading">Further Reading</a></li>
+</ul>
+</div>
+        </aside>
+
+        <!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+-->
+
+<p>One of DataFusion's greatest strengths is its extensibility. If your data lives
+in a custom format, behind an API, or in a system that DataFusion does not
+natively support, you can teach DataFusion to read it by implementing a
+<strong>custom table provider</strong>. This post walks through the three layers you need to
+understand and explains where your work should actually happen.</p>
+<h2 id="the-three-layers">The Three Layers<a class="headerlink" href="#the-three-layers" title="Permanent link">¶</a></h2>
+<hr/>
+<p>When DataFusion executes a query against a table, three abstractions collaborate
+to produce results:</p>
+<ol>
+<li><strong>[<code>TableProvider</code>]</strong> -- Describes the table (schema, capabilities) and
+   produces an execution plan when queried.</li>
+<li><strong>[<code>ExecutionPlan</code>]</strong> -- Describes <em>how</em> to compute the result: partitioning,
+   ordering, and child plan relationships.</li>
+<li><strong>[<code>SendableRecordBatchStream</code>]</strong> -- The async stream that <em>actually does the
+   work</em>, yielding <code>RecordBatch</code>es one at a time.</li>
+</ol>
+<p>Think of these as a funnel: <code>TableProvider::scan()</code> is called once during
+planning to create an <code>ExecutionPlan</code>, then <code>ExecutionPlan::execute()</code> is called
+once per partition to create a stream, and those streams are where rows are
+actually produced during execution.</p>
+<h2 id="layer-1-tableprovider">Layer 1: TableProvider<a class="headerlink" href="#layer-1-tableprovider" title="Permanent link">¶</a></h2>
+<hr/>
+<p>A [<code>TableProvider</code>] represents a queryable data source. For a minimal read-only
+table, you need four methods:</p>
+<pre><code class="language-rust">impl TableProvider for MyTable {
+    fn as_any(&amp;self) -&gt; &amp;dyn Any { self }
+
+    fn schema(&amp;self) -&gt; SchemaRef {
+        Arc::clone(&amp;self.schema)
+    }
+
+    fn table_type(&amp;self) -&gt; TableType {
+        TableType::Base
+    }
+
+    async fn scan(
+        &amp;self,
+        state: &amp;dyn Session,
+        projection: Option&lt;&amp;Vec&lt;usize&gt;&gt;,
+        filters: &amp;[Expr],
+        limit: Option&lt;usize&gt;,
+    ) -&gt; Result&lt;Arc&lt;dyn ExecutionPlan&gt;&gt; {
+        // Build and return an ExecutionPlan -- keep this lightweight!
+        Ok(Arc::new(MyExecPlan::new(
+            Arc::clone(&amp;self.schema),
+            projection,
+            limit,
+        )))
+    }
+}
+</code></pre>
+<p>The <code>scan</code> method is the heart of <code>TableProvider</code>. It receives three pushdown
+hints from the optimizer, each reducing the amount of data your source needs
+to produce:</p>
+<ul>
+<li><strong><code>projection</code></strong> -- Which columns are needed. This reduces the <strong>width</strong> of
+  the output. If your source supports it, read only these columns rather than
+  the full schema.</li>
+<li><strong><code>filters</code></strong> -- Predicates the engine would like you to apply during the
+  scan. This reduces the <strong>number of rows</strong> by skipping data that does not
+  match. Implement <code>supports_filters_pushdown</code> to advertise which filters you
+  can handle.</li>
+<li><strong><code>limit</code></strong> -- A row count cap. This also reduces the <strong>number of rows</strong> --
+  if you can stop reading early once you have produced enough rows, this avoids
+  unnecessary work.</li>
+</ul>
+<h3 id="keep-scan-lightweight">Keep <code>scan()</code> Lightweight<a class="headerlink" href="#keep-scan-lightweight" title="Permanent link">¶</a></h3>
+<p>This is a critical point: <strong><code>scan()</code> runs during planning, not execution.</strong> It
+should return quickly. Best practices are to avoid performing I/O, network
+calls, or heavy computation here. The <code>scan</code> method's job is to <em>describe</em> how
+the data will be produced, not to produce it. All the real work belongs in the
+stream (Layer 3).</p>
+<p>A common pitfall is to fetch data or open connections in <code>scan()</code>. This blocks
+the planning thread and can cause timeouts or deadlocks, especially if the query
+involves multiple tables or subqueries that all need to be planned before
+execution begins.</p>
+<h3 id="existing-implementations-to-learn-from">Existing Implementations to Learn From<a class="headerlink" href="#existing-implementations-to-learn-from" title="Permanent link">¶</a></h3>
+<p>DataFusion ships several <code>TableProvider</code> implementations that are excellent
+references:</p>
+<ul>
+<li><strong>[<code>MemTable</code>]</strong> -- Holds data in memory as <code>Vec&lt;RecordBatch&gt;</code>. The simplest
+  possible provider; great for tests and small datasets.</li>
+<li><strong>[<code>StreamTable</code>]</strong> -- Wraps a user-provided stream factory. Useful when your
+  data arrives as a continuous stream (e.g., from Kafka or a socket).</li>
+<li><strong>[<code>SortedTableProvider</code>]</strong> -- Wraps another <code>TableProvider</code> and advertises a
+  known sort order, enabling the optimizer to skip redundant sorts.</li>
+</ul>
+<h2 id="layer-2-executionplan">Layer 2: ExecutionPlan<a class="headerlink" href="#layer-2-executionplan" title="Permanent link">¶</a></h2>
+<hr/>
+<p>An [<code>ExecutionPlan</code>] is a node in the physical query plan tree. Your table
+provider's <code>scan()</code> method returns one. The required methods are:</p>
+<pre><code class="language-rust">impl ExecutionPlan for MyExecPlan {
+    fn name(&amp;self) -&gt; &amp;str { "MyExecPlan" }
+
+    fn as_any(&amp;self) -&gt; &amp;dyn Any { self }
+
+    fn properties(&amp;self) -&gt; &amp;PlanProperties {
+        &amp;self.properties
+    }
+
+    fn children(&amp;self) -&gt; Vec&lt;&amp;Arc&lt;dyn ExecutionPlan&gt;&gt; {
+        vec![]  // Leaf node -- no children
+    }
+
+    fn with_new_children(
+        self: Arc&lt;Self&gt;,
+        children: Vec&lt;Arc&lt;dyn ExecutionPlan&gt;&gt;,
+    ) -&gt; Result&lt;Arc&lt;dyn ExecutionPlan&gt;&gt; {
+        assert!(children.is_empty());
+        Ok(self)
+    }
+
+    fn execute(
+        &amp;self,
+        partition: usize,
+        context: Arc&lt;TaskContext&gt;,
+    ) -&gt; Result&lt;SendableRecordBatchStream&gt; {
+        // This is where you build and return your stream
+        // ...
+    }
+}
+</code></pre>
+<p>The key properties to set correctly in [<code>PlanProperties</code>] are <strong>output
+partitioning</strong> and <strong>output ordering</strong>.</p>
+<p><strong>Output partitioning</strong> tells the engine how many partitions your data has,
+which determines parallelism. If your source naturally partitions data (e.g.,
+by file or by shard), expose that here.</p>
+<p><strong>Output ordering</strong> declares whether your data is naturally sorted. This
+enables the optimizer to avoid inserting a <code>SortExec</code> when a query requires
+ordered data. Getting this right can be a significant performance win.</p>
+<h3 id="partitioning-strategies">Partitioning Strategies<a class="headerlink" href="#partitioning-strategies" title="Permanent link">¶</a></h3>
+<p>Since <code>execute()</code> is called once per partition, partitioning directly controls
+the parallelism of your table scan. Each partition runs on its own task, so
+more partitions means more concurrent work -- up to the number of available
+cores.</p>
+<p>Consider how your data source naturally divides its data:</p>
+<ul>
+<li><strong>By file or object:</strong> If you are reading from S3, each file can be a
+  partition. DataFusion will read them in parallel.</li>
+<li><strong>By shard or region:</strong> If your source is a sharded database, each shard
+  maps naturally to a partition.</li>
+<li><strong>By key range:</strong> If your data is keyed (e.g., by timestamp or customer ID),
+  you can split it into ranges.</li>
+</ul>
+<p>Getting partitioning right matters because it affects everything downstream in
+the plan. When DataFusion needs to perform an aggregation or join, it
+repartitions data by hashing the relevant columns. If your source already
+produces data partitioned by the join or group-by key, DataFusion can skip the
+repartition step entirely -- avoiding a potentially expensive shuffle.</p>
+<p>For example, if you are building a table provider for a system that stores
+data partitioned by <code>customer_id</code>, and a common query groups by <code>customer_id</code>:</p>
+<pre><code class="language-sql">SELECT customer_id, SUM(amount)
+FROM my_table
+GROUP BY customer_id;
+</code></pre>
+<p>If you declare your output partitioning as <code>Hash([customer_id], N)</code>, the
+optimizer recognizes that the data is already distributed correctly for the
+aggregation and eliminates the <code>RepartitionExec</code> that would otherwise appear
+in the plan. You can verify this with <code>EXPLAIN</code> (more on this below).</p>
+<p>Conversely, if you report <code>UnknownPartitioning</code>, DataFusion must assume the
+worst case and will always insert repartitioning operators as needed.</p>
+<h3 id="keep-execute-lightweight-too">Keep <code>execute()</code> Lightweight Too<a class="headerlink" href="#keep-execute-lightweight-too" title="Permanent link">¶</a></h3>
+<p>Like <code>scan()</code>, the <code>execute()</code> method should construct and return a stream
+without doing heavy work. The actual data production happens when the stream
+is polled. Do not block on async operations here -- build the stream and let
+the runtime drive it.</p>
+<h3 id="existing-implementations-to-learn-from_1">Existing Implementations to Learn From<a class="headerlink" href="#existing-implementations-to-learn-from_1" title="Permanent link">¶</a></h3>
+<ul>
+<li><strong>[<code>StreamingTableExec</code>]</strong> -- Executes a streaming table scan. It takes a
+  stream factory (a closure that produces streams) and handles partitioning.
+  Good reference for wrapping external streams.</li>
+<li><strong>[<code>DataSourceExec</code>]</strong> -- The execution plan behind DataFusion's built-in file
+  scanning (Parquet, CSV, JSON). It demonstrates sophisticated partitioning,
+  filter pushdown, and projection pushdown.</li>
+</ul>
+<h2 id="layer-3-sendablerecordbatchstream">Layer 3: SendableRecordBatchStream<a class="headerlink" href="#layer-3-sendablerecordbatchstream" title="Permanent link">¶</a></h2>
+<hr/>
+<p>[<code>SendableRecordBatchStream</code>] is where the real work happens. It is defined as:</p>
+<pre><code class="language-rust">type SendableRecordBatchStream =
+    Pin&lt;Box&lt;dyn RecordBatchStream&lt;Item = Result&lt;RecordBatch&gt;&gt; + Send&gt;&gt;;
+</code></pre>
+<p>This is an async stream of <code>RecordBatch</code>es that can be sent across threads. When
+the DataFusion runtime polls this stream, your code runs: reading files, calling
+APIs, transforming data, etc.</p>
+<h3 id="using-recordbatchstreamadapter">Using RecordBatchStreamAdapter<a class="headerlink" href="#using-recordbatchstreamadapter" title="Permanent link">¶</a></h3>
+<p>The easiest way to create a <code>SendableRecordBatchStream</code> is with
+[<code>RecordBatchStreamAdapter</code>]. It bridges any <code>futures::Stream&lt;Item =
+Result&lt;RecordBatch&gt;&gt;</code> into the <code>SendableRecordBatchStream</code> type:</p>
+<pre><code class="language-rust">use datafusion::physical_plan::stream::RecordBatchStreamAdapter;
+
+fn execute(
+    &amp;self,
+    partition: usize,
+    context: Arc&lt;TaskContext&gt;,
+) -&gt; Result&lt;SendableRecordBatchStream&gt; {
+    let schema = self.schema();
+    let config = self.config.clone();
+
+    let stream = futures::stream::once(async move {
+        // ALL the heavy work happens here, inside the stream:
+        // - Open connections
+        // - Read data from external sources
+        // - Transform and batch the results
+        let batches = fetch_data_from_source(&amp;config).await?;
+        Ok(batches)
+    })
+    .flat_map(|result| match result {
+        Ok(batch) =&gt; futures::stream::iter(vec![Ok(batch)]),
+        Err(e) =&gt; futures::stream::iter(vec![Err(e)]),
+    });
+
+    Ok(Box::pin(RecordBatchStreamAdapter::new(schema, stream)))
+}
+</code></pre>
+<h3 id="cpu-intensive-work-use-a-separate-thread-pool">CPU-Intensive Work: Use a Separate Thread Pool<a class="headerlink" href="#cpu-intensive-work-use-a-separate-thread-pool" title="Permanent link">¶</a></h3>
+<p>If your stream performs CPU-intensive work (parsing, decompression, complex
+transformations), avoid blocking the tokio runtime. Instead, offload to a
+dedicated thread pool and send results back through a channel:</p>
+<pre><code class="language-rust">fn execute(
+    &amp;self,
+    partition: usize,
+    context: Arc&lt;TaskContext&gt;,
+) -&gt; Result&lt;SendableRecordBatchStream&gt; {
+    let schema = self.schema();
+    let config = self.config.clone();
+
+    let (tx, rx) = tokio::sync::mpsc::channel(2);
+
+    // Spawn CPU-heavy work on a blocking thread pool
+    tokio::task::spawn_blocking(move || {
+        let batches = generate_data(&amp;config);
+        for batch in batches {
+            if tx.blocking_send(Ok(batch)).is_err() {
+                break; // Receiver dropped, query was cancelled
+            }
+        }
+    });
+
+    let stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+    Ok(Box::pin(RecordBatchStreamAdapter::new(schema, stream)))
+}
+</code></pre>
+<p>This pattern keeps the async runtime responsive while your data generation
+runs on its own threads.</p>
+<h2 id="where-should-the-work-happen">Where Should the Work Happen?<a class="headerlink" href="#where-should-the-work-happen" title="Permanent link">¶</a></h2>
+<hr/>
+<p>This table summarizes what belongs at each layer:</p>
+<table class="table">
+<thead>
+<tr>
+<th>Layer</th>
+<th>Runs During</th>
+<th>Should Do</th>
+<th>Should NOT Do</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>TableProvider::scan()</code></td>
+<td>Planning</td>
+<td>Build an <code>ExecutionPlan</code> with metadata</td>
+<td>I/O, network calls, heavy computation</td>
+</tr>
+<tr>
+<td><code>ExecutionPlan::execute()</code></td>
+<td>Execution (once per partition)</td>
+<td>Construct a stream, set up channels</td>
+<td>Block on async work, read data</td>
+</tr>
+<tr>
+<td><code>RecordBatchStream</code> (polling)</td>
+<td>Execution</td>
+<td>All I/O, computation, data production</td>
+<td>--</td>
+</tr>
+</tbody>
+</table>
+<p>The guiding principle: <strong>push work as late as possible.</strong> Planning should be
+fast so the optimizer can do its job. Execution setup should be fast so all
+partitions can start promptly. The stream is where you spend time producing
+data.</p>
+<h3 id="why-this-matters">Why This Matters<a class="headerlink" href="#why-this-matters" title="Permanent link">¶</a></h3>
+<p>When <code>scan()</code> does heavy work, several problems arise:</p>
+<ol>
+<li><strong>Planning becomes slow.</strong> If a query touches 10 tables and each <code>scan()</code>
+   takes 500ms, planning alone takes 5 seconds before any data flows.</li>
+<li><strong>The optimizer cannot help.</strong> The optimizer runs between planning and
+   execution. If you have already fetched data during planning, optimizations
+   like predicate pushdown or partition pruning cannot reduce the work.</li>
+<li><strong>Resource management breaks down.</strong> DataFusion manages concurrency and
+   memory during execution. Work done during planning bypasses these controls.</li>
+</ol>
+<h2 id="filter-pushdown-doing-less-work">Filter Pushdown: Doing Less Work<a class="headerlink" href="#filter-pushdown-doing-less-work" title="Permanent link">¶</a></h2>
+<hr/>
+<p>One of the most impactful optimizations you can add to a custom table provider
+is <strong>filter pushdown</strong> -- letting the source skip data that the query does not
+need, rather than reading everything and filtering it afterward.</p>
+<h3 id="how-filter-pushdown-works">How Filter Pushdown Works<a class="headerlink" href="#how-filter-pushdown-works" title="Permanent link">¶</a></h3>
+<p>When DataFusion plans a query with a <code>WHERE</code> clause, it passes the filter
+predicates to your <code>scan()</code> method as the <code>filters</code> parameter. By default,
+DataFusion assumes your provider cannot handle any filters and inserts a
+<code>FilterExec</code> node above your scan to apply them. But if your source <em>can</em>
+evaluate some predicates during scanning -- for example, by skipping files,
+partitions, or row groups that cannot match -- you can eliminate a huge amount
+of unnecessary I/O.</p>
+<p>To opt in, implement <code>supports_filters_pushdown</code>:</p>
+<pre><code class="language-rust">fn supports_filters_pushdown(
+    &amp;self,
+    filters: &amp;[&amp;Expr],
+) -&gt; Result&lt;Vec&lt;TableProviderFilterPushDown&gt;&gt; {
+    Ok(filters.iter().map(|f| {
+        match f {
+            // We can fully evaluate equality filters on
+            // the partition column at the source
+            Expr::BinaryExpr(BinaryExpr {
+                left, op: Operator::Eq, right
+            }) if is_partition_column(left) || is_partition_column(right) =&gt; {
+                TableProviderFilterPushDown::Exact
+            }
+            // All other filters: let DataFusion handle them
+            _ =&gt; TableProviderFilterPushDown::Unsupported,
+        }
+    }).collect())
+}
+</code></pre>
+<p>The three possible responses for each filter are:</p>
+<ul>
+<li><strong><code>Exact</code></strong> -- Your source guarantees that no output rows will have a false
+  value for this predicate. Because the filter is fully evaluated at the source,
+  DataFusion will <strong>not</strong> add a <code>FilterExec</code> for it.</li>
+<li><strong><code>Inexact</code></strong> -- Your source has the ability to reduce the data produced, but
+  the output may still include rows that do not satisfy the predicate. For
+  example, you might skip entire files based on metadata statistics but not
+  filter individual rows within a file. DataFusion will still add a <code>FilterExec</code>
+  above your scan to remove any remaining rows that slipped through.</li>
+<li><strong><code>Unsupported</code></strong> -- Your source ignores this filter entirely. DataFusion
+  handles it.</li>
+</ul>
+<h3 id="why-filter-pushdown-matters">Why Filter Pushdown Matters<a class="headerlink" href="#why-filter-pushdown-matters" title="Permanent link">¶</a></h3>
+<p>Consider a table with 1 billion rows partitioned by <code>region</code>, and a query:</p>
+<pre><code class="language-sql">SELECT * FROM events WHERE region = 'us-east-1' AND event_type = 'click';
+</code></pre>
+<p><strong>Without filter pushdown:</strong> Your table provider reads all 1 billion rows
+across all regions. DataFusion then applies both filters, discarding the vast
+majority of the data.</p>
+<p><strong>With filter pushdown on <code>region</code>:</strong> Your <code>scan()</code> method sees the
+<code>region = 'us-east-1'</code> filter and constructs an execution plan that only reads
+the <code>us-east-1</code> partition. If that partition holds 100 million rows, you have
+just eliminated 90% of the I/O. DataFusion still applies the <code>event_type</code>
+filter via <code>FilterExec</code> if you reported it as <code>Unsupported</code>.</p>
+<h3 id="using-explain-to-debug-your-table-provider">Using EXPLAIN to Debug Your Table Provider<a class="headerlink" href="#using-explain-to-debug-your-table-provider" title="Permanent link">¶</a></h3>
+<p>The <code>EXPLAIN</code> statement is your best tool for understanding what DataFusion is
+actually doing with your table provider. It shows the physical plan that
+DataFusion will execute, including any operators it inserted:</p>
+<pre><code class="language-sql">EXPLAIN SELECT * FROM events WHERE region = 'us-east-1' AND event_type = 'click';
+</code></pre>
+<p>If you are using DataFrames, call <code>.explain(false, false)</code> for the logical plan
+or <code>.explain(false, true)</code> for the physical plan. You can also print the plans
+in verbose mode with <code>.explain(true, true)</code>.</p>
+<p><strong>Before filter pushdown</strong>, the plan might look like:</p>
+<pre><code class="language-text">FilterExec: region@0 = us-east-1 AND event_type@1 = click
+  MyExecPlan: partitions=50
+</code></pre>
+<p>Here DataFusion is reading all 50 partitions and filtering everything
+afterward. The <code>FilterExec</code> above your scan is doing all the predicate work.</p>
+<p><strong>After implementing pushdown for <code>region</code></strong> (reported as <code>Exact</code>):</p>
+<pre><code class="language-text">FilterExec: event_type@1 = click
+  MyExecPlan: partitions=5, filter=[region = us-east-1]
+</code></pre>
+<p>Now your exec reads only the 5 partitions for <code>us-east-1</code>, and the remaining
+<code>FilterExec</code> only handles the <code>event_type</code> predicate. The <code>region</code> filter has
+been fully absorbed by your scan.</p>
+<p><strong>After implementing pushdown for both filters</strong> (both <code>Exact</code>):</p>
+<pre><code class="language-text">MyExecPlan: partitions=5, filter=[region = us-east-1 AND event_type = click]
+</code></pre>
+<p>No <code>FilterExec</code> at all -- your source handles everything.</p>
+<p>Similarly, <code>EXPLAIN</code> will reveal whether DataFusion is inserting unnecessary
+<code>SortExec</code> or <code>RepartitionExec</code> nodes that you could eliminate by declaring
+better output properties. Whenever your queries seem slower than expected,
+<code>EXPLAIN</code> is the first place to look.</p>
+<h2 id="putting-it-all-together">Putting It All Together<a class="headerlink" href="#putting-it-all-together" title="Permanent link">¶</a></h2>
+<hr/>
+<p>Here is a minimal but complete example of a custom table provider that generates
+data lazily during streaming:</p>
+<pre><code class="language-rust">use std::any::Any;
+use std::sync::Arc;
+
+use arrow::array::{Int64Array, StringArray};
+use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
+use arrow::record_batch::RecordBatch;
+use datafusion::catalog::TableProvider;
+use datafusion::common::Result;
+use datafusion::datasource::TableType;
+use datafusion::execution::context::SessionState;
+use datafusion::execution::SendableRecordBatchStream;
+use datafusion::logical_expr::Expr;
+use datafusion::physical_expr::EquivalenceProperties;
+use datafusion::physical_plan::execution_plan::{Boundedness, EmissionType};
+use datafusion::physical_plan::stream::RecordBatchStreamAdapter;
+use datafusion::physical_plan::{
+    ExecutionPlan, Partitioning, PlanProperties,
+};
+use futures::stream;
+
+/// A table provider that generates sequential numbers on demand.
+struct CountingTable {
+    schema: SchemaRef,
+    num_partitions: usize,
+    rows_per_partition: usize,
+}
+
+impl CountingTable {
+    fn new(num_partitions: usize, rows_per_partition: usize) -&gt; Self {
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("partition", DataType::Int64, false),
+            Field::new("value", DataType::Int64, false),
+        ]));
+        Self { schema, num_partitions, rows_per_partition }
+    }
+}
+
+#[async_trait::async_trait]
+impl TableProvider for CountingTable {
+    fn as_any(&amp;self) -&gt; &amp;dyn Any { self }
+    fn schema(&amp;self) -&gt; SchemaRef { Arc::clone(&amp;self.schema) }
+    fn table_type(&amp;self) -&gt; TableType { TableType::Base }
+
+    async fn scan(
+        &amp;self,
+        _state: &amp;dyn Session,
+        projection: Option&lt;&amp;Vec&lt;usize&gt;&gt;,
+        _filters: &amp;[Expr],
+        limit: Option&lt;usize&gt;,
+    ) -&gt; Result&lt;Arc&lt;dyn ExecutionPlan&gt;&gt; {
+        // Light work only: build the plan with metadata
+        Ok(Arc::new(CountingExec {
+            schema: Arc::clone(&amp;self.schema),
+            num_partitions: self.num_partitions,
+            rows_per_partition: limit
+                .unwrap_or(self.rows_per_partition)
+                .min(self.rows_per_partition),
+            properties: PlanProperties::new(
+                EquivalenceProperties::new(Arc::clone(&amp;self.schema)),
+                Partitioning::UnknownPartitioning(self.num_partitions),
+                EmissionType::Incremental,
+                Boundedness::Bounded,
+            ),
+        }))
+    }
+}
+
+struct CountingExec {
+    schema: SchemaRef,
+    num_partitions: usize,
+    rows_per_partition: usize,
+    properties: PlanProperties,
+}
+
+impl ExecutionPlan for CountingExec {
+    fn name(&amp;self) -&gt; &amp;str { "CountingExec" }
+    fn as_any(&amp;self) -&gt; &amp;dyn Any { self }
+    fn properties(&amp;self) -&gt; &amp;PlanProperties { &amp;self.properties }
+    fn children(&amp;self) -&gt; Vec&lt;&amp;Arc&lt;dyn ExecutionPlan&gt;&gt; { vec![] }
+
+    fn with_new_children(
+        self: Arc&lt;Self&gt;,
+        _children: Vec&lt;Arc&lt;dyn ExecutionPlan&gt;&gt;,
+    ) -&gt; Result&lt;Arc&lt;dyn ExecutionPlan&gt;&gt; {
+        Ok(self)
+    }
+
+    fn execute(
+        &amp;self,
+        partition: usize,
+        _context: Arc&lt;TaskContext&gt;,
+    ) -&gt; Result&lt;SendableRecordBatchStream&gt; {
+        let schema = Arc::clone(&amp;self.schema);
+        let rows = self.rows_per_partition;
+
+        // The heavy work (data generation) happens inside the stream,
+        // not here in execute().
+        let batch_stream = stream::once(async move {
+            let partitions = Int64Array::from(
+                vec![partition as i64; rows],
+            );
+            let values = Int64Array::from(
+                (0..rows as i64).collect::&lt;Vec&lt;_&gt;&gt;(),
+            );
+            let batch = RecordBatch::try_new(
+                Arc::clone(&amp;schema),
+                vec![Arc::new(partitions), Arc::new(values)],
+            )?;
+            Ok(batch)
+        });
+
+        Ok(Box::pin(RecordBatchStreamAdapter::new(
+            Arc::clone(&amp;self.schema),
+            batch_stream,
+        )))
+    }
+}
+</code></pre>
+<h2 id="choosing-the-right-starting-point">Choosing the Right Starting Point<a class="headerlink" href="#choosing-the-right-starting-point" title="Permanent link">¶</a></h2>
+<hr/>
+<p>Not every custom data source requires implementing all three layers from
+scratch. DataFusion provides building blocks that let you plug in at whatever
+level makes sense:</p>
+<table class="table">
+<thead>
+<tr>
+<th>If your data is...</th>
+<th>Start with</th>
+<th>You implement</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Already in <code>RecordBatch</code>es in memory</td>
+<td>[<code>MemTable</code>]</td>
+<td>Nothing -- just construct it</td>
+</tr>
+<tr>
+<td>An async stream of batches</td>
+<td>[<code>StreamTable</code>]</td>
+<td>A stream factory</td>
+</tr>
+<tr>
+<td>A table with known sort order</td>
+<td>[<code>SortedTableProvider</code>] wrapping another provider</td>
+<td>The inner provider</td>
+</tr>
+<tr>
+<td>A custom source needing full control</td>
+<td><code>TableProvider</code> + <code>ExecutionPlan</code> + stream</td>
+<td>All three layers</td>
+</tr>
+</tbody>
+</table>
+<p>For most integrations, [<code>StreamTable</code>] combined with
+[<code>RecordBatchStreamAdapter</code>] provides a good balance of simplicity and
+flexibility. You provide a closure that returns a stream, and DataFusion handles
+the rest.</p>
+<h2 id="further-reading">Further Reading<a class="headerlink" href="#further-reading" title="Permanent link">¶</a></h2>
+<hr/>
+<ul>
+<li>[TableProvider API docs][<code>TableProvider</code>]</li>
+<li>[ExecutionPlan API docs][<code>ExecutionPlan</code>]</li>
+<li>[SendableRecordBatchStream API docs][<code>SendableRecordBatchStream</code>]</li>
+<li><a href="https://github.com/apache/datafusion/issues/16821">GitHub issue discussing table provider examples</a></li>
+<li><a href="https://github.com/apache/datafusion/tree/main/datafusion-examples/examples">DataFusion examples directory</a> --
+  contains working examples including custom table providers</li>
+</ul>
+<hr/>
+<p><em>Note: Portions of this blog post were written with the assistance of an AI agent.</em></p>
+
+<!--
+  Comments Section
+  Loaded only after explicit visitor consent to comply with ASF policy.
+-->
+
+<div id="comments">
+  <hr>
+  <h3>Comments</h3>
+
+  <!-- Local loader script -->
+  <script src="/content/js/giscus-consent.js" defer></script>
+
+  <!-- Consent UI -->
+  <div id="giscus-consent">
+    <p>
+        We use <a href="https://giscus.app/">Giscus</a> for comments, powered by GitHub Discussions.
+        To respect your privacy, Giscus and comments will load only if you click "Show Comments"
+    </p>
+
+    <div class="consent-actions">
+      <button id="giscus-load" type="button">Show Comments</button>
+      <button id="giscus-revoke" type="button" hidden>Hide Comments</button>
+    </div>
+
+    <noscript>JavaScript is required to load comments from Giscus.</noscript>
+  </div>
+
+  <!-- Container where Giscus will render -->
+  <div id="comment-thread"></div>
+</div>      </div>
+      <aside class="toc-container d-none d-md-block col-md-4 col-xl-3 ms-xl-2">
+        <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#the-three-layers">The Three Layers</a></li>
+<li><a href="#layer-1-tableprovider">Layer 1: TableProvider</a><ul>
+<li><a href="#keep-scan-lightweight">Keep scan() Lightweight</a></li>
+<li><a href="#existing-implementations-to-learn-from">Existing Implementations to Learn From</a></li>
+</ul>
+</li>
+<li><a href="#layer-2-executionplan">Layer 2: ExecutionPlan</a><ul>
+<li><a href="#partitioning-strategies">Partitioning Strategies</a></li>
+<li><a href="#keep-execute-lightweight-too">Keep execute() Lightweight Too</a></li>
+<li><a href="#existing-implementations-to-learn-from_1">Existing Implementations to Learn From</a></li>
+</ul>
+</li>
+<li><a href="#layer-3-sendablerecordbatchstream">Layer 3: SendableRecordBatchStream</a><ul>
+<li><a href="#using-recordbatchstreamadapter">Using RecordBatchStreamAdapter</a></li>
+<li><a href="#cpu-intensive-work-use-a-separate-thread-pool">CPU-Intensive Work: Use a Separate Thread Pool</a></li>
+</ul>
+</li>
+<li><a href="#where-should-the-work-happen">Where Should the Work Happen?</a><ul>
+<li><a href="#why-this-matters">Why This Matters</a></li>
+</ul>
+</li>
+<li><a href="#filter-pushdown-doing-less-work">Filter Pushdown: Doing Less Work</a><ul>
+<li><a href="#how-filter-pushdown-works">How Filter Pushdown Works</a></li>
+<li><a href="#why-filter-pushdown-matters">Why Filter Pushdown Matters</a></li>
+<li><a href="#using-explain-to-debug-your-table-provider">Using EXPLAIN to Debug Your Table Provider</a></li>
+</ul>
+</li>
+<li><a href="#putting-it-all-together">Putting It All Together</a></li>
+<li><a href="#choosing-the-right-starting-point">Choosing the Right Starting Point</a></li>
+<li><a href="#further-reading">Further Reading</a></li>
+</ul>
+</div>
+      </aside>
+    </div>
+  </div>
+</div>    
+    <!-- footer -->
+    <div class="row g-0">
+      <div class="col-12">
+        <p style="font-style: italic; font-size: 0.8rem; text-align: center;">
+          Copyright 2026, <a href="https://www.apache.org/">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a>.<br/>
+          Apache&reg; and the Apache feather logo are trademarks of The Apache Software Foundation.
+        </p>
+      </div>
+    </div>
+    <script src="/blog/js/bootstrap.bundle.min.js"></script>  </main>
+  </body>
+</html>

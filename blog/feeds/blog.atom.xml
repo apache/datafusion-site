@@ -1,5 +1,1660 @@
 <?xml version="1.0" encoding="utf-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - blog</title><link href="https://datafusion.apache.org/blog/" rel="alternate"></link><link href="https://datafusion.apache.org/blog/feeds/blog.atom.xml" rel="self"></link><id>https://datafusion.apache.org/blog/</id><updated>2026-01-12T00:00:00+00:00</updated><subtitle></subtitle><entry><title>Extending SQL in DataFusion: from -&gt;&gt; to TABLESAMPLE</title><link href="https://datafusion.apache.org/blog/2026/01/12/extending-sql" rel="alternate"></link><published>2026-01-12T00:00:00+00:00</published><updated>2026-01-12T00:00:00+00:00</updated><author><name>Geoffrey Claude (Datadog)</name></author><id>tag:datafusion.apache.org,2026-01-12:/blog/2026/01/12/extending-sql</id><summary type="html">&lt;!--
+<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - blog</title><link href="https://datafusion.apache.org/blog/" rel="alternate"></link><link href="https://datafusion.apache.org/blog/feeds/blog.atom.xml" rel="self"></link><id>https://datafusion.apache.org/blog/</id><updated>2026-03-20T00:00:00+00:00</updated><subtitle></subtitle><entry><title>Turning LIMIT into an I/O Optimization: Inside DataFusion’s Multi-Layer Pruning Stack</title><link href="https://datafusion.apache.org/blog/2026/03/20/limit-pruning" rel="alternate"></link><published>2026-03-20T00:00:00+00:00</published><updated>2026-03-20T00:00:00+00:00</updated><author><name>xudong</name></author><id>tag:datafusion.apache.org,2026-03-20:/blog/2026/03/20/limit-pruning</id><summary type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+
+&lt;style&gt;
+figure {
+  margin: 20px 0;
+}
+
+figure img {
+  display: block;
+  max-width: 80%;
+  margin: auto;
+}
+
+figcaption {
+  font-style: italic;
+  color: #555;
+  font-size: 0.9em;
+  max-width: 80%;
+  margin: auto;
+  text-align: center;
+}
+&lt;/style&gt;
+&lt;p&gt;&lt;em&gt;Xudong Wang, &lt;a href="https://www.massive.com/"&gt;Massive&lt;/a&gt;&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;Reading data efficiently means touching as little data as possible. The fastest I/O is the I/O you never make …&lt;/p&gt;</summary><content type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+
+&lt;style&gt;
+figure {
+  margin: 20px 0;
+}
+
+figure img {
+  display: block;
+  max-width: 80%;
+  margin: auto;
+}
+
+figcaption {
+  font-style: italic;
+  color: #555;
+  font-size: 0.9em;
+  max-width: 80%;
+  margin: auto;
+  text-align: center;
+}
+&lt;/style&gt;
+&lt;p&gt;&lt;em&gt;Xudong Wang, &lt;a href="https://www.massive.com/"&gt;Massive&lt;/a&gt;&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;Reading data efficiently means touching as little data as possible. The fastest I/O is the I/O you never make. This sounds obvious, but making it happen in practice requires careful engineering at every layer of the query engine. &lt;a href="https://datafusion.apache.org/"&gt;Apache DataFusion&lt;/a&gt; achieves this through a multi-layer &lt;strong&gt;pruning pipeline&lt;/strong&gt; — a series of stages that progressively narrow down the data before decoding a single row.&lt;/p&gt;
+&lt;p&gt;In this post, we describe a new optimization called &lt;strong&gt;limit pruning&lt;/strong&gt; that makes this pipeline aware of SQL &lt;code&gt;LIMIT&lt;/code&gt; clauses. By identifying row groups where &lt;em&gt;every&lt;/em&gt; row is guaranteed to match the predicate, DataFusion can satisfy a &lt;code&gt;LIMIT&lt;/code&gt; query without ever touching partially matching row groups — eliminating wasted I/O entirely.&lt;/p&gt;
+&lt;p&gt;For example, given a query like:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT * FROM tracking_data
+WHERE species LIKE 'Alpine%' AND s &amp;gt;= 50
+LIMIT 3
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;If the pruning pipeline already knows that certain row groups fully satisfy the &lt;code&gt;WHERE&lt;/code&gt; clause, those groups alone may contain enough rows to fill the &lt;code&gt;LIMIT&lt;/code&gt; — making it unnecessary to scan anything else.&lt;/p&gt;
+&lt;p&gt;This work was inspired by the "Pruning for LIMIT Queries" section of Snowflake's paper &lt;a href="https://arxiv.org/pdf/2504.11540"&gt;&lt;em&gt;Pruning in Snowflake: Working Smarter, Not Harder&lt;/em&gt;&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id="datafusions-pruning-pipeline"&gt;DataFusion's Pruning Pipeline&lt;a class="headerlink" href="#datafusions-pruning-pipeline" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Before diving into limit pruning, let's understand the full pruning pipeline. DataFusion scans Parquet data through a series of increasingly fine-grained filters, each one eliminating data so the next stage processes less:&lt;/p&gt;
+&lt;figure&gt;
+&lt;img alt="Three phases of DataFusion's pruning pipeline" src="/blog/images/limit-pruning/pruning-phases.svg" width="80%"/&gt;
+&lt;figcaption&gt;Figure 1: The three phases of DataFusion's pruning pipeline — from directories down to individual rows.&lt;/figcaption&gt;
+&lt;/figure&gt;
+&lt;h3 id="phase-1-high-level-discovery"&gt;Phase 1: High-Level Discovery&lt;a class="headerlink" href="#phase-1-high-level-discovery" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Partition Pruning&lt;/strong&gt;: The &lt;a href="https://docs.rs/datafusion/latest/datafusion/datasource/listing/struct.ListingTable.html"&gt;ListingTable&lt;/a&gt; component evaluates filters that depend only on partition columns — things like &lt;code&gt;year&lt;/code&gt;, &lt;code&gt;month&lt;/code&gt;, or &lt;code&gt;region&lt;/code&gt; encoded in directory paths (e.g., &lt;code&gt;s3://data/year=2024/month=01/&lt;/code&gt;). Irrelevant directories are eliminated before we even open a file.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;File Stats Pruning&lt;/strong&gt;: The &lt;a href="https://docs.rs/datafusion/latest/datafusion/physical_optimizer/pruning/struct.FilePruner.html"&gt;FilePruner&lt;/a&gt; checks file-level min/max and null-count statistics. If these statistics prove that a file cannot satisfy the predicate, we drop it entirely — no need to read row group metadata.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id="phase-2-row-group-statistics"&gt;Phase 2: Row Group Statistics&lt;a class="headerlink" href="#phase-2-row-group-statistics" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;For each surviving file, DataFusion reads row group metadata and potentially &lt;a href="https://parquet.apache.org/docs/file-format/bloomfilter/"&gt;bloom filters&lt;/a&gt; and classifies each row group into one of three states (the example data shown in the figures below, such as "Snow Vole" and "Alpine Ibex", is adapted from the &lt;a href="https://arxiv.org/pdf/2504.11540"&gt;Snowflake pruning paper&lt;/a&gt;):&lt;/p&gt;
+&lt;figure&gt;
+&lt;img alt="Row group classification: not matching, partially matching, fully matching" src="/blog/images/limit-pruning/row-group-states.svg" width="80%"/&gt;
+&lt;figcaption&gt;Figure 2: Row groups are classified into three states based on their statistics.&lt;/figcaption&gt;
+&lt;/figure&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Not Matching (Skipped)&lt;/strong&gt;: Statistics prove no rows can match. The row group is ignored completely.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Partially Matching&lt;/strong&gt;: Statistics cannot rule out matching rows, but also cannot guarantee them. These groups might be scanned and verified row by row later.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Fully Matching&lt;/strong&gt;: Statistics prove that &lt;em&gt;every single row&lt;/em&gt; in the group satisfies the predicate. This state is key to making limit pruning possible.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id="phase-3-granular-pruning"&gt;Phase 3: Granular Pruning&lt;a class="headerlink" href="#phase-3-granular-pruning" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;The final phase goes even deeper:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;&lt;a href="https://parquet.apache.org/docs/file-format/pageindex/"&gt;Page Index Pruning&lt;/a&gt;&lt;/strong&gt;: Parquet pages have their own min/max statistics. DataFusion uses these to skip individual data pages within a surviving row group.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;&lt;a href="https://arrow.apache.org/blog/2025/12/11/parquet-late-materialization-deep-dive/"&gt;Late Materialization&lt;/a&gt; (Row Filtering)&lt;/strong&gt;: Instead of decoding all columns at once, DataFusion decodes the cheapest, most selective columns first. It filters rows using those columns, then only decodes the remaining columns for surviving rows.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id="the-problem-limit-was-ignored"&gt;The Problem: LIMIT Was Ignored&lt;a class="headerlink" href="#the-problem-limit-was-ignored" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Before limit pruning, all of these stages worked well — but the pruning pipeline had &lt;strong&gt;no awareness of &lt;code&gt;LIMIT&lt;/code&gt;&lt;/strong&gt;. Consider a query like:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT * FROM tracking_data
+WHERE species LIKE 'Alpine%' AND s &amp;gt;= 50
+LIMIT 3
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Even when fully matched row groups alone contain enough rows to satisfy the &lt;code&gt;LIMIT&lt;/code&gt;, DataFusion would still decode partially matching groups and filter out rows that did not match, wasting resources decoding rows just to immediately discard them.&lt;/p&gt;
+&lt;figure&gt;
+&lt;img alt="Traditional pruning decodes partially matching groups with no LIMIT awareness" src="/blog/images/limit-pruning/wasted-io.svg" width="80%"/&gt;
+&lt;figcaption&gt;Figure 3: Without limit awareness, partially matching groups are scanned and filtered even when fully matched groups already have enough rows. The left section shows 5 fully matched rows (enough to satisfy &lt;code&gt;LIMIT 5&lt;/code&gt;), while the right section with the dashed red border represents a partially matching group that is still decoded — wasting CPU and I/O on rows that may not match at all.&lt;/figcaption&gt;
+&lt;/figure&gt;
+&lt;p&gt;If five fully matched rows in a fully matched group already satisfy &lt;code&gt;LIMIT 5&lt;/code&gt;, why bother decoding groups where we're not even sure any rows qualify?&lt;/p&gt;
+&lt;h2 id="the-solution-limit-aware-pruning"&gt;The Solution: Limit-Aware Pruning&lt;a class="headerlink" href="#the-solution-limit-aware-pruning" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;The solution adds a new step in the pruning pipeline — right after row group pruning and before page index pruning:&lt;/p&gt;
+&lt;figure&gt;
+&lt;img alt="Pruning pipeline with limit pruning highlighted" src="/blog/images/limit-pruning/pruning-pipeline.svg" width="80%"/&gt;
+&lt;figcaption&gt;Figure 4: Limit pruning is inserted between row group and page index pruning.&lt;/figcaption&gt;
+&lt;/figure&gt;
+&lt;p&gt;The idea is simple: &lt;strong&gt;if fully matched row groups already contain enough rows to satisfy the &lt;code&gt;LIMIT&lt;/code&gt;, rewrite the access plan to scan only those groups and skip everything else.&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;This optimization is applied only when the query is a pure limit query with no &lt;code&gt;ORDER BY&lt;/code&gt;, because reordering which groups we scan could change the output ordering of the results. In the implementation, this check is expressed as:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;// Prune by limit if limit is set and order is not sensitive
+if let (Some(limit), false) = (limit, preserve_order) {
+    row_groups.prune_by_limit(limit, rg_metadata, &amp;amp;file_metrics);
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id="mechanism-detecting-fully-matched-row-groups"&gt;Mechanism: Detecting Fully Matched Row Groups&lt;a class="headerlink" href="#mechanism-detecting-fully-matched-row-groups" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;The core insight is &lt;strong&gt;predicate negation&lt;/strong&gt;. To determine if every row in a row group satisfies the predicate, we:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Negate the original predicate&lt;/li&gt;
+&lt;li&gt;Simplify the negated expression&lt;/li&gt;
+&lt;li&gt;Evaluate the negation against the row group's statistics&lt;/li&gt;
+&lt;li&gt;If the negation is &lt;em&gt;pruned&lt;/em&gt; (proven impossible), then the original predicate holds for every row&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Since DataFusion already had expression simplification (step 2) and statistics-based pruning (step 3), implementing this was relatively straightforward — the key addition was composing these existing capabilities with predicate negation.&lt;/p&gt;
+&lt;figure&gt;
+&lt;img alt="Fully matched detection via predicate negation" src="/blog/images/limit-pruning/fully-matched-detection.svg" width="80%"/&gt;
+&lt;figcaption&gt;Figure 5: If the negated predicate is impossible according to row group stats, all rows must match the original predicate.&lt;/figcaption&gt;
+&lt;/figure&gt;
+&lt;p&gt;In DataFusion's codebase, this logic lives in &lt;code&gt;identify_fully_matched_row_groups&lt;/code&gt; (&lt;a href="https://github.com/apache/datafusion/blob/main/datafusion/datasource-parquet/src/row_group_filter.rs"&gt;row_group_filter.rs&lt;/a&gt;):&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;fn identify_fully_matched_row_groups(
+    &amp;amp;mut self,
+    candidate_row_group_indices: &amp;amp;[usize],
+    arrow_schema: &amp;amp;Schema,
+    parquet_schema: &amp;amp;SchemaDescriptor,
+    groups: &amp;amp;[RowGroupMetaData],
+    predicate: &amp;amp;PruningPredicate,
+    metrics: &amp;amp;ParquetFileMetrics,
+) {
+    // Create the inverted predicate: NOT(original)
+    let inverted_expr = Arc::new(NotExpr::new(
+        Arc::clone(predicate.orig_expr()),
+    ));
+
+    // Simplify: e.g., NOT(c1 = 0) → c1 != 0
+    let simplifier = PhysicalExprSimplifier::new(arrow_schema);
+    let Ok(inverted_expr) = simplifier.simplify(inverted_expr) else {
+        return;
+    };
+
+    let Ok(inverted_predicate) = PruningPredicate::try_new(
+        inverted_expr,
+        Arc::clone(predicate.schema()),
+    ) else {
+        return;
+    };
+
+    // Evaluate inverted predicate against row group stats
+    let Ok(inverted_values) =
+        inverted_predicate.prune(&amp;amp;inverted_pruning_stats)
+    else {
+        return;
+    };
+
+    for (i, &amp;amp;original_idx) in
+        candidate_row_group_indices.iter().enumerate()
+    {
+        // If negation is pruned (false), all rows match original
+        if !inverted_values[i] {
+            self.is_fully_matched[original_idx] = true;
+        }
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id="mechanism-rewriting-the-access-plan"&gt;Mechanism: Rewriting the Access Plan&lt;a class="headerlink" href="#mechanism-rewriting-the-access-plan" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Once we know which row groups are fully matched, the limit pruning algorithm is straightforward:&lt;/p&gt;
+&lt;figure&gt;
+&lt;img alt="Limit pruning access plan rewrite algorithm" src="/blog/images/limit-pruning/limit-rewrite-algorithm.svg" width="80%"/&gt;
+&lt;figcaption&gt;Figure 6: The algorithm iterates fully matched groups, accumulating row counts until the limit is satisfied.&lt;/figcaption&gt;
+&lt;/figure&gt;
+&lt;p&gt;The implementation in &lt;code&gt;prune_by_limit&lt;/code&gt; (&lt;a href="https://github.com/apache/datafusion/blob/main/datafusion/datasource-parquet/src/row_group_filter.rs"&gt;row_group_filter.rs&lt;/a&gt;):&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;pub fn prune_by_limit(
+    &amp;amp;mut self,
+    limit: usize,
+    rg_metadata: &amp;amp;[RowGroupMetaData],
+    metrics: &amp;amp;ParquetFileMetrics,
+) {
+    let mut fully_matched_indexes: Vec&amp;lt;usize&amp;gt; = Vec::new();
+    let mut fully_matched_rows: usize = 0;
+
+    for &amp;amp;idx in self.access_plan.row_group_indexes().iter() {
+        if self.is_fully_matched[idx] {
+            fully_matched_indexes.push(idx);
+            fully_matched_rows += rg_metadata[idx].num_rows() as usize;
+            if fully_matched_rows &amp;gt;= limit {
+                break;
+            }
+        }
+    }
+
+    // Rewrite the plan if we have enough rows
+    if fully_matched_rows &amp;gt;= limit {
+        let mut new_plan = ParquetAccessPlan::new_none(rg_metadata.len());
+        for &amp;amp;idx in &amp;amp;fully_matched_indexes {
+            new_plan.scan(idx);
+        }
+        self.access_plan = new_plan;
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Key properties of this algorithm:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;It preserves the original row group ordering&lt;/li&gt;
+&lt;li&gt;If fully matched groups don't have enough rows, the plan is unchanged — no harm done&lt;/li&gt;
+&lt;li&gt;The cost is minimal: a single pass over the row group list&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id="case-study-alpine-wildlife-query"&gt;Case Study: Alpine Wildlife Query&lt;a class="headerlink" href="#case-study-alpine-wildlife-query" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Let's walk through a concrete example adapted from the &lt;a href="https://arxiv.org/pdf/2504.11540"&gt;Snowflake pruning paper&lt;/a&gt;. Given a wildlife tracking dataset with four row groups:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT * FROM tracking_data
+WHERE species LIKE 'Alpine%' AND s &amp;gt;= 50
+LIMIT 3
+&lt;/code&gt;&lt;/pre&gt;
+&lt;table class="table"&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Row Group&lt;/th&gt;
+&lt;th&gt;Species Range&lt;/th&gt;
+&lt;th&gt;S Range&lt;/th&gt;
+&lt;th&gt;State&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;RG1&lt;/td&gt;
+&lt;td&gt;Snow Vole, Brown Bear, Gray Wolf&lt;/td&gt;
+&lt;td&gt;7–133&lt;/td&gt;
+&lt;td&gt;&lt;strong&gt;Not Matching&lt;/strong&gt; (no 'Alpine%')&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;RG2&lt;/td&gt;
+&lt;td&gt;Lynx, Red Fox, Alpine Bat&lt;/td&gt;
+&lt;td&gt;6–71&lt;/td&gt;
+&lt;td&gt;&lt;strong&gt;Partially Matching&lt;/strong&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;RG3&lt;/td&gt;
+&lt;td&gt;Alpine Ibex, Alpine Goat, Alpine Sheep&lt;/td&gt;
+&lt;td&gt;76–101&lt;/td&gt;
+&lt;td&gt;&lt;strong&gt;Fully Matching&lt;/strong&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;RG4&lt;/td&gt;
+&lt;td&gt;Mixed species&lt;/td&gt;
+&lt;td&gt;Mixed&lt;/td&gt;
+&lt;td&gt;&lt;strong&gt;Partially Matching&lt;/strong&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;figure&gt;
+&lt;img alt="Before and after limit pruning comparison" src="/blog/images/limit-pruning/before-after.svg" width="80%"/&gt;
+&lt;figcaption&gt;Figure 7: Before limit pruning, RG2 is scanned for zero hits. After limit pruning, only RG3 is scanned.&lt;/figcaption&gt;
+&lt;/figure&gt;
+&lt;p&gt;&lt;strong&gt;Before limit pruning&lt;/strong&gt;: DataFusion scans RG2 (0 hits — wasted I/O), then RG3 (3 hits, early return). RG2 was decoded entirely for nothing.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;With limit pruning&lt;/strong&gt;: The system detects that RG3 has 3 fully matched rows, which satisfies &lt;code&gt;LIMIT 3&lt;/code&gt;. It rewrites the access plan to scan only RG3, skipping RG2 and RG4 entirely. One row group scanned. Zero waste.&lt;/p&gt;
+&lt;h2 id="observing-limit-pruning-via-metrics"&gt;Observing Limit Pruning via Metrics&lt;a class="headerlink" href="#observing-limit-pruning-via-metrics" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;DataFusion exposes limit pruning activity through query metrics. When running a query with &lt;code&gt;EXPLAIN ANALYZE&lt;/code&gt;, you will see entries like:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;row_groups_pruned_statistics=4 total → 3 matched -&amp;gt; 1 fully matched
+limit_pruned_row_groups=3 total → 1 matched
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;This tells us:
+- 4 row groups were evaluated, 3 survived statistics pruning, 1 was identified as fully matching
+- Of the 3 row groups that entered limit pruning, only 1 survived — 2 were pruned by the limit optimization&lt;/p&gt;
+&lt;h2 id="future-directions"&gt;Future Directions&lt;a class="headerlink" href="#future-directions" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;There are two natural extensions of this work:&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;&lt;a href="https://github.com/apache/datafusion/issues/19193"&gt;Page-Level Limit Pruning&lt;/a&gt;&lt;/strong&gt;: Today, "fully matched" detection operates at the row group level. If we extend this to use page index statistics, we could stop decoding pages &lt;em&gt;within&lt;/em&gt; a row group once the limit is met. This would pay dividends for wide row groups where only a few pages hold matching data.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;&lt;a href="https://github.com/apache/datafusion/issues/19028"&gt;Row Filter Hints&lt;/a&gt;&lt;/strong&gt;: Even when a row group is fully matched, the current row filter still evaluates predicates row by row. If we pass the fully matched groups info into the row filter builder, we can skip predicate evaluation entirely for guaranteed groups — saving CPU cycles on predicate evaluation.&lt;/p&gt;
+&lt;h2 id="summary"&gt;Summary&lt;a class="headerlink" href="#summary" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;DataFusion's pruning pipeline trims redundant I/O from the partition level all the way down to individual rows. Limit pruning adds a new step that creates an early exit when fully matched row groups already satisfy the &lt;code&gt;LIMIT&lt;/code&gt;. The result is fewer row groups scanned, less data decoded, and faster queries.&lt;/p&gt;
+&lt;p&gt;The key insights are:
+1. &lt;strong&gt;Predicate negation&lt;/strong&gt; can identify row groups where &lt;em&gt;all&lt;/em&gt; rows match — not just "some might match"
+2. &lt;strong&gt;Row count accumulation&lt;/strong&gt; across fully matched groups enables early termination&lt;/p&gt;
+&lt;h2 id="about-datafusion"&gt;About DataFusion&lt;a class="headerlink" href="#about-datafusion" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;&lt;a href="https://datafusion.apache.org/"&gt;Apache DataFusion&lt;/a&gt; is an extensible query engine, written in &lt;a href="https://www.rust-lang.org/"&gt;Rust&lt;/a&gt;, that uses &lt;a href="https://arrow.apache.org"&gt;Apache Arrow&lt;/a&gt; as its in-memory format. DataFusion is used by developers to create new, fast, data-centric systems such as databases, dataframe libraries, and machine learning and streaming applications.&lt;/p&gt;
+&lt;p&gt;DataFusion's core thesis is that, as a community, together we can build much more advanced technology than any of us as individuals or companies could build alone.&lt;/p&gt;
+&lt;h2 id="how-to-get-involved"&gt;How to Get Involved&lt;a class="headerlink" href="#how-to-get-involved" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;If you are interested in contributing, we would love to have you. You can try out DataFusion on some of your own data and projects and let us know how it goes, contribute suggestions, documentation, bug reports, or a PR with documentation, tests, or code. A list of open issues suitable for beginners is &lt;a href="https://github.com/apache/datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22"&gt;here&lt;/a&gt;, and you can find out how to reach us on the &lt;a href="https://datafusion.apache.org/contributor-guide/communication.html"&gt;communication doc&lt;/a&gt;.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>"Writing Custom Table Providers in Apache DataFusion"</title><link href="https://datafusion.apache.org/blog/2026/03/20/writing-table-providers" rel="alternate"></link><published>2026-03-20T00:00:00+00:00</published><updated>2026-03-20T00:00:00+00:00</updated><author><name>Tim Saucer</name></author><id>tag:datafusion.apache.org,2026-03-20:/blog/2026/03/20/writing-table-providers</id><summary type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+
+&lt;p&gt;One of DataFusion's greatest strengths is its extensibility. If your data lives
+in a custom format, behind an API, or in a system that DataFusion does not
+natively support, you can teach DataFusion to read it by implementing a
+&lt;strong&gt;custom table provider&lt;/strong&gt;. This post walks through the three layers you …&lt;/p&gt;</summary><content type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+
+&lt;p&gt;One of DataFusion's greatest strengths is its extensibility. If your data lives
+in a custom format, behind an API, or in a system that DataFusion does not
+natively support, you can teach DataFusion to read it by implementing a
+&lt;strong&gt;custom table provider&lt;/strong&gt;. This post walks through the three layers you need to
+understand and explains where your work should actually happen.&lt;/p&gt;
+&lt;h2 id="the-three-layers"&gt;The Three Layers&lt;a class="headerlink" href="#the-three-layers" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;hr/&gt;
+&lt;p&gt;When DataFusion executes a query against a table, three abstractions collaborate
+to produce results:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;[&lt;code&gt;TableProvider&lt;/code&gt;]&lt;/strong&gt; -- Describes the table (schema, capabilities) and
+   produces an execution plan when queried.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;[&lt;code&gt;ExecutionPlan&lt;/code&gt;]&lt;/strong&gt; -- Describes &lt;em&gt;how&lt;/em&gt; to compute the result: partitioning,
+   ordering, and child plan relationships.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;[&lt;code&gt;SendableRecordBatchStream&lt;/code&gt;]&lt;/strong&gt; -- The async stream that &lt;em&gt;actually does the
+   work&lt;/em&gt;, yielding &lt;code&gt;RecordBatch&lt;/code&gt;es one at a time.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Think of these as a funnel: &lt;code&gt;TableProvider::scan()&lt;/code&gt; is called once during
+planning to create an &lt;code&gt;ExecutionPlan&lt;/code&gt;, then &lt;code&gt;ExecutionPlan::execute()&lt;/code&gt; is called
+once per partition to create a stream, and those streams are where rows are
+actually produced during execution.&lt;/p&gt;
+&lt;h2 id="layer-1-tableprovider"&gt;Layer 1: TableProvider&lt;a class="headerlink" href="#layer-1-tableprovider" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;hr/&gt;
+&lt;p&gt;A [&lt;code&gt;TableProvider&lt;/code&gt;] represents a queryable data source. For a minimal read-only
+table, you need four methods:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;impl TableProvider for MyTable {
+    fn as_any(&amp;amp;self) -&amp;gt; &amp;amp;dyn Any { self }
+
+    fn schema(&amp;amp;self) -&amp;gt; SchemaRef {
+        Arc::clone(&amp;amp;self.schema)
+    }
+
+    fn table_type(&amp;amp;self) -&amp;gt; TableType {
+        TableType::Base
+    }
+
+    async fn scan(
+        &amp;amp;self,
+        state: &amp;amp;dyn Session,
+        projection: Option&amp;lt;&amp;amp;Vec&amp;lt;usize&amp;gt;&amp;gt;,
+        filters: &amp;amp;[Expr],
+        limit: Option&amp;lt;usize&amp;gt;,
+    ) -&amp;gt; Result&amp;lt;Arc&amp;lt;dyn ExecutionPlan&amp;gt;&amp;gt; {
+        // Build and return an ExecutionPlan -- keep this lightweight!
+        Ok(Arc::new(MyExecPlan::new(
+            Arc::clone(&amp;amp;self.schema),
+            projection,
+            limit,
+        )))
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;The &lt;code&gt;scan&lt;/code&gt; method is the heart of &lt;code&gt;TableProvider&lt;/code&gt;. It receives three pushdown
+hints from the optimizer, each reducing the amount of data your source needs
+to produce:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;&lt;code&gt;projection&lt;/code&gt;&lt;/strong&gt; -- Which columns are needed. This reduces the &lt;strong&gt;width&lt;/strong&gt; of
+  the output. If your source supports it, read only these columns rather than
+  the full schema.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;&lt;code&gt;filters&lt;/code&gt;&lt;/strong&gt; -- Predicates the engine would like you to apply during the
+  scan. This reduces the &lt;strong&gt;number of rows&lt;/strong&gt; by skipping data that does not
+  match. Implement &lt;code&gt;supports_filters_pushdown&lt;/code&gt; to advertise which filters you
+  can handle.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;&lt;code&gt;limit&lt;/code&gt;&lt;/strong&gt; -- A row count cap. This also reduces the &lt;strong&gt;number of rows&lt;/strong&gt; --
+  if you can stop reading early once you have produced enough rows, this avoids
+  unnecessary work.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id="keep-scan-lightweight"&gt;Keep &lt;code&gt;scan()&lt;/code&gt; Lightweight&lt;a class="headerlink" href="#keep-scan-lightweight" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;This is a critical point: &lt;strong&gt;&lt;code&gt;scan()&lt;/code&gt; runs during planning, not execution.&lt;/strong&gt; It
+should return quickly. Best practices are to avoid performing I/O, network
+calls, or heavy computation here. The &lt;code&gt;scan&lt;/code&gt; method's job is to &lt;em&gt;describe&lt;/em&gt; how
+the data will be produced, not to produce it. All the real work belongs in the
+stream (Layer 3).&lt;/p&gt;
+&lt;p&gt;A common pitfall is to fetch data or open connections in &lt;code&gt;scan()&lt;/code&gt;. This blocks
+the planning thread and can cause timeouts or deadlocks, especially if the query
+involves multiple tables or subqueries that all need to be planned before
+execution begins.&lt;/p&gt;
+&lt;h3 id="existing-implementations-to-learn-from"&gt;Existing Implementations to Learn From&lt;a class="headerlink" href="#existing-implementations-to-learn-from" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;DataFusion ships several &lt;code&gt;TableProvider&lt;/code&gt; implementations that are excellent
+references:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;[&lt;code&gt;MemTable&lt;/code&gt;]&lt;/strong&gt; -- Holds data in memory as &lt;code&gt;Vec&amp;lt;RecordBatch&amp;gt;&lt;/code&gt;. The simplest
+  possible provider; great for tests and small datasets.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;[&lt;code&gt;StreamTable&lt;/code&gt;]&lt;/strong&gt; -- Wraps a user-provided stream factory. Useful when your
+  data arrives as a continuous stream (e.g., from Kafka or a socket).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;[&lt;code&gt;SortedTableProvider&lt;/code&gt;]&lt;/strong&gt; -- Wraps another &lt;code&gt;TableProvider&lt;/code&gt; and advertises a
+  known sort order, enabling the optimizer to skip redundant sorts.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id="layer-2-executionplan"&gt;Layer 2: ExecutionPlan&lt;a class="headerlink" href="#layer-2-executionplan" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;hr/&gt;
+&lt;p&gt;An [&lt;code&gt;ExecutionPlan&lt;/code&gt;] is a node in the physical query plan tree. Your table
+provider's &lt;code&gt;scan()&lt;/code&gt; method returns one. The required methods are:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;impl ExecutionPlan for MyExecPlan {
+    fn name(&amp;amp;self) -&amp;gt; &amp;amp;str { "MyExecPlan" }
+
+    fn as_any(&amp;amp;self) -&amp;gt; &amp;amp;dyn Any { self }
+
+    fn properties(&amp;amp;self) -&amp;gt; &amp;amp;PlanProperties {
+        &amp;amp;self.properties
+    }
+
+    fn children(&amp;amp;self) -&amp;gt; Vec&amp;lt;&amp;amp;Arc&amp;lt;dyn ExecutionPlan&amp;gt;&amp;gt; {
+        vec![]  // Leaf node -- no children
+    }
+
+    fn with_new_children(
+        self: Arc&amp;lt;Self&amp;gt;,
+        children: Vec&amp;lt;Arc&amp;lt;dyn ExecutionPlan&amp;gt;&amp;gt;,
+    ) -&amp;gt; Result&amp;lt;Arc&amp;lt;dyn ExecutionPlan&amp;gt;&amp;gt; {
+        assert!(children.is_empty());
+        Ok(self)
+    }
+
+    fn execute(
+        &amp;amp;self,
+        partition: usize,
+        context: Arc&amp;lt;TaskContext&amp;gt;,
+    ) -&amp;gt; Result&amp;lt;SendableRecordBatchStream&amp;gt; {
+        // This is where you build and return your stream
+        // ...
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;The key properties to set correctly in [&lt;code&gt;PlanProperties&lt;/code&gt;] are &lt;strong&gt;output
+partitioning&lt;/strong&gt; and &lt;strong&gt;output ordering&lt;/strong&gt;.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Output partitioning&lt;/strong&gt; tells the engine how many partitions your data has,
+which determines parallelism. If your source naturally partitions data (e.g.,
+by file or by shard), expose that here.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Output ordering&lt;/strong&gt; declares whether your data is naturally sorted. This
+enables the optimizer to avoid inserting a &lt;code&gt;SortExec&lt;/code&gt; when a query requires
+ordered data. Getting this right can be a significant performance win.&lt;/p&gt;
+&lt;h3 id="partitioning-strategies"&gt;Partitioning Strategies&lt;a class="headerlink" href="#partitioning-strategies" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Since &lt;code&gt;execute()&lt;/code&gt; is called once per partition, partitioning directly controls
+the parallelism of your table scan. Each partition runs on its own task, so
+more partitions means more concurrent work -- up to the number of available
+cores.&lt;/p&gt;
+&lt;p&gt;Consider how your data source naturally divides its data:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;By file or object:&lt;/strong&gt; If you are reading from S3, each file can be a
+  partition. DataFusion will read them in parallel.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;By shard or region:&lt;/strong&gt; If your source is a sharded database, each shard
+  maps naturally to a partition.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;By key range:&lt;/strong&gt; If your data is keyed (e.g., by timestamp or customer ID),
+  you can split it into ranges.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Getting partitioning right matters because it affects everything downstream in
+the plan. When DataFusion needs to perform an aggregation or join, it
+repartitions data by hashing the relevant columns. If your source already
+produces data partitioned by the join or group-by key, DataFusion can skip the
+repartition step entirely -- avoiding a potentially expensive shuffle.&lt;/p&gt;
+&lt;p&gt;For example, if you are building a table provider for a system that stores
+data partitioned by &lt;code&gt;customer_id&lt;/code&gt;, and a common query groups by &lt;code&gt;customer_id&lt;/code&gt;:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT customer_id, SUM(amount)
+FROM my_table
+GROUP BY customer_id;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;If you declare your output partitioning as &lt;code&gt;Hash([customer_id], N)&lt;/code&gt;, the
+optimizer recognizes that the data is already distributed correctly for the
+aggregation and eliminates the &lt;code&gt;RepartitionExec&lt;/code&gt; that would otherwise appear
+in the plan. You can verify this with &lt;code&gt;EXPLAIN&lt;/code&gt; (more on this below).&lt;/p&gt;
+&lt;p&gt;Conversely, if you report &lt;code&gt;UnknownPartitioning&lt;/code&gt;, DataFusion must assume the
+worst case and will always insert repartitioning operators as needed.&lt;/p&gt;
+&lt;h3 id="keep-execute-lightweight-too"&gt;Keep &lt;code&gt;execute()&lt;/code&gt; Lightweight Too&lt;a class="headerlink" href="#keep-execute-lightweight-too" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Like &lt;code&gt;scan()&lt;/code&gt;, the &lt;code&gt;execute()&lt;/code&gt; method should construct and return a stream
+without doing heavy work. The actual data production happens when the stream
+is polled. Do not block on async operations here -- build the stream and let
+the runtime drive it.&lt;/p&gt;
+&lt;h3 id="existing-implementations-to-learn-from_1"&gt;Existing Implementations to Learn From&lt;a class="headerlink" href="#existing-implementations-to-learn-from_1" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;[&lt;code&gt;StreamingTableExec&lt;/code&gt;]&lt;/strong&gt; -- Executes a streaming table scan. It takes a
+  stream factory (a closure that produces streams) and handles partitioning.
+  Good reference for wrapping external streams.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;[&lt;code&gt;DataSourceExec&lt;/code&gt;]&lt;/strong&gt; -- The execution plan behind DataFusion's built-in file
+  scanning (Parquet, CSV, JSON). It demonstrates sophisticated partitioning,
+  filter pushdown, and projection pushdown.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id="layer-3-sendablerecordbatchstream"&gt;Layer 3: SendableRecordBatchStream&lt;a class="headerlink" href="#layer-3-sendablerecordbatchstream" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;hr/&gt;
+&lt;p&gt;[&lt;code&gt;SendableRecordBatchStream&lt;/code&gt;] is where the real work happens. It is defined as:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;type SendableRecordBatchStream =
+    Pin&amp;lt;Box&amp;lt;dyn RecordBatchStream&amp;lt;Item = Result&amp;lt;RecordBatch&amp;gt;&amp;gt; + Send&amp;gt;&amp;gt;;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;This is an async stream of &lt;code&gt;RecordBatch&lt;/code&gt;es that can be sent across threads. When
+the DataFusion runtime polls this stream, your code runs: reading files, calling
+APIs, transforming data, etc.&lt;/p&gt;
+&lt;h3 id="using-recordbatchstreamadapter"&gt;Using RecordBatchStreamAdapter&lt;a class="headerlink" href="#using-recordbatchstreamadapter" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;The easiest way to create a &lt;code&gt;SendableRecordBatchStream&lt;/code&gt; is with
+[&lt;code&gt;RecordBatchStreamAdapter&lt;/code&gt;]. It bridges any &lt;code&gt;futures::Stream&amp;lt;Item =
+Result&amp;lt;RecordBatch&amp;gt;&amp;gt;&lt;/code&gt; into the &lt;code&gt;SendableRecordBatchStream&lt;/code&gt; type:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;use datafusion::physical_plan::stream::RecordBatchStreamAdapter;
+
+fn execute(
+    &amp;amp;self,
+    partition: usize,
+    context: Arc&amp;lt;TaskContext&amp;gt;,
+) -&amp;gt; Result&amp;lt;SendableRecordBatchStream&amp;gt; {
+    let schema = self.schema();
+    let config = self.config.clone();
+
+    let stream = futures::stream::once(async move {
+        // ALL the heavy work happens here, inside the stream:
+        // - Open connections
+        // - Read data from external sources
+        // - Transform and batch the results
+        let batches = fetch_data_from_source(&amp;amp;config).await?;
+        Ok(batches)
+    })
+    .flat_map(|result| match result {
+        Ok(batch) =&amp;gt; futures::stream::iter(vec![Ok(batch)]),
+        Err(e) =&amp;gt; futures::stream::iter(vec![Err(e)]),
+    });
+
+    Ok(Box::pin(RecordBatchStreamAdapter::new(schema, stream)))
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id="cpu-intensive-work-use-a-separate-thread-pool"&gt;CPU-Intensive Work: Use a Separate Thread Pool&lt;a class="headerlink" href="#cpu-intensive-work-use-a-separate-thread-pool" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;If your stream performs CPU-intensive work (parsing, decompression, complex
+transformations), avoid blocking the tokio runtime. Instead, offload to a
+dedicated thread pool and send results back through a channel:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;fn execute(
+    &amp;amp;self,
+    partition: usize,
+    context: Arc&amp;lt;TaskContext&amp;gt;,
+) -&amp;gt; Result&amp;lt;SendableRecordBatchStream&amp;gt; {
+    let schema = self.schema();
+    let config = self.config.clone();
+
+    let (tx, rx) = tokio::sync::mpsc::channel(2);
+
+    // Spawn CPU-heavy work on a blocking thread pool
+    tokio::task::spawn_blocking(move || {
+        let batches = generate_data(&amp;amp;config);
+        for batch in batches {
+            if tx.blocking_send(Ok(batch)).is_err() {
+                break; // Receiver dropped, query was cancelled
+            }
+        }
+    });
+
+    let stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+    Ok(Box::pin(RecordBatchStreamAdapter::new(schema, stream)))
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;This pattern keeps the async runtime responsive while your data generation
+runs on its own threads.&lt;/p&gt;
+&lt;h2 id="where-should-the-work-happen"&gt;Where Should the Work Happen?&lt;a class="headerlink" href="#where-should-the-work-happen" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;hr/&gt;
+&lt;p&gt;This table summarizes what belongs at each layer:&lt;/p&gt;
+&lt;table class="table"&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Layer&lt;/th&gt;
+&lt;th&gt;Runs During&lt;/th&gt;
+&lt;th&gt;Should Do&lt;/th&gt;
+&lt;th&gt;Should NOT Do&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;code&gt;TableProvider::scan()&lt;/code&gt;&lt;/td&gt;
+&lt;td&gt;Planning&lt;/td&gt;
+&lt;td&gt;Build an &lt;code&gt;ExecutionPlan&lt;/code&gt; with metadata&lt;/td&gt;
+&lt;td&gt;I/O, network calls, heavy computation&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;code&gt;ExecutionPlan::execute()&lt;/code&gt;&lt;/td&gt;
+&lt;td&gt;Execution (once per partition)&lt;/td&gt;
+&lt;td&gt;Construct a stream, set up channels&lt;/td&gt;
+&lt;td&gt;Block on async work, read data&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;code&gt;RecordBatchStream&lt;/code&gt; (polling)&lt;/td&gt;
+&lt;td&gt;Execution&lt;/td&gt;
+&lt;td&gt;All I/O, computation, data production&lt;/td&gt;
+&lt;td&gt;--&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;The guiding principle: &lt;strong&gt;push work as late as possible.&lt;/strong&gt; Planning should be
+fast so the optimizer can do its job. Execution setup should be fast so all
+partitions can start promptly. The stream is where you spend time producing
+data.&lt;/p&gt;
+&lt;h3 id="why-this-matters"&gt;Why This Matters&lt;a class="headerlink" href="#why-this-matters" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;When &lt;code&gt;scan()&lt;/code&gt; does heavy work, several problems arise:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Planning becomes slow.&lt;/strong&gt; If a query touches 10 tables and each &lt;code&gt;scan()&lt;/code&gt;
+   takes 500ms, planning alone takes 5 seconds before any data flows.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;The optimizer cannot help.&lt;/strong&gt; The optimizer runs between planning and
+   execution. If you have already fetched data during planning, optimizations
+   like predicate pushdown or partition pruning cannot reduce the work.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Resource management breaks down.&lt;/strong&gt; DataFusion manages concurrency and
+   memory during execution. Work done during planning bypasses these controls.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id="filter-pushdown-doing-less-work"&gt;Filter Pushdown: Doing Less Work&lt;a class="headerlink" href="#filter-pushdown-doing-less-work" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;hr/&gt;
+&lt;p&gt;One of the most impactful optimizations you can add to a custom table provider
+is &lt;strong&gt;filter pushdown&lt;/strong&gt; -- letting the source skip data that the query does not
+need, rather than reading everything and filtering it afterward.&lt;/p&gt;
+&lt;h3 id="how-filter-pushdown-works"&gt;How Filter Pushdown Works&lt;a class="headerlink" href="#how-filter-pushdown-works" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;When DataFusion plans a query with a &lt;code&gt;WHERE&lt;/code&gt; clause, it passes the filter
+predicates to your &lt;code&gt;scan()&lt;/code&gt; method as the &lt;code&gt;filters&lt;/code&gt; parameter. By default,
+DataFusion assumes your provider cannot handle any filters and inserts a
+&lt;code&gt;FilterExec&lt;/code&gt; node above your scan to apply them. But if your source &lt;em&gt;can&lt;/em&gt;
+evaluate some predicates during scanning -- for example, by skipping files,
+partitions, or row groups that cannot match -- you can eliminate a huge amount
+of unnecessary I/O.&lt;/p&gt;
+&lt;p&gt;To opt in, implement &lt;code&gt;supports_filters_pushdown&lt;/code&gt;:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;fn supports_filters_pushdown(
+    &amp;amp;self,
+    filters: &amp;amp;[&amp;amp;Expr],
+) -&amp;gt; Result&amp;lt;Vec&amp;lt;TableProviderFilterPushDown&amp;gt;&amp;gt; {
+    Ok(filters.iter().map(|f| {
+        match f {
+            // We can fully evaluate equality filters on
+            // the partition column at the source
+            Expr::BinaryExpr(BinaryExpr {
+                left, op: Operator::Eq, right
+            }) if is_partition_column(left) || is_partition_column(right) =&amp;gt; {
+                TableProviderFilterPushDown::Exact
+            }
+            // All other filters: let DataFusion handle them
+            _ =&amp;gt; TableProviderFilterPushDown::Unsupported,
+        }
+    }).collect())
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;The three possible responses for each filter are:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;&lt;code&gt;Exact&lt;/code&gt;&lt;/strong&gt; -- Your source guarantees that no output rows will have a false
+  value for this predicate. Because the filter is fully evaluated at the source,
+  DataFusion will &lt;strong&gt;not&lt;/strong&gt; add a &lt;code&gt;FilterExec&lt;/code&gt; for it.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;&lt;code&gt;Inexact&lt;/code&gt;&lt;/strong&gt; -- Your source has the ability to reduce the data produced, but
+  the output may still include rows that do not satisfy the predicate. For
+  example, you might skip entire files based on metadata statistics but not
+  filter individual rows within a file. DataFusion will still add a &lt;code&gt;FilterExec&lt;/code&gt;
+  above your scan to remove any remaining rows that slipped through.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;&lt;code&gt;Unsupported&lt;/code&gt;&lt;/strong&gt; -- Your source ignores this filter entirely. DataFusion
+  handles it.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id="why-filter-pushdown-matters"&gt;Why Filter Pushdown Matters&lt;a class="headerlink" href="#why-filter-pushdown-matters" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Consider a table with 1 billion rows partitioned by &lt;code&gt;region&lt;/code&gt;, and a query:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT * FROM events WHERE region = 'us-east-1' AND event_type = 'click';
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;strong&gt;Without filter pushdown:&lt;/strong&gt; Your table provider reads all 1 billion rows
+across all regions. DataFusion then applies both filters, discarding the vast
+majority of the data.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;With filter pushdown on &lt;code&gt;region&lt;/code&gt;:&lt;/strong&gt; Your &lt;code&gt;scan()&lt;/code&gt; method sees the
+&lt;code&gt;region = 'us-east-1'&lt;/code&gt; filter and constructs an execution plan that only reads
+the &lt;code&gt;us-east-1&lt;/code&gt; partition. If that partition holds 100 million rows, you have
+just eliminated 90% of the I/O. DataFusion still applies the &lt;code&gt;event_type&lt;/code&gt;
+filter via &lt;code&gt;FilterExec&lt;/code&gt; if you reported it as &lt;code&gt;Unsupported&lt;/code&gt;.&lt;/p&gt;
+&lt;h3 id="using-explain-to-debug-your-table-provider"&gt;Using EXPLAIN to Debug Your Table Provider&lt;a class="headerlink" href="#using-explain-to-debug-your-table-provider" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;The &lt;code&gt;EXPLAIN&lt;/code&gt; statement is your best tool for understanding what DataFusion is
+actually doing with your table provider. It shows the physical plan that
+DataFusion will execute, including any operators it inserted:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;EXPLAIN SELECT * FROM events WHERE region = 'us-east-1' AND event_type = 'click';
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;If you are using DataFrames, call &lt;code&gt;.explain(false, false)&lt;/code&gt; for the logical plan
+or &lt;code&gt;.explain(false, true)&lt;/code&gt; for the physical plan. You can also print the plans
+in verbose mode with &lt;code&gt;.explain(true, true)&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Before filter pushdown&lt;/strong&gt;, the plan might look like:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-text"&gt;FilterExec: region@0 = us-east-1 AND event_type@1 = click
+  MyExecPlan: partitions=50
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Here DataFusion is reading all 50 partitions and filtering everything
+afterward. The &lt;code&gt;FilterExec&lt;/code&gt; above your scan is doing all the predicate work.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;After implementing pushdown for &lt;code&gt;region&lt;/code&gt;&lt;/strong&gt; (reported as &lt;code&gt;Exact&lt;/code&gt;):&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-text"&gt;FilterExec: event_type@1 = click
+  MyExecPlan: partitions=5, filter=[region = us-east-1]
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Now your exec reads only the 5 partitions for &lt;code&gt;us-east-1&lt;/code&gt;, and the remaining
+&lt;code&gt;FilterExec&lt;/code&gt; only handles the &lt;code&gt;event_type&lt;/code&gt; predicate. The &lt;code&gt;region&lt;/code&gt; filter has
+been fully absorbed by your scan.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;After implementing pushdown for both filters&lt;/strong&gt; (both &lt;code&gt;Exact&lt;/code&gt;):&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-text"&gt;MyExecPlan: partitions=5, filter=[region = us-east-1 AND event_type = click]
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;No &lt;code&gt;FilterExec&lt;/code&gt; at all -- your source handles everything.&lt;/p&gt;
+&lt;p&gt;Similarly, &lt;code&gt;EXPLAIN&lt;/code&gt; will reveal whether DataFusion is inserting unnecessary
+&lt;code&gt;SortExec&lt;/code&gt; or &lt;code&gt;RepartitionExec&lt;/code&gt; nodes that you could eliminate by declaring
+better output properties. Whenever your queries seem slower than expected,
+&lt;code&gt;EXPLAIN&lt;/code&gt; is the first place to look.&lt;/p&gt;
+&lt;h2 id="putting-it-all-together"&gt;Putting It All Together&lt;a class="headerlink" href="#putting-it-all-together" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;hr/&gt;
+&lt;p&gt;Here is a minimal but complete example of a custom table provider that generates
+data lazily during streaming:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;use std::any::Any;
+use std::sync::Arc;
+
+use arrow::array::{Int64Array, StringArray};
+use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
+use arrow::record_batch::RecordBatch;
+use datafusion::catalog::TableProvider;
+use datafusion::common::Result;
+use datafusion::datasource::TableType;
+use datafusion::execution::context::SessionState;
+use datafusion::execution::SendableRecordBatchStream;
+use datafusion::logical_expr::Expr;
+use datafusion::physical_expr::EquivalenceProperties;
+use datafusion::physical_plan::execution_plan::{Boundedness, EmissionType};
+use datafusion::physical_plan::stream::RecordBatchStreamAdapter;
+use datafusion::physical_plan::{
+    ExecutionPlan, Partitioning, PlanProperties,
+};
+use futures::stream;
+
+/// A table provider that generates sequential numbers on demand.
+struct CountingTable {
+    schema: SchemaRef,
+    num_partitions: usize,
+    rows_per_partition: usize,
+}
+
+impl CountingTable {
+    fn new(num_partitions: usize, rows_per_partition: usize) -&amp;gt; Self {
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("partition", DataType::Int64, false),
+            Field::new("value", DataType::Int64, false),
+        ]));
+        Self { schema, num_partitions, rows_per_partition }
+    }
+}
+
+#[async_trait::async_trait]
+impl TableProvider for CountingTable {
+    fn as_any(&amp;amp;self) -&amp;gt; &amp;amp;dyn Any { self }
+    fn schema(&amp;amp;self) -&amp;gt; SchemaRef { Arc::clone(&amp;amp;self.schema) }
+    fn table_type(&amp;amp;self) -&amp;gt; TableType { TableType::Base }
+
+    async fn scan(
+        &amp;amp;self,
+        _state: &amp;amp;dyn Session,
+        projection: Option&amp;lt;&amp;amp;Vec&amp;lt;usize&amp;gt;&amp;gt;,
+        _filters: &amp;amp;[Expr],
+        limit: Option&amp;lt;usize&amp;gt;,
+    ) -&amp;gt; Result&amp;lt;Arc&amp;lt;dyn ExecutionPlan&amp;gt;&amp;gt; {
+        // Light work only: build the plan with metadata
+        Ok(Arc::new(CountingExec {
+            schema: Arc::clone(&amp;amp;self.schema),
+            num_partitions: self.num_partitions,
+            rows_per_partition: limit
+                .unwrap_or(self.rows_per_partition)
+                .min(self.rows_per_partition),
+            properties: PlanProperties::new(
+                EquivalenceProperties::new(Arc::clone(&amp;amp;self.schema)),
+                Partitioning::UnknownPartitioning(self.num_partitions),
+                EmissionType::Incremental,
+                Boundedness::Bounded,
+            ),
+        }))
+    }
+}
+
+struct CountingExec {
+    schema: SchemaRef,
+    num_partitions: usize,
+    rows_per_partition: usize,
+    properties: PlanProperties,
+}
+
+impl ExecutionPlan for CountingExec {
+    fn name(&amp;amp;self) -&amp;gt; &amp;amp;str { "CountingExec" }
+    fn as_any(&amp;amp;self) -&amp;gt; &amp;amp;dyn Any { self }
+    fn properties(&amp;amp;self) -&amp;gt; &amp;amp;PlanProperties { &amp;amp;self.properties }
+    fn children(&amp;amp;self) -&amp;gt; Vec&amp;lt;&amp;amp;Arc&amp;lt;dyn ExecutionPlan&amp;gt;&amp;gt; { vec![] }
+
+    fn with_new_children(
+        self: Arc&amp;lt;Self&amp;gt;,
+        _children: Vec&amp;lt;Arc&amp;lt;dyn ExecutionPlan&amp;gt;&amp;gt;,
+    ) -&amp;gt; Result&amp;lt;Arc&amp;lt;dyn ExecutionPlan&amp;gt;&amp;gt; {
+        Ok(self)
+    }
+
+    fn execute(
+        &amp;amp;self,
+        partition: usize,
+        _context: Arc&amp;lt;TaskContext&amp;gt;,
+    ) -&amp;gt; Result&amp;lt;SendableRecordBatchStream&amp;gt; {
+        let schema = Arc::clone(&amp;amp;self.schema);
+        let rows = self.rows_per_partition;
+
+        // The heavy work (data generation) happens inside the stream,
+        // not here in execute().
+        let batch_stream = stream::once(async move {
+            let partitions = Int64Array::from(
+                vec![partition as i64; rows],
+            );
+            let values = Int64Array::from(
+                (0..rows as i64).collect::&amp;lt;Vec&amp;lt;_&amp;gt;&amp;gt;(),
+            );
+            let batch = RecordBatch::try_new(
+                Arc::clone(&amp;amp;schema),
+                vec![Arc::new(partitions), Arc::new(values)],
+            )?;
+            Ok(batch)
+        });
+
+        Ok(Box::pin(RecordBatchStreamAdapter::new(
+            Arc::clone(&amp;amp;self.schema),
+            batch_stream,
+        )))
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id="choosing-the-right-starting-point"&gt;Choosing the Right Starting Point&lt;a class="headerlink" href="#choosing-the-right-starting-point" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;hr/&gt;
+&lt;p&gt;Not every custom data source requires implementing all three layers from
+scratch. DataFusion provides building blocks that let you plug in at whatever
+level makes sense:&lt;/p&gt;
+&lt;table class="table"&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;If your data is...&lt;/th&gt;
+&lt;th&gt;Start with&lt;/th&gt;
+&lt;th&gt;You implement&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;Already in &lt;code&gt;RecordBatch&lt;/code&gt;es in memory&lt;/td&gt;
+&lt;td&gt;[&lt;code&gt;MemTable&lt;/code&gt;]&lt;/td&gt;
+&lt;td&gt;Nothing -- just construct it&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;An async stream of batches&lt;/td&gt;
+&lt;td&gt;[&lt;code&gt;StreamTable&lt;/code&gt;]&lt;/td&gt;
+&lt;td&gt;A stream factory&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;A table with known sort order&lt;/td&gt;
+&lt;td&gt;[&lt;code&gt;SortedTableProvider&lt;/code&gt;] wrapping another provider&lt;/td&gt;
+&lt;td&gt;The inner provider&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;A custom source needing full control&lt;/td&gt;
+&lt;td&gt;&lt;code&gt;TableProvider&lt;/code&gt; + &lt;code&gt;ExecutionPlan&lt;/code&gt; + stream&lt;/td&gt;
+&lt;td&gt;All three layers&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;For most integrations, [&lt;code&gt;StreamTable&lt;/code&gt;] combined with
+[&lt;code&gt;RecordBatchStreamAdapter&lt;/code&gt;] provides a good balance of simplicity and
+flexibility. You provide a closure that returns a stream, and DataFusion handles
+the rest.&lt;/p&gt;
+&lt;h2 id="further-reading"&gt;Further Reading&lt;a class="headerlink" href="#further-reading" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;hr/&gt;
+&lt;ul&gt;
+&lt;li&gt;[TableProvider API docs][&lt;code&gt;TableProvider&lt;/code&gt;]&lt;/li&gt;
+&lt;li&gt;[ExecutionPlan API docs][&lt;code&gt;ExecutionPlan&lt;/code&gt;]&lt;/li&gt;
+&lt;li&gt;[SendableRecordBatchStream API docs][&lt;code&gt;SendableRecordBatchStream&lt;/code&gt;]&lt;/li&gt;
+&lt;li&gt;&lt;a href="https://github.com/apache/datafusion/issues/16821"&gt;GitHub issue discussing table provider examples&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href="https://github.com/apache/datafusion/tree/main/datafusion-examples/examples"&gt;DataFusion examples directory&lt;/a&gt; --
+  contains working examples including custom table providers&lt;/li&gt;
+&lt;/ul&gt;
+&lt;hr/&gt;
+&lt;p&gt;&lt;em&gt;Note: Portions of this blog post were written with the assistance of an AI agent.&lt;/em&gt;&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Optimizing SQL CASE Expression Evaluation</title><link href="https://datafusion.apache.org/blog/2026/02/02/datafusion_case" rel="alternate"></link><published>2026-02-02T00:00:00+00:00</published><updated>2026-02-02T00:00:00+00:00</updated><author><name>Pepijn Van Eeckhoudt</name></author><id>tag:datafusion.apache.org,2026-02-02:/blog/2026/02/02/datafusion_case</id><summary type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+
+&lt;style&gt;
+figure {
+  margin: 20px 0;
+}
+
+figure img {
+  display: block;
+  max-width: 80%;
+  margin: auto;
+}
+
+figcaption {
+  font-style: italic;
+  color: #555;
+  font-size: 0.9em;
+  max-width: 80%;
+  margin: auto;
+  text-align: center;
+}
+&lt;/style&gt;
+&lt;p&gt;SQL's &lt;code&gt;CASE&lt;/code&gt; expression is one of the few explicit conditional evaluation constructs the language provides.
+It allows you to control which expression from a …&lt;/p&gt;</summary><content type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+
+&lt;style&gt;
+figure {
+  margin: 20px 0;
+}
+
+figure img {
+  display: block;
+  max-width: 80%;
+  margin: auto;
+}
+
+figcaption {
+  font-style: italic;
+  color: #555;
+  font-size: 0.9em;
+  max-width: 80%;
+  margin: auto;
+  text-align: center;
+}
+&lt;/style&gt;
+&lt;p&gt;SQL's &lt;code&gt;CASE&lt;/code&gt; expression is one of the few explicit conditional evaluation constructs the language provides.
+It allows you to control which expression from a set of expressions is evaluated for each row based on arbitrary boolean expressions.
+Its deceptively simple syntax hides significant implementation complexity.
+Over the past few &lt;a href="https://datafusion.apache.org/"&gt;Apache DataFusion&lt;/a&gt; releases, a series of improvements to &lt;code&gt;CASE&lt;/code&gt; expression evaluator have been merged that reduce both CPU time and memory allocations.
+This post provides an overview of the original implementation, its performance bottlenecks, and the steps taken to address them.&lt;/p&gt;
+&lt;h2 id="background-case-expression-evaluation"&gt;Background: CASE Expression Evaluation&lt;a class="headerlink" href="#background-case-expression-evaluation" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;SQL supports two forms of CASE expressions:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Simple&lt;/strong&gt;: &lt;code&gt;CASE expr WHEN value1 THEN result1 WHEN value2 THEN result2 ... END&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Searched&lt;/strong&gt;: &lt;code&gt;CASE WHEN condition1 THEN result1 WHEN condition2 THEN result2 ... END&lt;/code&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;The simple form evaluates an expression once for each input row and then tests that value against the expressions (typically constants) in each &lt;code&gt;WHEN&lt;/code&gt; clause using equality comparisons.&lt;/p&gt;
+&lt;p&gt;Here's an example of the simple form:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;CASE status
+    WHEN 'pending' THEN 1
+    WHEN 'active' THEN 2
+    WHEN 'complete' THEN 3
+    ELSE 0
+END
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;In this &lt;code&gt;CASE&lt;/code&gt; expression, &lt;code&gt;status&lt;/code&gt; is evaluated once per row, and then its value is tested for equality with the values &lt;code&gt;'pending'&lt;/code&gt;, &lt;code&gt;'active'&lt;/code&gt;, and &lt;code&gt;'complete'&lt;/code&gt; in that order.
+The &lt;code&gt;CASE&lt;/code&gt; expression evaluates to the value of the &lt;code&gt;THEN&lt;/code&gt; expression corresponding to the first matching &lt;code&gt;WHEN&lt;/code&gt; expression.&lt;/p&gt;
+&lt;p&gt;The searched &lt;code&gt;CASE&lt;/code&gt; form is a more flexible variant.
+It evaluates completely independent boolean expressions for each branch.
+This allows you to test different columns with different operators per branch as shown in the following example:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;CASE
+    WHEN age &amp;gt; 65 THEN 'senior'
+    WHEN childCount != 0 THEN 'parent'
+    WHEN age &amp;lt; 21 THEN 'minor'
+    ELSE 'adult'
+END
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;In both forms, branches are evaluated sequentially with short-circuit semantics: for each row, once a &lt;code&gt;WHEN&lt;/code&gt; condition matches, the corresponding &lt;code&gt;THEN&lt;/code&gt; expression is evaluated.
+Any further branches are not evaluated for that row.
+This lazy evaluation model is critical for correctness.
+It lets you safely write &lt;code&gt;CASE&lt;/code&gt; expressions like &lt;code&gt;CASE WHEN d != 0 THEN n / d ELSE NULL END&lt;/code&gt; that are guaranteed to not trigger divide-by-zero errors.&lt;/p&gt;
+&lt;p&gt;Besides &lt;code&gt;CASE&lt;/code&gt;, there are a few &lt;a href="https://datafusion.apache.org/user-guide/sql/scalar_functions.html#conditional-functions"&gt;conditional scalar functions&lt;/a&gt; that provide similar, more restricted capabilities.
+These include &lt;code&gt;COALESCE&lt;/code&gt;, &lt;code&gt;IFNULL&lt;/code&gt;, and &lt;code&gt;NVL2&lt;/code&gt;.
+You can consider each of these functions as the equivalent of a macro for &lt;code&gt;CASE&lt;/code&gt;.
+For example, &lt;code&gt;COALESCE(expr1, expr2, expr3)&lt;/code&gt; expands to:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;CASE
+  WHEN expr1 IS NOT NULL THEN expr1
+  WHEN expr2 IS NOT NULL THEN expr2
+  ELSE expr3
+END
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Since &lt;a href="https://datafusion.apache.org/"&gt;Apache DataFusion&lt;/a&gt; rewrites these conditional functions to their equivalent &lt;code&gt;CASE&lt;/code&gt; expression, any optimizations related to &lt;code&gt;CASE&lt;/code&gt; described in this post also apply to conditional function evaluation.&lt;/p&gt;
+&lt;h2 id="case-evaluation-in-datafusion-5000"&gt;&lt;code&gt;CASE&lt;/code&gt; Evaluation in DataFusion 50.0.0&lt;a class="headerlink" href="#case-evaluation-in-datafusion-5000" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;For the remainder of this post, we'll be looking at 'searched CASE' evaluation.
+'Simple CASE' uses a distinct, but very similar implementation.
+The same set of improvements has been applied to both.&lt;/p&gt;
+&lt;p&gt;The baseline implementation in DataFusion 50.0.0 evaluated &lt;code&gt;CASE&lt;/code&gt; using a common, straightforward approach:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Start with an output array &lt;code&gt;out&lt;/code&gt; with the same length as the input batch, filled with nulls. Additionally, create a bit vector &lt;code&gt;remainder&lt;/code&gt; with the same length and each value set to &lt;code&gt;true&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;For each &lt;code&gt;WHEN&lt;/code&gt;/&lt;code&gt;THEN&lt;/code&gt; branch:&lt;ul&gt;
+&lt;li&gt;Evaluate the &lt;code&gt;WHEN&lt;/code&gt; condition for the remaining unmatched rows using &lt;a href="https://docs.rs/datafusion/latest/datafusion/physical_expr/trait.PhysicalExpr.html#method.evaluate_selection"&gt;&lt;code&gt;PhysicalExpr::evaluate_selection&lt;/code&gt;&lt;/a&gt;, passing in the input batch and the &lt;code&gt;remainder&lt;/code&gt; mask.&lt;/li&gt;
+&lt;li&gt;If any rows matched, evaluate the &lt;code&gt;THEN&lt;/code&gt; expression for those rows using &lt;code&gt;PhysicalExpr::evaluate_selection&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Merge the results into the &lt;code&gt;out&lt;/code&gt; array using the &lt;a href="https://docs.rs/arrow/latest/arrow/compute/kernels/zip/fn.zip.html"&gt;&lt;code&gt;zip&lt;/code&gt;&lt;/a&gt; kernel.&lt;/li&gt;
+&lt;li&gt;Update the &lt;code&gt;remainder&lt;/code&gt; mask to exclude the matched rows.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;If there's an &lt;code&gt;ELSE&lt;/code&gt; clause, evaluate it for any remaining unmatched rows and merge using &lt;a href="https://docs.rs/arrow/latest/arrow/compute/kernels/zip/fn.zip.html"&gt;&lt;code&gt;zip&lt;/code&gt;&lt;/a&gt;.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Here's a simplified version of the Rust code for the original loop:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;let mut out = new_null_array(&amp;amp;return_type, batch.num_rows());
+let mut remainder = BooleanArray::from(vec![true; batch.num_rows()]);
+
+for (when_expr, then_expr) in &amp;amp;self.when_then_expr {
+    // Determine for which remaining rows the WHEN condition matches
+    let when = when_expr.evaluate_selection(batch, &amp;amp;remainder)?
+        .into_array(batch.num_rows())?;
+    // Ensure any `NULL` values are treated as false
+    let when_and_rem = and(&amp;amp;when, &amp;amp;remainder)?;
+
+    if when_and_rem.true_count() == 0 {
+        continue;
+    }
+
+    // Evaluate the THEN expression for matching rows
+    let then = then_expr.evaluate_selection(batch, &amp;amp;when_and_rem)?;
+    // Merge results into output array
+    out = zip(&amp;amp;when_and_rem, &amp;amp;then_value, &amp;amp;out)?;
+    // Update remainder mask to exclude matched rows
+    remainder = and_not(&amp;amp;remainder, &amp;amp;when_and_rem)?;
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Let's examine one iteration of this loop for the following &lt;code&gt;CASE&lt;/code&gt; expression:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;CASE
+    WHEN col = 'b' THEN 100
+    ELSE 200
+END
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Schematically, it will look as follows:&lt;/p&gt;
+&lt;figure&gt;
+&lt;img alt="Schematic representation of data flow in the original CASE implementation" class="img-responsive" src="/blog/images/case/original_loop.svg" width="100%"/&gt;
+&lt;figcaption&gt;One iteration of the `CASE` evaluation loop&lt;/figcaption&gt;
+&lt;/figure&gt;
+&lt;p&gt;This implementation works perfectly fine, but there's significant room for optimization, mostly related to the usage of &lt;code&gt;evaluate_selection&lt;/code&gt;.
+To understand why, we need to dig a little deeper into the implementation of that function.
+Here's a simplified version of it that captures the relevant parts:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;pub trait PhysicalExpr {
+    fn evaluate_selection(
+        &amp;amp;self,
+        batch: &amp;amp;RecordBatch,
+        selection: &amp;amp;BooleanArray,
+    ) -&amp;gt; Result&amp;lt;ColumnarValue&amp;gt; {
+        // Reduce record batch to only include rows that match selection
+        let filtered_batch = filter_record_batch(batch, selection)?;
+        // Perform regular evaluation on filtered batch
+        let filtered_result = self.evaluate(&amp;amp;filtered_batch)?;
+        // Expand result array to match original batch length
+        scatter(selection, filtered_result)
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Going back to the same example as before, the data flow in &lt;code&gt;evaluate_selection&lt;/code&gt; looks like this:&lt;/p&gt;
+&lt;figure&gt;
+&lt;img alt="Schematic representation of `evaluate_selection` evaluation" class="img-responsive" src="/blog/images/case/evaluate_selection.svg" width="100%"/&gt;
+&lt;figcaption&gt;evaluate_selection data flow&lt;/figcaption&gt;
+&lt;/figure&gt;
+&lt;p&gt;The &lt;code&gt;evaluate_selection&lt;/code&gt; method first filters the input batch to only include rows that match the &lt;code&gt;selection&lt;/code&gt; mask.
+It then calls the regular &lt;code&gt;evaluate&lt;/code&gt; method using the filtered batch as input.
+Finally, to return a result array with the same number of rows as &lt;code&gt;batch&lt;/code&gt;, the &lt;code&gt;scatter&lt;/code&gt; function is called.
+This function produces a new array padded with &lt;code&gt;null&lt;/code&gt; values for any rows that didn't match the &lt;code&gt;selection&lt;/code&gt; mask.&lt;/p&gt;
+&lt;p&gt;So how can we improve the performance of the simple evaluation strategy and use of &lt;code&gt;evaluate_selection&lt;/code&gt;?&lt;/p&gt;
+&lt;h3 id="opportunity-1-early-exit"&gt;Opportunity 1: Early Exit&lt;a class="headerlink" href="#opportunity-1-early-exit" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;The &lt;code&gt;CASE&lt;/code&gt; evaluation loop always iterates through all branches, even when every row has already been matched.
+In queries where early branches match all rows, this results in unnecessary work being done for the remaining branches.&lt;/p&gt;
+&lt;h3 id="opportunity-2-optimize-repeated-filtering-scattering-and-merging"&gt;Opportunity 2: Optimize Repeated Filtering, Scattering, and Merging&lt;a class="headerlink" href="#opportunity-2-optimize-repeated-filtering-scattering-and-merging" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Each iteration performs a number of operations that are very well-optimized, but still take up a significant amount of CPU time:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Filtering&lt;/strong&gt;: &lt;code&gt;PhysicalExpr::evaluate_selection&lt;/code&gt; filters the entire &lt;code&gt;RecordBatch&lt;/code&gt; for each branch. For the &lt;code&gt;WHEN&lt;/code&gt; expression, this is done even if the selection mask was entirely empty.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Scattering&lt;/strong&gt;: &lt;code&gt;PhysicalExpr::evaluate_selection&lt;/code&gt; scatters the filtered result back to the original &lt;code&gt;RecordBatch&lt;/code&gt; length.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Merging&lt;/strong&gt;: The &lt;code&gt;zip&lt;/code&gt; kernel is called once per branch to merge partial results into the output array&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Each of these operations needs to allocate memory for new arrays and shuffle quite a bit of data around.&lt;/p&gt;
+&lt;h3 id="opportunity-3-filter-only-necessary-columns"&gt;Opportunity 3: Filter only Necessary Columns&lt;a class="headerlink" href="#opportunity-3-filter-only-necessary-columns" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;The &lt;code&gt;PhysicalExpr::evaluate_selection&lt;/code&gt; method filters the entire record batch, including columns that the current branch's &lt;code&gt;WHEN&lt;/code&gt; and &lt;code&gt;THEN&lt;/code&gt; expressions don't reference.
+For wide tables (many columns) with narrow expressions (few column references), this is wasteful.&lt;/p&gt;
+&lt;p&gt;Suppose you have a table with 26 columns named &lt;code&gt;a&lt;/code&gt; through &lt;code&gt;z&lt;/code&gt;, and the following simple &lt;code&gt;CASE&lt;/code&gt; expression:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;CASE
+  WHEN a &amp;gt; 1000 THEN 'large'
+  WHEN a &amp;gt;= 0 THEN 'positive'
+  ELSE 'negative'
+END
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;The implementation would filter all 26 columns even though only a single column is needed for the entire &lt;code&gt;CASE&lt;/code&gt; expression evaluation.
+Again this involves a non-negligible amount of allocation and data copying.&lt;/p&gt;
+&lt;h2 id="performance-optimizations"&gt;Performance Optimizations&lt;a class="headerlink" href="#performance-optimizations" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;h3 id="optimization-1-short-circuit-early-exit"&gt;Optimization 1: Short-Circuit Early Exit&lt;a class="headerlink" href="#optimization-1-short-circuit-early-exit" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;The first optimization is straightforward.
+As soon as we detect that all rows of the batch have been matched, we break out of the evaluation loop:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;let mut remainder_count = batch.num_rows();
+
+for (when_expr, then_expr) in &amp;amp;self.when_then_expr {
+    if remainder_count == 0 {
+        break;  // All rows matched, exit early
+    }
+
+    // ... evaluate branch ...
+
+    let when_match_count = when_value.true_count();
+    remainder_count -= when_match_count;
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Additionally, we avoid evaluating the &lt;code&gt;ELSE&lt;/code&gt; clause when no rows remain:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;if let Some(else_expr) = &amp;amp;self.else_expr {
+    remainder = or(&amp;amp;base_nulls, &amp;amp;remainder)?;
+    if remainder.true_count() &amp;gt; 0 {
+        // ... evaluate else ...
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;For queries where early branches match all rows, this eliminates unnecessary branch evaluations and &lt;code&gt;ELSE&lt;/code&gt; clause processing.&lt;/p&gt;
+&lt;p&gt;This optimization was implemented by Pepijn Van Eeckhoudt (&lt;a href="https://github.com/pepijnve"&gt;&lt;code&gt;@pepijnve&lt;/code&gt;&lt;/a&gt;) in &lt;a href="https://github.com/apache/datafusion/pull/17898"&gt;PR #17898&lt;/a&gt;&lt;/p&gt;
+&lt;h3 id="optimization-2-optimized-result-merging"&gt;Optimization 2: Optimized Result Merging&lt;a class="headerlink" href="#optimization-2-optimized-result-merging" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;The second optimization fundamentally restructures how the results of each loop iteration will be merged.
+The diagram below illustrates the optimized data flow when evaluating the &lt;code&gt;CASE WHEN col = 'b' THEN 100 ELSE 200 END&lt;/code&gt; from before:&lt;/p&gt;
+&lt;figure&gt;
+&lt;img alt="Schematic representation of optimized evaluation loop" class="img-responsive" src="/blog/images/case/merging.svg" width="100%"/&gt;
+&lt;figcaption&gt;optimized evaluation loop&lt;/figcaption&gt;
+&lt;/figure&gt;
+&lt;p&gt;In the reworked implementation, the &lt;code&gt;evaluate_selection&lt;/code&gt; function is no longer used.
+The key insight is that we can defer all merging until the end of the evaluation loop by tracking result provenance.
+This was implemented with the following changes:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Augment the input batch with a column containing row indices.&lt;/li&gt;
+&lt;li&gt;Reduce the augmented batch after each loop iteration to only contain the remaining rows.&lt;/li&gt;
+&lt;li&gt;Use the row index column to track which partial result array contains the value for each row.&lt;/li&gt;
+&lt;li&gt;Perform a single merge operation at the end instead of a &lt;code&gt;zip&lt;/code&gt; operation after each loop iteration.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;These changes make it unnecessary to &lt;code&gt;scatter&lt;/code&gt; and &lt;code&gt;zip&lt;/code&gt; results in each loop iteration.
+Instead, when all rows have been matched, we then merge the partial results using &lt;a href="https://docs.rs/arrow-select/57.1.0/arrow_select/merge/fn.merge_n.html"&gt;&lt;code&gt;arrow_select::merge::merge_n&lt;/code&gt;&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;The diagram below illustrates how &lt;code&gt;merge_n&lt;/code&gt; works for an example where three &lt;code&gt;WHEN/THEN&lt;/code&gt; branches produced results.
+The first branch produced the result &lt;code&gt;A&lt;/code&gt; for row 2, the second produced &lt;code&gt;B&lt;/code&gt; for row 1, and the third produced &lt;code&gt;C&lt;/code&gt; and &lt;code&gt;D&lt;/code&gt; for rows 4 and 5.&lt;/p&gt;
+&lt;figure&gt;
+&lt;img alt="Schematic illustration of the merge_n algorithm" class="img-responsive" src="/blog/images/case/merge_n.svg" width="100%"/&gt;
+&lt;figcaption&gt;merge_n example&lt;/figcaption&gt;
+&lt;/figure&gt;
+&lt;p&gt;The &lt;code&gt;merge_n&lt;/code&gt; algorithm scans through the indices array.
+For each non-empty cell, it takes one value from the corresponding values array.
+In the example above, we first encounter &lt;code&gt;1&lt;/code&gt;.
+This takes the first element from the values array with index &lt;code&gt;1&lt;/code&gt;, resulting in &lt;code&gt;B&lt;/code&gt;.
+The next cell contains &lt;code&gt;0&lt;/code&gt; which takes &lt;code&gt;A&lt;/code&gt;, from the first array.
+Finally, we encounter &lt;code&gt;2&lt;/code&gt; twice.
+This takes the first and second element from the last values array respectively.&lt;/p&gt;
+&lt;p&gt;This algorithm was initially implemented in DataFusion for the &lt;code&gt;CASE&lt;/code&gt; implementation, but in the meantime has been generalized and moved into the &lt;code&gt;arrow-rs&lt;/code&gt; crate as &lt;a href="https://docs.rs/arrow-select/57.1.0/arrow_select/merge/fn.merge_n.html"&gt;&lt;code&gt;arrow_select::merge::merge_n&lt;/code&gt;&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;This optimization was implemented by Pepijn Van Eeckhoudt (&lt;a href="https://github.com/pepijnve"&gt;&lt;code&gt;@pepijnve&lt;/code&gt;&lt;/a&gt;) in &lt;a href="https://github.com/apache/datafusion/pull/18152"&gt;PR #18152&lt;/a&gt;&lt;/p&gt;
+&lt;h3 id="optimization-3-column-projection"&gt;Optimization 3: Column Projection&lt;a class="headerlink" href="#optimization-3-column-projection" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;The third optimization addresses the "filtering unused columns" overhead through projection.&lt;/p&gt;
+&lt;p&gt;Look at the following query example where the &lt;code&gt;mailing_address&lt;/code&gt; table has the columns &lt;code&gt;name&lt;/code&gt;, &lt;code&gt;surname&lt;/code&gt;, &lt;code&gt;street&lt;/code&gt;, &lt;code&gt;number&lt;/code&gt;, &lt;code&gt;city&lt;/code&gt;, &lt;code&gt;state&lt;/code&gt;, &lt;code&gt;country&lt;/code&gt;:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT *, CASE WHEN country = 'USA' THEN state ELSE country END AS region
+FROM mailing_address 
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;You can see that the &lt;code&gt;CASE&lt;/code&gt; expression only references the columns &lt;code&gt;country&lt;/code&gt; and &lt;code&gt;state&lt;/code&gt;, but because all columns are being queried, projection pushdown cannot reduce the number of columns being fed in to the projection operator.&lt;/p&gt;
+&lt;figure&gt;
+&lt;img alt="Schematic illustration of CASE evaluation without projection" class="img-responsive" src="/blog/images/case/no_projection.svg" width="100%"/&gt;
+&lt;figcaption&gt;CASE evaluation without projection&lt;/figcaption&gt;
+&lt;/figure&gt;
+&lt;p&gt;During &lt;code&gt;CASE&lt;/code&gt; evaluation, the batch must be filtered using the &lt;code&gt;WHEN&lt;/code&gt; expression to evaluate the &lt;code&gt;THEN&lt;/code&gt; expression values.
+As the diagram above shows, this filtering creates a reduced copy of all columns.&lt;/p&gt;
+&lt;p&gt;This unnecessary copying can be avoided by first narrowing the batch to only include the columns that are actually needed.&lt;/p&gt;
+&lt;figure&gt;
+&lt;img alt="Schematic illustration of CASE evaluation with projection" class="img-responsive" src="/blog/images/case/projection.svg" width="100%"/&gt;
+&lt;figcaption&gt;CASE evaluation with projection&lt;/figcaption&gt;
+&lt;/figure&gt;
+&lt;p&gt;At first glance, this might not seem beneficial, since we're introducing an additional processing step.
+Luckily projection of a record batch only requires a shallow copy of the record batch.
+The column arrays themselves are not copied, and the only work that is actually done is incrementing the reference counts of the columns.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Impact&lt;/strong&gt;: For wide tables with narrow CASE expressions, this dramatically reduces filtering overhead by removing the copying of unused columns.&lt;/p&gt;
+&lt;p&gt;This optimization was implemented by Pepijn Van Eeckhoudt (&lt;a href="https://github.com/pepijnve"&gt;&lt;code&gt;@pepijnve&lt;/code&gt;&lt;/a&gt;) in &lt;a href="https://github.com/apache/datafusion/pull/18329"&gt;PR #18329&lt;/a&gt;&lt;/p&gt;
+&lt;h3 id="optimization-4-eliminating-scatter-in-two-branch-case"&gt;Optimization 4: Eliminating Scatter in Two-Branch Case&lt;a class="headerlink" href="#optimization-4-eliminating-scatter-in-two-branch-case" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Some of the earlier examples in this post use expressions of the form &lt;code&gt;CASE WHEN condition THEN expr1 ELSE expr2 END&lt;/code&gt; to explain how the general evaluation loop works.
+For this kind of two-branch &lt;code&gt;CASE&lt;/code&gt; expression, &lt;a href="https://datafusion.apache.org/"&gt;Apache DataFusion&lt;/a&gt; has a more optimized implementation that unrolls the loop.
+This specialized &lt;code&gt;ExpressionOrExpression&lt;/code&gt; fast path still used &lt;code&gt;evaluate_selection()&lt;/code&gt; for both branches which uses &lt;code&gt;scatter&lt;/code&gt; and &lt;code&gt;zip&lt;/code&gt; to combine the results incurring the same performance overhead as the general implementation.&lt;/p&gt;
+&lt;p&gt;The revised implementation eliminates the use of &lt;code&gt;evaluate_selection&lt;/code&gt; as follows:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;// Compute the `WHEN` condition for the entire batch
+let when_filter = create_filter(&amp;amp;when_value);
+
+// Compute a compact array of `THEN` values for the matching rows
+let then_batch = filter_record_batch(batch, &amp;amp;when_filter)?;
+let then_value = then_expr.evaluate(&amp;amp;then_batch)?;
+
+// Compute a compact array of `ELSE` values for the non-matching rows
+let else_filter = create_filter(&amp;amp;not(&amp;amp;when_value)?);
+let else_batch = filter_record_batch(batch, &amp;amp;else_filter)?;
+let else_value = else_expr.evaluate(&amp;amp;else_batch)?;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;This produces two compact arrays, one for the THEN values and one for the ELSE values, which are then merged with the &lt;code&gt;merge&lt;/code&gt; function.
+In contrast to &lt;code&gt;zip&lt;/code&gt;, &lt;code&gt;merge&lt;/code&gt; does not require both of its value inputs to have the same length.
+Instead it requires that the sum of the length of the value inputs matches the length of the mask array.&lt;/p&gt;
+&lt;figure&gt;
+&lt;img alt="Schematic illustration of the merge algorithm" class="img-responsive" src="/blog/images/case/merge.svg" width="100%"/&gt;
+&lt;figcaption&gt;merge example&lt;/figcaption&gt;
+&lt;/figure&gt;
+&lt;p&gt;This eliminates unnecessary &lt;code&gt;scatter&lt;/code&gt; operations and memory allocations for one of the most common &lt;code&gt;CASE&lt;/code&gt; expression patterns.&lt;/p&gt;
+&lt;p&gt;Just like &lt;code&gt;merge_n&lt;/code&gt;, this operation has been moved into &lt;code&gt;arrow-rs&lt;/code&gt; as &lt;a href="https://docs.rs/arrow-select/57.1.0/arrow_select/merge/fn.merge.html"&gt;&lt;code&gt;arrow_select::merge::merge&lt;/code&gt;&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;This optimization was implemented by Pepijn Van Eeckhoudt (&lt;a href="https://github.com/pepijnve"&gt;&lt;code&gt;@pepijnve&lt;/code&gt;&lt;/a&gt;) in &lt;a href="https://github.com/apache/datafusion/pull/18444"&gt;PR #18444&lt;/a&gt;&lt;/p&gt;
+&lt;h3 id="optimization-5-table-lookup-of-constants"&gt;Optimization 5: Table Lookup of Constants&lt;a class="headerlink" href="#optimization-5-table-lookup-of-constants" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Up until now, we've discussed the implementations for generic &lt;code&gt;CASE&lt;/code&gt; expressions that use non-constant expressions for both &lt;code&gt;WHEN&lt;/code&gt; and &lt;code&gt;THEN&lt;/code&gt;.
+Another common use of &lt;code&gt;CASE&lt;/code&gt; is to perform a mapping from one set of constants to another.
+For instance, you can expand numeric constants to human-readable strings using the following &lt;code&gt;CASE&lt;/code&gt; example.&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;CASE status
+  WHEN 0 THEN 'idle'
+  WHEN 1 THEN 'running'
+  WHEN 2 THEN 'paused'
+  WHEN 3 THEN 'stopped'
+  ELSE 'unknown'
+END
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;A final &lt;code&gt;CASE&lt;/code&gt; optimization recognizes this pattern and compiles the &lt;code&gt;CASE&lt;/code&gt; expression into a hash table.
+Rather than evaluating the &lt;code&gt;WHEN&lt;/code&gt; and &lt;code&gt;THEN&lt;/code&gt; expressions, the input expression is evaluated once, and the result array is computed using a vectorized hash table lookup.
+This approach avoids the need to filter the input batch and combine partial results entirely.
+The result array is computed in a single pass over the input values, and the computation time does not grow significantly with the number of &lt;code&gt;WHEN&lt;/code&gt; branches in the &lt;code&gt;CASE&lt;/code&gt; expression.&lt;/p&gt;
+&lt;p&gt;This optimization was implemented by Raz Luvaton (&lt;a href="https://github.com/rluvaton"&gt;&lt;code&gt;@rluvaton&lt;/code&gt;&lt;/a&gt;) in &lt;a href="https://github.com/apache/datafusion/pull/18183"&gt;PR #18183&lt;/a&gt;&lt;/p&gt;
+&lt;h2 id="results"&gt;Results&lt;a class="headerlink" href="#results" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;The degree to which the performance optimizations described in this post will benefit your queries is highly dependent on both your data and your queries.
+To give some idea of the impact, we ran the following query on the TPC_H &lt;code&gt;orders&lt;/code&gt; table with a scale factor of 100:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT
+    *,
+    case o_orderstatus
+        when 'O' then 'ordered'
+        when 'F' then 'filled'
+        when 'P' then 'pending'
+        else 'other'
+    end
+from orders
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;This query was first run with DataFusion 50.0.0 to get a baseline measurement.
+The same query was then run with each optimization applied in turn.
+The recorded times are presented as the blue series in the chart below.
+The green series shows the time measurement for the &lt;code&gt;SELECT * FROM orders&lt;/code&gt; to give an idea of the cost the addition of a &lt;code&gt;CASE&lt;/code&gt; expression in a query incurs.
+All measurements were made with a target partition count of &lt;code&gt;1&lt;/code&gt;.&lt;/p&gt;
+&lt;figure&gt;
+&lt;img alt="Performance measurements chart" class="img-responsive" src="/blog/images/case/results.png" width="100%"/&gt;
+&lt;figcaption&gt;Performance measurements&lt;/figcaption&gt;
+&lt;/figure&gt;
+&lt;p&gt;What you can see in the chart is that the effect of the various optimizations compounds up to the &lt;code&gt;project&lt;/code&gt; measurement.
+Up to that point these results are applicable to any &lt;code&gt;CASE&lt;/code&gt; expression.
+The final improvement in the &lt;code&gt;hash&lt;/code&gt; measurement is only applicable to simple &lt;code&gt;CASE&lt;/code&gt; expressions with constant &lt;code&gt;WHEN&lt;/code&gt; and &lt;code&gt;THEN&lt;/code&gt; expressions.&lt;/p&gt;
+&lt;p&gt;The cumulative effect of these optimizations is a 63-71% reduction in CPU time spent evaluating &lt;code&gt;CASE&lt;/code&gt; expressions compared to the baseline.&lt;/p&gt;
+&lt;h2 id="summary"&gt;Summary&lt;a class="headerlink" href="#summary" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Through a number of targeted optimizations, we've transformed &lt;code&gt;CASE&lt;/code&gt; expression evaluation from a simple, but unoptimized implementation into a highly optimized one.
+The optimizations described in this post compound: a &lt;code&gt;CASE&lt;/code&gt; expression on a wide table with multiple branches and early matches benefits from all four optimizations simultaneously.
+The result is significantly reduced CPU time and memory allocation in SQL constructs that are essential for ETL-like queries.&lt;/p&gt;
+&lt;h2 id="about-datafusion"&gt;About DataFusion&lt;a class="headerlink" href="#about-datafusion" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;&lt;a href="https://datafusion.apache.org/"&gt;Apache DataFusion&lt;/a&gt; is an extensible query engine, written in &lt;a href="https://www.rust-lang.org/"&gt;Rust&lt;/a&gt;, that uses &lt;a href="https://arrow.apache.org"&gt;Apache Arrow&lt;/a&gt; as its in-memory format. DataFusion is used by developers to create new, fast, data-centric systems such as databases, dataframe libraries,
+and machine learning and streaming applications.
+While &lt;a href="https://datafusion.apache.org/user-guide/introduction.html#project-goals"&gt;DataFusion’s primary design goal&lt;/a&gt; is to accelerate the creation of other data-centric systems, it provides a reasonable experience directly out of the box as a &lt;a href="https://datafusion.apache.org/user-guide/dataframe.html"&gt;dataframe library&lt;/a&gt;, &lt;a href="https://datafusion.apache.org/python/"&gt;Python library&lt;/a&gt;, and &lt;a href="https://datafusion.apache.org/user-guide/cli/"&gt;command-line SQL tool&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;DataFusion's core thesis is that, as a community, together we can build much more advanced technology than any of us as individuals or companies could build alone.
+Without DataFusion, highly performant vectorized query engines would remain the domain of a few large companies and world-class research institutions.
+With DataFusion, we can all build on top of a shared foundation and focus on what makes our projects unique.&lt;/p&gt;
+&lt;h2 id="how-to-get-involved"&gt;How to Get Involved&lt;a class="headerlink" href="#how-to-get-involved" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;DataFusion is not a project built or driven by a single person, company, or foundation.
+Rather, our community of users and contributors works together to build a shared technology that none of us could have built alone.&lt;/p&gt;
+&lt;p&gt;If you are interested in joining us, we would love to have you. You can try out DataFusion on some of your own data and projects and let us know how it goes, contribute suggestions, documentation, bug reports, or a PR with documentation, tests, or code.
+A list of open issues suitable for beginners is &lt;a href="https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22"&gt;here&lt;/a&gt;, and you can find out how to reach us on the &lt;a href="https://datafusion.apache.org/contributor-guide/communication.html"&gt;communication doc&lt;/a&gt;.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Apache DataFusion Comet 0.13.0 Release</title><link href="https://datafusion.apache.org/blog/2026/01/30/datafusion-comet-0.13.0" rel="alternate"></link><published>2026-01-30T00:00:00+00:00</published><updated>2026-01-30T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2026-01-30:/blog/2026/01/30/datafusion-comet-0.13.0</id><summary type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+
+&lt;p&gt;The Apache DataFusion PMC is pleased to announce version 0.13.0 of the &lt;a href="https://datafusion.apache.org/comet/"&gt;Comet&lt;/a&gt; subproject.&lt;/p&gt;
+&lt;p&gt;Comet is an accelerator for Apache Spark that translates Spark physical plans to DataFusion physical plans for
+improved performance and efficiency without requiring any code changes.&lt;/p&gt;
+&lt;p&gt;This release covers approximately eight weeks of development …&lt;/p&gt;</summary><content type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+
+&lt;p&gt;The Apache DataFusion PMC is pleased to announce version 0.13.0 of the &lt;a href="https://datafusion.apache.org/comet/"&gt;Comet&lt;/a&gt; subproject.&lt;/p&gt;
+&lt;p&gt;Comet is an accelerator for Apache Spark that translates Spark physical plans to DataFusion physical plans for
+improved performance and efficiency without requiring any code changes.&lt;/p&gt;
+&lt;p&gt;This release covers approximately eight weeks of development work and is the result of merging 169 PRs from 15
+contributors. See the &lt;a href="https://github.com/apache/datafusion-comet/blob/main/dev/changelog/0.13.0.md"&gt;change log&lt;/a&gt; for more information.&lt;/p&gt;
+&lt;h2 id="key-features"&gt;Key Features&lt;a class="headerlink" href="#key-features" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;h3 id="native-parquet-write-support-experimental"&gt;Native Parquet Write Support (Experimental)&lt;a class="headerlink" href="#native-parquet-write-support-experimental" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;This release introduces experimental native Parquet write capabilities, allowing Comet to intercept and execute Parquet write operations natively through DataFusion. Key capabilities include:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;File commit protocol support for reliable writes&lt;/li&gt;
+&lt;li&gt;Remote HDFS writing via OpenDAL integration&lt;/li&gt;
+&lt;li&gt;Complex type support (arrays, maps, structs)&lt;/li&gt;
+&lt;li&gt;Proper handling of object store settings&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;To enable native Parquet writes, set:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;spark.comet.allowIncompatibleOp.DataWritingCommandExec=true
+spark.comet.parquet.write.enabled=true
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;strong&gt;Note&lt;/strong&gt;: This feature is highly experimental and should not be used in production environments. It is currently categorized as a testing feature and is disabled by default.&lt;/p&gt;
+&lt;h3 id="native-iceberg-improvements"&gt;Native Iceberg Improvements&lt;a class="headerlink" href="#native-iceberg-improvements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Comet's fully-native Iceberg integration received significant enhancements in this release:&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;REST Catalog Support&lt;/strong&gt;: Native Iceberg scans now support REST catalogs, enabling integration with catalog services like Apache Polaris and Tabular. Configure with:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-shell"&gt;--conf spark.sql.catalog.rest_cat=org.apache.iceberg.spark.SparkCatalog
+--conf spark.sql.catalog.rest_cat.catalog-impl=org.apache.iceberg.rest.RESTCatalog
+--conf spark.sql.catalog.rest_cat.uri=http://localhost:8181
+--conf spark.comet.scan.icebergNative.enabled=true
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;strong&gt;Session Token Authentication&lt;/strong&gt;: Added support for session tokens in native Iceberg scans for secure S3 access.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Performance Optimizations&lt;/strong&gt;:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Deduplicated serialized metadata reducing memory overhead&lt;/li&gt;
+&lt;li&gt;Switched from JSON to protobuf for partition value serialization&lt;/li&gt;
+&lt;li&gt;Removed IcebergFileStream in favor of iceberg-rust's built-in parallelization&lt;/li&gt;
+&lt;li&gt;Reduced metadata serialization points&lt;/li&gt;
+&lt;li&gt;Added SchemaAdapter caching&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;To enable fully-native Iceberg scanning:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;spark.comet.scan.icebergNative.enabled=true
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;The native reader supports Iceberg table spec v1 and v2, all primitive and complex types, schema evolution, time travel, positional and equality deletes, filter pushdown, and various storage backends (local, HDFS, S3).&lt;/p&gt;
+&lt;h3 id="native-csv-reading-experimental"&gt;Native CSV Reading (Experimental)&lt;a class="headerlink" href="#native-csv-reading-experimental" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Experimental support for native CSV file reading has been added, expanding Comet's file format capabilities beyond Parquet.&lt;/p&gt;
+&lt;h3 id="new-expressions"&gt;New Expressions&lt;a class="headerlink" href="#new-expressions" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;The release adds support for numerous expressions:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Array functions: &lt;code&gt;explode&lt;/code&gt;, &lt;code&gt;explode_outer&lt;/code&gt;, &lt;code&gt;size&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;Date/time functions: &lt;code&gt;unix_date&lt;/code&gt;, &lt;code&gt;date_format&lt;/code&gt;, &lt;code&gt;datediff&lt;/code&gt;, &lt;code&gt;last_day&lt;/code&gt;, &lt;code&gt;unix_timestamp&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;String functions: &lt;code&gt;left&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;JSON functions: &lt;code&gt;from_json&lt;/code&gt; (partial support)&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id="ansi-mode-support"&gt;ANSI Mode Support&lt;a class="headerlink" href="#ansi-mode-support" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Sum and average aggregate expressions now support ANSI mode for both integer and decimal inputs, enabling overflow checking in strict SQL mode.&lt;/p&gt;
+&lt;h3 id="native-shuffle-improvements"&gt;Native Shuffle Improvements&lt;a class="headerlink" href="#native-shuffle-improvements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Round-robin partitioning is now supported in native shuffle&lt;/li&gt;
+&lt;li&gt;Spill metrics are now reported correctly&lt;/li&gt;
+&lt;li&gt;Configurable shuffle writer buffer size via &lt;code&gt;spark.comet.shuffle.write.bufferSize&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id="performance-improvements"&gt;Performance Improvements&lt;a class="headerlink" href="#performance-improvements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;This release includes extensive performance optimizations:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;String to integer casting&lt;/strong&gt;: Significant speedups through optimized parsing&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;String functions&lt;/strong&gt;: Optimized &lt;code&gt;lpad&lt;/code&gt;/&lt;code&gt;rpad&lt;/code&gt; to remove unnecessary memory allocations&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Date operations&lt;/strong&gt;: Improved &lt;code&gt;normalize_nan&lt;/code&gt; and date truncate performance&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Query planning&lt;/strong&gt;: Cached query plans to avoid per-partition serialization overhead&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Memory efficiency&lt;/strong&gt;: Reduced GC pressure in protobuf serialization&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Hash operations&lt;/strong&gt;: Optimized complex-type hash implementations including murmur3 support for nested types&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Runtime efficiency&lt;/strong&gt;: Eliminated busy-polling of Tokio stream for plans without CometScan&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Metrics overhead&lt;/strong&gt;: Reduced timer and syscall overhead in native shuffle writer&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id="deprecations"&gt;Deprecations&lt;a class="headerlink" href="#deprecations" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;The &lt;code&gt;native_comet&lt;/code&gt; scan mode is now deprecated in favor of &lt;code&gt;native_iceberg_compat&lt;/code&gt; and will be removed in a future release. The &lt;code&gt;auto&lt;/code&gt; scan mode no longer falls back to &lt;code&gt;native_comet&lt;/code&gt;.&lt;/p&gt;
+&lt;h2 id="compatibility"&gt;Compatibility&lt;a class="headerlink" href="#compatibility" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;This release upgrades to DataFusion 51, Arrow 57, and the latest iceberg-rust. The minimum supported Rust version is now 1.88.&lt;/p&gt;
+&lt;p&gt;Supported platforms include Spark 3.4.3, 3.5.4-3.5.7, and Spark 4.0.x with various JDK and Scala combinations.&lt;/p&gt;
+&lt;p&gt;The community encourages users to test Comet with existing Spark workloads and welcomes contributions to ongoing development.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Apache DataFusion 52.0.0 Released</title><link href="https://datafusion.apache.org/blog/2026/01/12/datafusion-52.0.0" rel="alternate"></link><published>2026-01-12T00:00:00+00:00</published><updated>2026-01-12T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2026-01-12:/blog/2026/01/12/datafusion-52.0.0</id><summary type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+
+&lt;p&gt;We are proud to announce the release of &lt;a href="https://crates.io/crates/datafusion/52.0.0"&gt;DataFusion 52.0.0&lt;/a&gt;. This post highlights
+some of the major improvements since &lt;a href="https://datafusion.apache.org/blog/2025/11/25/datafusion-51.0.0/"&gt;DataFusion 51.0.0&lt;/a&gt;. The complete list of
+changes is available in the &lt;a href="https://github.com/apache/datafusion/blob/branch-52/dev/changelog/52.0.0.md"&gt;changelog&lt;/a&gt;. Thanks to the &lt;a href="https://github.com/apache/datafusion/blob/branch-52/dev/changelog/52.0.0.md#credits"&gt;121 contributors&lt;/a&gt; for
+making this release possible.&lt;/p&gt;
+&lt;h2 id="performance-improvements"&gt;Performance Improvements 🚀&lt;a class="headerlink" href="#performance-improvements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;We continue to …&lt;/p&gt;</summary><content type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+
+&lt;p&gt;We are proud to announce the release of &lt;a href="https://crates.io/crates/datafusion/52.0.0"&gt;DataFusion 52.0.0&lt;/a&gt;. This post highlights
+some of the major improvements since &lt;a href="https://datafusion.apache.org/blog/2025/11/25/datafusion-51.0.0/"&gt;DataFusion 51.0.0&lt;/a&gt;. The complete list of
+changes is available in the &lt;a href="https://github.com/apache/datafusion/blob/branch-52/dev/changelog/52.0.0.md"&gt;changelog&lt;/a&gt;. Thanks to the &lt;a href="https://github.com/apache/datafusion/blob/branch-52/dev/changelog/52.0.0.md#credits"&gt;121 contributors&lt;/a&gt; for
+making this release possible.&lt;/p&gt;
+&lt;h2 id="performance-improvements"&gt;Performance Improvements 🚀&lt;a class="headerlink" href="#performance-improvements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;We continue to make significant performance improvements in DataFusion as explained below.&lt;/p&gt;
+&lt;h3 id="faster-case-expressions"&gt;Faster &lt;code&gt;CASE&lt;/code&gt; Expressions&lt;a class="headerlink" href="#faster-case-expressions" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;DataFusion 52 has lookup-table-based evaluation for certain &lt;code&gt;CASE&lt;/code&gt; expressions
+to avoid repeated evaluation for accelerating common ETL patterns such as&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;CASE company
+    WHEN 1 THEN 'Apple'
+    WHEN 5 THEN 'Samsung'
+    WHEN 2 THEN 'Motorola'
+    WHEN 3 THEN 'LG'
+    ELSE 'Other'
+END
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;This is the final work in our &lt;code&gt;CASE&lt;/code&gt; performance epic (&lt;a href="https://github.com/apache/datafusion/issues/18075"&gt;#18075&lt;/a&gt;), which has
+improved &lt;code&gt;CASE&lt;/code&gt; evaluation significantly. Related PRs &lt;a href="https://github.com/apache/datafusion/pull/18183"&gt;#18183&lt;/a&gt;. Thanks to
+&lt;a href="https://github.com/rluvaton"&gt;rluvaton&lt;/a&gt; and &lt;a href="https://github.com/pepijnve"&gt;pepijnve&lt;/a&gt; for the implementation.&lt;/p&gt;
+&lt;h3 id="minmax-aggregate-dynamic-filters"&gt;&lt;code&gt;MIN&lt;/code&gt;/&lt;code&gt;MAX&lt;/code&gt; Aggregate Dynamic Filters&lt;a class="headerlink" href="#minmax-aggregate-dynamic-filters" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;DataFusion now creates dynamic filters for queries with &lt;code&gt;MIN&lt;/code&gt;/&lt;code&gt;MAX&lt;/code&gt; aggregates
+that have filters, but no &lt;code&gt;GROUP BY&lt;/code&gt;. These dynamic filters are used during scan
+to prune files and rows as tighter bounds are discovered during execution, as
+explained in the &lt;a href="https://datafusion.apache.org/blog/2025/09/10/dynamic-filters/#hash-join-dynamic-filters"&gt;Dynamic Filtering Blog&lt;/a&gt;. For example, the following query:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT min(l_shipdate)
+FROM lineitem
+WHERE l_returnflag = 'R';
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Is now executed like this  &lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT min(l_shipdate)
+FROM lineitem
+--  '__current_min' is updated dynamically during execution
+WHERE l_returnflag = 'R' AND l_shipdate &amp;lt; __current_min;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/2010YOUY01"&gt;2010YOUY01&lt;/a&gt; for implementing this feature, with reviews from
+&lt;a href="https://github.com/martin-g"&gt;martin-g&lt;/a&gt;, &lt;a href="https://github.com/adriangb"&gt;adriangb&lt;/a&gt;, and &lt;a href="https://github.com/LiaCastaneda"&gt;LiaCastaneda&lt;/a&gt;. Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/18644"&gt;#18644&lt;/a&gt;&lt;/p&gt;
+&lt;h3 id="new-merge-join"&gt;New Merge Join&lt;a class="headerlink" href="#new-merge-join" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;DataFusion 52 includes a rewrite of the sort-merge join (SMJ) operator, with
+speedups of three orders of magnitude in some pathological cases such as the
+case in &lt;a href="https://github.com/apache/datafusion/issues/18487"&gt;#18487&lt;/a&gt;, which also affected &lt;a href="https://datafusion.apache.org/comet/"&gt;Apache Comet&lt;/a&gt; workloads. Benchmarks in
+&lt;a href="https://github.com/apache/datafusion/pull/18875"&gt;#18875&lt;/a&gt; show dramatic gains for TPC-H Q21 (minutes to milliseconds) while
+leaving other queries unchanged or modestly faster. Thanks to &lt;a href="https://github.com/mbutrovich"&gt;mbutrovich&lt;/a&gt; for
+the implementation and reviews from &lt;a href="https://github.com/Dandandan"&gt;Dandandan&lt;/a&gt;.&lt;/p&gt;
+&lt;h3 id="caching-improvements"&gt;Caching Improvements&lt;a class="headerlink" href="#caching-improvements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;This release also includes several additional caching improvements.&lt;/p&gt;
+&lt;p&gt;A new statistics cache for File Metadata avoids repeatedly (re)calculating
+statistics for files. This significantly improves planning time
+for certain queries. You can see the contents of the new cache using the
+&lt;a href="https://datafusion.apache.org/user-guide/cli/functions.html#statistics-cache"&gt;statistics_cache&lt;/a&gt; function in the CLI:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;select * from statistics_cache();
++------------------+---------------------+-----------------+------------------------+---------+-----------------+-------------+--------------------+-----------------------+
+| path             | file_modified       | file_size_bytes | e_tag                  | version | num_rows        | num_columns | table_size_bytes   | statistics_size_bytes |
++------------------+---------------------+-----------------+------------------------+---------+-----------------+-------------+--------------------+-----------------------+
+| .../hits.parquet | 2022-06-25T22:22:22 | 14779976446     | 0-5e24d1ee16380-370f48 | NULL    | Exact(99997497) | 105         | Exact(36445943240) | 0                     |
++------------------+---------------------+-----------------+------------------------+---------+-----------------+-------------+--------------------+-----------------------+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/bharath-techie"&gt;bharath-techie&lt;/a&gt; and &lt;a href="https://github.com/nuno-faria"&gt;nuno-faria&lt;/a&gt; for implementing the statistics cache,
+with reviews from &lt;a href="https://github.com/martin-g"&gt;martin-g&lt;/a&gt;, &lt;a href="https://github.com/alamb"&gt;alamb&lt;/a&gt;, and &lt;a href="https://github.com/alchemist51"&gt;alchemist51&lt;/a&gt;.
+Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/18971"&gt;#18971&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/19054"&gt;#19054&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;A prefix-aware list-files cache accelerates evaluating partition predicates for
+Hive partitioned tables.&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;-- Read the hive partitioned dataset from Overture Maps (100s of Parquet files)
+CREATE EXTERNAL TABLE overturemaps
+STORED AS PARQUET LOCATION 's3://overturemaps-us-west-2/release/2025-12-17.0/';
+-- Find all files where the path contains `theme=base without requiring another LIST call
+select count(*) from overturemaps where theme='base';
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;You can see the
+contents of the new cache using the &lt;a href="https://datafusion.apache.org/user-guide/cli/functions.html#list-files-cache"&gt;list_files_cache&lt;/a&gt; function in the CLI:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;create external table overturemaps
+stored as parquet
+location 's3://overturemaps-us-west-2/release/2025-12-17.0/theme=base/type=infrastructure';
+0 row(s) fetched.
+&amp;gt; select table, path, metadata_size_bytes, expires_in, unnest(metadata_list)['file_size_bytes'] as file_size_bytes, unnest(metadata_list)['e_tag'] as e_tag from list_files_cache() limit 10;
++--------------+-----------------------------------------------------+---------------------+-----------------------------------+-----------------+---------------------------------------+
+| table        | path                                                | metadata_size_bytes | expires_in                        | file_size_bytes | e_tag                                 |
++--------------+-----------------------------------------------------+---------------------+-----------------------------------+-----------------+---------------------------------------+
+| overturemaps | release/2025-12-17.0/theme=base/type=infrastructure | 2750                | 0 days 0 hours 0 mins 25.264 secs | 999055952       | "35fc8fbe8400960b54c66fbb408c48e8-60" |
+| overturemaps | release/2025-12-17.0/theme=base/type=infrastructure | 2750                | 0 days 0 hours 0 mins 25.264 secs | 975592768       | "8a16e10b722681cdc00242564b502965-59" |
+...
+| overturemaps | release/2025-12-17.0/theme=base/type=infrastructure | 2750                | 0 days 0 hours 0 mins 25.264 secs | 1016732378      | "6d70857a0473ed9ed3fc6e149814168b-61" |
+| overturemaps | release/2025-12-17.0/theme=base/type=infrastructure | 2750                | 0 days 0 hours 0 mins 25.264 secs | 991363784       | "c9cafb42fcbb413f851691c895dd7c2b-60" |
+| overturemaps | release/2025-12-17.0/theme=base/type=infrastructure | 2750                | 0 days 0 hours 0 mins 25.264 secs | 1032469715      | "7540252d0d67158297a67038a3365e0f-62" |
++--------------+-----------------------------------------------------+---------------------+-----------------------------------+-----------------+---------------------------------------+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/BlakeOrth"&gt;BlakeOrth&lt;/a&gt; and &lt;a href="https://github.com/Yuvraj-cyborg"&gt;Yuvraj-cyborg&lt;/a&gt; for implementing the list-files cache work,
+with reviews from &lt;a href="https://github.com/gabotechs"&gt;gabotechs&lt;/a&gt;, &lt;a href="https://github.com/alamb"&gt;alamb&lt;/a&gt;, &lt;a href="https://github.com/alchemist51"&gt;alchemist51&lt;/a&gt;, &lt;a href="https://github.com/martin-g"&gt;martin-g&lt;/a&gt;, and &lt;a href="https://github.com/BlakeOrth"&gt;BlakeOrth&lt;/a&gt;.
+Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/18146"&gt;#18146&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/18855"&gt;#18855&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/19366"&gt;#19366&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/19298"&gt;#19298&lt;/a&gt;, &lt;/p&gt;
+&lt;h3 id="improved-hash-join-filter-pushdown"&gt;Improved Hash Join Filter Pushdown&lt;a class="headerlink" href="#improved-hash-join-filter-pushdown" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Starting in DataFusion 51, filtering information from &lt;code&gt;HashJoinExec&lt;/code&gt; is passed
+dynamically to scans, as explained in the &lt;a href="https://datafusion.apache.org/blog/2025/09/10/dynamic-filters/#hash-join-dynamic-filters"&gt;Dynamic Filtering Blog&lt;/a&gt; using a
+technique referred to as &lt;a href="https://dl.acm.org/doi/10.1109/ICDE.2008.4497486"&gt;Sideways Information Passing&lt;/a&gt; in Database research
+literature. The initial implementation passed min/max values for the join keys.
+DataFusion 52 extends the optimization (&lt;a href="https://github.com/apache/datafusion/issues/17171"&gt;#17171&lt;/a&gt; / &lt;a href="https://github.com/apache/datafusion/pull/18393"&gt;#18393&lt;/a&gt;) to pass the
+contents of the build side hash map. These filters are evaluated on the probe
+side scan to prune files, row groups, and individual rows. When the build side
+contains &lt;code&gt;20&lt;/code&gt; or fewer rows (configurable) the contents of the hash map are
+transformed to an &lt;code&gt;IN&lt;/code&gt; expression and used for &lt;a href="https://docs.rs/datafusion/latest/datafusion/physical_optimizer/pruning/struct.PruningPredicate.html"&gt;statistics-based pruning&lt;/a&gt; which
+can avoid reading entire files or row groups that contain no matching join keys.
+Thanks to &lt;a href="https://github.com/adriangb"&gt;adriangb&lt;/a&gt; for implementing this feature, with reviews from
+&lt;a href="https://github.com/LiaCastaneda"&gt;LiaCastaneda&lt;/a&gt;, &lt;a href="https://github.com/asolimando"&gt;asolimando&lt;/a&gt;, &lt;a href="https://github.com/comphead"&gt;comphead&lt;/a&gt;, and &lt;a href="https://github.com/mbutrovich"&gt;mbutrovich&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id="major-features"&gt;Major Features ✨&lt;a class="headerlink" href="#major-features" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;h3 id="arrow-ipc-stream-file-support"&gt;Arrow IPC Stream file support&lt;a class="headerlink" href="#arrow-ipc-stream-file-support" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;DataFusion can now read Arrow IPC stream files (&lt;a href="https://github.com/apache/datafusion/pull/18457"&gt;#18457&lt;/a&gt;). This expands
+interoperability with systems that emit Arrow streams directly, making it
+simpler to ingest Arrow-native data without conversion. Thanks to &lt;a href="https://github.com/corasaurus-hex"&gt;corasaurus-hex&lt;/a&gt;
+for implementing this feature, with reviews from &lt;a href="https://github.com/martin-g"&gt;martin-g&lt;/a&gt;, &lt;a href="https://github.com/Jefffrey"&gt;Jefffrey&lt;/a&gt;,
+&lt;a href="https://github.com/jdcasale"&gt;jdcasale&lt;/a&gt;, &lt;a href="https://github.com/2010YOUY01"&gt;2010YOUY01&lt;/a&gt;, and &lt;a href="https://github.com/timsaucer"&gt;timsaucer&lt;/a&gt;.&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;CREATE EXTERNAL TABLE ipc_events
+STORED AS ARROW
+LOCATION 's3://bucket/events.arrow';
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/18457"&gt;#18457&lt;/a&gt;&lt;/p&gt;
+&lt;h3 id="more-extensible-sql-planning-with-relationplanner"&gt;More Extensible SQL Planning with &lt;code&gt;RelationPlanner&lt;/code&gt;&lt;a class="headerlink" href="#more-extensible-sql-planning-with-relationplanner" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;DataFusion now has an API for extending the SQL planner for relations, as
+explained in the &lt;a href="https://datafusion.apache.org/blog/2026/01/12/extending-sql/"&gt;Extending SQL in DataFusion Blog&lt;/a&gt;. In addition to the existing
+expression and types extension points, this new API now allows extending &lt;code&gt;FROM&lt;/code&gt;
+clauses. Using these APIs it is straightforward to provide SQL support for
+almost any dialect, including vendor-specific syntax. Example use cases include:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;-- Postgres-style JSON operators
+SELECT payload-&amp;gt;'user'-&amp;gt;&amp;gt;'id' FROM logs;
+-- MySQL-specific types
+SELECT DATETIME '2001-01-01 18:00:00';
+-- Statistical sampling
+SELECT * FROM sensor_data TABLESAMPLE BERNOULLI(10 PERCENT);
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/geoffreyclaude"&gt;geoffreyclaude&lt;/a&gt; for implementing relation planner extensions, and to
+&lt;a href="https://github.com/theirix"&gt;theirix&lt;/a&gt;, &lt;a href="https://github.com/alamb"&gt;alamb&lt;/a&gt;, &lt;a href="https://github.com/NGA-TRAN"&gt;NGA-TRAN&lt;/a&gt;, and &lt;a href="https://github.com/gabotechs"&gt;gabotechs&lt;/a&gt; for reviews and feedback on the
+design. Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/17843"&gt;#17843&lt;/a&gt;&lt;/p&gt;
+&lt;h3 id="expression-evaluation-pushdown-to-scans"&gt;Expression Evaluation Pushdown to Scans&lt;a class="headerlink" href="#expression-evaluation-pushdown-to-scans" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;DataFusion now pushes down expression evaluation into TableProviders using 
+&lt;a href="https://docs.rs/datafusion/52.0.0/datafusion/physical_expr_adapter/trait.PhysicalExprAdapter.html"&gt;PhysicalExprAdapter&lt;/a&gt;, replacing the older SchemaAdapter approach (&lt;a href="https://github.com/apache/datafusion/issues/14993"&gt;#14993&lt;/a&gt;,
+&lt;a href="https://github.com/apache/datafusion/issues/16800"&gt;#16800&lt;/a&gt;). Predicates and expressions can now be customized for each
+individual file schema, opening additional optimization such as support for
+&lt;a href="https://github.com/apache/datafusion/issues/16116"&gt;Variant shredding&lt;/a&gt;. Thanks to &lt;a href="https://github.com/adriangb"&gt;adriangb&lt;/a&gt; for implementing PhysicalExprAdapter
+and reworking pushdown to use it. Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/18998"&gt;#18998&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/19345"&gt;#19345&lt;/a&gt;&lt;/p&gt;
+&lt;h3 id="sort-pushdown-to-scans"&gt;Sort Pushdown to Scans&lt;a class="headerlink" href="#sort-pushdown-to-scans" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;DataFusion can now push sorts into data sources (&lt;a href="https://github.com/apache/datafusion/issues/10433"&gt;#10433&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/19064"&gt;#19064&lt;/a&gt;).
+This allows table provider implementations to optimize based on
+sort knowledge for certain query patterns. For example, the provided Parquet
+data source now reverses the scan order of row groups and files when queried
+for the opposite of the file's natural sort (e.g. &lt;code&gt;DESC&lt;/code&gt; when the files are sorted &lt;code&gt;ASC&lt;/code&gt;).
+This reversal, combined with dynamic filtering, allows top-K queries with &lt;code&gt;LIMIT&lt;/code&gt;
+on pre-sorted data to find the requested rows very quickly, pruning more files and row groups
+without even scanning them. We have seen a ~30x performance improvement on
+benchmark queries with pre-sorted data.
+Thanks to &lt;a href="https://github.com/zhuqi-lucas"&gt;zhuqi-lucas&lt;/a&gt; and &lt;a href="https://github.com/xudong963"&gt;xudong963&lt;/a&gt; for this feature, with reviews from
+&lt;a href="https://github.com/martin-g"&gt;martin-g&lt;/a&gt;, &lt;a href="https://github.com/adriangb"&gt;adriangb&lt;/a&gt;, and &lt;a href="https://github.com/alamb"&gt;alamb&lt;/a&gt;.&lt;/p&gt;
+&lt;h3 id="tableprovider-supports-delete-and-update-statements"&gt;&lt;code&gt;TableProvider&lt;/code&gt; supports &lt;code&gt;DELETE&lt;/code&gt; and &lt;code&gt;UPDATE&lt;/code&gt; statements&lt;a class="headerlink" href="#tableprovider-supports-delete-and-update-statements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;The &lt;a href="https://docs.rs/datafusion/52.0.0/datafusion/datasource/trait.TableProvider.html"&gt;TableProvider&lt;/a&gt; trait now includes hooks for &lt;code&gt;DELETE&lt;/code&gt; and &lt;code&gt;UPDATE&lt;/code&gt;
+statements and the basic MemTable implements them (&lt;a href="https://github.com/apache/datafusion/pull/19142"&gt;#19142&lt;/a&gt;). This lets
+downstream implementations and storage engines plug in their own mutation logic.
+See &lt;a href="https://docs.rs/datafusion/52.0.0/datafusion/datasource/trait.TableProvider.html#method.delete_from"&gt;TableProvider::delete_from&lt;/a&gt; and &lt;a href="https://docs.rs/datafusion/52.0.0/datafusion/datasource/trait.TableProvider.html#method.update"&gt;TableProvider::update&lt;/a&gt; for more details.&lt;/p&gt;
+&lt;p&gt;Example:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;DELETE FROM mem_table WHERE status = 'obsolete';
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/ethan-tyler"&gt;ethan-tyler&lt;/a&gt; for the implementation and &lt;a href="https://github.com/alamb"&gt;alamb&lt;/a&gt; and &lt;a href="https://github.com/adriangb"&gt;adriangb&lt;/a&gt; for
+reviews.&lt;/p&gt;
+&lt;h3 id="coalescebatchesexec-removed"&gt;&lt;code&gt;CoalesceBatchesExec&lt;/code&gt; Removed&lt;a class="headerlink" href="#coalescebatchesexec-removed" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;The standalone &lt;code&gt;CoalesceBatchesExec&lt;/code&gt; operator existed to ensure batches were
+large enough for subsequent vectorized execution, and was inserted after
+filter-like operators such as &lt;code&gt;FilterExec&lt;/code&gt;, &lt;code&gt;HashJoinExec&lt;/code&gt;, and
+&lt;code&gt;RepartitionExec&lt;/code&gt;. However, using a separate operator also blocks other
+optimizations such as pushing &lt;code&gt;LIMIT&lt;/code&gt; through joins and made optimizer rules
+more complex. In this release, we  integrated the coalescing into the operators
+themselves (&lt;a href="https://github.com/apache/datafusion/issues/18779"&gt;#18779&lt;/a&gt;) using Arrow's &lt;a href="https://docs.rs/arrow/57.2.0/arrow/compute/kernels/coalesce/"&gt;coalesce kernel&lt;/a&gt;. This reduces plan
+complexity while keeping batch sizes efficient, and allows additional focused
+optimization work in the Arrow kernel, such as &lt;a href="https://github.com/Dandandan"&gt;Dandandan&lt;/a&gt;'s recent work with
+filtering in &lt;a href="https://github.com/apache/arrow-rs/pull/8951"&gt;arrow-rs/#8951&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/18540"&gt;#18540&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/18604"&gt;#18604&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/18630"&gt;#18630&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/18972"&gt;#18972&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/19002"&gt;#19002&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/19342"&gt;#19342&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/19239"&gt;#19239&lt;/a&gt;
+Thanks to &lt;a href="https://github.com/Tim-53"&gt;Tim-53&lt;/a&gt;, &lt;a href="https://github.com/Dandandan"&gt;Dandandan&lt;/a&gt;, &lt;a href="https://github.com/jizezhang"&gt;jizezhang&lt;/a&gt;, and &lt;a href="https://github.com/feniljain"&gt;feniljain&lt;/a&gt; for implementing
+this feature, with reviews from &lt;a href="https://github.com/Jefffrey"&gt;Jefffrey&lt;/a&gt;, &lt;a href="https://github.com/alamb"&gt;alamb&lt;/a&gt;, &lt;a href="https://github.com/martin-g"&gt;martin-g&lt;/a&gt;,
+&lt;a href="https://github.com/geoffreyclaude"&gt;geoffreyclaude&lt;/a&gt;, &lt;a href="https://github.com/milenkovicm"&gt;milenkovicm&lt;/a&gt;, and &lt;a href="https://github.com/jizezhang"&gt;jizezhang&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id="upgrade-guide-and-changelog"&gt;Upgrade Guide and Changelog&lt;a class="headerlink" href="#upgrade-guide-and-changelog" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;As always, upgrading to 52.0.0 should be straightforward for most users. Please review the
+&lt;a href="https://datafusion.apache.org/library-user-guide/upgrading.html"&gt;Upgrade Guide&lt;/a&gt;
+for details on breaking changes and code snippets to help with the transition.
+For a comprehensive list of all changes, please refer to the &lt;a href="https://github.com/apache/datafusion/blob/branch-52/dev/changelog/52.0.0.md"&gt;changelog&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id="about-datafusion"&gt;About DataFusion&lt;a class="headerlink" href="#about-datafusion" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;&lt;a href="https://datafusion.apache.org/"&gt;Apache DataFusion&lt;/a&gt; is an extensible query engine, written in &lt;a href="https://www.rust-lang.org/"&gt;Rust&lt;/a&gt;, that uses
+&lt;a href="https://arrow.apache.org"&gt;Apache Arrow&lt;/a&gt; as its in-memory format. DataFusion is used by developers to
+create new, fast, data-centric systems such as databases, dataframe libraries,
+and machine learning and streaming applications. While &lt;a href="https://datafusion.apache.org/user-guide/introduction.html#project-goals"&gt;DataFusion's primary
+design goal&lt;/a&gt; is to accelerate the creation of other data-centric systems, it
+provides a reasonable experience directly out of the box as a &lt;a href="https://datafusion.apache.org/user-guide/dataframe.html"&gt;dataframe
+library&lt;/a&gt;, &lt;a href="https://datafusion.apache.org/python/"&gt;Python library&lt;/a&gt;, and &lt;a href="https://datafusion.apache.org/user-guide/cli/"&gt;command-line SQL tool&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id="how-to-get-involved"&gt;How to Get Involved&lt;a class="headerlink" href="#how-to-get-involved" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;DataFusion is not a project built or driven by a single person, company, or
+foundation. Rather, our community of users and contributors works together to
+build a shared technology that none of us could have built alone.&lt;/p&gt;
+&lt;p&gt;If you are interested in joining us, we would love to have you. You can try out
+DataFusion on some of your own data and projects and let us know how it goes,
+contribute suggestions, documentation, bug reports, or a PR with documentation,
+tests, or code. A list of open issues suitable for beginners is &lt;a href="https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22"&gt;here&lt;/a&gt;, and you
+can find out how to reach us on the &lt;a href="https://datafusion.apache.org/contributor-guide/communication.html"&gt;communication doc&lt;/a&gt;.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Extending SQL in DataFusion: from -&gt;&gt; to TABLESAMPLE</title><link href="https://datafusion.apache.org/blog/2026/01/12/extending-sql" rel="alternate"></link><published>2026-01-12T00:00:00+00:00</published><updated>2026-01-12T00:00:00+00:00</updated><author><name>Geoffrey Claude (Datadog)</name></author><id>tag:datafusion.apache.org,2026-01-12:/blog/2026/01/12/extending-sql</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -283,245 +1938,7 @@ println!("{}", df.logical_plan().display_indent());
 &lt;li&gt;&lt;strong&gt;Try it out&lt;/strong&gt;: Implement one of the extension points and share your experience&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;File issues or join the conversation&lt;/strong&gt;: &lt;a href="https://github.com/apache/datafusion/"&gt;GitHub&lt;/a&gt; for bugs and feature requests, &lt;a href="https://datafusion.apache.org/contributor-guide/communication.html"&gt;Slack or Discord&lt;/a&gt; for discussion&lt;/li&gt;
 &lt;/ul&gt;
-&lt;!-- Reference links --&gt;</content><category term="blog"></category></entry><entry><title>Apache DataFusion 52.0.0 Released</title><link href="https://datafusion.apache.org/blog/2026/01/08/datafusion-52.0.0" rel="alternate"></link><published>2026-01-08T00:00:00+00:00</published><updated>2026-01-08T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2026-01-08:/blog/2026/01/08/datafusion-52.0.0</id><summary type="html">&lt;!--
-{% comment %}
-Licensed to the Apache Software Foundation (ASF) under one or more
-contributor license agreements.  See the NOTICE file distributed with
-this work for additional information regarding copyright ownership.
-The ASF licenses this file to you under the Apache License, Version 2.0
-(the "License"); you may not use this file except in compliance with
-the License.  You may obtain a copy of the License at
-
-http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-{% endcomment %}
---&gt;
-
-&lt;p&gt;We are proud to announce the release of &lt;a href="https://crates.io/crates/datafusion/52.0.0"&gt;DataFusion 52.0.0&lt;/a&gt;. This post highlights
-some of the major improvements since &lt;a href="https://datafusion.apache.org/blog/2025/11/25/datafusion-51.0.0/"&gt;DataFusion 51.0.0&lt;/a&gt;. The complete list of
-changes is available in the &lt;a href="https://github.com/apache/datafusion/blob/branch-52/dev/changelog/52.0.0.md"&gt;changelog&lt;/a&gt;. Thanks to the &lt;a href="https://github.com/apache/datafusion/blob/branch-52/dev/changelog/52.0.0.md#credits"&gt;121 contributors&lt;/a&gt; for
-making this release possible.&lt;/p&gt;
-&lt;h2 id="performance-improvements"&gt;Performance Improvements 🚀&lt;a class="headerlink" href="#performance-improvements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
-&lt;p&gt;We continue to …&lt;/p&gt;</summary><content type="html">&lt;!--
-{% comment %}
-Licensed to the Apache Software Foundation (ASF) under one or more
-contributor license agreements.  See the NOTICE file distributed with
-this work for additional information regarding copyright ownership.
-The ASF licenses this file to you under the Apache License, Version 2.0
-(the "License"); you may not use this file except in compliance with
-the License.  You may obtain a copy of the License at
-
-http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-{% endcomment %}
---&gt;
-
-&lt;p&gt;We are proud to announce the release of &lt;a href="https://crates.io/crates/datafusion/52.0.0"&gt;DataFusion 52.0.0&lt;/a&gt;. This post highlights
-some of the major improvements since &lt;a href="https://datafusion.apache.org/blog/2025/11/25/datafusion-51.0.0/"&gt;DataFusion 51.0.0&lt;/a&gt;. The complete list of
-changes is available in the &lt;a href="https://github.com/apache/datafusion/blob/branch-52/dev/changelog/52.0.0.md"&gt;changelog&lt;/a&gt;. Thanks to the &lt;a href="https://github.com/apache/datafusion/blob/branch-52/dev/changelog/52.0.0.md#credits"&gt;121 contributors&lt;/a&gt; for
-making this release possible.&lt;/p&gt;
-&lt;h2 id="performance-improvements"&gt;Performance Improvements 🚀&lt;a class="headerlink" href="#performance-improvements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
-&lt;p&gt;We continue to make significant performance improvements in DataFusion as explained below.&lt;/p&gt;
-&lt;h3 id="faster-case-expressions"&gt;Faster &lt;code&gt;CASE&lt;/code&gt; Expressions&lt;a class="headerlink" href="#faster-case-expressions" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
-&lt;p&gt;DataFusion 52 has lookup-table-based evaluation for certain &lt;code&gt;CASE&lt;/code&gt; expressions
-to avoid repeated evaluation for accelerating common ETL patterns such as&lt;/p&gt;
-&lt;pre&gt;&lt;code class="language-sql"&gt;CASE company
-    WHEN 1 THEN 'Apple'
-    WHEN 5 THEN 'Samsung'
-    WHEN 2 THEN 'Motorola'
-    WHEN 3 THEN 'LG'
-    ELSE 'Other'
-END
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;This is the final work in our &lt;code&gt;CASE&lt;/code&gt; performance epic (&lt;a href="https://github.com/apache/datafusion/issues/18075"&gt;#18075&lt;/a&gt;), which has
-improved &lt;code&gt;CASE&lt;/code&gt; evaluation significantly. Related PRs &lt;a href="https://github.com/apache/datafusion/pull/18183"&gt;#18183&lt;/a&gt;. Thanks to
-&lt;a href="https://github.com/rluvaton"&gt;rluvaton&lt;/a&gt; and &lt;a href="https://github.com/pepijnve"&gt;pepijnve&lt;/a&gt; for the implementation.&lt;/p&gt;
-&lt;h3 id="minmax-aggregate-dynamic-filters"&gt;&lt;code&gt;MIN&lt;/code&gt;/&lt;code&gt;MAX&lt;/code&gt; Aggregate Dynamic Filters&lt;a class="headerlink" href="#minmax-aggregate-dynamic-filters" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
-&lt;p&gt;DataFusion now creates dynamic filters for queries with &lt;code&gt;MIN&lt;/code&gt;/&lt;code&gt;MAX&lt;/code&gt; aggregates
-that have filters, but no &lt;code&gt;GROUP BY&lt;/code&gt;. These dynamic filters are used during scan
-to prune files and rows as tighter bounds are discovered during execution, as
-explained in the &lt;a href="https://datafusion.apache.org/blog/2025/09/10/dynamic-filters/#hash-join-dynamic-filters"&gt;Dynamic Filtering Blog&lt;/a&gt;. For example, the following query:&lt;/p&gt;
-&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT min(l_shipdate)
-FROM lineitem
-WHERE l_returnflag = 'R';
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;Is now executed like this  &lt;/p&gt;
-&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT min(l_shipdate)
-FROM lineitem
---  '__current_min' is updated dynamically during execution
-WHERE l_returnflag = 'R' AND l_shipdate &amp;lt; __current_min;
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;Thanks to &lt;a href="https://github.com/2010YOUY01"&gt;2010YOUY01&lt;/a&gt; for implementing this feature, with reviews from
-&lt;a href="https://github.com/martin-g"&gt;martin-g&lt;/a&gt;, &lt;a href="https://github.com/adriangb"&gt;adriangb&lt;/a&gt;, and &lt;a href="https://github.com/LiaCastaneda"&gt;LiaCastaneda&lt;/a&gt;. Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/18644"&gt;#18644&lt;/a&gt;&lt;/p&gt;
-&lt;h3 id="new-merge-join"&gt;New Merge Join&lt;a class="headerlink" href="#new-merge-join" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
-&lt;p&gt;DataFusion 52 includes a rewrite of the sort-merge join (SMJ) operator, with
-speedups of three orders of magnitude in some pathological cases such as the
-case in &lt;a href="https://github.com/apache/datafusion/issues/18487"&gt;#18487&lt;/a&gt;, which also affected &lt;a href="https://datafusion.apache.org/comet/"&gt;Apache Comet&lt;/a&gt; workloads. Benchmarks in
-&lt;a href="https://github.com/apache/datafusion/pull/18875"&gt;#18875&lt;/a&gt; show dramatic gains for TPC-H Q21 (minutes to milliseconds) while
-leaving other queries unchanged or modestly faster. Thanks to &lt;a href="https://github.com/mbutrovich"&gt;mbutrovich&lt;/a&gt; for
-the implementation and reviews from &lt;a href="https://github.com/Dandandan"&gt;Dandandan&lt;/a&gt;.&lt;/p&gt;
-&lt;h3 id="caching-improvements"&gt;Caching Improvements&lt;a class="headerlink" href="#caching-improvements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
-&lt;p&gt;This release also includes several additional caching improvements.&lt;/p&gt;
-&lt;p&gt;A new statistics cache for File Metadata avoids repeatedly (re)calculating
-statistics for files. This significantly improves planning time
-for certain queries. You can see the contents of the new cache using the
-&lt;a href="https://datafusion.apache.org/user-guide/cli/functions.html#statistics-cache"&gt;statistics_cache&lt;/a&gt; function in the CLI:&lt;/p&gt;
-&lt;pre&gt;&lt;code class="language-sql"&gt;select * from statistics_cache();
-+------------------+---------------------+-----------------+------------------------+---------+-----------------+-------------+--------------------+-----------------------+
-| path             | file_modified       | file_size_bytes | e_tag                  | version | num_rows        | num_columns | table_size_bytes   | statistics_size_bytes |
-+------------------+---------------------+-----------------+------------------------+---------+-----------------+-------------+--------------------+-----------------------+
-| .../hits.parquet | 2022-06-25T22:22:22 | 14779976446     | 0-5e24d1ee16380-370f48 | NULL    | Exact(99997497) | 105         | Exact(36445943240) | 0                     |
-+------------------+---------------------+-----------------+------------------------+---------+-----------------+-------------+--------------------+-----------------------+
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;Thanks to &lt;a href="https://github.com/bharath-techie"&gt;bharath-techie&lt;/a&gt; and &lt;a href="https://github.com/nuno-faria"&gt;nuno-faria&lt;/a&gt; for implementing the statistics cache,
-with reviews from &lt;a href="https://github.com/martin-g"&gt;martin-g&lt;/a&gt;, &lt;a href="https://github.com/alamb"&gt;alamb&lt;/a&gt;, and &lt;a href="https://github.com/alchemist51"&gt;alchemist51&lt;/a&gt;.
-Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/18971"&gt;#18971&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/19054"&gt;#19054&lt;/a&gt;&lt;/p&gt;
-&lt;p&gt;A prefix-aware list-files cache accelerates evaluating partition predicates for
-Hive partitioned tables.&lt;/p&gt;
-&lt;pre&gt;&lt;code class="language-sql"&gt;-- Read the hive partitioned dataset from Overture Maps (100s of Parquet files)
-CREATE EXTERNAL TABLE overturemaps
-STORED AS PARQUET LOCATION 's3://overturemaps-us-west-2/release/2025-12-17.0/';
--- Find all files where the path contains `theme=base without requiring another LIST call
-select count(*) from overturemaps where theme='base';
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;You can see the
-contents of the new cache using the &lt;a href="https://datafusion.apache.org/user-guide/cli/functions.html#list-files-cache"&gt;list_files_cache&lt;/a&gt; function in the CLI:&lt;/p&gt;
-&lt;pre&gt;&lt;code class="language-sql"&gt;create external table overturemaps
-stored as parquet
-location 's3://overturemaps-us-west-2/release/2025-12-17.0/theme=base/type=infrastructure';
-0 row(s) fetched.
-&amp;gt; select table, path, metadata_size_bytes, expires_in, unnest(metadata_list)['file_size_bytes'] as file_size_bytes, unnest(metadata_list)['e_tag'] as e_tag from list_files_cache() limit 10;
-+--------------+-----------------------------------------------------+---------------------+-----------------------------------+-----------------+---------------------------------------+
-| table        | path                                                | metadata_size_bytes | expires_in                        | file_size_bytes | e_tag                                 |
-+--------------+-----------------------------------------------------+---------------------+-----------------------------------+-----------------+---------------------------------------+
-| overturemaps | release/2025-12-17.0/theme=base/type=infrastructure | 2750                | 0 days 0 hours 0 mins 25.264 secs | 999055952       | "35fc8fbe8400960b54c66fbb408c48e8-60" |
-| overturemaps | release/2025-12-17.0/theme=base/type=infrastructure | 2750                | 0 days 0 hours 0 mins 25.264 secs | 975592768       | "8a16e10b722681cdc00242564b502965-59" |
-...
-| overturemaps | release/2025-12-17.0/theme=base/type=infrastructure | 2750                | 0 days 0 hours 0 mins 25.264 secs | 1016732378      | "6d70857a0473ed9ed3fc6e149814168b-61" |
-| overturemaps | release/2025-12-17.0/theme=base/type=infrastructure | 2750                | 0 days 0 hours 0 mins 25.264 secs | 991363784       | "c9cafb42fcbb413f851691c895dd7c2b-60" |
-| overturemaps | release/2025-12-17.0/theme=base/type=infrastructure | 2750                | 0 days 0 hours 0 mins 25.264 secs | 1032469715      | "7540252d0d67158297a67038a3365e0f-62" |
-+--------------+-----------------------------------------------------+---------------------+-----------------------------------+-----------------+---------------------------------------+
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;Thanks to &lt;a href="https://github.com/BlakeOrth"&gt;BlakeOrth&lt;/a&gt; and &lt;a href="https://github.com/Yuvraj-cyborg"&gt;Yuvraj-cyborg&lt;/a&gt; for implementing the list-files cache work,
-with reviews from &lt;a href="https://github.com/gabotechs"&gt;gabotechs&lt;/a&gt;, &lt;a href="https://github.com/alamb"&gt;alamb&lt;/a&gt;, &lt;a href="https://github.com/alchemist51"&gt;alchemist51&lt;/a&gt;, &lt;a href="https://github.com/martin-g"&gt;martin-g&lt;/a&gt;, and &lt;a href="https://github.com/BlakeOrth"&gt;BlakeOrth&lt;/a&gt;.
-Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/18146"&gt;#18146&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/18855"&gt;#18855&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/19366"&gt;#19366&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/19298"&gt;#19298&lt;/a&gt;, &lt;/p&gt;
-&lt;h3 id="improved-hash-join-filter-pushdown"&gt;Improved Hash Join Filter Pushdown&lt;a class="headerlink" href="#improved-hash-join-filter-pushdown" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
-&lt;p&gt;Starting in DataFusion 51, filtering information from &lt;code&gt;HashJoinExec&lt;/code&gt; is passed
-dynamically to scans, as explained in the &lt;a href="https://datafusion.apache.org/blog/2025/09/10/dynamic-filters/#hash-join-dynamic-filters"&gt;Dynamic Filtering Blog&lt;/a&gt; using a
-technique referred to as &lt;a href="https://dl.acm.org/doi/10.1109/ICDE.2008.4497486"&gt;Sideways Information Passing&lt;/a&gt; in Database research
-literature. The initial implementation passed min/max values for the join keys.
-DataFusion 52 extends the optimization (&lt;a href="https://github.com/apache/datafusion/issues/17171"&gt;#17171&lt;/a&gt; / &lt;a href="https://github.com/apache/datafusion/pull/18393"&gt;#18393&lt;/a&gt;) to pass the
-contents of the build side hash map. These filters are evaluated on the probe
-side scan to prune files, row groups, and individual rows. When the build side
-contains &lt;code&gt;20&lt;/code&gt; or fewer rows (configurable) the contents of the hash map are
-transformed to an &lt;code&gt;IN&lt;/code&gt; expression and used for &lt;a href="https://docs.rs/datafusion/latest/datafusion/physical_optimizer/pruning/struct.PruningPredicate.html"&gt;statistics-based pruning&lt;/a&gt; which
-can avoid reading entire files or row groups that contain no matching join keys.
-Thanks to &lt;a href="https://github.com/adriangb"&gt;adriangb&lt;/a&gt; for implementing this feature, with reviews from
-&lt;a href="https://github.com/LiaCastaneda"&gt;LiaCastaneda&lt;/a&gt;, &lt;a href="https://github.com/asolimando"&gt;asolimando&lt;/a&gt;, &lt;a href="https://github.com/comphead"&gt;comphead&lt;/a&gt;, and &lt;a href="https://github.com/mbutrovich"&gt;mbutrovich&lt;/a&gt;.&lt;/p&gt;
-&lt;h2 id="major-features"&gt;Major Features ✨&lt;a class="headerlink" href="#major-features" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
-&lt;h3 id="arrow-ipc-stream-file-support"&gt;Arrow IPC Stream file support&lt;a class="headerlink" href="#arrow-ipc-stream-file-support" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
-&lt;p&gt;DataFusion can now read Arrow IPC stream files (&lt;a href="https://github.com/apache/datafusion/pull/18457"&gt;#18457&lt;/a&gt;). This expands
-interoperability with systems that emit Arrow streams directly, making it
-simpler to ingest Arrow-native data without conversion. Thanks to &lt;a href="https://github.com/corasaurus-hex"&gt;corasaurus-hex&lt;/a&gt;
-for implementing this feature, with reviews from &lt;a href="https://github.com/martin-g"&gt;martin-g&lt;/a&gt;, &lt;a href="https://github.com/Jefffrey"&gt;Jefffrey&lt;/a&gt;,
-&lt;a href="https://github.com/jdcasale"&gt;jdcasale&lt;/a&gt;, &lt;a href="https://github.com/2010YOUY01"&gt;2010YOUY01&lt;/a&gt;, and &lt;a href="https://github.com/timsaucer"&gt;timsaucer&lt;/a&gt;.&lt;/p&gt;
-&lt;pre&gt;&lt;code class="language-sql"&gt;CREATE EXTERNAL TABLE ipc_events
-STORED AS ARROW
-LOCATION 's3://bucket/events.arrow';
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/18457"&gt;#18457&lt;/a&gt;&lt;/p&gt;
-&lt;h3 id="more-extensible-sql-planning-with-relationplanner"&gt;More Extensible SQL Planning with &lt;code&gt;RelationPlanner&lt;/code&gt;&lt;a class="headerlink" href="#more-extensible-sql-planning-with-relationplanner" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
-&lt;p&gt;DataFusion now has an API for extending the SQL planner for relations, as
-explained in the &lt;a href="https://datafusion.apache.org/blog/2026/01/12/extending-sql/"&gt;Extending SQL in DataFusion Blog&lt;/a&gt;. In addition to the existing
-expression and types extension points, this new API now allows extending &lt;code&gt;FROM&lt;/code&gt;
-clauses. Using these APIs it is straightforward to provide SQL support for
-almost any dialect, including vendor-specific syntax. Example use cases include:&lt;/p&gt;
-&lt;pre&gt;&lt;code class="language-sql"&gt;-- Postgres-style JSON operators
-SELECT payload-&amp;gt;'user'-&amp;gt;&amp;gt;'id' FROM logs;
--- MySQL-specific types
-SELECT DATETIME '2001-01-01 18:00:00';
--- Statistical sampling
-SELECT * FROM sensor_data TABLESAMPLE BERNOULLI(10 PERCENT);
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;Thanks to &lt;a href="https://github.com/geoffreyclaude"&gt;geoffreyclaude&lt;/a&gt; for implementing relation planner extensions, and to
-&lt;a href="https://github.com/theirix"&gt;theirix&lt;/a&gt;, &lt;a href="https://github.com/alamb"&gt;alamb&lt;/a&gt;, &lt;a href="https://github.com/NGA-TRAN"&gt;NGA-TRAN&lt;/a&gt;, and &lt;a href="https://github.com/gabotechs"&gt;gabotechs&lt;/a&gt; for reviews and feedback on the
-design. Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/17843"&gt;#17843&lt;/a&gt;&lt;/p&gt;
-&lt;h3 id="expression-evaluation-pushdown-to-scans"&gt;Expression Evaluation Pushdown to Scans&lt;a class="headerlink" href="#expression-evaluation-pushdown-to-scans" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
-&lt;p&gt;DataFusion now pushes down expression evaluation into TableProviders using 
-&lt;a href="https://docs.rs/datafusion/52.0.0/datafusion/physical_expr_adapter/trait.PhysicalExprAdapter.html"&gt;PhysicalExprAdapter&lt;/a&gt;, replacing the older SchemaAdapter approach (&lt;a href="https://github.com/apache/datafusion/issues/14993"&gt;#14993&lt;/a&gt;,
-&lt;a href="https://github.com/apache/datafusion/issues/16800"&gt;#16800&lt;/a&gt;). Predicates and expressions can now be customized for each
-individual file schema, opening additional optimization such as support for
-&lt;a href="https://github.com/apache/datafusion/issues/16116"&gt;Variant shredding&lt;/a&gt;. Thanks to &lt;a href="https://github.com/adriangb"&gt;adriangb&lt;/a&gt; for implementing PhysicalExprAdapter
-and reworking pushdown to use it. Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/18998"&gt;#18998&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/19345"&gt;#19345&lt;/a&gt;&lt;/p&gt;
-&lt;h3 id="sort-pushdown-to-scans"&gt;Sort Pushdown to Scans&lt;a class="headerlink" href="#sort-pushdown-to-scans" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
-&lt;p&gt;DataFusion can now push sorts into data sources (&lt;a href="https://github.com/apache/datafusion/issues/10433"&gt;#10433&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/19064"&gt;#19064&lt;/a&gt;).
-This allows table provider implementations to optimize based on
-sort knowledge for certain query patterns. For example, the provided Parquet
-data source now reverses the scan order of row groups and files when queried
-for the opposite of the file's natural sort (e.g. &lt;code&gt;DESC&lt;/code&gt; when the files are sorted &lt;code&gt;ASC&lt;/code&gt;).
-This reversal, combined with dynamic filtering, allows top-K queries with &lt;code&gt;LIMIT&lt;/code&gt;
-on pre-sorted data to find the requested rows very quickly, pruning more files and row groups
-without even scanning them. We have seen a ~30x performance improvement on
-benchmark queries with pre-sorted data.
-Thanks to &lt;a href="https://github.com/zhuqi-lucas"&gt;zhuqi-lucas&lt;/a&gt; and &lt;a href="https://github.com/xudong963"&gt;xudong963&lt;/a&gt; for this feature, with reviews from
-&lt;a href="https://github.com/martin-g"&gt;martin-g&lt;/a&gt;, &lt;a href="https://github.com/adriangb"&gt;adriangb&lt;/a&gt;, and &lt;a href="https://github.com/alamb"&gt;alamb&lt;/a&gt;.&lt;/p&gt;
-&lt;h3 id="tableprovider-supports-delete-and-update-statements"&gt;&lt;code&gt;TableProvider&lt;/code&gt; supports &lt;code&gt;DELETE&lt;/code&gt; and &lt;code&gt;UPDATE&lt;/code&gt; statements&lt;a class="headerlink" href="#tableprovider-supports-delete-and-update-statements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
-&lt;p&gt;The &lt;a href="https://docs.rs/datafusion/52.0.0/datafusion/datasource/trait.TableProvider.html"&gt;TableProvider&lt;/a&gt; trait now includes hooks for &lt;code&gt;DELETE&lt;/code&gt; and &lt;code&gt;UPDATE&lt;/code&gt;
-statements and the basic MemTable implements them (&lt;a href="https://github.com/apache/datafusion/pull/19142"&gt;#19142&lt;/a&gt;). This lets
-downstream implementations and storage engines plug in their own mutation logic.
-See &lt;a href="https://docs.rs/datafusion/52.0.0/datafusion/datasource/trait.TableProvider.html#method.delete_from"&gt;TableProvider::delete_from&lt;/a&gt; and &lt;a href="https://docs.rs/datafusion/52.0.0/datafusion/datasource/trait.TableProvider.html#method.update"&gt;TableProvider::update&lt;/a&gt; for more details.&lt;/p&gt;
-&lt;p&gt;Example:&lt;/p&gt;
-&lt;pre&gt;&lt;code class="language-sql"&gt;DELETE FROM mem_table WHERE status = 'obsolete';
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;Thanks to &lt;a href="https://github.com/ethan-tyler"&gt;ethan-tyler&lt;/a&gt; for the implementation and &lt;a href="https://github.com/alamb"&gt;alamb&lt;/a&gt; and &lt;a href="https://github.com/adriangb"&gt;adriangb&lt;/a&gt; for
-reviews.&lt;/p&gt;
-&lt;h3 id="coalescebatchesexec-removed"&gt;&lt;code&gt;CoalesceBatchesExec&lt;/code&gt; Removed&lt;a class="headerlink" href="#coalescebatchesexec-removed" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
-&lt;p&gt;The standalone &lt;code&gt;CoalesceBatchesExec&lt;/code&gt; operator existed to ensure batches were
-large enough for subsequent vectorized execution, and was inserted after
-filter-like operators such as &lt;code&gt;FilterExec&lt;/code&gt;, &lt;code&gt;HashJoinExec&lt;/code&gt;, and
-&lt;code&gt;RepartitionExec&lt;/code&gt;. However, using a separate operator also blocks other
-optimizations such as pushing &lt;code&gt;LIMIT&lt;/code&gt; through joins and made optimizer rules
-more complex. In this release, we  integrated the coalescing into the operators
-themselves (&lt;a href="https://github.com/apache/datafusion/issues/18779"&gt;#18779&lt;/a&gt;) using Arrow's &lt;a href="https://docs.rs/arrow/57.2.0/arrow/compute/kernels/coalesce/"&gt;coalesce kernel&lt;/a&gt;. This reduces plan
-complexity while keeping batch sizes efficient, and allows additional focused
-optimization work in the Arrow kernel, such as &lt;a href="https://github.com/Dandandan"&gt;Dandandan&lt;/a&gt;'s recent work with
-filtering in &lt;a href="https://github.com/apache/arrow-rs/pull/8951"&gt;arrow-rs/#8951&lt;/a&gt;.&lt;/p&gt;
-&lt;p&gt;Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/18540"&gt;#18540&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/18604"&gt;#18604&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/18630"&gt;#18630&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/18972"&gt;#18972&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/19002"&gt;#19002&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/19342"&gt;#19342&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/19239"&gt;#19239&lt;/a&gt;
-Thanks to &lt;a href="https://github.com/Tim-53"&gt;Tim-53&lt;/a&gt;, &lt;a href="https://github.com/Dandandan"&gt;Dandandan&lt;/a&gt;, &lt;a href="https://github.com/jizezhang"&gt;jizezhang&lt;/a&gt;, and &lt;a href="https://github.com/feniljain"&gt;feniljain&lt;/a&gt; for implementing
-this feature, with reviews from &lt;a href="https://github.com/Jefffrey"&gt;Jefffrey&lt;/a&gt;, &lt;a href="https://github.com/alamb"&gt;alamb&lt;/a&gt;, &lt;a href="https://github.com/martin-g"&gt;martin-g&lt;/a&gt;,
-&lt;a href="https://github.com/geoffreyclaude"&gt;geoffreyclaude&lt;/a&gt;, &lt;a href="https://github.com/milenkovicm"&gt;milenkovicm&lt;/a&gt;, and &lt;a href="https://github.com/jizezhang"&gt;jizezhang&lt;/a&gt;.&lt;/p&gt;
-&lt;h2 id="upgrade-guide-and-changelog"&gt;Upgrade Guide and Changelog&lt;a class="headerlink" href="#upgrade-guide-and-changelog" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
-&lt;p&gt;As always, upgrading to 52.0.0 should be straightforward for most users. Please review the
-&lt;a href="https://datafusion.apache.org/library-user-guide/upgrading.html"&gt;Upgrade Guide&lt;/a&gt;
-for details on breaking changes and code snippets to help with the transition.
-For a comprehensive list of all changes, please refer to the &lt;a href="https://github.com/apache/datafusion/blob/branch-52/dev/changelog/52.0.0.md"&gt;changelog&lt;/a&gt;.&lt;/p&gt;
-&lt;h2 id="about-datafusion"&gt;About DataFusion&lt;a class="headerlink" href="#about-datafusion" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
-&lt;p&gt;&lt;a href="https://datafusion.apache.org/"&gt;Apache DataFusion&lt;/a&gt; is an extensible query engine, written in &lt;a href="https://www.rust-lang.org/"&gt;Rust&lt;/a&gt;, that uses
-&lt;a href="https://arrow.apache.org"&gt;Apache Arrow&lt;/a&gt; as its in-memory format. DataFusion is used by developers to
-create new, fast, data-centric systems such as databases, dataframe libraries,
-and machine learning and streaming applications. While &lt;a href="https://datafusion.apache.org/user-guide/introduction.html#project-goals"&gt;DataFusion's primary
-design goal&lt;/a&gt; is to accelerate the creation of other data-centric systems, it
-provides a reasonable experience directly out of the box as a &lt;a href="https://datafusion.apache.org/user-guide/dataframe.html"&gt;dataframe
-library&lt;/a&gt;, &lt;a href="https://datafusion.apache.org/python/"&gt;Python library&lt;/a&gt;, and &lt;a href="https://datafusion.apache.org/user-guide/cli/"&gt;command-line SQL tool&lt;/a&gt;.&lt;/p&gt;
-&lt;h2 id="how-to-get-involved"&gt;How to Get Involved&lt;a class="headerlink" href="#how-to-get-involved" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
-&lt;p&gt;DataFusion is not a project built or driven by a single person, company, or
-foundation. Rather, our community of users and contributors works together to
-build a shared technology that none of us could have built alone.&lt;/p&gt;
-&lt;p&gt;If you are interested in joining us, we would love to have you. You can try out
-DataFusion on some of your own data and projects and let us know how it goes,
-contribute suggestions, documentation, bug reports, or a PR with documentation,
-tests, or code. A list of open issues suitable for beginners is &lt;a href="https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22"&gt;here&lt;/a&gt;, and you
-can find out how to reach us on the &lt;a href="https://datafusion.apache.org/contributor-guide/communication.html"&gt;communication doc&lt;/a&gt;.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Optimizing Repartitions in DataFusion: How I Went From Database Noob to Core Contribution</title><link href="https://datafusion.apache.org/blog/2025/12/15/avoid-consecutive-repartitions" rel="alternate"></link><published>2025-12-15T00:00:00+00:00</published><updated>2025-12-15T00:00:00+00:00</updated><author><name>Gene Bordegaray</name></author><id>tag:datafusion.apache.org,2025-12-15:/blog/2025/12/15/avoid-consecutive-repartitions</id><summary type="html">&lt;!--
+&lt;!-- Reference links --&gt;</content><category term="blog"></category></entry><entry><title>Optimizing Repartitions in DataFusion: How I Went From Database Noob to Core Contribution</title><link href="https://datafusion.apache.org/blog/2025/12/15/avoid-consecutive-repartitions" rel="alternate"></link><published>2025-12-15T00:00:00+00:00</published><updated>2025-12-15T00:00:00+00:00</updated><author><name>Gene Bordegaray</name></author><id>tag:datafusion.apache.org,2025-12-15:/blog/2025/12/15/avoid-consecutive-repartitions</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -6545,7 +7962,7 @@ to register the view and then use it in another place:&lt;/p&gt;
 &lt;pre&gt;&lt;code class="language-python"&gt;ctx.register_view("view1", df1)
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;And then in another portion of your code which has access to the same session context
-you can retrive the DataFrame with:&lt;/p&gt;
+you can retrieve the DataFrame with:&lt;/p&gt;
 &lt;pre&gt;&lt;code&gt;df2 = ctx.table("view1")
 &lt;/code&gt;&lt;/pre&gt;
 &lt;h2 id="asynchronous-iteration-of-record-batches"&gt;Asynchronous Iteration of Record Batches&lt;a class="headerlink" href="#asynchronous-iteration-of-record-batches" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
@@ -8179,7 +9596,7 @@ consistent method for exposing these data structures across libraries.&lt;/p&gt;
 &lt;p&gt;In &lt;a href="https://github.com/apache/datafusion-python/pull/825"&gt;PR #825&lt;/a&gt;, we introduced support for both importing and exporting Arrow data in
 &lt;code&gt;datafusion-python&lt;/code&gt;. With this improvement, you can now use a single function call to import
 a table from &lt;strong&gt;any&lt;/strong&gt; Python library that implements the &lt;a href="https://arrow.apache.org/docs/format/CDataInterface/PyCapsuleInterface.html"&gt;Arrow PyCapsule Interface&lt;/a&gt;.
-Many popular libaries, such as &lt;a href="https://pandas.pydata.org/"&gt;Pandas&lt;/a&gt; and &lt;a href="https://pola.rs/"&gt;Polars&lt;/a&gt;
+Many popular libraries, such as &lt;a href="https://pandas.pydata.org/"&gt;Pandas&lt;/a&gt; and &lt;a href="https://pola.rs/"&gt;Polars&lt;/a&gt;
 already support these interfaces.&lt;/p&gt;
 &lt;p&gt;Suppose you have a Pandas and Polars DataFrames named &lt;code&gt;df_pandas&lt;/code&gt; or &lt;code&gt;df_polars&lt;/code&gt;, respectively:&lt;/p&gt;
 &lt;pre&gt;&lt;code class="language-python"&gt;ctx = SessionContext()
@@ -8239,7 +9656,7 @@ of the blog post describing how these enhancements can lead to 20-200% performan
 gains in some tests.&lt;/p&gt;
 &lt;p&gt;During our testing we identified some cases where we needed to adjust workflows to
 account for the fact that StringView is now the default type for string based operations.
-First, when performing manipulations on string objects there is a perfomance loss when
+First, when performing manipulations on string objects there is a performance loss when
 needing to cast from string to string view or vice versa. To reap the best performance,
 ideally all of your string type data will use StringView. For most users this should be
 transparent. However if you specify a schema for reading or creating data, then you
@@ -8476,7 +9893,7 @@ than a join can be significantly faster. This is worth profiling for your specif
 &lt;p&gt;I have a DataFrame with many values that I want to aggregate. I have already analyzed it and
 determined there is a noise level below which I do not want to include in my analysis. I want to
 compute a sum of only values that are above my noise threshold.&lt;/p&gt;
-&lt;p&gt;This can be done fairly easy without leaning on a User Defined Aggegate Function (UDAF). You can
+&lt;p&gt;This can be done fairly easy without leaning on a User Defined Aggregate Function (UDAF). You can
 simply filter the DataFrame and then aggregate using the built-in &lt;code&gt;sum&lt;/code&gt; function. Here, we
 demonstrate doing this as a UDF primarily as an example of how to write UDAFs. We will use the
 PyArrow compute approach.&lt;/p&gt;
@@ -8637,7 +10054,7 @@ Python, is to primarily demonstrate how to make the Python to Rust with Python w
 transition. In the second implementation you can see how we can iterate through all of the arrays
 ourselves.&lt;/p&gt;
 &lt;p&gt;In this first example, we are hard coding the values of interest, but in the following section
-we demonstrate passing these in during initalization.&lt;/p&gt;
+we demonstrate passing these in during initialization.&lt;/p&gt;
 &lt;pre&gt;&lt;code class="language-rust"&gt;#[pyfunction]
 pub fn tuple_filter_fn(
     py: Python&amp;lt;'_&amp;gt;,
@@ -8860,13 +10277,13 @@ how much they have ordered total. We want to ignore small orders, which we defin
 import pyarrow as pa
 import pyarrow.compute as pc
 
-IGNORE_THESHOLD = 5000.0
+IGNORE_THRESHOLD = 5000.0
 class AboveThresholdAccum(Accumulator):
     def __init__(self) -&amp;gt; None:
         self._sum = 0.0
 
     def update(self, values: pa.Array) -&amp;gt; None:
-        over_threshold = pc.greater(values, pa.scalar(IGNORE_THESHOLD))
+        over_threshold = pc.greater(values, pa.scalar(IGNORE_THRESHOLD))
         sum_above = pc.sum(values.filter(over_threshold)).as_py()
         if sum_above is None:
             sum_above = 0.0
@@ -9441,8 +10858,8 @@ Figure 1 illustrates the difference between the output of both string representa
 &lt;h1 id="when-to-gc"&gt;When to GC?&lt;a class="headerlink" href="#when-to-gc" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h1&gt;
 &lt;p&gt;Zero-copy &lt;code&gt;take/filter&lt;/code&gt; is great for generating large arrays quickly, but it is suboptimal for highly selective filters, where most of the strings are filtered out. When the cardinality drops, StringViewArray buffers become sparse—only a small subset of the bytes in the buffer’s memory are referred to by any &lt;code&gt;view&lt;/code&gt;. This leads to excessive memory usage, especially in a &lt;a href="https://github.com/apache/datafusion/issues/11628"&gt;filter-then-coalesce scenario&lt;/a&gt;. For example, a StringViewArray with 10M strings may only refer to 1M strings after some filter operations; however, due to zero-copy take/filter, the (reused) 10M buffers can not be released/reused.&lt;/p&gt;
 &lt;p&gt;To release unused memory, we implemented a &lt;a href="https://docs.rs/arrow/latest/arrow/array/struct.GenericByteViewArray.html#method.gc"&gt;garbage collection (GC)&lt;/a&gt; routine to consolidate the data into a new buffer to release the old sparse buffer(s). As the GC operation copies strings, similarly to StringArray, we must be careful about when to call it. If we call GC too early, we cause unnecessary copying, losing much of the benefit of StringViewArray. If we call GC too late, we hold large buffers for too long, increasing memory use and decreasing cache efficiency. The &lt;a href="https://pola.rs/posts/polars-string-type/"&gt;Polars blog&lt;/a&gt; on StringView also refers to the challenge presented by garbage collection timing.&lt;/p&gt;
-&lt;p&gt;&lt;code&gt;arrow-rs&lt;/code&gt; implements the GC process, but it is up to users to decide when to call it. We leverage the semantics of the query engine and observed that the &lt;a href="https://docs.rs/datafusion/latest/datafusion/physical_plan/coalesce_batches/struct.CoalesceBatchesExec.html"&gt;&lt;code&gt;CoalseceBatchesExec&lt;/code&gt;&lt;/a&gt; operator, which merge smaller batches to a larger batch, is often used after the record cardinality is expected to shrink, which aligns perfectly with the scenario of GC in StringViewArray. 
-We, therefore,&lt;a href="https://github.com/apache/datafusion/pull/11587"&gt; implemented the GC procedure&lt;/a&gt; inside &lt;code&gt;CoalseceBatchesExec&lt;/code&gt;[^5] with a heuristic that estimates when the buffers are too sparse.&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;arrow-rs&lt;/code&gt; implements the GC process, but it is up to users to decide when to call it. We leverage the semantics of the query engine and observed that the &lt;a href="https://docs.rs/datafusion/latest/datafusion/physical_plan/coalesce_batches/struct.CoalesceBatchesExec.html"&gt;&lt;code&gt;CoalesceBatchesExec&lt;/code&gt;&lt;/a&gt; operator, which merge smaller batches to a larger batch, is often used after the record cardinality is expected to shrink, which aligns perfectly with the scenario of GC in StringViewArray. 
+We, therefore,&lt;a href="https://github.com/apache/datafusion/pull/11587"&gt; implemented the GC procedure&lt;/a&gt; inside &lt;code&gt;CoalesceBatchesExec&lt;/code&gt;[^5] with a heuristic that estimates when the buffers are too sparse.&lt;/p&gt;
 &lt;h2 id="the-art-of-function-inlining-not-too-much-not-too-little"&gt;The art of function inlining: not too much, not too little&lt;a class="headerlink" href="#the-art-of-function-inlining-not-too-much-not-too-little" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;Like string inlining, &lt;em&gt;function&lt;/em&gt; inlining is the process of embedding a short function into the caller to avoid the overhead of function calls (caller/callee save). 
 Usually, the Rust compiler does a good job of deciding when to inline. However, it is possible to override its default using the &lt;a href="https://doc.rust-lang.org/reference/attributes/codegen.html#the-inline-attribute"&gt;&lt;code&gt;#[inline(always)]&lt;/code&gt; directive&lt;/a&gt;. 
@@ -9641,7 +11058,7 @@ to their Rust counterparts.&lt;/li&gt;
 &lt;p&gt;The most significant difference is that we have added wrapper functions and classes for most of the
 user facing interface. These wrappers, written in Python, contain both documentation and type
 annotations.&lt;/p&gt;
-&lt;p&gt;This documenation is now available on the &lt;a href="https://datafusion.apache.org/python/autoapi/datafusion/index.html"&gt;DataFusion in Python API&lt;/a&gt; website. There you can browse
+&lt;p&gt;This documentation is now available on the &lt;a href="https://datafusion.apache.org/python/autoapi/datafusion/index.html"&gt;DataFusion in Python API&lt;/a&gt; website. There you can browse
 the available functions and classes to see the breadth of available functionality.&lt;/p&gt;
 &lt;p&gt;Modern IDEs use language servers such as
 &lt;a href="https://marketplace.visualstudio.com/items?itemName=ms-python.vscode-pylance"&gt;Pylance&lt;/a&gt; or
@@ -10565,7 +11982,7 @@ LIMIT 3;
 3 rows in set. Query took 0.053 seconds.
 &lt;/code&gt;&lt;/pre&gt;
 &lt;h3 id="growth-of-datafusion"&gt;Growth of DataFusion 📈&lt;a class="headerlink" href="#growth-of-datafusion" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
-&lt;p&gt;DataFusion has been appearing more publically in the wild. For example
+&lt;p&gt;DataFusion has been appearing more publicly in the wild. For example
 * New projects built using DataFusion such as &lt;a href="https://lancedb.com/"&gt;lancedb&lt;/a&gt;, &lt;a href="https://glaredb.com/"&gt;GlareDB&lt;/a&gt;, &lt;a href="https://www.arroyo.dev/"&gt;Arroyo&lt;/a&gt;, and &lt;a href="https://github.com/cmu-db/optd"&gt;optd&lt;/a&gt;.
 * Public talks such as &lt;a href="https://www.youtube.com/watch?v=AJU9rdRNk9I"&gt;Apache Arrow Datafusion: Vectorized
   Execution Framework For Maximum Performance&lt;/a&gt; in &lt;a href="https://www.bagevent.com/event/8432178"&gt;CommunityOverCode Asia 2023&lt;/a&gt; 
@@ -11317,7 +12734,7 @@ required synchronous access to all relevant catalog information.&lt;/p&gt;
 &lt;li&gt;Automatic coercions ast between Date and Timestamp &lt;a href="https://github.com/apache/arrow-datafusion/issues/4726"&gt;#4726&lt;/a&gt;&lt;/li&gt;
 &lt;li&gt;Support type coercion for timestamp and utf8 &lt;a href="https://github.com/apache/arrow-datafusion/issues/4312"&gt;#4312&lt;/a&gt;&lt;/li&gt;
 &lt;li&gt;Full support for time32 and time64 literal values (&lt;code&gt;ScalarValue&lt;/code&gt;) &lt;a href="https://github.com/apache/arrow-datafusion/issues/4156"&gt;#4156&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;New functions, incuding &lt;code&gt;uuid()&lt;/code&gt; &lt;a href="https://github.com/apache/arrow-datafusion/issues/4041"&gt;#4041&lt;/a&gt;, &lt;code&gt;current_time&lt;/code&gt; &lt;a href="https://github.com/apache/arrow-datafusion/issues/4054"&gt;#4054&lt;/a&gt;, &lt;code&gt;current_date&lt;/code&gt; &lt;a href="https://github.com/apache/arrow-datafusion/issues/4022"&gt;#4022&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;New functions, including &lt;code&gt;uuid()&lt;/code&gt; &lt;a href="https://github.com/apache/arrow-datafusion/issues/4041"&gt;#4041&lt;/a&gt;, &lt;code&gt;current_time&lt;/code&gt; &lt;a href="https://github.com/apache/arrow-datafusion/issues/4054"&gt;#4054&lt;/a&gt;, &lt;code&gt;current_date&lt;/code&gt; &lt;a href="https://github.com/apache/arrow-datafusion/issues/4022"&gt;#4022&lt;/a&gt;&lt;/li&gt;
 &lt;li&gt;Compressed CSV/JSON support &lt;a href="https://github.com/apache/arrow-datafusion/issues/3642"&gt;#3642&lt;/a&gt;&lt;/li&gt;
 &lt;/ul&gt;
 &lt;p&gt;The community has also invested in new &lt;a href="https://github.com/apache/arrow-datafusion/blob/master/datafusion/core/tests/sqllogictests/README.md"&gt;sqllogic based&lt;/a&gt; tests to keep improving DataFusion's quality with less effort.&lt;/p&gt;
@@ -12169,7 +13586,7 @@ git shortlog -sn 5.0.0..6.0.0 datafusion datafusion-cli datafusion-examples | wc
 &lt;li&gt;Switch from &lt;code&gt;std::sync::Mutex&lt;/code&gt; to &lt;code&gt;parking_lot::Mutex&lt;/code&gt; &lt;a href="https://github.com/apache/arrow-datafusion/pull/1720"&gt;#1720&lt;/a&gt;&lt;/li&gt;
 &lt;li&gt;New Features&lt;/li&gt;
 &lt;li&gt;Support for memory tracking and spilling to disk&lt;ul&gt;
-&lt;li&gt;MemoryMananger and DiskManager &lt;a href="https://github.com/apache/arrow-datafusion/pull/1526"&gt;#1526&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;MemoryManager and DiskManager &lt;a href="https://github.com/apache/arrow-datafusion/pull/1526"&gt;#1526&lt;/a&gt;&lt;/li&gt;
 &lt;li&gt;Out of core sort &lt;a href="https://github.com/apache/arrow-datafusion/pull/1526"&gt;#1526&lt;/a&gt;&lt;/li&gt;
 &lt;li&gt;New metrics&lt;/li&gt;
 &lt;li&gt;&lt;code&gt;Gauge&lt;/code&gt; and &lt;code&gt;CurrentMemoryUsage&lt;/code&gt; &lt;a href="https://github.com/apache/arrow-datafusion/pull/1682"&gt;#1682&lt;/a&gt;&lt;/li&gt;
