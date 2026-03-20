@@ -1,7 +1,7 @@
 ---
 layout: post
 title: Turning LIMIT into an I/O Optimization: Inside DataFusion’s Multi-Layer Pruning Stack
-date: 2026-03-10
+date: 2026-03-20
 author: xudong
 categories: [features]
 ---
