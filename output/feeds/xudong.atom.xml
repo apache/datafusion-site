@@ -1,0 +1,313 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - xudong</title><link href="https://datafusion.apache.org/blog/" rel="alternate"></link><link href="https://datafusion.apache.org/blog/feeds/xudong.atom.xml" rel="self"></link><id>https://datafusion.apache.org/blog/</id><updated>2026-03-20T00:00:00+00:00</updated><subtitle></subtitle><entry><title>Turning LIMIT into an I/O Optimization: Inside DataFusion’s Multi-Layer Pruning Stack</title><link href="https://datafusion.apache.org/blog/2026/03/20/limit-pruning" rel="alternate"></link><published>2026-03-20T00:00:00+00:00</published><updated>2026-03-20T00:00:00+00:00</updated><author><name>xudong</name></author><id>tag:datafusion.apache.org,2026-03-20:/blog/2026/03/20/limit-pruning</id><summary type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+
+&lt;style&gt;
+figure {
+  margin: 20px 0;
+}
+
+figure img {
+  display: block;
+  max-width: 80%;
+  margin: auto;
+}
+
+figcaption {
+  font-style: italic;
+  color: #555;
+  font-size: 0.9em;
+  max-width: 80%;
+  margin: auto;
+  text-align: center;
+}
+&lt;/style&gt;
+&lt;p&gt;&lt;em&gt;Xudong Wang, &lt;a href="https://www.massive.com/"&gt;Massive&lt;/a&gt;&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;Reading data efficiently means touching as little data as possible. The fastest I/O is the I/O you never make …&lt;/p&gt;</summary><content type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+
+&lt;style&gt;
+figure {
+  margin: 20px 0;
+}
+
+figure img {
+  display: block;
+  max-width: 80%;
+  margin: auto;
+}
+
+figcaption {
+  font-style: italic;
+  color: #555;
+  font-size: 0.9em;
+  max-width: 80%;
+  margin: auto;
+  text-align: center;
+}
+&lt;/style&gt;
+&lt;p&gt;&lt;em&gt;Xudong Wang, &lt;a href="https://www.massive.com/"&gt;Massive&lt;/a&gt;&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;Reading data efficiently means touching as little data as possible. The fastest I/O is the I/O you never make. This sounds obvious, but making it happen in practice requires careful engineering at every layer of the query engine. &lt;a href="https://datafusion.apache.org/"&gt;Apache DataFusion&lt;/a&gt; achieves this through a multi-layer &lt;strong&gt;pruning pipeline&lt;/strong&gt; — a series of stages that progressively narrow down the data before decoding a single row.&lt;/p&gt;
+&lt;p&gt;In this post, we describe a new optimization called &lt;strong&gt;limit pruning&lt;/strong&gt; that makes this pipeline aware of SQL &lt;code&gt;LIMIT&lt;/code&gt; clauses. By identifying row groups where &lt;em&gt;every&lt;/em&gt; row is guaranteed to match the predicate, DataFusion can satisfy a &lt;code&gt;LIMIT&lt;/code&gt; query without ever touching partially matching row groups — eliminating wasted I/O entirely.&lt;/p&gt;
+&lt;p&gt;For example, given a query like:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT * FROM tracking_data
+WHERE species LIKE 'Alpine%' AND s &amp;gt;= 50
+LIMIT 3
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;If the pruning pipeline already knows that certain row groups fully satisfy the &lt;code&gt;WHERE&lt;/code&gt; clause, those groups alone may contain enough rows to fill the &lt;code&gt;LIMIT&lt;/code&gt; — making it unnecessary to scan anything else.&lt;/p&gt;
+&lt;p&gt;This work was inspired by the "Pruning for LIMIT Queries" section of Snowflake's paper &lt;a href="https://arxiv.org/pdf/2504.11540"&gt;&lt;em&gt;Pruning in Snowflake: Working Smarter, Not Harder&lt;/em&gt;&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id="datafusions-pruning-pipeline"&gt;DataFusion's Pruning Pipeline&lt;a class="headerlink" href="#datafusions-pruning-pipeline" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Before diving into limit pruning, let's understand the full pruning pipeline. DataFusion scans Parquet data through a series of increasingly fine-grained filters, each one eliminating data so the next stage processes less:&lt;/p&gt;
+&lt;figure&gt;
+&lt;img alt="Three phases of DataFusion's pruning pipeline" src="/blog/images/limit-pruning/pruning-phases.svg" width="80%"/&gt;
+&lt;figcaption&gt;Figure 1: The three phases of DataFusion's pruning pipeline — from directories down to individual rows.&lt;/figcaption&gt;
+&lt;/figure&gt;
+&lt;h3 id="phase-1-high-level-discovery"&gt;Phase 1: High-Level Discovery&lt;a class="headerlink" href="#phase-1-high-level-discovery" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Partition Pruning&lt;/strong&gt;: The &lt;a href="https://docs.rs/datafusion/latest/datafusion/datasource/listing/struct.ListingTable.html"&gt;ListingTable&lt;/a&gt; component evaluates filters that depend only on partition columns — things like &lt;code&gt;year&lt;/code&gt;, &lt;code&gt;month&lt;/code&gt;, or &lt;code&gt;region&lt;/code&gt; encoded in directory paths (e.g., &lt;code&gt;s3://data/year=2024/month=01/&lt;/code&gt;). Irrelevant directories are eliminated before we even open a file.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;File Stats Pruning&lt;/strong&gt;: The &lt;a href="https://docs.rs/datafusion/latest/datafusion/physical_optimizer/pruning/struct.FilePruner.html"&gt;FilePruner&lt;/a&gt; checks file-level min/max and null-count statistics. If these statistics prove that a file cannot satisfy the predicate, we drop it entirely — no need to read row group metadata.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id="phase-2-row-group-statistics"&gt;Phase 2: Row Group Statistics&lt;a class="headerlink" href="#phase-2-row-group-statistics" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;For each surviving file, DataFusion reads row group metadata and potentially &lt;a href="https://parquet.apache.org/docs/file-format/bloomfilter/"&gt;bloom filters&lt;/a&gt; and classifies each row group into one of three states (the example data shown in the figures below, such as "Snow Vole" and "Alpine Ibex", is adapted from the &lt;a href="https://arxiv.org/pdf/2504.11540"&gt;Snowflake pruning paper&lt;/a&gt;):&lt;/p&gt;
+&lt;figure&gt;
+&lt;img alt="Row group classification: not matching, partially matching, fully matching" src="/blog/images/limit-pruning/row-group-states.svg" width="80%"/&gt;
+&lt;figcaption&gt;Figure 2: Row groups are classified into three states based on their statistics.&lt;/figcaption&gt;
+&lt;/figure&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Not Matching (Skipped)&lt;/strong&gt;: Statistics prove no rows can match. The row group is ignored completely.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Partially Matching&lt;/strong&gt;: Statistics cannot rule out matching rows, but also cannot guarantee them. These groups might be scanned and verified row by row later.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Fully Matching&lt;/strong&gt;: Statistics prove that &lt;em&gt;every single row&lt;/em&gt; in the group satisfies the predicate. This state is key to making limit pruning possible.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id="phase-3-granular-pruning"&gt;Phase 3: Granular Pruning&lt;a class="headerlink" href="#phase-3-granular-pruning" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;The final phase goes even deeper:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;&lt;a href="https://parquet.apache.org/docs/file-format/pageindex/"&gt;Page Index Pruning&lt;/a&gt;&lt;/strong&gt;: Parquet pages have their own min/max statistics. DataFusion uses these to skip individual data pages within a surviving row group.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;&lt;a href="https://arrow.apache.org/blog/2025/12/11/parquet-late-materialization-deep-dive/"&gt;Late Materialization&lt;/a&gt; (Row Filtering)&lt;/strong&gt;: Instead of decoding all columns at once, DataFusion decodes the cheapest, most selective columns first. It filters rows using those columns, then only decodes the remaining columns for surviving rows.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id="the-problem-limit-was-ignored"&gt;The Problem: LIMIT Was Ignored&lt;a class="headerlink" href="#the-problem-limit-was-ignored" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Before limit pruning, all of these stages worked well — but the pruning pipeline had &lt;strong&gt;no awareness of &lt;code&gt;LIMIT&lt;/code&gt;&lt;/strong&gt;. Consider a query like:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT * FROM tracking_data
+WHERE species LIKE 'Alpine%' AND s &amp;gt;= 50
+LIMIT 3
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Even when fully matched row groups alone contain enough rows to satisfy the &lt;code&gt;LIMIT&lt;/code&gt;, DataFusion would still decode partially matching groups and filter out rows that did not match, wasting resources decoding rows just to immediately discard them.&lt;/p&gt;
+&lt;figure&gt;
+&lt;img alt="Traditional pruning decodes partially matching groups with no LIMIT awareness" src="/blog/images/limit-pruning/wasted-io.svg" width="80%"/&gt;
+&lt;figcaption&gt;Figure 3: Without limit awareness, partially matching groups are scanned and filtered even when fully matched groups already have enough rows. The left section shows 5 fully matched rows (enough to satisfy &lt;code&gt;LIMIT 5&lt;/code&gt;), while the right section with the dashed red border represents a partially matching group that is still decoded — wasting CPU and I/O on rows that may not match at all.&lt;/figcaption&gt;
+&lt;/figure&gt;
+&lt;p&gt;If five fully matched rows in a fully matched group already satisfy &lt;code&gt;LIMIT 5&lt;/code&gt;, why bother decoding groups where we're not even sure any rows qualify?&lt;/p&gt;
+&lt;h2 id="the-solution-limit-aware-pruning"&gt;The Solution: Limit-Aware Pruning&lt;a class="headerlink" href="#the-solution-limit-aware-pruning" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;The solution adds a new step in the pruning pipeline — right after row group pruning and before page index pruning:&lt;/p&gt;
+&lt;figure&gt;
+&lt;img alt="Pruning pipeline with limit pruning highlighted" src="/blog/images/limit-pruning/pruning-pipeline.svg" width="80%"/&gt;
+&lt;figcaption&gt;Figure 4: Limit pruning is inserted between row group and page index pruning.&lt;/figcaption&gt;
+&lt;/figure&gt;
+&lt;p&gt;The idea is simple: &lt;strong&gt;if fully matched row groups already contain enough rows to satisfy the &lt;code&gt;LIMIT&lt;/code&gt;, rewrite the access plan to scan only those groups and skip everything else.&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;This optimization is applied only when the query is a pure limit query with no &lt;code&gt;ORDER BY&lt;/code&gt;, because reordering which groups we scan could change the output ordering of the results. In the implementation, this check is expressed as:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;// Prune by limit if limit is set and order is not sensitive
+if let (Some(limit), false) = (limit, preserve_order) {
+    row_groups.prune_by_limit(limit, rg_metadata, &amp;amp;file_metrics);
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id="mechanism-detecting-fully-matched-row-groups"&gt;Mechanism: Detecting Fully Matched Row Groups&lt;a class="headerlink" href="#mechanism-detecting-fully-matched-row-groups" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;The core insight is &lt;strong&gt;predicate negation&lt;/strong&gt;. To determine if every row in a row group satisfies the predicate, we:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Negate the original predicate&lt;/li&gt;
+&lt;li&gt;Simplify the negated expression&lt;/li&gt;
+&lt;li&gt;Evaluate the negation against the row group's statistics&lt;/li&gt;
+&lt;li&gt;If the negation is &lt;em&gt;pruned&lt;/em&gt; (proven impossible), then the original predicate holds for every row&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Since DataFusion already had expression simplification (step 2) and statistics-based pruning (step 3), implementing this was relatively straightforward — the key addition was composing these existing capabilities with predicate negation.&lt;/p&gt;
+&lt;figure&gt;
+&lt;img alt="Fully matched detection via predicate negation" src="/blog/images/limit-pruning/fully-matched-detection.svg" width="80%"/&gt;
+&lt;figcaption&gt;Figure 5: If the negated predicate is impossible according to row group stats, all rows must match the original predicate.&lt;/figcaption&gt;
+&lt;/figure&gt;
+&lt;p&gt;In DataFusion's codebase, this logic lives in &lt;code&gt;identify_fully_matched_row_groups&lt;/code&gt; (&lt;a href="https://github.com/apache/datafusion/blob/main/datafusion/datasource-parquet/src/row_group_filter.rs"&gt;row_group_filter.rs&lt;/a&gt;):&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;fn identify_fully_matched_row_groups(
+    &amp;amp;mut self,
+    candidate_row_group_indices: &amp;amp;[usize],
+    arrow_schema: &amp;amp;Schema,
+    parquet_schema: &amp;amp;SchemaDescriptor,
+    groups: &amp;amp;[RowGroupMetaData],
+    predicate: &amp;amp;PruningPredicate,
+    metrics: &amp;amp;ParquetFileMetrics,
+) {
+    // Create the inverted predicate: NOT(original)
+    let inverted_expr = Arc::new(NotExpr::new(
+        Arc::clone(predicate.orig_expr()),
+    ));
+
+    // Simplify: e.g., NOT(c1 = 0) → c1 != 0
+    let simplifier = PhysicalExprSimplifier::new(arrow_schema);
+    let Ok(inverted_expr) = simplifier.simplify(inverted_expr) else {
+        return;
+    };
+
+    let Ok(inverted_predicate) = PruningPredicate::try_new(
+        inverted_expr,
+        Arc::clone(predicate.schema()),
+    ) else {
+        return;
+    };
+
+    // Evaluate inverted predicate against row group stats
+    let Ok(inverted_values) =
+        inverted_predicate.prune(&amp;amp;inverted_pruning_stats)
+    else {
+        return;
+    };
+
+    for (i, &amp;amp;original_idx) in
+        candidate_row_group_indices.iter().enumerate()
+    {
+        // If negation is pruned (false), all rows match original
+        if !inverted_values[i] {
+            self.is_fully_matched[original_idx] = true;
+        }
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id="mechanism-rewriting-the-access-plan"&gt;Mechanism: Rewriting the Access Plan&lt;a class="headerlink" href="#mechanism-rewriting-the-access-plan" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Once we know which row groups are fully matched, the limit pruning algorithm is straightforward:&lt;/p&gt;
+&lt;figure&gt;
+&lt;img alt="Limit pruning access plan rewrite algorithm" src="/blog/images/limit-pruning/limit-rewrite-algorithm.svg" width="80%"/&gt;
+&lt;figcaption&gt;Figure 6: The algorithm iterates fully matched groups, accumulating row counts until the limit is satisfied.&lt;/figcaption&gt;
+&lt;/figure&gt;
+&lt;p&gt;The implementation in &lt;code&gt;prune_by_limit&lt;/code&gt; (&lt;a href="https://github.com/apache/datafusion/blob/main/datafusion/datasource-parquet/src/row_group_filter.rs"&gt;row_group_filter.rs&lt;/a&gt;):&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;pub fn prune_by_limit(
+    &amp;amp;mut self,
+    limit: usize,
+    rg_metadata: &amp;amp;[RowGroupMetaData],
+    metrics: &amp;amp;ParquetFileMetrics,
+) {
+    let mut fully_matched_indexes: Vec&amp;lt;usize&amp;gt; = Vec::new();
+    let mut fully_matched_rows: usize = 0;
+
+    for &amp;amp;idx in self.access_plan.row_group_indexes().iter() {
+        if self.is_fully_matched[idx] {
+            fully_matched_indexes.push(idx);
+            fully_matched_rows += rg_metadata[idx].num_rows() as usize;
+            if fully_matched_rows &amp;gt;= limit {
+                break;
+            }
+        }
+    }
+
+    // Rewrite the plan if we have enough rows
+    if fully_matched_rows &amp;gt;= limit {
+        let mut new_plan = ParquetAccessPlan::new_none(rg_metadata.len());
+        for &amp;amp;idx in &amp;amp;fully_matched_indexes {
+            new_plan.scan(idx);
+        }
+        self.access_plan = new_plan;
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Key properties of this algorithm:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;It preserves the original row group ordering&lt;/li&gt;
+&lt;li&gt;If fully matched groups don't have enough rows, the plan is unchanged — no harm done&lt;/li&gt;
+&lt;li&gt;The cost is minimal: a single pass over the row group list&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id="case-study-alpine-wildlife-query"&gt;Case Study: Alpine Wildlife Query&lt;a class="headerlink" href="#case-study-alpine-wildlife-query" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Let's walk through a concrete example adapted from the &lt;a href="https://arxiv.org/pdf/2504.11540"&gt;Snowflake pruning paper&lt;/a&gt;. Given a wildlife tracking dataset with four row groups:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT * FROM tracking_data
+WHERE species LIKE 'Alpine%' AND s &amp;gt;= 50
+LIMIT 3
+&lt;/code&gt;&lt;/pre&gt;
+&lt;table class="table"&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Row Group&lt;/th&gt;
+&lt;th&gt;Species Range&lt;/th&gt;
+&lt;th&gt;S Range&lt;/th&gt;
+&lt;th&gt;State&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;RG1&lt;/td&gt;
+&lt;td&gt;Snow Vole, Brown Bear, Gray Wolf&lt;/td&gt;
+&lt;td&gt;7–133&lt;/td&gt;
+&lt;td&gt;&lt;strong&gt;Not Matching&lt;/strong&gt; (no 'Alpine%')&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;RG2&lt;/td&gt;
+&lt;td&gt;Lynx, Red Fox, Alpine Bat&lt;/td&gt;
+&lt;td&gt;6–71&lt;/td&gt;
+&lt;td&gt;&lt;strong&gt;Partially Matching&lt;/strong&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;RG3&lt;/td&gt;
+&lt;td&gt;Alpine Ibex, Alpine Goat, Alpine Sheep&lt;/td&gt;
+&lt;td&gt;76–101&lt;/td&gt;
+&lt;td&gt;&lt;strong&gt;Fully Matching&lt;/strong&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;RG4&lt;/td&gt;
+&lt;td&gt;Mixed species&lt;/td&gt;
+&lt;td&gt;Mixed&lt;/td&gt;
+&lt;td&gt;&lt;strong&gt;Partially Matching&lt;/strong&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;figure&gt;
+&lt;img alt="Before and after limit pruning comparison" src="/blog/images/limit-pruning/before-after.svg" width="80%"/&gt;
+&lt;figcaption&gt;Figure 7: Before limit pruning, RG2 is scanned for zero hits. After limit pruning, only RG3 is scanned.&lt;/figcaption&gt;
+&lt;/figure&gt;
+&lt;p&gt;&lt;strong&gt;Before limit pruning&lt;/strong&gt;: DataFusion scans RG2 (0 hits — wasted I/O), then RG3 (3 hits, early return). RG2 was decoded entirely for nothing.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;With limit pruning&lt;/strong&gt;: The system detects that RG3 has 3 fully matched rows, which satisfies &lt;code&gt;LIMIT 3&lt;/code&gt;. It rewrites the access plan to scan only RG3, skipping RG2 and RG4 entirely. One row group scanned. Zero waste.&lt;/p&gt;
+&lt;h2 id="observing-limit-pruning-via-metrics"&gt;Observing Limit Pruning via Metrics&lt;a class="headerlink" href="#observing-limit-pruning-via-metrics" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;DataFusion exposes limit pruning activity through query metrics. When running a query with &lt;code&gt;EXPLAIN ANALYZE&lt;/code&gt;, you will see entries like:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;row_groups_pruned_statistics=4 total → 3 matched -&amp;gt; 1 fully matched
+limit_pruned_row_groups=3 total → 1 matched
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;This tells us:
+- 4 row groups were evaluated, 3 survived statistics pruning, 1 was identified as fully matching
+- Of the 3 row groups that entered limit pruning, only 1 survived — 2 were pruned by the limit optimization&lt;/p&gt;
+&lt;h2 id="future-directions"&gt;Future Directions&lt;a class="headerlink" href="#future-directions" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;There are two natural extensions of this work:&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;&lt;a href="https://github.com/apache/datafusion/issues/19193"&gt;Page-Level Limit Pruning&lt;/a&gt;&lt;/strong&gt;: Today, "fully matched" detection operates at the row group level. If we extend this to use page index statistics, we could stop decoding pages &lt;em&gt;within&lt;/em&gt; a row group once the limit is met. This would pay dividends for wide row groups where only a few pages hold matching data.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;&lt;a href="https://github.com/apache/datafusion/issues/19028"&gt;Row Filter Hints&lt;/a&gt;&lt;/strong&gt;: Even when a row group is fully matched, the current row filter still evaluates predicates row by row. If we pass the fully matched groups info into the row filter builder, we can skip predicate evaluation entirely for guaranteed groups — saving CPU cycles on predicate evaluation.&lt;/p&gt;
+&lt;h2 id="summary"&gt;Summary&lt;a class="headerlink" href="#summary" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;DataFusion's pruning pipeline trims redundant I/O from the partition level all the way down to individual rows. Limit pruning adds a new step that creates an early exit when fully matched row groups already satisfy the &lt;code&gt;LIMIT&lt;/code&gt;. The result is fewer row groups scanned, less data decoded, and faster queries.&lt;/p&gt;
+&lt;p&gt;The key insights are:
+1. &lt;strong&gt;Predicate negation&lt;/strong&gt; can identify row groups where &lt;em&gt;all&lt;/em&gt; rows match — not just "some might match"
+2. &lt;strong&gt;Row count accumulation&lt;/strong&gt; across fully matched groups enables early termination&lt;/p&gt;
+&lt;h2 id="about-datafusion"&gt;About DataFusion&lt;a class="headerlink" href="#about-datafusion" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;&lt;a href="https://datafusion.apache.org/"&gt;Apache DataFusion&lt;/a&gt; is an extensible query engine, written in &lt;a href="https://www.rust-lang.org/"&gt;Rust&lt;/a&gt;, that uses &lt;a href="https://arrow.apache.org"&gt;Apache Arrow&lt;/a&gt; as its in-memory format. DataFusion is used by developers to create new, fast, data-centric systems such as databases, dataframe libraries, and machine learning and streaming applications.&lt;/p&gt;
+&lt;p&gt;DataFusion's core thesis is that, as a community, together we can build much more advanced technology than any of us as individuals or companies could build alone.&lt;/p&gt;
+&lt;h2 id="how-to-get-involved"&gt;How to Get Involved&lt;a class="headerlink" href="#how-to-get-involved" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;If you are interested in contributing, we would love to have you. You can try out DataFusion on some of your own data and projects and let us know how it goes, contribute suggestions, documentation, bug reports, or a PR with documentation, tests, or code. A list of open issues suitable for beginners is &lt;a href="https://github.com/apache/datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22"&gt;here&lt;/a&gt;, and you can find out how to reach us on the &lt;a href="https://datafusion.apache.org/contributor-guide/communication.html"&gt;communication doc&lt;/a&gt;.&lt;/p&gt;</content><category term="blog"></category></entry></feed>
