@@ -361,11 +361,11 @@ understand and explains where your work should actually happen.&lt;/p&gt;
 &lt;p&gt;When DataFusion executes a query against a table, three abstractions collaborate
 to produce results:&lt;/p&gt;
 &lt;ol&gt;
-&lt;li&gt;&lt;strong&gt;[&lt;code&gt;TableProvider&lt;/code&gt;]&lt;/strong&gt; -- Describes the table (schema, capabilities) and
+&lt;li&gt;&lt;strong&gt;&lt;a href="https://docs.rs/datafusion/latest/datafusion/catalog/trait.TableProvider.html"&gt;TableProvider&lt;/a&gt;&lt;/strong&gt; -- Describes the table (schema, capabilities) and
    produces an execution plan when queried.&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;[&lt;code&gt;ExecutionPlan&lt;/code&gt;]&lt;/strong&gt; -- Describes &lt;em&gt;how&lt;/em&gt; to compute the result: partitioning,
+&lt;li&gt;&lt;strong&gt;&lt;a href="https://docs.rs/datafusion/latest/datafusion/physical_plan/trait.ExecutionPlan.html"&gt;ExecutionPlan&lt;/a&gt;&lt;/strong&gt; -- Describes &lt;em&gt;how&lt;/em&gt; to compute the result: partitioning,
    ordering, and child plan relationships.&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;[&lt;code&gt;SendableRecordBatchStream&lt;/code&gt;]&lt;/strong&gt; -- The async stream that &lt;em&gt;actually does the
+&lt;li&gt;&lt;strong&gt;&lt;a href="https://docs.rs/datafusion/latest/datafusion/execution/type.SendableRecordBatchStream.html"&gt;SendableRecordBatchStream&lt;/a&gt;&lt;/strong&gt; -- The async stream that &lt;em&gt;actually does the
    work&lt;/em&gt;, yielding &lt;code&gt;RecordBatch&lt;/code&gt;es one at a time.&lt;/li&gt;
 &lt;/ol&gt;
 &lt;p&gt;Think of these as a funnel: &lt;code&gt;TableProvider::scan()&lt;/code&gt; is called once during
@@ -427,7 +427,7 @@ metadata you declare in your &lt;code&gt;ExecutionPlan&lt;/code&gt; (partitionin
 affects which physical optimizations apply.&lt;/p&gt;
 &lt;h2 id="layer-1-tableprovider"&gt;Layer 1: TableProvider&lt;a class="headerlink" href="#layer-1-tableprovider" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;hr/&gt;
-&lt;p&gt;A [&lt;code&gt;TableProvider&lt;/code&gt;] represents a queryable data source. For a minimal read-only
+&lt;p&gt;A &lt;a href="https://docs.rs/datafusion/latest/datafusion/catalog/trait.TableProvider.html"&gt;TableProvider&lt;/a&gt; represents a queryable data source. For a minimal read-only
 table, you need four methods:&lt;/p&gt;
 &lt;pre&gt;&lt;code class="language-rust"&gt;impl TableProvider for MyTable {
     fn as_any(&amp;amp;self) -&amp;gt; &amp;amp;dyn Any { self }
@@ -485,19 +485,19 @@ execution begins.&lt;/p&gt;
 &lt;p&gt;DataFusion ships several &lt;code&gt;TableProvider&lt;/code&gt; implementations that are excellent
 references:&lt;/p&gt;
 &lt;ul&gt;
-&lt;li&gt;&lt;strong&gt;[&lt;code&gt;MemTable&lt;/code&gt;]&lt;/strong&gt; -- Holds data in memory as &lt;code&gt;Vec&amp;lt;RecordBatch&amp;gt;&lt;/code&gt;. The simplest
+&lt;li&gt;&lt;strong&gt;&lt;a href="https://docs.rs/datafusion/latest/datafusion/datasource/memory/struct.MemTable.html"&gt;MemTable&lt;/a&gt;&lt;/strong&gt; -- Holds data in memory as &lt;code&gt;Vec&amp;lt;RecordBatch&amp;gt;&lt;/code&gt;. The simplest
   possible provider; great for tests and small datasets.&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;[&lt;code&gt;StreamTable&lt;/code&gt;]&lt;/strong&gt; -- Wraps a user-provided stream factory. Useful when your
+&lt;li&gt;&lt;strong&gt;&lt;a href="https://docs.rs/datafusion/latest/datafusion/datasource/stream/struct.StreamTable.html"&gt;StreamTable&lt;/a&gt;&lt;/strong&gt; -- Wraps a user-provided stream factory. Useful when your
   data arrives as a continuous stream (e.g., from Kafka or a socket).&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;[&lt;code&gt;ListingTable&lt;/code&gt;]&lt;/strong&gt; -- The file-based data source behind DataFusion's
+&lt;li&gt;&lt;strong&gt;&lt;a href="https://docs.rs/datafusion/latest/datafusion/datasource/listing/struct.ListingTable.html"&gt;ListingTable&lt;/a&gt;&lt;/strong&gt; -- The file-based data source behind DataFusion's
   built-in Parquet, CSV, and JSON support. Demonstrates sophisticated filter
   and projection pushdown, file pruning, and schema inference.&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;[&lt;code&gt;ViewTable&lt;/code&gt;]&lt;/strong&gt; -- Wraps a logical plan, representing a SQL view. Useful
+&lt;li&gt;&lt;strong&gt;&lt;a href="https://docs.rs/datafusion/latest/datafusion/datasource/view/struct.ViewTable.html"&gt;ViewTable&lt;/a&gt;&lt;/strong&gt; -- Wraps a logical plan, representing a SQL view. Useful
   if your provider is best expressed as a transformation of other tables.&lt;/li&gt;
 &lt;/ul&gt;
 &lt;h2 id="layer-2-executionplan"&gt;Layer 2: ExecutionPlan&lt;a class="headerlink" href="#layer-2-executionplan" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;hr/&gt;
-&lt;p&gt;An [&lt;code&gt;ExecutionPlan&lt;/code&gt;] is a node in the physical query plan tree. Your table
+&lt;p&gt;An &lt;a href="https://docs.rs/datafusion/latest/datafusion/physical_plan/trait.ExecutionPlan.html"&gt;ExecutionPlan&lt;/a&gt; is a node in the physical query plan tree. Your table
 provider's &lt;code&gt;scan()&lt;/code&gt; method returns one. The required methods are:&lt;/p&gt;
 &lt;pre&gt;&lt;code class="language-rust"&gt;impl ExecutionPlan for MyExecPlan {
     fn name(&amp;amp;self) -&amp;gt; &amp;amp;str { "MyExecPlan" }
@@ -530,7 +530,7 @@ provider's &lt;code&gt;scan()&lt;/code&gt; method returns one. The required meth
     }
 }
 &lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;The key properties to set correctly in [&lt;code&gt;PlanProperties&lt;/code&gt;] are &lt;strong&gt;output
+&lt;p&gt;The key properties to set correctly in &lt;a href="https://docs.rs/datafusion/latest/datafusion/physical_plan/struct.PlanProperties.html"&gt;PlanProperties&lt;/a&gt; are &lt;strong&gt;output
 partitioning&lt;/strong&gt; and &lt;strong&gt;output ordering&lt;/strong&gt;.&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Output partitioning&lt;/strong&gt; tells the engine how many partitions your data has,
 which determines parallelism. If your source naturally partitions data (e.g.,
@@ -602,16 +602,16 @@ is polled. Do not block on async operations here -- build the stream and let
 the runtime drive it.&lt;/p&gt;
 &lt;h3 id="existing-implementations-to-learn-from_1"&gt;Existing Implementations to Learn From&lt;a class="headerlink" href="#existing-implementations-to-learn-from_1" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;ul&gt;
-&lt;li&gt;&lt;strong&gt;[&lt;code&gt;StreamingTableExec&lt;/code&gt;]&lt;/strong&gt; -- Executes a streaming table scan. It takes a
+&lt;li&gt;&lt;strong&gt;&lt;a href="https://docs.rs/datafusion/latest/datafusion/datasource/stream/struct.StreamingTableExec.html"&gt;StreamingTableExec&lt;/a&gt;&lt;/strong&gt; -- Executes a streaming table scan. It takes a
   stream factory (a closure that produces streams) and handles partitioning.
   Good reference for wrapping external streams.&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;[&lt;code&gt;DataSourceExec&lt;/code&gt;]&lt;/strong&gt; -- The execution plan behind DataFusion's built-in file
+&lt;li&gt;&lt;strong&gt;&lt;a href="https://docs.rs/datafusion/latest/datafusion/datasource/struct.DataSourceExec.html"&gt;DataSourceExec&lt;/a&gt;&lt;/strong&gt; -- The execution plan behind DataFusion's built-in file
   scanning (Parquet, CSV, JSON). It demonstrates sophisticated partitioning,
   filter pushdown, and projection pushdown.&lt;/li&gt;
 &lt;/ul&gt;
 &lt;h2 id="layer-3-sendablerecordbatchstream"&gt;Layer 3: SendableRecordBatchStream&lt;a class="headerlink" href="#layer-3-sendablerecordbatchstream" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;hr/&gt;
-&lt;p&gt;[&lt;code&gt;SendableRecordBatchStream&lt;/code&gt;] is where the real work happens. It is defined as:&lt;/p&gt;
+&lt;p&gt;&lt;a href="https://docs.rs/datafusion/latest/datafusion/execution/type.SendableRecordBatchStream.html"&gt;SendableRecordBatchStream&lt;/a&gt; is where the real work happens. It is defined as:&lt;/p&gt;
 &lt;pre&gt;&lt;code class="language-rust"&gt;type SendableRecordBatchStream =
     Pin&amp;lt;Box&amp;lt;dyn RecordBatchStream&amp;lt;Item = Result&amp;lt;RecordBatch&amp;gt;&amp;gt; + Send&amp;gt;&amp;gt;;
 &lt;/code&gt;&lt;/pre&gt;
@@ -620,7 +620,7 @@ the DataFusion runtime polls this stream, your code runs: reading files, calling
 APIs, transforming data, etc.&lt;/p&gt;
 &lt;h3 id="using-recordbatchstreamadapter"&gt;Using RecordBatchStreamAdapter&lt;a class="headerlink" href="#using-recordbatchstreamadapter" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;The easiest way to create a &lt;code&gt;SendableRecordBatchStream&lt;/code&gt; is with
-[&lt;code&gt;RecordBatchStreamAdapter&lt;/code&gt;]. It bridges any &lt;code&gt;futures::Stream&amp;lt;Item =
+&lt;a href="https://docs.rs/datafusion/latest/datafusion/physical_plan/stream/struct.RecordBatchStreamAdapter.html"&gt;RecordBatchStreamAdapter&lt;/a&gt;. It bridges any &lt;code&gt;futures::Stream&amp;lt;Item =
 Result&amp;lt;RecordBatch&amp;gt;&amp;gt;&lt;/code&gt; into the &lt;code&gt;SendableRecordBatchStream&lt;/code&gt; type:&lt;/p&gt;
 &lt;pre&gt;&lt;code class="language-rust"&gt;use datafusion::physical_plan::stream::RecordBatchStreamAdapter;
 
@@ -942,7 +942,7 @@ happens later, in the stream produced by &lt;code&gt;execute()&lt;/code&gt;.&lt;
 &lt;hr/&gt;
 &lt;p&gt;The examples above all use the &lt;code&gt;scan()&lt;/code&gt; method, which receives projection,
 filters, and limit as separate parameters. DataFusion also provides
-[&lt;code&gt;scan_with_args()&lt;/code&gt;], which bundles these into a structured [&lt;code&gt;ScanArgs&lt;/code&gt;]
+&lt;a href="https://docs.rs/datafusion/latest/datafusion/catalog/trait.TableProvider.html#method.scan_with_args"&gt;scan_with_args()&lt;/a&gt;, which bundles these into a structured &lt;a href="https://docs.rs/datafusion/latest/datafusion/catalog/struct.ScanArgs.html"&gt;ScanArgs&lt;/a&gt;
 parameter:&lt;/p&gt;
 &lt;pre&gt;&lt;code class="language-rust"&gt;async fn scan_with_args(
     &amp;amp;self,
@@ -1100,22 +1100,22 @@ level makes sense:&lt;/p&gt;
 &lt;tbody&gt;
 &lt;tr&gt;
 &lt;td&gt;Already in &lt;code&gt;RecordBatch&lt;/code&gt;es in memory&lt;/td&gt;
-&lt;td&gt;[&lt;code&gt;MemTable&lt;/code&gt;]&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://docs.rs/datafusion/latest/datafusion/datasource/memory/struct.MemTable.html"&gt;MemTable&lt;/a&gt;&lt;/td&gt;
 &lt;td&gt;Nothing -- just construct it&lt;/td&gt;
 &lt;/tr&gt;
 &lt;tr&gt;
 &lt;td&gt;An async stream of batches&lt;/td&gt;
-&lt;td&gt;[&lt;code&gt;StreamTable&lt;/code&gt;]&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://docs.rs/datafusion/latest/datafusion/datasource/stream/struct.StreamTable.html"&gt;StreamTable&lt;/a&gt;&lt;/td&gt;
 &lt;td&gt;A stream factory&lt;/td&gt;
 &lt;/tr&gt;
 &lt;tr&gt;
 &lt;td&gt;A logical transformation of other tables&lt;/td&gt;
-&lt;td&gt;[&lt;code&gt;ViewTable&lt;/code&gt;] wrapping a logical plan&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://docs.rs/datafusion/latest/datafusion/datasource/view/struct.ViewTable.html"&gt;ViewTable&lt;/a&gt; wrapping a logical plan&lt;/td&gt;
 &lt;td&gt;The logical plan&lt;/td&gt;
 &lt;/tr&gt;
 &lt;tr&gt;
 &lt;td&gt;Files on disk or object storage&lt;/td&gt;
-&lt;td&gt;[&lt;code&gt;ListingTable&lt;/code&gt;] with a custom [&lt;code&gt;FileFormat&lt;/code&gt;]&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://docs.rs/datafusion/latest/datafusion/datasource/listing/struct.ListingTable.html"&gt;ListingTable&lt;/a&gt; with a custom &lt;a href="https://docs.rs/datafusion/latest/datafusion/datasource/file_format/trait.FileFormat.html"&gt;FileFormat&lt;/a&gt;&lt;/td&gt;
 &lt;td&gt;The file format&lt;/td&gt;
 &lt;/tr&gt;
 &lt;tr&gt;
@@ -1125,8 +1125,8 @@ level makes sense:&lt;/p&gt;
 &lt;/tr&gt;
 &lt;/tbody&gt;
 &lt;/table&gt;
-&lt;p&gt;For most integrations, [&lt;code&gt;StreamTable&lt;/code&gt;] combined with
-[&lt;code&gt;RecordBatchStreamAdapter&lt;/code&gt;] provides a good balance of simplicity and
+&lt;p&gt;For most integrations, &lt;a href="https://docs.rs/datafusion/latest/datafusion/datasource/stream/struct.StreamTable.html"&gt;StreamTable&lt;/a&gt; combined with
+&lt;a href="https://docs.rs/datafusion/latest/datafusion/physical_plan/stream/struct.RecordBatchStreamAdapter.html"&gt;RecordBatchStreamAdapter&lt;/a&gt; provides a good balance of simplicity and
 flexibility. You provide a closure that returns a stream, and DataFusion handles
 the rest.&lt;/p&gt;
 &lt;h2 id="acknowledgements"&gt;Acknowledgements&lt;a class="headerlink" href="#acknowledgements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
