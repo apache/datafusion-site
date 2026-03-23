@@ -61,6 +61,59 @@ to produce results:&lt;/p&gt;
 planning to create an &lt;code&gt;ExecutionPlan&lt;/code&gt;, then &lt;code&gt;ExecutionPlan::execute()&lt;/code&gt; is called
 once per partition to create a stream, and those streams are where rows are
 actually produced during execution.&lt;/p&gt;
+&lt;h2 id="background-logical-and-physical-planning"&gt;Background: Logical and Physical Planning&lt;a class="headerlink" href="#background-logical-and-physical-planning" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;hr/&gt;
+&lt;p&gt;Before diving into the three layers, it helps to understand how DataFusion
+processes a query. There are four phases between a SQL string (or DataFrame
+call) and streaming results:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-text"&gt;SQL / DataFrame API
+  → Logical Plan          (abstract: what to compute)
+  → Logical Optimization  (rewrite rules that preserve semantics)
+  → Physical Plan         (concrete: how to compute it)
+  → Physical Optimization (hardware- and data-aware rewrites)
+  → Execution             (streaming RecordBatches)
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id="logical-planning"&gt;Logical Planning&lt;a class="headerlink" href="#logical-planning" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;A &lt;strong&gt;logical plan&lt;/strong&gt; describes &lt;em&gt;what&lt;/em&gt; the query computes without specifying &lt;em&gt;how&lt;/em&gt;.
+It is a tree of relational operators -- &lt;code&gt;TableScan&lt;/code&gt;, &lt;code&gt;Filter&lt;/code&gt;, &lt;code&gt;Projection&lt;/code&gt;,
+&lt;code&gt;Aggregate&lt;/code&gt;, &lt;code&gt;Join&lt;/code&gt;, &lt;code&gt;Sort&lt;/code&gt;, &lt;code&gt;Limit&lt;/code&gt;, and so on. The logical optimizer rewrites
+this tree to reduce work while preserving the query's meaning. Key logical
+optimizations include:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Predicate pushdown&lt;/strong&gt; -- moves filters as close to the data source as
+  possible, so fewer rows flow through the rest of the plan.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Projection pruning&lt;/strong&gt; -- eliminates columns that are never referenced
+  downstream, reducing memory and I/O.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Expression simplification&lt;/strong&gt; -- rewrites expressions like &lt;code&gt;1 = 1&lt;/code&gt; or
+  &lt;code&gt;x AND true&lt;/code&gt; into simpler forms.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Subquery decorrelation&lt;/strong&gt; -- converts correlated &lt;code&gt;IN&lt;/code&gt; / &lt;code&gt;EXISTS&lt;/code&gt; subqueries
+  into more efficient semi-joins.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Limit pushdown&lt;/strong&gt; -- pushes &lt;code&gt;LIMIT&lt;/code&gt; earlier in the plan so operators
+  produce less data.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id="physical-planning"&gt;Physical Planning&lt;a class="headerlink" href="#physical-planning" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;The &lt;strong&gt;physical planner&lt;/strong&gt; converts the optimized logical plan into an
+&lt;code&gt;ExecutionPlan&lt;/code&gt; tree -- the concrete plan that will actually run. This is where
+decisions like "use a hash join vs. a sort-merge join" or "how many partitions
+to scan" are made. The physical optimizer then refines this tree further:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Distribution enforcement&lt;/strong&gt; -- inserts &lt;code&gt;RepartitionExec&lt;/code&gt; nodes so that data
+  is partitioned correctly for joins and aggregations.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Sort enforcement&lt;/strong&gt; -- inserts &lt;code&gt;SortExec&lt;/code&gt; nodes where ordering is required,
+  and removes them where the data is already sorted.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Join selection&lt;/strong&gt; -- picks the most efficient join strategy based on
+  statistics and table sizes.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Aggregate optimization&lt;/strong&gt; -- combines partial and final aggregation stages,
+  and can use exact statistics to skip scanning entirely.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id="why-this-matters-for-table-providers"&gt;Why This Matters for Table Providers&lt;a class="headerlink" href="#why-this-matters-for-table-providers" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Your &lt;code&gt;TableProvider&lt;/code&gt; sits at the boundary between logical and physical planning.
+During logical optimization, DataFusion determines which filters and projections
+&lt;em&gt;could&lt;/em&gt; be pushed down to the source. When &lt;code&gt;scan()&lt;/code&gt; is called during physical
+planning, those hints are passed to you. By implementing capabilities like
+&lt;code&gt;supports_filters_pushdown&lt;/code&gt;, you influence what the optimizer can do -- and the
+metadata you declare in your &lt;code&gt;ExecutionPlan&lt;/code&gt; (partitioning, ordering) directly
+affects which physical optimizations apply.&lt;/p&gt;
 &lt;h2 id="layer-1-tableprovider"&gt;Layer 1: TableProvider&lt;a class="headerlink" href="#layer-1-tableprovider" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;hr/&gt;
 &lt;p&gt;A [&lt;code&gt;TableProvider&lt;/code&gt;] represents a queryable data source. For a minimal read-only
@@ -125,8 +178,11 @@ references:&lt;/p&gt;
   possible provider; great for tests and small datasets.&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;[&lt;code&gt;StreamTable&lt;/code&gt;]&lt;/strong&gt; -- Wraps a user-provided stream factory. Useful when your
   data arrives as a continuous stream (e.g., from Kafka or a socket).&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;[&lt;code&gt;SortedTableProvider&lt;/code&gt;]&lt;/strong&gt; -- Wraps another &lt;code&gt;TableProvider&lt;/code&gt; and advertises a
-  known sort order, enabling the optimizer to skip redundant sorts.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;[&lt;code&gt;ListingTable&lt;/code&gt;]&lt;/strong&gt; -- The file-based data source behind DataFusion's
+  built-in Parquet, CSV, and JSON support. Demonstrates sophisticated filter
+  and projection pushdown, file pruning, and schema inference.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;[&lt;code&gt;ViewTable&lt;/code&gt;]&lt;/strong&gt; -- Wraps a logical plan, representing a SQL view. Useful
+  if your provider is best expressed as a transformation of other tables.&lt;/li&gt;
 &lt;/ul&gt;
 &lt;h2 id="layer-2-executionplan"&gt;Layer 2: ExecutionPlan&lt;a class="headerlink" href="#layer-2-executionplan" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;hr/&gt;
@@ -173,9 +229,35 @@ enables the optimizer to avoid inserting a &lt;code&gt;SortExec&lt;/code&gt; whe
 ordered data. Getting this right can be a significant performance win.&lt;/p&gt;
 &lt;h3 id="partitioning-strategies"&gt;Partitioning Strategies&lt;a class="headerlink" href="#partitioning-strategies" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;Since &lt;code&gt;execute()&lt;/code&gt; is called once per partition, partitioning directly controls
-the parallelism of your table scan. Each partition runs on its own task, so
-more partitions means more concurrent work -- up to the number of available
-cores.&lt;/p&gt;
+the parallelism of your table scan. Each partition produces an independent
+stream that DataFusion schedules as a &lt;strong&gt;task&lt;/strong&gt; on the tokio runtime. It is
+important to distinguish tasks from threads: tasks are lightweight units of
+async work that are multiplexed onto a thread pool. You can have many more
+tasks (partitions) than physical threads -- the runtime will interleave them
+efficiently as they await I/O or yield.&lt;/p&gt;
+&lt;p&gt;That said, having &lt;em&gt;too many&lt;/em&gt; partitions is not free. Each partition adds
+scheduling overhead, and downstream operators like aggregations and joins may
+need to repartition the data to match their requirements. You can use the
+session configuration to find the &lt;strong&gt;target partition count&lt;/strong&gt;, which reflects
+how many partitions DataFusion's optimizer expects to work with:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;async fn scan(
+    &amp;amp;self,
+    state: &amp;amp;dyn Session,
+    projection: Option&amp;lt;&amp;amp;Vec&amp;lt;usize&amp;gt;&amp;gt;,
+    filters: &amp;amp;[Expr],
+    limit: Option&amp;lt;usize&amp;gt;,
+) -&amp;gt; Result&amp;lt;Arc&amp;lt;dyn ExecutionPlan&amp;gt;&amp;gt; {
+    let target_partitions = state.config().target_partitions();
+    // Use target_partitions to decide how many partitions to expose.
+    // If your source naturally has more partitions, consider coalescing
+    // them down to target_partitions to avoid unnecessary repartitioning.
+    // ...
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;If your source produces data in exactly &lt;code&gt;target_partitions&lt;/code&gt; partitions, the
+optimizer is less likely to insert a &lt;code&gt;RepartitionExec&lt;/code&gt; above your scan --
+avoiding an expensive data shuffle. For small datasets, &lt;code&gt;target_partitions&lt;/code&gt; may
+be set to 1, which avoids any repartitioning overhead entirely.&lt;/p&gt;
 &lt;p&gt;Consider how your data source naturally divides its data:&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;&lt;strong&gt;By file or object:&lt;/strong&gt; If you are reading from S3, each file can be a
@@ -424,6 +506,151 @@ been fully absorbed by your scan.&lt;/p&gt;
 &lt;code&gt;SortExec&lt;/code&gt; or &lt;code&gt;RepartitionExec&lt;/code&gt; nodes that you could eliminate by declaring
 better output properties. Whenever your queries seem slower than expected,
 &lt;code&gt;EXPLAIN&lt;/code&gt; is the first place to look.&lt;/p&gt;
+&lt;h3 id="a-complete-filter-pushdown-example"&gt;A Complete Filter Pushdown Example&lt;a class="headerlink" href="#a-complete-filter-pushdown-example" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;To make filter pushdown concrete, here is a full working example. Imagine a
+table provider that reads from a set of date-partitioned directories on disk
+(e.g., &lt;code&gt;data/2026-03-01/&lt;/code&gt;, &lt;code&gt;data/2026-03-02/&lt;/code&gt;, ...). Each directory contains
+one or more Parquet files for that date. By pushing down a filter on the &lt;code&gt;date&lt;/code&gt;
+column, the provider can skip entire directories -- avoiding the I/O of listing
+and reading files that cannot possibly match the query.&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;use std::any::Any;
+use std::collections::HashMap;
+use std::sync::Arc;
+
+use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
+use arrow::array::{Date32Array, Float64Array, StringArray};
+use arrow::record_batch::RecordBatch;
+use datafusion::catalog::TableProvider;
+use datafusion::common::Result;
+use datafusion::datasource::TableType;
+use datafusion::execution::SendableRecordBatchStream;
+use datafusion::logical_expr::Expr;
+use datafusion::logical_expr::TableProviderFilterPushDown;
+use datafusion::physical_expr::EquivalenceProperties;
+use datafusion::physical_plan::execution_plan::{Boundedness, EmissionType};
+use datafusion::physical_plan::stream::RecordBatchStreamAdapter;
+use datafusion::physical_plan::{
+    ExecutionPlan, Partitioning, PlanProperties,
+};
+use futures::stream;
+
+/// A table provider backed by date-partitioned directories.
+/// Each date directory contains data files; by filtering on the
+/// `date` column we can skip entire directories of I/O.
+struct DatePartitionedTable {
+    schema: SchemaRef,
+    /// Maps date strings ("2026-03-01") to directory paths
+    partitions: HashMap&amp;lt;String, String&amp;gt;,
+}
+
+#[async_trait::async_trait]
+impl TableProvider for DatePartitionedTable {
+    fn as_any(&amp;amp;self) -&amp;gt; &amp;amp;dyn Any { self }
+    fn schema(&amp;amp;self) -&amp;gt; SchemaRef { Arc::clone(&amp;amp;self.schema) }
+    fn table_type(&amp;amp;self) -&amp;gt; TableType { TableType::Base }
+
+    fn supports_filters_pushdown(
+        &amp;amp;self,
+        filters: &amp;amp;[&amp;amp;Expr],
+    ) -&amp;gt; Result&amp;lt;Vec&amp;lt;TableProviderFilterPushDown&amp;gt;&amp;gt; {
+        Ok(filters.iter().map(|f| {
+            if Self::is_date_equality_filter(f) {
+                // We can fully evaluate this: we will only read
+                // directories matching the date, so no rows with
+                // a different date will appear in the output.
+                TableProviderFilterPushDown::Exact
+            } else {
+                TableProviderFilterPushDown::Unsupported
+            }
+        }).collect())
+    }
+
+    async fn scan(
+        &amp;amp;self,
+        _state: &amp;amp;dyn Session,
+        projection: Option&amp;lt;&amp;amp;Vec&amp;lt;usize&amp;gt;&amp;gt;,
+        filters: &amp;amp;[Expr],
+        limit: Option&amp;lt;usize&amp;gt;,
+    ) -&amp;gt; Result&amp;lt;Arc&amp;lt;dyn ExecutionPlan&amp;gt;&amp;gt; {
+        // Determine which date partitions to read by inspecting
+        // the pushed-down filters. This is the key optimization:
+        // we decide *during planning* which directories to scan,
+        // so that execution never touches irrelevant data.
+        let dates_to_read: Vec&amp;lt;String&amp;gt; = self
+            .extract_date_values(filters)
+            .unwrap_or_else(||
+                self.partitions.keys().cloned().collect()
+            );
+
+        let dirs: Vec&amp;lt;String&amp;gt; = dates_to_read
+            .iter()
+            .filter_map(|d| self.partitions.get(d).cloned())
+            .collect();
+
+        Ok(Arc::new(DatePartitionedExec {
+            schema: Arc::clone(&amp;amp;self.schema),
+            directories: dirs,
+            properties: PlanProperties::new(
+                EquivalenceProperties::new(
+                    Arc::clone(&amp;amp;self.schema),
+                ),
+                // One partition per date directory -- these
+                // will be read in parallel.
+                Partitioning::UnknownPartitioning(dirs.len()),
+                EmissionType::Incremental,
+                Boundedness::Bounded,
+            ),
+        }))
+    }
+}
+
+impl DatePartitionedTable {
+    /// Check if a filter is an equality comparison on the `date` column.
+    fn is_date_equality_filter(expr: &amp;amp;Expr) -&amp;gt; bool {
+        // In practice, match on BinaryExpr { left, op: Eq, right }
+        // and check if either side references the "date" column.
+        // Simplified here for clarity.
+        todo!("match on date equality expressions")
+    }
+
+    /// Extract date literal values from pushed-down equality filters.
+    fn extract_date_values(&amp;amp;self, filters: &amp;amp;[Expr]) -&amp;gt; Option&amp;lt;Vec&amp;lt;String&amp;gt;&amp;gt; {
+        // Parse filters like `date = '2026-03-01'` and return
+        // the literal date strings. Returns None if no date
+        // filters are present (meaning: read all partitions).
+        todo!("extract date literals from filter expressions")
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;The key insight is that the filter pushdown decision (&lt;code&gt;supports_filters_pushdown&lt;/code&gt;)
+and the partition pruning (&lt;code&gt;scan()&lt;/code&gt;) work together: the first tells DataFusion
+that a &lt;code&gt;FilterExec&lt;/code&gt; is unnecessary for the &lt;code&gt;date&lt;/code&gt; predicate, and the second
+ensures that only the relevant directories are scanned. The actual file reading
+happens later, in the stream produced by &lt;code&gt;execute()&lt;/code&gt;.&lt;/p&gt;
+&lt;h2 id="scan-vs-scan_with_args"&gt;&lt;code&gt;scan&lt;/code&gt; vs &lt;code&gt;scan_with_args&lt;/code&gt;&lt;a class="headerlink" href="#scan-vs-scan_with_args" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;hr/&gt;
+&lt;p&gt;The examples above all use the &lt;code&gt;scan()&lt;/code&gt; method, which receives projection,
+filters, and limit as separate parameters. DataFusion also provides
+[&lt;code&gt;scan_with_args()&lt;/code&gt;], which bundles these into a structured [&lt;code&gt;ScanArgs&lt;/code&gt;]
+parameter:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;async fn scan_with_args(
+    &amp;amp;self,
+    args: ScanArgs&amp;lt;'_&amp;gt;,
+) -&amp;gt; Result&amp;lt;ScanResult&amp;gt; {
+    let projection = args.projection();
+    let filters = args.filters();
+    let limit = args.limit();
+    // ...
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;code&gt;ScanArgs&lt;/code&gt; is designed to be extensible -- new scan parameters can be added
+without breaking existing implementations. It also carries additional context
+not available in &lt;code&gt;scan()&lt;/code&gt;, such as a &lt;code&gt;preferred_ordering&lt;/code&gt; hint that lets the
+optimizer request a specific output order from your provider.&lt;/p&gt;
+&lt;p&gt;If you are building a new table provider, consider implementing
+&lt;code&gt;scan_with_args()&lt;/code&gt; instead of &lt;code&gt;scan()&lt;/code&gt;. The default implementation of &lt;code&gt;scan()&lt;/code&gt;
+delegates to &lt;code&gt;scan_with_args()&lt;/code&gt;, so you only need to implement one. Existing
+providers that already implement &lt;code&gt;scan()&lt;/code&gt; will continue to work without changes.&lt;/p&gt;
 &lt;h2 id="putting-it-all-together"&gt;Putting It All Together&lt;a class="headerlink" href="#putting-it-all-together" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;hr/&gt;
 &lt;p&gt;Here is a minimal but complete example of a custom table provider that generates
@@ -571,9 +798,14 @@ level makes sense:&lt;/p&gt;
 &lt;td&gt;A stream factory&lt;/td&gt;
 &lt;/tr&gt;
 &lt;tr&gt;
-&lt;td&gt;A table with known sort order&lt;/td&gt;
-&lt;td&gt;[&lt;code&gt;SortedTableProvider&lt;/code&gt;] wrapping another provider&lt;/td&gt;
-&lt;td&gt;The inner provider&lt;/td&gt;
+&lt;td&gt;A logical transformation of other tables&lt;/td&gt;
+&lt;td&gt;[&lt;code&gt;ViewTable&lt;/code&gt;] wrapping a logical plan&lt;/td&gt;
+&lt;td&gt;The logical plan&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Files on disk or object storage&lt;/td&gt;
+&lt;td&gt;[&lt;code&gt;ListingTable&lt;/code&gt;] with a custom [&lt;code&gt;FileFormat&lt;/code&gt;]&lt;/td&gt;
+&lt;td&gt;The file format&lt;/td&gt;
 &lt;/tr&gt;
 &lt;tr&gt;
 &lt;td&gt;A custom source needing full control&lt;/td&gt;
