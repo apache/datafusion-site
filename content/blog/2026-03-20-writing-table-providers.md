@@ -432,6 +432,11 @@ the `us-east-1` partition. If that partition holds 100 million rows, you have
 just eliminated 90% of the I/O. DataFusion still applies the `event_type`
 filter via `FilterExec` if you reported it as `Unsupported`.
 
+### Only Push Down Filters When the Data Source Can Do Better
+
+DataFusion already pushes filters as close to the data source as possible, typically placing them directly above the scan. `FilterExec` is also highly optimized, with vectorized evaluation and type-specialized kernels for fast predicate evaluation.
+
+Because of this, you should only implement filter pushdown when your data source can do strictly better. For example, avoid I/O by skipping data early using metadata. If your data source cannot eliminate I/O in this way, it is usually better to let DataFusion handle the filter, as its in-memory execution is already highly efficient (unless there are additional opportunities for deeper, application-specific optimizations).
 ### Using EXPLAIN to Debug Your Table Provider
 
 The `EXPLAIN` statement is your best tool for understanding what DataFusion is
