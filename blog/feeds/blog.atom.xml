@@ -702,6 +702,9 @@ majority of the data.&lt;/p&gt;
 the &lt;code&gt;us-east-1&lt;/code&gt; partition. If that partition holds 100 million rows, you have
 just eliminated 90% of the I/O. DataFusion still applies the &lt;code&gt;event_type&lt;/code&gt;
 filter via &lt;code&gt;FilterExec&lt;/code&gt; if you reported it as &lt;code&gt;Unsupported&lt;/code&gt;.&lt;/p&gt;
+&lt;h3 id="only-push-down-filters-when-the-data-source-can-do-better"&gt;Only Push Down Filters When the Data Source Can Do Better&lt;a class="headerlink" href="#only-push-down-filters-when-the-data-source-can-do-better" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;DataFusion already pushes filters as close to the data source as possible, typically placing them directly above the scan. &lt;code&gt;FilterExec&lt;/code&gt; is also highly optimized, with vectorized evaluation and type-specialized kernels for fast predicate evaluation.&lt;/p&gt;
+&lt;p&gt;Because of this, you should only implement filter pushdown when your data source can do strictly better. For example, avoid I/O by skipping data early using metadata. If your data source cannot eliminate I/O in this way, it is usually better to let DataFusion handle the filter, as its in-memory execution is already highly efficient (unless there are additional opportunities for deeper, application-specific optimizations).&lt;/p&gt;
 &lt;h3 id="using-explain-to-debug-your-table-provider"&gt;Using EXPLAIN to Debug Your Table Provider&lt;a class="headerlink" href="#using-explain-to-debug-your-table-provider" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;The &lt;code&gt;EXPLAIN&lt;/code&gt; statement is your best tool for understanding what DataFusion is
 actually doing with your table provider. It shows the physical plan that

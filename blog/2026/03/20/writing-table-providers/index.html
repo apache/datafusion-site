@@ -76,6 +76,7 @@
 <li><a href="#filter-pushdown-doing-less-work">Filter Pushdown: Doing Less Work</a><ul>
 <li><a href="#how-filter-pushdown-works">How Filter Pushdown Works</a></li>
 <li><a href="#why-filter-pushdown-matters">Why Filter Pushdown Matters</a></li>
+<li><a href="#only-push-down-filters-when-the-data-source-can-do-better">Only Push Down Filters When the Data Source Can Do Better</a></li>
 <li><a href="#using-explain-to-debug-your-table-provider">Using EXPLAIN to Debug Your Table Provider</a></li>
 </ul>
 </li>
@@ -457,6 +458,9 @@ majority of the data.</p>
 the <code>us-east-1</code> partition. If that partition holds 100 million rows, you have
 just eliminated 90% of the I/O. DataFusion still applies the <code>event_type</code>
 filter via <code>FilterExec</code> if you reported it as <code>Unsupported</code>.</p>
+<h3 id="only-push-down-filters-when-the-data-source-can-do-better">Only Push Down Filters When the Data Source Can Do Better<a class="headerlink" href="#only-push-down-filters-when-the-data-source-can-do-better" title="Permanent link">¶</a></h3>
+<p>DataFusion already pushes filters as close to the data source as possible, typically placing them directly above the scan. <code>FilterExec</code> is also highly optimized, with vectorized evaluation and type-specialized kernels for fast predicate evaluation.</p>
+<p>Because of this, you should only implement filter pushdown when your data source can do strictly better. For example, avoid I/O by skipping data early using metadata. If your data source cannot eliminate I/O in this way, it is usually better to let DataFusion handle the filter, as its in-memory execution is already highly efficient (unless there are additional opportunities for deeper, application-specific optimizations).</p>
 <h3 id="using-explain-to-debug-your-table-provider">Using EXPLAIN to Debug Your Table Provider<a class="headerlink" href="#using-explain-to-debug-your-table-provider" title="Permanent link">¶</a></h3>
 <p>The <code>EXPLAIN</code> statement is your best tool for understanding what DataFusion is
 actually doing with your table provider. It shows the physical plan that
@@ -722,6 +726,7 @@ table providers for working with data analytics.</p>
 <li><a href="#filter-pushdown-doing-less-work">Filter Pushdown: Doing Less Work</a><ul>
 <li><a href="#how-filter-pushdown-works">How Filter Pushdown Works</a></li>
 <li><a href="#why-filter-pushdown-matters">Why Filter Pushdown Matters</a></li>
+<li><a href="#only-push-down-filters-when-the-data-source-can-do-better">Only Push Down Filters When the Data Source Can Do Better</a></li>
 <li><a href="#using-explain-to-debug-your-table-provider">Using EXPLAIN to Debug Your Table Provider</a></li>
 </ul>
 </li>
