@@ -39,11 +39,11 @@ understand and explains where your work should actually happen.
 When DataFusion executes a query against a table, three abstractions collaborate
 to produce results:
 
-1. **[`TableProvider`]** -- Describes the table (schema, capabilities) and
+1. **[TableProvider]** -- Describes the table (schema, capabilities) and
    produces an execution plan when queried.
-2. **[`ExecutionPlan`]** -- Describes *how* to compute the result: partitioning,
+2. **[ExecutionPlan]** -- Describes *how* to compute the result: partitioning,
    ordering, and child plan relationships.
-3. **[`SendableRecordBatchStream`]** -- The async stream that *actually does the
+3. **[SendableRecordBatchStream]** -- The async stream that *actually does the
    work*, yielding `RecordBatch`es one at a time.
 
 Think of these as a funnel: `TableProvider::scan()` is called once during
@@ -51,9 +51,16 @@ planning to create an `ExecutionPlan`, then `ExecutionPlan::execute()` is called
 once per partition to create a stream, and those streams are where rows are
 actually produced during execution.
 
-[`TableProvider`]: https://docs.rs/datafusion/latest/datafusion/catalog/trait.TableProvider.html
-[`ExecutionPlan`]: https://docs.rs/datafusion/latest/datafusion/physical_plan/trait.ExecutionPlan.html
-[`SendableRecordBatchStream`]: https://docs.rs/datafusion/latest/datafusion/execution/type.SendableRecordBatchStream.html
+[TableProvider]: https://docs.rs/datafusion/latest/datafusion/catalog/trait.TableProvider.html
+[ExecutionPlan]: https://docs.rs/datafusion/latest/datafusion/physical_plan/trait.ExecutionPlan.html
+[SendableRecordBatchStream]: https://docs.rs/datafusion/latest/datafusion/execution/type.SendableRecordBatchStream.html
+[MemTable]: https://docs.rs/datafusion/latest/datafusion/datasource/memory/struct.MemTable.html
+[StreamTable]: https://docs.rs/datafusion/latest/datafusion/datasource/stream/struct.StreamTable.html
+[ListingTable]: https://docs.rs/datafusion/latest/datafusion/datasource/listing/struct.ListingTable.html
+[ViewTable]: https://docs.rs/datafusion/latest/datafusion/datasource/view/struct.ViewTable.html
+[PlanProperties]: https://docs.rs/datafusion/latest/datafusion/physical_plan/struct.PlanProperties.html
+[StreamingTableExec]: https://docs.rs/datafusion/latest/datafusion/datasource/stream/struct.StreamingTableExec.html
+[DataSourceExec]: https://docs.rs/datafusion/latest/datafusion/datasource/struct.DataSourceExec.html
 
 ## Background: Logical and Physical Planning
 
@@ -121,7 +128,7 @@ affects which physical optimizations apply.
 
 ---
 
-A [`TableProvider`] represents a queryable data source. For a minimal read-only
+A [TableProvider] represents a queryable data source. For a minimal read-only
 table, you need four methods:
 
 ```rust
@@ -186,26 +193,21 @@ execution begins.
 DataFusion ships several `TableProvider` implementations that are excellent
 references:
 
-- **[`MemTable`]** -- Holds data in memory as `Vec<RecordBatch>`. The simplest
+- **[MemTable]** -- Holds data in memory as `Vec<RecordBatch>`. The simplest
   possible provider; great for tests and small datasets.
-- **[`StreamTable`]** -- Wraps a user-provided stream factory. Useful when your
+- **[StreamTable]** -- Wraps a user-provided stream factory. Useful when your
   data arrives as a continuous stream (e.g., from Kafka or a socket).
-- **[`ListingTable`]** -- The file-based data source behind DataFusion's
+- **[ListingTable]** -- The file-based data source behind DataFusion's
   built-in Parquet, CSV, and JSON support. Demonstrates sophisticated filter
   and projection pushdown, file pruning, and schema inference.
-- **[`ViewTable`]** -- Wraps a logical plan, representing a SQL view. Useful
+- **[ViewTable]** -- Wraps a logical plan, representing a SQL view. Useful
   if your provider is best expressed as a transformation of other tables.
-
-[`MemTable`]: https://docs.rs/datafusion/latest/datafusion/datasource/memory/struct.MemTable.html
-[`StreamTable`]: https://docs.rs/datafusion/latest/datafusion/datasource/stream/struct.StreamTable.html
-[`ListingTable`]: https://docs.rs/datafusion/latest/datafusion/datasource/listing/struct.ListingTable.html
-[`ViewTable`]: https://docs.rs/datafusion/latest/datafusion/datasource/view/struct.ViewTable.html
 
 ## Layer 2: ExecutionPlan
 
 ---
 
-An [`ExecutionPlan`] is a node in the physical query plan tree. Your table
+An [ExecutionPlan] is a node in the physical query plan tree. Your table
 provider's `scan()` method returns one. The required methods are:
 
 ```rust
@@ -241,7 +243,7 @@ impl ExecutionPlan for MyExecPlan {
 }
 ```
 
-The key properties to set correctly in [`PlanProperties`] are **output
+The key properties to set correctly in [PlanProperties] are **output
 partitioning** and **output ordering**.
 
 **Output partitioning** tells the engine how many partitions your data has,
@@ -330,22 +332,18 @@ the runtime drive it.
 
 ### Existing Implementations to Learn From
 
-- **[`StreamingTableExec`]** -- Executes a streaming table scan. It takes a
+- **[StreamingTableExec]** -- Executes a streaming table scan. It takes a
   stream factory (a closure that produces streams) and handles partitioning.
   Good reference for wrapping external streams.
-- **[`DataSourceExec`]** -- The execution plan behind DataFusion's built-in file
+- **[DataSourceExec]** -- The execution plan behind DataFusion's built-in file
   scanning (Parquet, CSV, JSON). It demonstrates sophisticated partitioning,
   filter pushdown, and projection pushdown.
-
-[`StreamingTableExec`]: https://docs.rs/datafusion/latest/datafusion/datasource/stream/struct.StreamingTableExec.html
-[`DataSourceExec`]: https://docs.rs/datafusion/latest/datafusion/datasource/struct.DataSourceExec.html
-[`PlanProperties`]: https://docs.rs/datafusion/latest/datafusion/physical_plan/struct.PlanProperties.html
 
 ## Layer 3: SendableRecordBatchStream
 
 ---
 
-[`SendableRecordBatchStream`] is where the real work happens. It is defined as:
+[SendableRecordBatchStream] is where the real work happens. It is defined as:
 
 ```rust
 type SendableRecordBatchStream =
@@ -359,7 +357,7 @@ APIs, transforming data, etc.
 ### Using RecordBatchStreamAdapter
 
 The easiest way to create a `SendableRecordBatchStream` is with
-[`RecordBatchStreamAdapter`]. It bridges any `futures::Stream<Item =
+[RecordBatchStreamAdapter]. It bridges any `futures::Stream<Item =
 Result<RecordBatch>>` into the `SendableRecordBatchStream` type:
 
 ```rust
@@ -390,7 +388,7 @@ fn execute(
 }
 ```
 
-[`RecordBatchStreamAdapter`]: https://docs.rs/datafusion/latest/datafusion/physical_plan/stream/struct.RecordBatchStreamAdapter.html
+[RecordBatchStreamAdapter]: https://docs.rs/datafusion/latest/datafusion/physical_plan/stream/struct.RecordBatchStreamAdapter.html
 
 ### CPU-Intensive Work: Use a Separate Thread Pool
 
@@ -713,7 +711,7 @@ happens later, in the stream produced by `execute()`.
 
 The examples above all use the `scan()` method, which receives projection,
 filters, and limit as separate parameters. DataFusion also provides
-[`scan_with_args()`], which bundles these into a structured [`ScanArgs`]
+[scan_with_args()], which bundles these into a structured [ScanArgs]
 parameter:
 
 ```rust
@@ -738,8 +736,8 @@ If you are building a new table provider, consider implementing
 delegates to `scan_with_args()`, so you only need to implement one. Existing
 providers that already implement `scan()` will continue to work without changes.
 
-[`scan_with_args()`]: https://docs.rs/datafusion/latest/datafusion/catalog/trait.TableProvider.html#method.scan_with_args
-[`ScanArgs`]: https://docs.rs/datafusion/latest/datafusion/catalog/struct.ScanArgs.html
+[scan_with_args()]: https://docs.rs/datafusion/latest/datafusion/catalog/trait.TableProvider.html#method.scan_with_args
+[ScanArgs]: https://docs.rs/datafusion/latest/datafusion/catalog/struct.ScanArgs.html
 
 ## Putting It All Together
 
@@ -878,16 +876,16 @@ level makes sense:
 
 | If your data is... | Start with | You implement |
 |---|---|---|
-| Already in `RecordBatch`es in memory | [`MemTable`] | Nothing -- just construct it |
-| An async stream of batches | [`StreamTable`] | A stream factory |
-| A logical transformation of other tables | [`ViewTable`] wrapping a logical plan | The logical plan |
-| Files on disk or object storage | [`ListingTable`] with a custom [`FileFormat`] | The file format |
+| Already in `RecordBatch`es in memory | [MemTable] | Nothing -- just construct it |
+| An async stream of batches | [StreamTable] | A stream factory |
+| A logical transformation of other tables | [ViewTable] wrapping a logical plan | The logical plan |
+| Files on disk or object storage | [ListingTable] with a custom [FileFormat] | The file format |
 | A custom source needing full control | `TableProvider` + `ExecutionPlan` + stream | All three layers |
 
-[`FileFormat`]: https://docs.rs/datafusion/latest/datafusion/datasource/file_format/trait.FileFormat.html
+[FileFormat]: https://docs.rs/datafusion/latest/datafusion/datasource/file_format/trait.FileFormat.html
 
-For most integrations, [`StreamTable`] combined with
-[`RecordBatchStreamAdapter`] provides a good balance of simplicity and
+For most integrations, [StreamTable] combined with
+[RecordBatchStreamAdapter] provides a good balance of simplicity and
 flexibility. You provide a closure that returns a stream, and DataFusion handles
 the rest.
 
