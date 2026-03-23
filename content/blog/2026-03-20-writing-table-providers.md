@@ -55,6 +55,68 @@ actually produced during execution.
 [`ExecutionPlan`]: https://docs.rs/datafusion/latest/datafusion/physical_plan/trait.ExecutionPlan.html
 [`SendableRecordBatchStream`]: https://docs.rs/datafusion/latest/datafusion/execution/type.SendableRecordBatchStream.html
 
+## Background: Logical and Physical Planning
+
+---
+
+Before diving into the three layers, it helps to understand how DataFusion
+processes a query. There are four phases between a SQL string (or DataFrame
+call) and streaming results:
+
+```text
+SQL / DataFrame API
+  → Logical Plan          (abstract: what to compute)
+  → Logical Optimization  (rewrite rules that preserve semantics)
+  → Physical Plan         (concrete: how to compute it)
+  → Physical Optimization (hardware- and data-aware rewrites)
+  → Execution             (streaming RecordBatches)
+```
+
+### Logical Planning
+
+A **logical plan** describes *what* the query computes without specifying *how*.
+It is a tree of relational operators -- `TableScan`, `Filter`, `Projection`,
+`Aggregate`, `Join`, `Sort`, `Limit`, and so on. The logical optimizer rewrites
+this tree to reduce work while preserving the query's meaning. Key logical
+optimizations include:
+
+- **Predicate pushdown** -- moves filters as close to the data source as
+  possible, so fewer rows flow through the rest of the plan.
+- **Projection pruning** -- eliminates columns that are never referenced
+  downstream, reducing memory and I/O.
+- **Expression simplification** -- rewrites expressions like `1 = 1` or
+  `x AND true` into simpler forms.
+- **Subquery decorrelation** -- converts correlated `IN` / `EXISTS` subqueries
+  into more efficient semi-joins.
+- **Limit pushdown** -- pushes `LIMIT` earlier in the plan so operators
+  produce less data.
+
+### Physical Planning
+
+The **physical planner** converts the optimized logical plan into an
+`ExecutionPlan` tree -- the concrete plan that will actually run. This is where
+decisions like "use a hash join vs. a sort-merge join" or "how many partitions
+to scan" are made. The physical optimizer then refines this tree further:
+
+- **Distribution enforcement** -- inserts `RepartitionExec` nodes so that data
+  is partitioned correctly for joins and aggregations.
+- **Sort enforcement** -- inserts `SortExec` nodes where ordering is required,
+  and removes them where the data is already sorted.
+- **Join selection** -- picks the most efficient join strategy based on
+  statistics and table sizes.
+- **Aggregate optimization** -- combines partial and final aggregation stages,
+  and can use exact statistics to skip scanning entirely.
+
+### Why This Matters for Table Providers
+
+Your `TableProvider` sits at the boundary between logical and physical planning.
+During logical optimization, DataFusion determines which filters and projections
+*could* be pushed down to the source. When `scan()` is called during physical
+planning, those hints are passed to you. By implementing capabilities like
+`supports_filters_pushdown`, you influence what the optimizer can do -- and the
+metadata you declare in your `ExecutionPlan` (partitioning, ordering) directly
+affects which physical optimizations apply.
+
 ## Layer 1: TableProvider
 
 ---
@@ -128,12 +190,16 @@ references:
   possible provider; great for tests and small datasets.
 - **[`StreamTable`]** -- Wraps a user-provided stream factory. Useful when your
   data arrives as a continuous stream (e.g., from Kafka or a socket).
-- **[`SortedTableProvider`]** -- Wraps another `TableProvider` and advertises a
-  known sort order, enabling the optimizer to skip redundant sorts.
+- **[`ListingTable`]** -- The file-based data source behind DataFusion's
+  built-in Parquet, CSV, and JSON support. Demonstrates sophisticated filter
+  and projection pushdown, file pruning, and schema inference.
+- **[`ViewTable`]** -- Wraps a logical plan, representing a SQL view. Useful
+  if your provider is best expressed as a transformation of other tables.
 
 [`MemTable`]: https://docs.rs/datafusion/latest/datafusion/datasource/memory/struct.MemTable.html
 [`StreamTable`]: https://docs.rs/datafusion/latest/datafusion/datasource/stream/struct.StreamTable.html
-[`SortedTableProvider`]: https://docs.rs/datafusion/latest/datafusion/datasource/struct.SortedTableProvider.html
+[`ListingTable`]: https://docs.rs/datafusion/latest/datafusion/datasource/listing/struct.ListingTable.html
+[`ViewTable`]: https://docs.rs/datafusion/latest/datafusion/datasource/view/struct.ViewTable.html
 
 ## Layer 2: ExecutionPlan
 
@@ -189,9 +255,39 @@ ordered data. Getting this right can be a significant performance win.
 ### Partitioning Strategies
 
 Since `execute()` is called once per partition, partitioning directly controls
-the parallelism of your table scan. Each partition runs on its own task, so
-more partitions means more concurrent work -- up to the number of available
-cores.
+the parallelism of your table scan. Each partition produces an independent
+stream that DataFusion schedules as a **task** on the tokio runtime. It is
+important to distinguish tasks from threads: tasks are lightweight units of
+async work that are multiplexed onto a thread pool. You can have many more
+tasks (partitions) than physical threads -- the runtime will interleave them
+efficiently as they await I/O or yield.
+
+That said, having *too many* partitions is not free. Each partition adds
+scheduling overhead, and downstream operators like aggregations and joins may
+need to repartition the data to match their requirements. You can use the
+session configuration to find the **target partition count**, which reflects
+how many partitions DataFusion's optimizer expects to work with:
+
+```rust
+async fn scan(
+    &self,
+    state: &dyn Session,
+    projection: Option<&Vec<usize>>,
+    filters: &[Expr],
+    limit: Option<usize>,
+) -> Result<Arc<dyn ExecutionPlan>> {
+    let target_partitions = state.config().target_partitions();
+    // Use target_partitions to decide how many partitions to expose.
+    // If your source naturally has more partitions, consider coalescing
+    // them down to target_partitions to avoid unnecessary repartitioning.
+    // ...
+}
+```
+
+If your source produces data in exactly `target_partitions` partitions, the
+optimizer is less likely to insert a `RepartitionExec` above your scan --
+avoiding an expensive data shuffle. For small datasets, `target_partitions` may
+be set to 1, which avoids any repartitioning overhead entirely.
 
 Consider how your data source naturally divides its data:
 
@@ -485,6 +581,166 @@ Similarly, `EXPLAIN` will reveal whether DataFusion is inserting unnecessary
 better output properties. Whenever your queries seem slower than expected,
 `EXPLAIN` is the first place to look.
 
+### A Complete Filter Pushdown Example
+
+To make filter pushdown concrete, here is a full working example. Imagine a
+table provider that reads from a set of date-partitioned directories on disk
+(e.g., `data/2026-03-01/`, `data/2026-03-02/`, ...). Each directory contains
+one or more Parquet files for that date. By pushing down a filter on the `date`
+column, the provider can skip entire directories -- avoiding the I/O of listing
+and reading files that cannot possibly match the query.
+
+```rust
+use std::any::Any;
+use std::collections::HashMap;
+use std::sync::Arc;
+
+use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
+use arrow::array::{Date32Array, Float64Array, StringArray};
+use arrow::record_batch::RecordBatch;
+use datafusion::catalog::TableProvider;
+use datafusion::common::Result;
+use datafusion::datasource::TableType;
+use datafusion::execution::SendableRecordBatchStream;
+use datafusion::logical_expr::Expr;
+use datafusion::logical_expr::TableProviderFilterPushDown;
+use datafusion::physical_expr::EquivalenceProperties;
+use datafusion::physical_plan::execution_plan::{Boundedness, EmissionType};
+use datafusion::physical_plan::stream::RecordBatchStreamAdapter;
+use datafusion::physical_plan::{
+    ExecutionPlan, Partitioning, PlanProperties,
+};
+use futures::stream;
+
+/// A table provider backed by date-partitioned directories.
+/// Each date directory contains data files; by filtering on the
+/// `date` column we can skip entire directories of I/O.
+struct DatePartitionedTable {
+    schema: SchemaRef,
+    /// Maps date strings ("2026-03-01") to directory paths
+    partitions: HashMap<String, String>,
+}
+
+#[async_trait::async_trait]
+impl TableProvider for DatePartitionedTable {
+    fn as_any(&self) -> &dyn Any { self }
+    fn schema(&self) -> SchemaRef { Arc::clone(&self.schema) }
+    fn table_type(&self) -> TableType { TableType::Base }
+
+    fn supports_filters_pushdown(
+        &self,
+        filters: &[&Expr],
+    ) -> Result<Vec<TableProviderFilterPushDown>> {
+        Ok(filters.iter().map(|f| {
+            if Self::is_date_equality_filter(f) {
+                // We can fully evaluate this: we will only read
+                // directories matching the date, so no rows with
+                // a different date will appear in the output.
+                TableProviderFilterPushDown::Exact
+            } else {
+                TableProviderFilterPushDown::Unsupported
+            }
+        }).collect())
+    }
+
+    async fn scan(
+        &self,
+        _state: &dyn Session,
+        projection: Option<&Vec<usize>>,
+        filters: &[Expr],
+        limit: Option<usize>,
+    ) -> Result<Arc<dyn ExecutionPlan>> {
+        // Determine which date partitions to read by inspecting
+        // the pushed-down filters. This is the key optimization:
+        // we decide *during planning* which directories to scan,
+        // so that execution never touches irrelevant data.
+        let dates_to_read: Vec<String> = self
+            .extract_date_values(filters)
+            .unwrap_or_else(||
+                self.partitions.keys().cloned().collect()
+            );
+
+        let dirs: Vec<String> = dates_to_read
+            .iter()
+            .filter_map(|d| self.partitions.get(d).cloned())
+            .collect();
+
+        Ok(Arc::new(DatePartitionedExec {
+            schema: Arc::clone(&self.schema),
+            directories: dirs,
+            properties: PlanProperties::new(
+                EquivalenceProperties::new(
+                    Arc::clone(&self.schema),
+                ),
+                // One partition per date directory -- these
+                // will be read in parallel.
+                Partitioning::UnknownPartitioning(dirs.len()),
+                EmissionType::Incremental,
+                Boundedness::Bounded,
+            ),
+        }))
+    }
+}
+
+impl DatePartitionedTable {
+    /// Check if a filter is an equality comparison on the `date` column.
+    fn is_date_equality_filter(expr: &Expr) -> bool {
+        // In practice, match on BinaryExpr { left, op: Eq, right }
+        // and check if either side references the "date" column.
+        // Simplified here for clarity.
+        todo!("match on date equality expressions")
+    }
+
+    /// Extract date literal values from pushed-down equality filters.
+    fn extract_date_values(&self, filters: &[Expr]) -> Option<Vec<String>> {
+        // Parse filters like `date = '2026-03-01'` and return
+        // the literal date strings. Returns None if no date
+        // filters are present (meaning: read all partitions).
+        todo!("extract date literals from filter expressions")
+    }
+}
+```
+
+The key insight is that the filter pushdown decision (`supports_filters_pushdown`)
+and the partition pruning (`scan()`) work together: the first tells DataFusion
+that a `FilterExec` is unnecessary for the `date` predicate, and the second
+ensures that only the relevant directories are scanned. The actual file reading
+happens later, in the stream produced by `execute()`.
+
+## `scan` vs `scan_with_args`
+
+---
+
+The examples above all use the `scan()` method, which receives projection,
+filters, and limit as separate parameters. DataFusion also provides
+[`scan_with_args()`], which bundles these into a structured [`ScanArgs`]
+parameter:
+
+```rust
+async fn scan_with_args(
+    &self,
+    args: ScanArgs<'_>,
+) -> Result<ScanResult> {
+    let projection = args.projection();
+    let filters = args.filters();
+    let limit = args.limit();
+    // ...
+}
+```
+
+`ScanArgs` is designed to be extensible -- new scan parameters can be added
+without breaking existing implementations. It also carries additional context
+not available in `scan()`, such as a `preferred_ordering` hint that lets the
+optimizer request a specific output order from your provider.
+
+If you are building a new table provider, consider implementing
+`scan_with_args()` instead of `scan()`. The default implementation of `scan()`
+delegates to `scan_with_args()`, so you only need to implement one. Existing
+providers that already implement `scan()` will continue to work without changes.
+
+[`scan_with_args()`]: https://docs.rs/datafusion/latest/datafusion/catalog/trait.TableProvider.html#method.scan_with_args
+[`ScanArgs`]: https://docs.rs/datafusion/latest/datafusion/catalog/struct.ScanArgs.html
+
 ## Putting It All Together
 
 ---
@@ -624,8 +880,11 @@ level makes sense:
 |---|---|---|
 | Already in `RecordBatch`es in memory | [`MemTable`] | Nothing -- just construct it |
 | An async stream of batches | [`StreamTable`] | A stream factory |
-| A table with known sort order | [`SortedTableProvider`] wrapping another provider | The inner provider |
+| A logical transformation of other tables | [`ViewTable`] wrapping a logical plan | The logical plan |
+| Files on disk or object storage | [`ListingTable`] with a custom [`FileFormat`] | The file format |
 | A custom source needing full control | `TableProvider` + `ExecutionPlan` + stream | All three layers |
+
+[`FileFormat`]: https://docs.rs/datafusion/latest/datafusion/datasource/file_format/trait.FileFormat.html
 
 For most integrations, [`StreamTable`] combined with
 [`RecordBatchStreamAdapter`] provides a good balance of simplicity and
