@@ -903,10 +903,9 @@ table providers for working with data analytics.
 
 ---
 
-- [TableProvider API docs][`TableProvider`]
-- [ExecutionPlan API docs][`ExecutionPlan`]
-- [SendableRecordBatchStream API docs][`SendableRecordBatchStream`]
-- [GitHub issue discussing table provider examples](https://github.com/apache/datafusion/issues/16821)
+- [`TableProvider` API docs](https://docs.rs/datafusion/latest/datafusion/catalog/trait.TableProvider.html)
+- [`ExecutionPlan` API docs](https://docs.rs/datafusion/latest/datafusion/physical_plan/trait.ExecutionPlan.html)
+- [`SendableRecordBatchStream` API docs](https://docs.rs/datafusion/latest/datafusion/execution/type.SendableRecordBatchStream.html)
 - [DataFusion examples directory](https://github.com/apache/datafusion/tree/main/datafusion-examples/examples) --
   contains working examples including custom table providers
 
