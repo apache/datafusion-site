@@ -1,0 +1,208 @@
+<!doctype html>
+<html class="no-js" lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apache DataFusion Comet 0.14.0 Release - Apache DataFusion Blog</title>
+<link href="/blog/css/bootstrap.min.css" rel="stylesheet">
+<link href="/blog/css/fontawesome.all.min.css" rel="stylesheet">
+<link href="/blog/css/headerlink.css" rel="stylesheet">
+<link href="/blog/highlight/default.min.css" rel="stylesheet">
+<link href="/blog/css/app.css" rel="stylesheet">
+<link href="/blog/css/dark-mode.css" rel="stylesheet">
+<script src="/blog/js/dark-mode.js"></script>
+<script src="/blog/highlight/highlight.js"></script>
+<script>hljs.highlightAll();</script>  </head>
+  <body class="d-flex flex-column h-100">
+  <main class="flex-shrink-0">
+<!-- nav bar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark" aria-label="Fifth navbar example">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/blog/"><img src="/blog/images/logo_original4x.png" style="height: 32px;"/> Apache DataFusion Blog</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarADP" aria-controls="navbarADP" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarADP">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/about.html">About</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/feed.xml">RSS</a>
+                </li>
+            </ul>
+            <button id="dark-mode-toggle" type="button" class="dark-mode-toggle" aria-label="Toggle dark mode" aria-pressed="false" title="Toggle dark mode">
+                <span class="sun-icon" aria-hidden="true">☀</span>
+                <span class="moon-icon" aria-hidden="true">☾</span>
+            </button>
+        </div>
+    </div>
+</nav>    
+<!-- article contents -->
+<div id="contents">
+  <div class="bg-white p-4 p-md-5 rounded">
+    <div class="row justify-content-center">
+      <div class="col-12 col-md-8 main-content">
+        <h1>
+          Apache DataFusion Comet 0.14.0 Release
+        </h1>
+        <p>Posted on: Wed 18 March 2026 by pmc</p>
+
+        <aside class="toc-container d-md-none mb-2">
+          <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#key-features">Key Features</a><ul>
+<li><a href="#native-columnar-to-row-conversion">Native Columnar-to-Row Conversion</a></li>
+<li><a href="#native-iceberg-improvements">Native Iceberg Improvements</a></li>
+<li><a href="#new-expressions">New Expressions</a></li>
+<li><a href="#ansi-mode-error-messages">ANSI Mode Error Messages</a></li>
+<li><a href="#datafusion-configuration-passthrough">DataFusion Configuration Passthrough</a></li>
+</ul>
+</li>
+<li><a href="#performance-improvements">Performance Improvements</a></li>
+<li><a href="#deprecations-and-removals">Deprecations and Removals</a></li>
+<li><a href="#compatibility">Compatibility</a></li>
+</ul>
+</div>
+        </aside>
+
+        <!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+-->
+
+<p>The Apache DataFusion PMC is pleased to announce version 0.14.0 of the <a href="https://datafusion.apache.org/comet/">Comet</a> subproject.</p>
+<p>Comet is an accelerator for Apache Spark that translates Spark physical plans to DataFusion physical plans for
+improved performance and efficiency without requiring any code changes.</p>
+<p>This release covers approximately eight weeks of development work and is the result of merging 189 PRs from 21
+contributors. See the <a href="https://github.com/apache/datafusion-comet/blob/main/dev/changelog/0.14.0.md">change log</a> for more information.</p>
+<h2 id="key-features">Key Features<a class="headerlink" href="#key-features" title="Permanent link">¶</a></h2>
+<h3 id="native-columnar-to-row-conversion">Native Columnar-to-Row Conversion<a class="headerlink" href="#native-columnar-to-row-conversion" title="Permanent link">¶</a></h3>
+<p>Comet now uses a native columnar-to-row (C2R) conversion by default. This
+feature replaces Comet's JVM-based columnar-to-row transition with a native Rust implementation, reducing JVM memory overhead
+when data flows from Comet's native execution back to Spark operators that require row-based input.</p>
+<h3 id="native-iceberg-improvements">Native Iceberg Improvements<a class="headerlink" href="#native-iceberg-improvements" title="Permanent link">¶</a></h3>
+<p>Comet's fully-native Iceberg integration received several enhancements:</p>
+<p><strong>Per-Partition Plan Serialization</strong>: <code>CometExecRDD</code> now supports per-partition plan data, reducing serialization
+overhead for native Iceberg scans and enabling dynamic partition pruning (DPP).</p>
+<p><strong>Vended Credentials</strong>: Native Iceberg scans now support passing vended credentials from the catalog, improving
+integration with cloud storage services.</p>
+<p><strong>Performance Optimizations</strong>:</p>
+<ul>
+<li>Single-pass <code>FileScanTask</code> validation for reduced planning overhead</li>
+<li>Configurable data file concurrency via <code>spark.comet.scan.icebergNative.dataFileConcurrency</code></li>
+<li>Channel-based executor thread parking instead of <code>yield_now()</code> for reduced CPU overhead</li>
+<li>Reuse of <code>CometConf</code> and native utility instances in batch decoding</li>
+</ul>
+<h3 id="new-expressions">New Expressions<a class="headerlink" href="#new-expressions" title="Permanent link">¶</a></h3>
+<p>This release adds support for the following expressions:</p>
+<ul>
+<li>Date/time functions: <code>make_date</code>, <code>next_day</code></li>
+<li>String functions: <code>right</code>, <code>string_split</code></li>
+<li>Math functions: <code>width_bucket</code>, <code>crc32</code></li>
+<li>Map functions: <code>map_contains_key</code>, <code>map_from_entries</code></li>
+<li>Conversion functions: <code>to_csv</code>, <code>luhn_check</code></li>
+<li>Cast support: date to timestamp, integer to timestamp, numeric to timestamp, integer to binary, boolean to decimal, date to numeric</li>
+</ul>
+<h3 id="ansi-mode-error-messages">ANSI Mode Error Messages<a class="headerlink" href="#ansi-mode-error-messages" title="Permanent link">¶</a></h3>
+<p>ANSI SQL mode now produces proper error messages matching Spark's expected output, improving compatibility for
+workloads that rely on strict SQL error handling.</p>
+<h3 id="datafusion-configuration-passthrough">DataFusion Configuration Passthrough<a class="headerlink" href="#datafusion-configuration-passthrough" title="Permanent link">¶</a></h3>
+<p>DataFusion session-level configurations can now be set directly from Spark using the <code>spark.comet.datafusion.*</code>
+prefix. This enables tuning DataFusion internals such as batch sizes and memory limits without modifying Comet code.</p>
+<h2 id="performance-improvements">Performance Improvements<a class="headerlink" href="#performance-improvements" title="Permanent link">¶</a></h2>
+<p>This release includes extensive performance optimizations:</p>
+<ul>
+<li><strong>Sum aggregation</strong>: Specialized implementations for each eval mode eliminate per-row mode checks</li>
+<li><strong>Contains expression</strong>: SIMD-based scalar pattern search for faster string matching</li>
+<li><strong>Batch coalescing</strong>: Reduced IPC schema overhead in <code>BufBatchWriter</code> by coalescing small batches</li>
+<li><strong>Tokio runtime</strong>: Worker threads now initialize from <code>spark.executor.cores</code> for better resource utilization</li>
+<li><strong>Decimal expressions</strong>: Optimized decimal arithmetic operations</li>
+<li><strong>Row-to-columnar transition</strong>: Improved performance for JVM shuffle data conversion</li>
+<li><strong>Aligned pointer reads</strong>: Optimized <code>SparkUnsafeRow</code> field accessors using aligned memory reads</li>
+</ul>
+<h2 id="deprecations-and-removals">Deprecations and Removals<a class="headerlink" href="#deprecations-and-removals" title="Permanent link">¶</a></h2>
+<p>The deprecated <code>native_comet</code> scan mode has been removed. Use <code>native_datafusion</code> instead. Note 
+that the <code>native_iceberg_compat</code> scan is now deprecated and will be removed from a future release. </p>
+<h2 id="compatibility">Compatibility<a class="headerlink" href="#compatibility" title="Permanent link">¶</a></h2>
+<p>This release upgrades to DataFusion 52.3, Arrow 57.3, and iceberg-rust 0.9.0. Published binaries now target
+x86-64-v3 and neoverse-n1 CPU architectures for improved performance on modern hardware.</p>
+<p>Supported platforms include Spark 3.4.3, 3.5.4-3.5.8, and Spark 4.0.x with various JDK and Scala combinations.</p>
+<p>The community encourages users to test Comet with existing Spark workloads and welcomes contributions to ongoing development.</p>
+
+<!--
+  Comments Section
+  Loaded only after explicit visitor consent to comply with ASF policy.
+-->
+
+<div id="comments">
+  <hr>
+  <h3>Comments</h3>
+
+  <!-- Local loader script -->
+  <script src="/content/js/giscus-consent.js" defer></script>
+
+  <!-- Consent UI -->
+  <div id="giscus-consent">
+    <p>
+        We use <a href="https://giscus.app/">Giscus</a> for comments, powered by GitHub Discussions.
+        To respect your privacy, Giscus and comments will load only if you click "Show Comments"
+    </p>
+
+    <div class="consent-actions">
+      <button id="giscus-load" type="button">Show Comments</button>
+      <button id="giscus-revoke" type="button" hidden>Hide Comments</button>
+    </div>
+
+    <noscript>JavaScript is required to load comments from Giscus.</noscript>
+  </div>
+
+  <!-- Container where Giscus will render -->
+  <div id="comment-thread"></div>
+</div>      </div>
+      <aside class="toc-container d-none d-md-block col-md-4 col-xl-3 ms-xl-2">
+        <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#key-features">Key Features</a><ul>
+<li><a href="#native-columnar-to-row-conversion">Native Columnar-to-Row Conversion</a></li>
+<li><a href="#native-iceberg-improvements">Native Iceberg Improvements</a></li>
+<li><a href="#new-expressions">New Expressions</a></li>
+<li><a href="#ansi-mode-error-messages">ANSI Mode Error Messages</a></li>
+<li><a href="#datafusion-configuration-passthrough">DataFusion Configuration Passthrough</a></li>
+</ul>
+</li>
+<li><a href="#performance-improvements">Performance Improvements</a></li>
+<li><a href="#deprecations-and-removals">Deprecations and Removals</a></li>
+<li><a href="#compatibility">Compatibility</a></li>
+</ul>
+</div>
+      </aside>
+    </div>
+  </div>
+</div>    
+    <!-- footer -->
+    <div class="row g-0">
+      <div class="col-12">
+        <p style="font-style: italic; font-size: 0.8rem; text-align: center;">
+          Copyright 2026, <a href="https://www.apache.org/">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a>.<br/>
+          Apache&reg; and the Apache feather logo are trademarks of The Apache Software Foundation.
+        </p>
+      </div>
+    </div>
+    <script src="/blog/js/bootstrap.bundle.min.js"></script>  </main>
+  </body>
+</html>
