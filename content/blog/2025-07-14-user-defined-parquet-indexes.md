@@ -173,24 +173,24 @@ A **distinct value index** stores the unique values of a specific column. This t
 
 For example, if the files contain a column named `Category` like this:
 
-<table style="border-collapse:collapse;">
+<table class="table table-bordered">
   <tr>
-    <td style="border:1px solid #888;padding:2px 6px;"><b><code>Category</code></b></td>
+    <td><b><code>Category</code></b></td>
   </tr>
   <tr>
-    <td style="border:1px solid #888;padding:2px 6px;"><code>foo</code></td>
+    <td><code>foo</code></td>
   </tr>
   <tr>
-    <td style="border:1px solid #888;padding:2px 6px;"><code>bar</code></td>
+    <td><code>bar</code></td>
   </tr>
   <tr>
-    <td style="border:1px solid #888;padding:2px 6px;"><code>...</code></td>
+    <td><code>...</code></td>
   </tr>
   <tr>
-    <td style="border:1px solid #888;padding:2px 6px;"><code>baz</code></td>
+    <td><code>baz</code></td>
   </tr>
   <tr>
-    <td style="border:1px solid #888;padding:2px 6px;"><code>foo</code></td>
+    <td><code>foo</code></td>
   </tr>
 </table>
 

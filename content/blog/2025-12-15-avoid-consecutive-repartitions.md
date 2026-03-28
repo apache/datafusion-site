@@ -25,18 +25,17 @@ limitations under the License.
 {% endcomment %}
 -->
 
-<div style="display: flex; align-items: center; gap: 20px; margin-bottom: 20px;">
-<div style="flex: 1;">
+<div class="row align-items-center mb-3">
+<div class="col-md-7">
 
 Databases are some of the most complex yet interesting pieces of software. They are amazing pieces of abstraction: query engines optimize and execute complex plans, storage engines provide sophisticated infrastructure as the backbone of the system, while intricate file formats lay the groundwork for particular workloads. All of this is exposed by a user-friendly interface and query languages (typically a dialect of SQL).
 <br><br>
 Starting a journey learning about database internals can be daunting. With so many topics that are whole PhD degrees themselves, finding a place to start is difficult. In this blog post, I will share my early journey in the database world and a quick lesson on one of the first topics I dove into. If you are new to the space, this post will help you get your first foot into the database world, and if you are already a veteran, you may still learn something new.
 
 </div>
-<div style="flex: 0 0 40%; text-align: center;">
+<div class="col-md-5 text-center">
 <img
   src="/blog/images/avoid-consecutive-repartitions/database_system_diagram.png"
-  width="100%"
   class="img-fluid"
   alt="Database System Components"
 />
@@ -122,18 +121,17 @@ Partitioning is a "divide-and-conquer" approach to executing a query. Each parti
 
 #### **Round-Robin Repartitioning**
 
-<div style="display: flex; align-items: top; gap: 20px; margin-bottom: 20px;">
-<div style="flex: 1;">
+<div class="row align-items-start mb-3">
+<div class="col-md-9">
 
 Round-robin repartitioning is the simplest partitioning strategy. Incoming data is processed in batches (chunks of rows), and these batches are distributed across partitions cyclically or sequentially, with each new batch assigned to the next available partition.
 <br><br>
 Round-robin repartitioning is useful when the data grouping isn't known or when aiming for an even distribution across partitions. Because it simply assigns batches in order without inspecting their contents, it is a low-overhead way to increase parallelism for downstream operations.
 
 </div>
-<div style="flex: 0 0 25%; text-align: center;">
+<div class="col-md-3 text-center">
 <img
   src="/blog/images/avoid-consecutive-repartitions/round_robin_repartitioning.png"
-  width="100%"
   class="img-fluid"
   alt="Round-Robin Repartitioning"
 />
@@ -142,18 +140,17 @@ Round-robin repartitioning is useful when the data grouping isn't known or when 
 
 #### **Hash Repartitioning**
 
-<div style="display: flex; align-items: top; gap: 20px; margin-bottom: 20px;">
-<div style="flex: 1;">
+<div class="row align-items-start mb-3">
+<div class="col-md-9">
 
 Hash repartitioning distributes data based on a hash function applied to one or more columns, called the partitioning key. Rows with the same hash value are placed in the same partition.
 <br><br>
 Hash repartitioning is useful when working with grouped data. Imagine you have a database containing information on company sales, and you are looking to find the total revenue each store produced. Hash repartitioning would make this query much more efficient. Rather than iterating over the data on a single thread and keeping a running sum for each store, it would be better to hash repartition on the store column and have multiple threads calculate individual store sales.
 
 </div>
-<div style="flex: 0 0 25%; text-align: center;">
+<div class="col-md-3 text-center">
 <img
   src="/blog/images/avoid-consecutive-repartitions/hash_repartitioning.png"
-  width="100%"
   class="img-fluid"
   alt="Hash Repartitioning"
 />

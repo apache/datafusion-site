@@ -25,16 +25,6 @@ limitations under the License.
 
 [TOC]
 
-<style>
-/* Table borders */
-table, th, td {
-  border: 1px solid black;
-  border-collapse: collapse;
-}
-th, td {
-  padding: 3px;
-}
-</style>
 **TLDR: TPC-H SF=100 in 1min using tpchgen-rs vs 30min+ with dbgen**.
 
 3 members of the [Apache DataFusion] community used Rust and open source
@@ -135,7 +125,7 @@ bound on the Scale Factor.
 
 **Figure 2**: Example TBL formatted output of `dbgen` for the `LINEITEM` table
 
-<table>
+<table class="table table-bordered">
   <tr>
    <td><strong>Scale Factor</strong>
    </td>
@@ -308,7 +298,7 @@ compatible port, and knew about the performance shortcomings and how to approach
 them.
 
 
-<table>
+<table class="table table-bordered">
   <tr>
    <td><strong>Scale Factor</strong>
    </td>
@@ -356,7 +346,7 @@ list of optimizations:
 At the time of writing, single threaded performance is now 2.5x-2.7x faster than the initial version, as shown in Table 3.
 
 
-<table>
+<table class="table table-bordered">
   <tr>
    <td><strong>Scale Factor</strong>
    </td>
@@ -412,7 +402,7 @@ When writing to `/dev/null` tpchgen  generates the entire dataset in 25 seconds
 (4 GB/s).
 
 
-<table>
+<table class="table table-bordered">
   <tr>
    <td><strong>Scale Factor</strong>
    </td>
@@ -516,7 +506,7 @@ or CSV, tpchgen-cli creates the full SF=100 parquet format dataset in less than
 [a small 300 line PR]: https://github.com/clflushopt/tpchgen-rs/pull/61
 [Rust Parquet writer]: https://crates.io/crates/parquet
 
-<table>
+<table class="table table-bordered">
   <tr>
    <td><strong>Scale Factor</strong>
    </td>

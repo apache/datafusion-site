@@ -68,10 +68,9 @@ Modern IDEs use language servers such as
 hints, and identify usage errors. These are major tools in the python user community. With this
 release, users can fully use these tools in their workflow.
 
-<figure style="text-align: center;">
+<figure class="text-center">
   <img 
     src="/blog/images/python-datafusion-40.0.0/vscode_hover_tooltip.png" 
-    width="100%"
     class="img-fluid"
     alt="Fig 1: Enhanced tooltips in an IDE."
   >
@@ -84,10 +83,9 @@ release, users can fully use these tools in their workflow.
 By having the type annotations, these IDEs can also identify quickly when a user has incorrectly
 used a function's arguments as shown in Figure 2.
 
-<figure style="text-align: center;">
+<figure class="text-center">
   <img 
     src="/blog/images/python-datafusion-40.0.0/pylance_error_checking.png"
-    width="100%"
     class="img-fluid"
     alt="Fig 2: Error checking in static analysis"
   >
