@@ -39,12 +39,6 @@ contributors. See the [change log] for more information.
 
 ## Key Features
 
-### Native Columnar-to-Row Conversion
-
-Comet now uses a native columnar-to-row (C2R) conversion by default. This
-feature replaces Comet's JVM-based columnar-to-row transition with a native Rust implementation, reducing JVM memory overhead
-when data flows from Comet's native execution back to Spark operators that require row-based input.
-
 ### Native Iceberg Improvements
 
 Comet's fully-native Iceberg integration received several enhancements:
@@ -65,6 +59,12 @@ to iceberg-rust 0.9.0, which Comet now uses. These improvements benefit all iceb
 - Configurable data file concurrency via `spark.comet.scan.icebergNative.dataFileConcurrencyLimit`
 - Channel-based executor thread parking instead of `yield_now()` for reduced CPU overhead
 - Reuse of `CometConf` and native utility instances in batch decoding
+
+### Native Columnar-to-Row Conversion
+
+Comet now uses a native columnar-to-row (C2R) conversion by default. This
+feature replaces Comet's JVM-based columnar-to-row transition with a native Rust implementation, reducing JVM memory overhead
+when data flows from Comet's native execution back to Spark operators that require row-based input.
 
 ### New Expressions
 
