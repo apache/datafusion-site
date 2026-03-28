@@ -58,7 +58,7 @@ integration with cloud storage services.
 **Performance Optimizations**:
 
 - Single-pass `FileScanTask` validation for reduced planning overhead
-- Configurable data file concurrency via `spark.comet.scan.icebergNative.dataFileConcurrency`
+- Configurable data file concurrency via `spark.comet.scan.icebergNative.dataFileConcurrencyLimit`
 - Channel-based executor thread parking instead of `yield_now()` for reduced CPU overhead
 - Reuse of `CometConf` and native utility instances in batch decoding
 
@@ -67,11 +67,11 @@ integration with cloud storage services.
 This release adds support for the following expressions:
 
 - Date/time functions: `make_date`, `next_day`
-- String functions: `right`, `string_split`
-- Math functions: `width_bucket`, `crc32`
+- String functions: `right`, `string_split`, `luhn_check`
+- Math functions: `crc32`
 - Map functions: `map_contains_key`, `map_from_entries`
-- Conversion functions: `to_csv`, `luhn_check`
-- Cast support: date to timestamp, integer to timestamp, numeric to timestamp, integer to binary, boolean to decimal, date to numeric
+- Conversion functions: `to_csv`
+- Cast support: date to timestamp, numeric to timestamp, integer to binary, boolean to decimal, date to numeric
 
 ### ANSI Mode Error Messages
 
@@ -102,7 +102,9 @@ that the `native_iceberg_compat` scan is now deprecated and will be removed from
 
 ## Compatibility
 
-This release upgrades to DataFusion 52.3, Arrow 57.3, and iceberg-rust 0.9.0. Published binaries now target
+This release upgrades to DataFusion 52.3, Arrow 57.3, and iceberg-rust 0.9.0, which included a number of
+[reader performance improvements](https://iceberg.apache.org/blog/apache-iceberg-rust-0.9.0-release/#reader-performance-improvements)
+contributed by the Comet team. Published binaries now target
 x86-64-v3 and neoverse-n1 CPU architectures for improved performance on modern hardware.
 
 Supported platforms include Spark 3.4.3, 3.5.4-3.5.8, and Spark 4.0.x with various JDK and Scala combinations.
