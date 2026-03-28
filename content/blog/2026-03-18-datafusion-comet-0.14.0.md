@@ -55,6 +55,10 @@ overhead for native Iceberg scans and enabling dynamic partition pruning (DPP).
 **Vended Credentials**: Native Iceberg scans now support passing vended credentials from the catalog, improving
 integration with cloud storage services.
 
+**Upstream Reader Performance Improvements**: The Comet team contributed a number of
+[reader performance improvements](https://iceberg.apache.org/blog/apache-iceberg-rust-0.9.0-release/#reader-performance-improvements)
+to iceberg-rust 0.9.0, which Comet now uses. These improvements benefit all iceberg-rust users.
+
 **Performance Optimizations**:
 
 - Single-pass `FileScanTask` validation for reduced planning overhead
@@ -102,9 +106,7 @@ that the `native_iceberg_compat` scan is now deprecated and will be removed from
 
 ## Compatibility
 
-This release upgrades to DataFusion 52.3, Arrow 57.3, and iceberg-rust 0.9.0, which included a number of
-[reader performance improvements](https://iceberg.apache.org/blog/apache-iceberg-rust-0.9.0-release/#reader-performance-improvements)
-contributed by the Comet team. Published binaries now target
+This release upgrades to DataFusion 52.3, Arrow 57.3, and iceberg-rust 0.9.0. Published binaries now target
 x86-64-v3 and neoverse-n1 CPU architectures for improved performance on modern hardware.
 
 Supported platforms include Spark 3.4.3, 3.5.4-3.5.8, and Spark 4.0.x with various JDK and Scala combinations.
