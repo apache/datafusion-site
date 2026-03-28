@@ -37,7 +37,7 @@ Starting a journey learning about database internals can be daunting. With so ma
 <img
   src="/blog/images/avoid-consecutive-repartitions/database_system_diagram.png"
   width="100%"
-  class="img-responsive"
+  class="img-fluid"
   alt="Database System Components"
 />
 </div>
@@ -81,7 +81,7 @@ This will give you familiarity with the codebase and using your tools, like your
 <img
   src="/blog/images/avoid-consecutive-repartitions/noot_noot_database_meme.png"
   width="50%"
-  class="img-responsive"
+  class="img-fluid"
   alt="Noot Noot Database Meme"
 />
 </div>
@@ -109,7 +109,7 @@ DataFusion implements a vectorized <a href="https://dl.acm.org/doi/10.1145/93605
 <img
   src="/blog/images/avoid-consecutive-repartitions/volcano_model_diagram.png"
   width="60%"
-  class="img-responsive"
+  class="img-fluid"
   alt="Vectorized Volcano Model Example"
 />
 </div>
@@ -134,7 +134,7 @@ Round-robin repartitioning is useful when the data grouping isn't known or when 
 <img
   src="/blog/images/avoid-consecutive-repartitions/round_robin_repartitioning.png"
   width="100%"
-  class="img-responsive"
+  class="img-fluid"
   alt="Round-Robin Repartitioning"
 />
 </div>
@@ -154,7 +154,7 @@ Hash repartitioning is useful when working with grouped data. Imagine you have a
 <img
   src="/blog/images/avoid-consecutive-repartitions/hash_repartitioning.png"
   width="100%"
-  class="img-responsive"
+  class="img-fluid"
   alt="Hash Repartitioning"
 />
 </div>
@@ -166,7 +166,7 @@ Note, the benefit of hash opposed to round-robin partitioning in this scenario. 
 <img
   src="/blog/images/avoid-consecutive-repartitions/hash_repartitioning_example.png"
   width="100%"
-  class="img-responsive"
+  class="img-fluid"
   alt="Hash Repartitioning Example"
 />
 </div>
@@ -187,7 +187,7 @@ SELECT a, SUM(b) FROM data.parquet GROUP BY a;
 <img
   src="/blog/images/avoid-consecutive-repartitions/basic_before_query_plan.png"
   width="65%"
-  class="img-responsive"
+  class="img-fluid"
   alt="Consecutive Repartition Query Plan"
 />
 </div>
@@ -204,7 +204,7 @@ Why is this such a big deal? Well, repartitions do not process the data; their p
 <img
   src="/blog/images/avoid-consecutive-repartitions/in_depth_before_query_plan.png"
   width="65%"
-  class="img-responsive"
+  class="img-fluid"
   alt="Consecutive Repartition Query Plan With Data"
 />
 </div>
@@ -219,7 +219,7 @@ Optimally the plan should do one of two things:
 <img
   src="/blog/images/avoid-consecutive-repartitions/optimal_query_plans.png"
   width="100%"
-  class="img-responsive"
+  class="img-fluid"
   alt="Optimal Query Plans"
 />
 </div>
@@ -294,7 +294,7 @@ This logic takes place in the main loop of this rule. I find it helpful to draw 
 <img
   src="/blog/images/avoid-consecutive-repartitions/logic_tree_before.png"
   width="100%"
-  class="img-responsive"
+  class="img-fluid"
   alt="Incorrect Logic Tree"
 />
 </div>
@@ -321,7 +321,7 @@ The new logic tree looks like this:
 <img
   src="/blog/images/avoid-consecutive-repartitions/logic_tree_after.png"
   width="100%"
-  class="img-responsive"
+  class="img-fluid"
   alt="Correct Logic Tree"
 />
 </div>
@@ -388,7 +388,7 @@ For the benchmarking standard, TPCH, speedups were small but consistent:
 <img
   src="/blog/images/avoid-consecutive-repartitions/tpch_benchmark.png"
   width="60%"
-  class="img-responsive"
+  class="img-fluid"
   alt="TPCH Benchmark Results"
 />
 </div>
@@ -400,7 +400,7 @@ For the benchmarking standard, TPCH, speedups were small but consistent:
 <img
   src="/blog/images/avoid-consecutive-repartitions/tpch10_benchmark.png"
   width="60%"
-  class="img-responsive"
+  class="img-fluid"
   alt="TPCH10 Benchmark Results"
 />
 </div>

@@ -88,7 +88,7 @@ The Parquet format includes three main types<sup>[2](#footnote2)</sup> of option
 
 <!-- Source: https://docs.google.com/presentation/d/1aFjTLEDJyDqzFZHgcmRxecCvLKKXV2OvyEpTQFCNZPw -->
 
-<img src="/blog/images/user-defined-parquet-indexes/standard_index_structures.png" width="80%" class="img-responsive" alt="Parquet File layout with standard index structures."/>
+<img src="/blog/images/user-defined-parquet-indexes/standard_index_structures.png" width="80%" class="img-fluid" alt="Parquet File layout with standard index structures."/>
 
 **Figure 1**: Parquet file layout with standard index structures (as written by arrow-rs).
 
@@ -116,7 +116,7 @@ Figure 2 shows the resulting file layout.
 
 <!-- Source: https://docs.google.com/presentation/d/1aFjTLEDJyDqzFZHgcmRxecCvLKKXV2OvyEpTQFCNZPw -->
 
-<img src="/blog/images/user-defined-parquet-indexes/custom_index_structures.png" width="80%" class="img-responsive" alt="Parquet File layout with custom index structures."/>
+<img src="/blog/images/user-defined-parquet-indexes/custom_index_structures.png" width="80%" class="img-fluid" alt="Parquet File layout with custom index structures."/>
 
 **Figure 2**: Parquet file layout with user-defined indexes.
 

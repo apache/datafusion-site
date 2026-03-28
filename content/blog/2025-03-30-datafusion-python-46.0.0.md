@@ -181,7 +181,7 @@ expandable text and scroll bars.
   <img 
     src="/blog/images/python-datafusion-46.0.0/html_rendering.png" 
     width="100%"
-    class="img-responsive"
+    class="img-fluid"
     alt="Fig 1: Example html rendering in a jupyter notebook."
   >
   <figcaption>

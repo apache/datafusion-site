@@ -91,7 +91,7 @@ Per query comparison:
 <img
 src="/blog/images/datafusion-ballista-43.0.0/tpch_queries_compare.png"
 width="100%"
-class="img-responsive"
+class="img-fluid"
 alt="Per query comparison"
 />
 
@@ -100,7 +100,7 @@ Relative speedup:
 <img
 src="/blog/images/datafusion-ballista-43.0.0/tpch_queries_speedup_rel.png"
 width="100%"
-class="img-responsive"
+class="img-fluid"
 alt="Relative speedup graph"
 />
 
@@ -109,7 +109,7 @@ The overall speedup is 2.9x
 <img
 src="/blog/images/datafusion-ballista-43.0.0/tpch_allqueries.png"
 width="50%"
-class="img-responsive"
+class="img-fluid"
 alt="Overall speedup"
 />
 
@@ -120,7 +120,7 @@ Ballista now has a new logo, which is visually similar to other DataFusion proje
 <img
 src="/blog/images/datafusion-ballista-43.0.0/ballista-logo.png"
 width="50%"
-class="img-responsive"
+class="img-fluid"
 alt="New logo"
 />
 
