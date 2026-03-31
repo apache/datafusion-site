@@ -30,7 +30,7 @@ One of DataFusion's greatest strengths is its extensibility. If your data lives
 in a custom format, behind an API, or in a system that DataFusion does not
 natively support, you can teach DataFusion to read it by implementing a
 **custom table provider**. This post walks through the three layers you need to
-understand and explains where your work should actually happen.
+understand to design a table provider and where planning and execution work should happen.
 
 ## The Three Layers
 
@@ -40,9 +40,9 @@ When DataFusion executes a query against a table, three abstractions collaborate
 to produce results:
 
 1. **[TableProvider]** -- Describes the table (schema, capabilities) and
-   produces an execution plan when queried.
+   produces an execution plan when queried. This is part of the **Logical Plan**.
 2. **[ExecutionPlan]** -- Describes *how* to compute the result: partitioning,
-   ordering, and child plan relationships.
+   ordering, and child plan relationships. This is part of the **Physical Plan**.
 3. **[SendableRecordBatchStream]** -- The async stream that *actually does the
    work*, yielding `RecordBatch`es one at a time.
 
@@ -67,7 +67,7 @@ actually produced during execution.
 ---
 
 Before diving into the three layers, it helps to understand how DataFusion
-processes a query. There are four phases between a SQL string (or DataFrame
+processes a query. There are several phases between a SQL string (or DataFrame
 call) and streaming results:
 
 ```text
@@ -84,7 +84,7 @@ SQL / DataFrame API
 A **logical plan** describes *what* the query computes without specifying *how*.
 It is a tree of relational operators -- `TableScan`, `Filter`, `Projection`,
 `Aggregate`, `Join`, `Sort`, `Limit`, and so on. The logical optimizer rewrites
-this tree to reduce work while preserving the query's meaning. Key logical
+this tree to reduce work while preserving the query's meaning. Some logical
 optimizations include:
 
 - **Predicate pushdown** -- moves filters as close to the data source as
@@ -103,7 +103,7 @@ optimizations include:
 The **physical planner** converts the optimized logical plan into an
 `ExecutionPlan` tree -- the concrete plan that will actually run. This is where
 decisions like "use a hash join vs. a sort-merge join" or "how many partitions
-to scan" are made. The physical optimizer then refines this tree further:
+to scan" are made. The physical optimizer then refines this tree further with rewrites such as:
 
 - **Distribution enforcement** -- inserts `RepartitionExec` nodes so that data
   is partitioned correctly for joins and aggregations.
@@ -150,7 +150,7 @@ impl TableProvider for MyTable {
         filters: &[Expr],
         limit: Option<usize>,
     ) -> Result<Arc<dyn ExecutionPlan>> {
-        // Build and return an ExecutionPlan -- keep this lightweight!
+        // Build and return an ExecutionPlan -- don't do any execution work here -- keep lightweight!
         Ok(Arc::new(MyExecPlan::new(
             Arc::clone(&self.schema),
             projection,
@@ -264,32 +264,13 @@ async work that are multiplexed onto a thread pool. You can have many more
 tasks (partitions) than physical threads -- the runtime will interleave them
 efficiently as they await I/O or yield.
 
-That said, having *too many* partitions is not free. Each partition adds
-scheduling overhead, and downstream operators like aggregations and joins may
-need to repartition the data to match their requirements. You can use the
-session configuration to find the **target partition count**, which reflects
-how many partitions DataFusion's optimizer expects to work with:
-
-```rust
-async fn scan(
-    &self,
-    state: &dyn Session,
-    projection: Option<&Vec<usize>>,
-    filters: &[Expr],
-    limit: Option<usize>,
-) -> Result<Arc<dyn ExecutionPlan>> {
-    let target_partitions = state.config().target_partitions();
-    // Use target_partitions to decide how many partitions to expose.
-    // If your source naturally has more partitions, consider coalescing
-    // them down to target_partitions to avoid unnecessary repartitioning.
-    // ...
-}
-```
-
-If your source produces data in exactly `target_partitions` partitions, the
-optimizer is less likely to insert a `RepartitionExec` above your scan --
-avoiding an expensive data shuffle. For small datasets, `target_partitions` may
-be set to 1, which avoids any repartitioning overhead entirely.
+**Start simple: match your data's natural layout.** If you have 4 files, expose
+4 partitions. If your source has 8 shards, expose 8 partitions. DataFusion will
+insert a `RepartitionExec` above your scan when downstream operators need a
+different distribution. You can also implement the
+[`repartitioned`](https://docs.rs/datafusion/latest/datafusion/physical_plan/trait.ExecutionPlan.html#method.repartitioned)
+method on your `ExecutionPlan` to let DataFusion request a different partition
+count directly from your source, avoiding the extra operator entirely.
 
 Consider how your data source naturally divides its data:
 
@@ -300,14 +281,35 @@ Consider how your data source naturally divides its data:
 - **By key range:** If your data is keyed (e.g., by timestamp or customer ID),
   you can split it into ranges.
 
-Getting partitioning right matters because it affects everything downstream in
-the plan. When DataFusion needs to perform an aggregation or join, it
-repartitions data by hashing the relevant columns. If your source already
-produces data partitioned by the join or group-by key, DataFusion can skip the
-repartition step entirely -- avoiding a potentially expensive shuffle.
+**Advanced: aligning with `target_partitions`.** Once you have something
+working, you can tune further. Having *too many* partitions is not free: each
+partition adds scheduling overhead, and downstream operators may need to
+repartition the data anyway. The session configuration exposes a
+**target partition count** that reflects how many partitions the optimizer
+expects to work with:
 
-For example, if you are building a table provider for a system that stores
-data partitioned by `customer_id`, and a common query groups by `customer_id`:
+```rust
+async fn scan(
+    &self,
+    state: &dyn Session,
+    projection: Option<&Vec<usize>>,
+    filters: &[Expr],
+    limit: Option<usize>,
+) -> Result<Arc<dyn ExecutionPlan>> {
+    let target_partitions = state.config().target_partitions();
+    // Optionally coalesce or split partitions to match target_partitions.
+    // ...
+}
+```
+
+If your source produces data in exactly `target_partitions` partitions, the
+optimizer is less likely to insert a `RepartitionExec` above your scan.
+For small datasets, `target_partitions` may be set to 1, which avoids any
+repartitioning overhead entirely.
+
+**Advanced: declaring hash partitioning.** If your source stores data
+pre-partitioned by a specific key (e.g., `customer_id`), you can declare this
+in your output partitioning. For a query like:
 
 ```sql
 SELECT customer_id, SUM(amount)
@@ -390,11 +392,14 @@ fn execute(
 
 [RecordBatchStreamAdapter]: https://docs.rs/datafusion/latest/datafusion/physical_plan/stream/struct.RecordBatchStreamAdapter.html
 
-### CPU-Intensive Work: Use a Separate Thread Pool
+### Blocking Work: Use a Separate Thread Pool
 
-If your stream performs CPU-intensive work (parsing, decompression, complex
-transformations), avoid blocking the tokio runtime. Instead, offload to a
-dedicated thread pool and send results back through a channel:
+If your stream performs **blocking** work -- such as blocking I/O, or CPU work
+that runs for hundreds of milliseconds without yielding -- you must avoid
+blocking the tokio async runtime. Short CPU work (e.g., parsing a batch in a
+few milliseconds) is fine to do inline as long as your code yields back to the
+runtime frequently. But for long-running synchronous work that cannot yield,
+offload to a dedicated thread pool and send results back through a channel:
 
 ```rust
 fn execute(
@@ -407,7 +412,7 @@ fn execute(
 
     let (tx, rx) = tokio::sync::mpsc::channel(2);
 
-    // Spawn CPU-heavy work on a blocking thread pool
+    // Spawn blocking work on a dedicated thread pool
     tokio::task::spawn_blocking(move || {
         let batches = generate_data(&config);
         for batch in batches {
@@ -422,8 +427,8 @@ fn execute(
 }
 ```
 
-This pattern keeps the async runtime responsive while your data generation
-runs on its own threads.
+This pattern keeps the async runtime responsive while long-running synchronous
+work runs on its own threads.
 
 ## Where Should the Work Happen?
 
@@ -448,10 +453,13 @@ When `scan()` does heavy work, several problems arise:
 
 1. **Planning becomes slow.** If a query touches 10 tables and each `scan()`
    takes 500ms, planning alone takes 5 seconds before any data flows.
-2. **The optimizer cannot help.** The optimizer runs between planning and
+2. **Execution is single-threaded.** `scan()` runs on a single thread during
+   planning, so any work done there cannot benefit from the parallel execution
+   that DataFusion provides across partitions.
+3. **The optimizer cannot help.** The optimizer runs between planning and
    execution. If you have already fetched data during planning, optimizations
    like predicate pushdown or partition pruning cannot reduce the work.
-3. **Resource management breaks down.** DataFusion manages concurrency and
+4. **Resource management breaks down.** DataFusion manages concurrency and
    memory during execution. Work done during planning bypasses these controls.
 
 ## Filter Pushdown: Doing Less Work
