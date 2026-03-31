@@ -879,12 +879,55 @@ level makes sense:
 | Already in `RecordBatch`es in memory | [MemTable] | Nothing -- just construct it |
 | An async stream of batches | [StreamTable] | A stream factory |
 | A logical transformation of other tables | [ViewTable] wrapping a logical plan | The logical plan |
-| Files on disk or object storage | [ListingTable] with a custom [FileFormat] | The file format |
+| A variant of an existing file format | [ListingTable] with a custom [FileFormat] wrapping an existing one | A thin `FileFormat` wrapper |
+| Files in a custom format on disk or object storage | [ListingTable] with a custom [FileFormat], [FileSource], and [FileOpener] | The format, source, and opener |
 | A custom source needing full control | `TableProvider` + `ExecutionPlan` + stream | All three layers |
 
 [FileFormat]: https://docs.rs/datafusion/latest/datafusion/datasource/file_format/trait.FileFormat.html
+[FileSource]: https://docs.rs/datafusion-datasource/latest/datafusion_datasource/file/trait.FileSource.html
+[FileOpener]: https://docs.rs/datafusion-datasource/latest/datafusion_datasource/file_stream/trait.FileOpener.html
 
-For most integrations, [StreamTable] combined with
+### The File-Based Path: FileFormat, FileSource, and FileOpener
+
+If your data lives in files (local disk or object storage like S3), you do not
+need to build a `TableProvider` and `ExecutionPlan` from scratch. Instead, you
+can plug into [ListingTable] by implementing a stack of three traits:
+
+1. **[FileFormat]** -- The planning-level abstraction. Handles schema inference
+   (`infer_schema`), statistics (`infer_stats`), and produces a `FileSource` via
+   its `file_source()` method. If your format is a variant of an existing one,
+   you can wrap an existing `FileFormat` and delegate most methods.
+2. **[FileSource]** -- The execution-level configuration. Holds format-specific
+   settings and creates a `FileOpener` in `create_file_opener()`. You can also
+   override provided methods for optimization hooks like filter pushdown,
+   projection pushdown, and repartitioning.
+3. **[FileOpener]** -- The I/O layer. Has a single method,
+   `open(PartitionedFile)`, that reads a file (or byte range within a file)
+   and returns an async stream of `RecordBatch`es.
+
+The relationship flows downward:
+
+```text
+FileFormat  (planning: schema inference, statistics)
+  └── file_source() → FileSource  (execution: config + optimization hooks)
+        └── create_file_opener() → FileOpener  (I/O: reads files → RecordBatches)
+```
+
+`ListingTable` handles everything else: file discovery, partition column
+inference, and wiring the result into a [DataSourceExec] execution plan. You
+get file pruning, projection pushdown, and parallelism across files for free.
+
+If your format is a variant of an existing one, the [custom_file_format example]
+shows how to wrap `CsvFormat` to create a TSV format with minimal code -- you
+only need to implement `FileFormat`. For a fully custom format, a good approach
+is to study the built-in implementations like [ParquetSource] and [ParquetOpener]
+to understand the full `FileSource` → `FileOpener` contract.
+
+[custom_file_format example]: https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/custom_data_source/custom_file_format.rs
+[ParquetSource]: https://docs.rs/datafusion/latest/datafusion/datasource/file_format/parquet/struct.ParquetSource.html
+[ParquetOpener]: https://docs.rs/datafusion/latest/datafusion/datasource/file_format/parquet/struct.ParquetOpener.html
+
+For most non-file integrations, [StreamTable] combined with
 [RecordBatchStreamAdapter] provides a good balance of simplicity and
 flexibility. You provide a closure that returns a stream, and DataFusion handles
 the rest.
