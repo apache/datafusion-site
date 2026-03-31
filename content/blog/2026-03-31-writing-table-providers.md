@@ -873,12 +873,12 @@ building a data visualization system for Physical AI and makes heavy use of Data
 table providers for working with data analytics.
 
 I would also like to thank the reviewers of this post for their helpful feedback and
-suggestions: [@adriangb], [@alamb], [@2010YOUY01], [@kevinjqliu], [@Omega359],
+suggestions: [@2010YOUY01], [@adriangb], [@alamb], [@kevinjqliu], [@Omega359],
 [@pgwhalen], and [@stuhood].
 
+[@2010YOUY01]: https://github.com/2010YOUY01
 [@adriangb]: https://github.com/adriangb
 [@alamb]: https://github.com/alamb
-[@2010YOUY01]: https://github.com/2010YOUY01
 [@kevinjqliu]: https://github.com/kevinjqliu
 [@Omega359]: https://github.com/Omega359
 [@pgwhalen]: https://github.com/pgwhalen
