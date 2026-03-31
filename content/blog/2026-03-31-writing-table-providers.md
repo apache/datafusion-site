@@ -872,6 +872,14 @@ I would like to thank [Rerun.io] for sponsoring the development of this work. Re
 building a data visualization system for Physical AI and makes heavy use of DataFusion
 table providers for working with data analytics.
 
+I would also like to thank the reviewers of this post for their helpful feedback and
+suggestions: [@alamb], [@2010YOUY01], [@pgwhalen], and [@stuhood].
+
+[@alamb]: https://github.com/alamb
+[@2010YOUY01]: https://github.com/2010YOUY01
+[@pgwhalen]: https://github.com/pgwhalen
+[@stuhood]: https://github.com/stuhood
+
 [Rerun.io]: https://rerun.io
 
 ## Further Reading
