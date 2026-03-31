@@ -359,7 +359,7 @@ To illustrate what this process looks like, let's have a look at the execution o
 If we assume a task budget of 1 unit, each time Tokio schedules the task would result in the following sequence of function calls.
 
 <figure>
-<img src="/blog/images/task-cancellation/tokio_budget.png" style="width: 100%; max-width: 100%" class="img-responsive" alt="Sequence diagram showing how the tokio task budget is used and reset."
+<img src="/blog/images/task-cancellation/tokio_budget.png" style="width: 100%; max-width: 100%" class="img-fluid" alt="Sequence diagram showing how the tokio task budget is used and reset."
 />
 <figcaption>Tokio task budget system, assuming the task budget is set to 1, for the plan above.</figcaption>
 </figure>

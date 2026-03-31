@@ -80,7 +80,7 @@ needs<sup>[1](#footnote1)</sup>.
 <img
   src="/blog/images/external-parquet-indexes/external-index-overview.png"
   width="80%"
-  class="img-responsive"
+  class="img-fluid"
   alt="Using External Indexes to Accelerate Queries"
 />
 </div>
@@ -211,7 +211,7 @@ The standard approach is shown in Figure 2:
 <img 
   src="/blog/images/external-parquet-indexes/processing-pipeline.png" 
   width="80%" 
-  class="img-responsive" 
+  class="img-fluid" 
   alt="Standard Pruning Layers."
 />
 </div>
@@ -245,7 +245,7 @@ shown below.
 <img
   src="/blog/images/external-parquet-indexes/parquet-layout.png"
   width="80%"
-  class="img-responsive"
+  class="img-fluid"
   alt="Logical Parquet File layout: Row Groups and Column Chunks."
 />
 </div>
@@ -262,7 +262,7 @@ stored at the end of the file (in the footer), as shown below.
 <img
   src="/blog/images/external-parquet-indexes/parquet-metadata.png"
   width="80%"
-  class="img-responsive"
+  class="img-fluid"
   alt="Physical Parquet File layout: Metadata and Footer."
 />
 </div>
@@ -289,7 +289,7 @@ The high level mechanics of Parquet predicate pushdown is shown below:
 <img
   src="/blog/images/external-parquet-indexes/parquet-filter-pushdown.png"
   width="80%"
-  class="img-responsive"
+  class="img-fluid"
   alt="Parquet Filter Pushdown: use filter predicate to skip pages."
 />
 </div>
@@ -326,7 +326,7 @@ most recent 7 days.
 <img
   src="/blog/images/external-parquet-indexes/prune-files.png"
   width="80%"
-  class="img-responsive"
+  class="img-fluid"
   alt="Data Skipping: Pruning Files."
 />
 </div>  
@@ -471,7 +471,7 @@ indexes for filtering *WITHIN* Parquet files as shown below.
 <img
   src="/blog/images/external-parquet-indexes/prune-row-groups.png"
   width="80%"
-  class="img-responsive"
+  class="img-fluid"
   alt="Data Skipping: Pruning Row Groups and DataPages"
 />
 
@@ -724,7 +724,7 @@ Come Join Us! 🎣
 <img
   src="/blog/images/logo_original4x.png"
   width="20%"
-  class="img-responsive"
+  class="img-fluid"
   alt="https://datafusion.apache.org/"
 />
 </a>

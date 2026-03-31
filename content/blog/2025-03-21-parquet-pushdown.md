@@ -77,7 +77,7 @@ WHERE date_time > '2025-03-11' AND location = 'office';
 ```
 
 <figure>
-  <img src="/blog/images/parquet-pushdown/pushdown-vs-no-pushdown.jpg" alt="Parquet pruning skips irrelevant files/row_groups, while filter pushdown skips irrelevant rows. Without filter pushdown, all rows from location, val, and date_time columns are decoded before `location='office'` is evaluated. Filter pushdown is especially useful when the filter is selective, i.e., removes many rows." width="80%" class="img-responsive">
+  <img src="/blog/images/parquet-pushdown/pushdown-vs-no-pushdown.jpg" alt="Parquet pruning skips irrelevant files/row_groups, while filter pushdown skips irrelevant rows. Without filter pushdown, all rows from location, val, and date_time columns are decoded before `location='office'` is evaluated. Filter pushdown is especially useful when the filter is selective, i.e., removes many rows." width="80%" class="img-fluid">
   <figcaption>
     Parquet pruning skips irrelevant files/row_groups, while filter pushdown skips irrelevant rows. Without filter pushdown, all rows from location, val, and date_time columns are decoded before `location='office'` is evaluated. Filter pushdown is especially useful when the filter is selective, i.e., removes many rows.
   </figcaption>
@@ -102,7 +102,7 @@ At a high level, the Parquet reader first builds a filter mask -- essentially a 
 Let's dig into details of [how filter pushdown is implemented](https://github.com/apache/arrow-rs/blob/d5339f31a60a4bd8a4256e7120fe32603249d88e/parquet/src/arrow/async_reader/mod.rs#L618-L712) in the current Rust Parquet reader implementation, illustrated in the following figure.
 
 <figure>
-  <img src="/blog/images/parquet-pushdown/baseline-impl.jpg" alt="Implementation of filter pushdown in Rust Parquet readers" class="img-responsive" with="70%">
+  <img src="/blog/images/parquet-pushdown/baseline-impl.jpg" alt="Implementation of filter pushdown in Rust Parquet readers" class="img-fluid" with="70%">
   <figcaption>
     Implementation of filter pushdown in Rust Parquet readers -- the first phase builds the filter mask, the second phase applies the filter mask to the other columns
   </figcaption>
@@ -170,7 +170,7 @@ This section describes my [<700 LOC PR (with lots of comments and tests)](https:
 
 
 <figure>
-  <img src="/blog/images/parquet-pushdown/new-pipeline.jpg" alt="New decoding pipeline, building filter mask and output columns are interleaved in a single pass, allowing us to cache minimal pages for minimal amount of time" width="80%" class="img-responsive">
+  <img src="/blog/images/parquet-pushdown/new-pipeline.jpg" alt="New decoding pipeline, building filter mask and output columns are interleaved in a single pass, allowing us to cache minimal pages for minimal amount of time" width="80%" class="img-fluid">
   <figcaption>
     New decoding pipeline, building filter mask and output columns are interleaved in a single pass, allowing us to cache minimal pages for minimal amount of time
   </figcaption>
@@ -213,7 +213,7 @@ Parquet by default encodes data using [dictionary encoding](https://parquet.apac
 You can see this in action using [parquet-viewer](https://parquet-viewer.xiangpeng.systems):
 
 <figure>
-  <img src="/blog/images/parquet-pushdown/parquet-viewer.jpg" alt="Parquet viewer shows the page layout of a column chunk" width="80%" class="img-responsive">
+  <img src="/blog/images/parquet-pushdown/parquet-viewer.jpg" alt="Parquet viewer shows the page layout of a column chunk" width="80%" class="img-fluid">
   <figcaption>
     Parquet viewer shows the page layout of a column chunk
   </figcaption>
@@ -225,7 +225,7 @@ This is why it caches 2 pages per column: one dictionary page and one data page.
 The data page slot will move forward as it reads the data; but the dictionary page slot always references the first page.
 
 <figure>
-  <img src="/blog/images/parquet-pushdown/cached-pages.jpg" alt="Cached two pages, one for dictionary (pinned), one for data (moves as it reads the data)" width="80%" class="img-responsive">
+  <img src="/blog/images/parquet-pushdown/cached-pages.jpg" alt="Cached two pages, one for dictionary (pinned), one for data (moves as it reads the data)" width="80%" class="img-fluid">
   <figcaption>
     Cached two pages, one for dictionary (pinned), one for data (moves as it reads the data)
   </figcaption>

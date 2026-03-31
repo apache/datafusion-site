@@ -86,7 +86,7 @@ implementation, during processing of all user defined functions we pass the inpu
 field information.
 
 <figure>
-  <img src="/blog/images/metadata-handling/arrow_record_batch.png" alt="Relationship between a Record Batch, it's schema, and the underlying arrays. There is a one to one relationship between each Field in the Schema and Array entry in the Columns." width="100%" class="img-responsive">
+  <img src="/blog/images/metadata-handling/arrow_record_batch.png" alt="Relationship between a Record Batch, it's schema, and the underlying arrays. There is a one to one relationship between each Field in the Schema and Array entry in the Columns." width="100%" class="img-fluid">
   <figcaption>
     <b>Figure 1:</b> Relationship between a Record Batch, it's schema, and the underlying arrays. There is a one to one relationship between each Field in the Schema and Array entry in the Columns.
   </figcaption>

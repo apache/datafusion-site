@@ -95,7 +95,7 @@ Optimizers will evaluate the filter before the aggregation.
 
 [evaluated after]: https://www.datacamp.com/tutorial/sql-order-of-execution
 
-<img src="/blog/images/optimizing-sql-dataframes/filter-pushdown.png" width="80%" class="img-responsive" alt="Fig 1: Filter Pushdown."/>
+<img src="/blog/images/optimizing-sql-dataframes/filter-pushdown.png" width="80%" class="img-fluid" alt="Fig 1: Filter Pushdown."/>
 
 **Figure 1**: Filter Pushdown.  In (**A**) without filter pushdown, the operator
 processes more rows, reducing efficiency. In (**B**) with filter pushdown, the
@@ -129,7 +129,7 @@ each column in each row must be parsed even if it is not used in the plan.
 [Apache Parquet]: https://parquet.apache.org/
 [especially powerful in combination with filter pushdown]: https://blog.xiangpeng.systems/posts/parquet-pushdown/
 
-<img src="/blog/images/optimizing-sql-dataframes/projection-pushdown.png" width="80%" class="img-responsive" alt="Fig 2: Projection Pushdown."/>
+<img src="/blog/images/optimizing-sql-dataframes/projection-pushdown.png" width="80%" class="img-fluid" alt="Fig 2: Projection Pushdown."/>
 
 **Figure 2:** In (**A**) without projection pushdown, the operator receives more
 columns, reducing efficiency. In (**B**) with projection pushdown, the operator
@@ -156,7 +156,7 @@ opening additional files once the limit has been hit.
 
 [TopK]: https://docs.rs/datafusion/latest/datafusion/physical_plan/struct.TopK.html
 
-<img src="/blog/images/optimizing-sql-dataframes/limit-pushdown.png" width="80%" class="img-responsive" alt="Fig 3: Limit Pushdown."/>
+<img src="/blog/images/optimizing-sql-dataframes/limit-pushdown.png" width="80%" class="img-fluid" alt="Fig 3: Limit Pushdown."/>
 
 **Figure 3**: In (**A**), without limit pushdown all data is sorted and
 everything except the first few rows are discarded. In (**B**), with limit
@@ -217,7 +217,7 @@ customer, but fills in the fields with `null`. All such rows will be filtered
 out by `customer.last_name = 'Lamb'`, and thus an INNER JOIN produces the same
 answer. This is illustrated in Figure 4.
 
-<img src="/blog/images/optimizing-sql-dataframes/join-rewrite.png" width="80%" class="img-responsive" alt="Fig 4: Join Rewrite."/>
+<img src="/blog/images/optimizing-sql-dataframes/join-rewrite.png" width="80%" class="img-fluid" alt="Fig 4: Join Rewrite."/>
 
 **Figure 4**: Rewriting `OUTER JOIN` to `INNER JOIN`. In (A) the original query
 contains an `OUTER JOIN` but also a filter on `customer.last_name`, which
@@ -326,7 +326,7 @@ ORDER BY time_chunk
 ```
 
 
-<img src="/blog/images/optimizing-sql-dataframes/common-subexpression-elimination.png" width="80%" class="img-responsive" alt="Fig 5: Common Subquery Elimination."/>
+<img src="/blog/images/optimizing-sql-dataframes/common-subexpression-elimination.png" width="80%" class="img-fluid" alt="Fig 5: Common Subquery Elimination."/>
 
 **Figure 5:** Adding a Projection to evaluate common complex sub expression
 decreases complexity for later stages.
@@ -349,7 +349,7 @@ group keys or a `MergeJoin`
 
 [source]: https://docs.rs/datafusion/latest/datafusion/physical_plan/struct.TopK.html
 
-<img src="/blog/images/optimizing-sql-dataframes/specialized-grouping.png" width="80%" class="img-responsive" alt="Fig 6: Specialized Grouping."/>
+<img src="/blog/images/optimizing-sql-dataframes/specialized-grouping.png" width="80%" class="img-fluid" alt="Fig 6: Specialized Grouping."/>
 
 **Figure 6: **An example of specialized operation for grouping. In (**A**), input data has no specified ordering and DataFusion uses a hashing-based grouping operator ([source](https://github.com/apache/datafusion/blob/main/datafusion/physical-plan/src/aggregates/row_hash.rs)) to determine distinct groups. In (**B**), when the input data is ordered by the group keys, DataFusion uses a specialized grouping operator ([source](https://github.com/apache/datafusion/tree/main/datafusion/physical-plan/src/aggregates/order)) to find boundaries that separate groups.
 
@@ -371,7 +371,7 @@ and statistics are commonly stored in analytic file formats. For example, the
 
 [Metadata]: https://docs.rs/parquet/latest/parquet/file/metadata/index.html
 
-<img src="/blog/images/optimizing-sql-dataframes/using-statistics.png" width="80%" class="img-responsive" alt="Fig 7: Using Statistics."/>
+<img src="/blog/images/optimizing-sql-dataframes/using-statistics.png" width="80%" class="img-fluid" alt="Fig 7: Using Statistics."/>
 
 **Figure 7: **When the aggregation result is already stored in the statistics,
 the query can be evaluated using the values from statistics without looking at
@@ -392,7 +392,7 @@ potentially (very) different performance. The major options in this category are
 
 [Materialized View]: https://en.wikipedia.org/wiki/Materialized_view
 
-<img src="/blog/images/optimizing-sql-dataframes/access-path-and-join-order.png" width="80%" class="img-responsive" alt="Fig 8: Access Path and Join Order."/>
+<img src="/blog/images/optimizing-sql-dataframes/access-path-and-join-order.png" width="80%" class="img-fluid" alt="Fig 8: Access Path and Join Order."/>
 
 **Figure 8:** Access Path and Join Order Selection in Query Optimizers. Optimizers use heuristics to enumerate some subset of potential join orders (shape) and access paths (color). The plan with the smallest estimated cost according to some cost model is chosen. In this case, Plan 2 with a cost of 180,000 is chosen for execution as it has the lowest estimated cost.
 

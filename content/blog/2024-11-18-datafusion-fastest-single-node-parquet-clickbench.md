@@ -45,14 +45,14 @@ been held by traditional C/C++-based engines.
 <img
 src="/blog/images/2x_bgwhite_original.png"
 width="80%"
-class="img-responsive"
+class="img-fluid"
 alt="Apache DataFusion Logo"
 />
 
 <img
 src="/blog/images/clickbench-datafusion-43/perf.png"
 width="100%"
-class="img-responsive"
+class="img-fluid"
 alt="ClickBench performance for DataFusion 43.0.0"
 />
 
@@ -97,7 +97,7 @@ Figure 2.
 <img
 src="/blog/images/clickbench-datafusion-43/perf-over-time.png"
 width="100%"
-class="img-responsive"
+class="img-fluid"
 alt="ClickBench performance results over time for DataFusion"
 />
 
@@ -134,7 +134,7 @@ resulted in measurable performance improvements.
 <img
 src="/blog/images/clickbench-datafusion-43/string-view-take.png"
 width="80%"
-class="img-responsive"
+class="img-fluid"
 alt="Illustration of how take works with StringView"
 />
 
@@ -216,7 +216,7 @@ bypass the first phase when it is not working efficiently, shown in Figure 4.
 <img
 src="/blog/images/clickbench-datafusion-43/skipping-partial-aggregation.png"
 width="100%"
-class="img-responsive"
+class="img-fluid"
 alt="Two phase aggregation diagram from DataFusion API docs annotated to show first phase not helping"
 />
 
@@ -253,7 +253,7 @@ length strings and binary data].
 <img
 src="/blog/images/clickbench-datafusion-43/row-based-storage.png"
 width="100%"
-class="img-responsive"
+class="img-fluid"
 alt="Row based storage for multiple group columns"
 />
 
@@ -276,7 +276,7 @@ at the [one shipped in DataFusion `43.0.0`], shown in Figure 6.
 <img
 src="/blog/images/clickbench-datafusion-43/column-based-storage.png"
 width="100%"
-class="img-responsive"
+class="img-fluid"
 alt="Column based storage for multiple group columns"
 />
 

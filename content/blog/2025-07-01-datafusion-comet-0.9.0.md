@@ -144,7 +144,7 @@ Comet now provides a tracing feature for analyzing performance and off-heap vers
 <img
 src="/blog/images/comet-0.9.0/tracing.png"
 width="100%"
-class="img-responsive"
+class="img-fluid"
 alt="Comet Tracing"
 />
 

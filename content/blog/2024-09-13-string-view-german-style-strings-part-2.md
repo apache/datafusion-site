@@ -66,7 +66,7 @@ Figure 1 illustrates the difference between the output of both string representa
 <img
 src="/blog/images/string-view-2/figure1-zero-copy-take.png"
 width="100%"
-class="img-responsive"
+class="img-fluid"
 alt="Diagram showing Zero-copy `take`/`filter` for StringViewArray"
 />
 
@@ -121,7 +121,7 @@ To eliminate the impact of the faster Parquet reading using StringViewArray (see
 <img
 src="/blog/images/string-view-2/figure2-filter-time.png"
 width="100%"
-class="img-responsive"
+class="img-fluid"
 alt="Figure showing StringViewArray reduces the filter time by 32% on ClickBench query 22."
 />
 

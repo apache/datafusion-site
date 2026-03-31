@@ -79,7 +79,7 @@ language—it describes what answers are desired rather than an *imperative*
 language such as Python, where you describe how to do the computation as shown
 in Figure 1.
 
-<img src="/blog/images/optimizing-sql-dataframes/query-execution.png" width="80%" class="img-responsive" alt="Fig 1: Query Execution."/>
+<img src="/blog/images/optimizing-sql-dataframes/query-execution.png" width="80%" class="img-fluid" alt="Fig 1: Query Execution."/>
 
 **Figure 1**: Query Execution: Users describe the answer they want using either
 SQL or a DataFrame. For SQL, a Query Planner translates the parsed query 
@@ -112,7 +112,7 @@ modern APIs such as [Polars' lazy API], [Apache Spark's DataFrame]. and
 This section motivates the value of a Query Optimizer with an example. Let’s say
 you have some observations of animal behavior, as illustrated in Table 1.
 
-<img src="/blog/images/optimizing-sql-dataframes/table1.png" width="75%" class="img-responsive" alt="Table 1: Observational Data."/>
+<img src="/blog/images/optimizing-sql-dataframes/table1.png" width="75%" class="img-fluid" alt="Table 1: Observational Data."/>
 
 **Table 1**: Example observational data.
 
@@ -148,7 +148,7 @@ Figure 2.
 [LogicalPlan]: https://docs.rs/datafusion/latest/datafusion/logical_expr/enum.LogicalPlan.html
 [this DataFusion overview video]: https://youtu.be/EzZTLiSJnhY
 
-<img src="/blog/images/optimizing-sql-dataframes/initial-logical-plan.png" width="72%" class="img-responsive" alt="Fig 2: Initial Logical Plan."/>
+<img src="/blog/images/optimizing-sql-dataframes/initial-logical-plan.png" width="72%" class="img-fluid" alt="Fig 2: Initial Logical Plan."/>
 
 **Figure 2**: Example initial `LogicalPlan` for SQL and DataFrame query. The
 plan is read from bottom to top, computing the results in each step.
@@ -157,7 +157,7 @@ The optimizer's job is to take this query plan and rewrite it into an alternate
 plan that computes the same results but faster, such as the one shown in Figure
 3.
 
-<img src="/blog/images/optimizing-sql-dataframes/optimized-logical-plan.png" width="80%" class="img-responsive" alt="Fig 3: Optimized Logical Plan."/>
+<img src="/blog/images/optimizing-sql-dataframes/optimized-logical-plan.png" width="80%" class="img-fluid" alt="Fig 3: Optimized Logical Plan."/>
 
 **Figure 3**: An example optimized plan that computes the same result as the
 plan in Figure 2 more efficiently. The diagram highlights where the optimizer
@@ -184,7 +184,7 @@ A multi-pass design is standard because it helps:
 1. Understand, implement, and test each pass in isolation
 2. Easily extend the optimizer by adding new passes
 
-<img src="/blog/images/optimizing-sql-dataframes/optimizer-passes.png" width="80%" class="img-responsive" alt="Fig 4: Query Optimizer Passes."/>
+<img src="/blog/images/optimizing-sql-dataframes/optimizer-passes.png" width="80%" class="img-fluid" alt="Fig 4: Query Optimizer Passes."/>
 
 **Figure 4**: Query Optimizers are implemented as a series of rules that each
 rewrite the query plan. Each rule’s algorithm is expressed as a transformation

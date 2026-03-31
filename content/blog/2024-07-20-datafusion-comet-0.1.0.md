@@ -88,7 +88,7 @@ for details of the environment used for these benchmarks.
 <img
 src="/blog/images/comet-0.1.0/tpch_allqueries.png"
 width="100%"
-class="img-responsive"
+class="img-fluid"
 alt="Chart showing TPC-H benchmark results for Comet 0.1.0"
 />
 
@@ -105,7 +105,7 @@ The following chart shows how much Comet currently accelerates each query from t
 <img 
   src="/blog/images/comet-0.1.0/tpch_queries_speedup.png" 
   width="100%" 
-  class="img-responsive" 
+  class="img-fluid" 
   alt="Chart showing TPC-H benchmark results for Comet 0.1.0"
 />
 
