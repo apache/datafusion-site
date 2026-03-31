@@ -47,7 +47,7 @@ StringView support was released as part of [arrow-rs v52.2.0](https://crates.io/
 <img
 src="/blog/images/string-view-1/figure1-performance.png"
 width="100%"
-class="img-responsive"
+class="img-fluid"
 alt="End to end performance improvements for ClickBench queries"
 />
 
@@ -61,7 +61,7 @@ Figure 1: StringView improves string-intensive ClickBench query performance by 2
 <img
 src="/blog/images/string-view-1/figure2-string-view.png"
 width="100%"
-class="img-responsive"
+class="img-fluid"
 alt="Diagram of using StringArray and StringViewArray to represent the same string content"
 />
 
@@ -121,7 +121,7 @@ On the other hand, reading Parquet data as a StringViewArray can re-use the same
 <img
 src="/blog/images/string-view-1/figure4-copying.png"
 width="100%"
-class="img-responsive"
+class="img-fluid"
 alt="Diagram showing how StringViewArray can avoid copying by reusing decoded Parquet pages."
 />
 
@@ -147,7 +147,7 @@ Strings are stored as byte sequences. When reading data from (potentially untrus
 <img
 src="/blog/images/string-view-1/figure5-loading-strings.png"
 width="100%"
-class="img-responsive"
+class="img-fluid"
 alt="Figure showing time to load strings from Parquet and the effect of optimized UTF-8 validation."
 />
 
@@ -162,7 +162,7 @@ UTF-8 validation in Rust is highly optimized and favors longer strings (as shown
 <img
 src="/blog/images/string-view-1/figure6-utf8-validation.png"
 width="100%"
-class="img-responsive"
+class="img-fluid"
 alt="Figure showing UTF-8 validation throughput vs string length."
 />
 
@@ -212,7 +212,7 @@ With StringViewArray we saw a 24% end-to-end performance improvement, as shown i
 <img
 src="/blog/images/string-view-1/figure7-end-to-end.png"
 width="100%"
-class="img-responsive"
+class="img-fluid"
 alt="Figure showing StringView improves end to end performance by 24 percent."
 />
 

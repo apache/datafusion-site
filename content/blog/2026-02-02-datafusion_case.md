@@ -164,7 +164,7 @@ END
 Schematically, it will look as follows:
 
 <figure>
-<img src="/blog/images/case/original_loop.svg" alt="Schematic representation of data flow in the original CASE implementation" width="100%" class="img-responsive">
+<img src="/blog/images/case/original_loop.svg" alt="Schematic representation of data flow in the original CASE implementation" width="100%" class="img-fluid">
 <figcaption>One iteration of the `CASE` evaluation loop</figcaption>
 </figure>
 
@@ -192,7 +192,7 @@ pub trait PhysicalExpr {
 Going back to the same example as before, the data flow in `evaluate_selection` looks like this:
 
 <figure>
-<img src="/blog/images/case/evaluate_selection.svg" alt="Schematic representation of `evaluate_selection` evaluation" width="100%" class="img-responsive">
+<img src="/blog/images/case/evaluate_selection.svg" alt="Schematic representation of `evaluate_selection` evaluation" width="100%" class="img-fluid">
 <figcaption>evaluate_selection data flow</figcaption>
 </figure>
 
@@ -279,7 +279,7 @@ The second optimization fundamentally restructures how the results of each loop 
 The diagram below illustrates the optimized data flow when evaluating the `CASE WHEN col = 'b' THEN 100 ELSE 200 END` from before:
 
 <figure>
-<img src="/blog/images/case/merging.svg" alt="Schematic representation of optimized evaluation loop" width="100%" class="img-responsive">
+<img src="/blog/images/case/merging.svg" alt="Schematic representation of optimized evaluation loop" width="100%" class="img-fluid">
 <figcaption>optimized evaluation loop</figcaption>
 </figure>
 
@@ -299,7 +299,7 @@ The diagram below illustrates how `merge_n` works for an example where three `WH
 The first branch produced the result `A` for row 2, the second produced `B` for row 1, and the third produced `C` and `D` for rows 4 and 5.
 
 <figure>
-<img src="/blog/images/case/merge_n.svg" alt="Schematic illustration of the merge_n algorithm" width="100%" class="img-responsive">
+<img src="/blog/images/case/merge_n.svg" alt="Schematic illustration of the merge_n algorithm" width="100%" class="img-fluid">
 <figcaption>merge_n example</figcaption>
 </figure>
 
@@ -329,7 +329,7 @@ FROM mailing_address
 You can see that the `CASE` expression only references the columns `country` and `state`, but because all columns are being queried, projection pushdown cannot reduce the number of columns being fed in to the projection operator.
 
 <figure>
-<img src="/blog/images/case/no_projection.svg" alt="Schematic illustration of CASE evaluation without projection" width="100%" class="img-responsive">
+<img src="/blog/images/case/no_projection.svg" alt="Schematic illustration of CASE evaluation without projection" width="100%" class="img-fluid">
 <figcaption>CASE evaluation without projection</figcaption>
 </figure>
 
@@ -339,7 +339,7 @@ As the diagram above shows, this filtering creates a reduced copy of all columns
 This unnecessary copying can be avoided by first narrowing the batch to only include the columns that are actually needed.
 
 <figure>
-<img src="/blog/images/case/projection.svg" alt="Schematic illustration of CASE evaluation with projection" width="100%" class="img-responsive">
+<img src="/blog/images/case/projection.svg" alt="Schematic illustration of CASE evaluation with projection" width="100%" class="img-fluid">
 <figcaption>CASE evaluation with projection</figcaption>
 </figure>
 
@@ -378,7 +378,7 @@ In contrast to `zip`, `merge` does not require both of its value inputs to have 
 Instead it requires that the sum of the length of the value inputs matches the length of the mask array.
 
 <figure>
-<img src="/blog/images/case/merge.svg" alt="Schematic illustration of the merge algorithm" width="100%" class="img-responsive">
+<img src="/blog/images/case/merge.svg" alt="Schematic illustration of the merge algorithm" width="100%" class="img-fluid">
 <figcaption>merge example</figcaption>
 </figure>
 
@@ -435,7 +435,7 @@ The green series shows the time measurement for the `SELECT * FROM orders` to gi
 All measurements were made with a target partition count of `1`.
 
 <figure>
-<img src="/blog/images/case/results.png" alt="Performance measurements chart" width="100%" class="img-responsive">
+<img src="/blog/images/case/results.png" alt="Performance measurements chart" width="100%" class="img-fluid">
 <figcaption>Performance measurements</figcaption>
 </figure>
 

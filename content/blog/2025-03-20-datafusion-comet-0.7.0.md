@@ -56,7 +56,7 @@ CPU and RAM. Even with **half the resources**, Comet still provides a measurable
 <img
 src="/blog/images/comet-0.7.0/performance.png"
 width="100%"
-class="img-responsive"
+class="img-fluid"
 alt="Chart showing TPC-H benchmark results for Comet 0.7.0"
 />
 

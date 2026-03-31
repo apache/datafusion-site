@@ -109,7 +109,7 @@ Comet 0.11.0 continues to deliver significant performance improvements over Spar
 <img
 src="/blog/images/comet-0.11.0/tpch_allqueries.png"
 width="100%"
-class="img-responsive"
+class="img-fluid"
 alt="TPC-H Overall Performance"
 />
 
@@ -118,7 +118,7 @@ The performance gains are consistent across individual queries, with most querie
 <img
 src="/blog/images/comet-0.11.0/tpch_queries_compare.png"
 width="100%"
-class="img-responsive"
+class="img-fluid"
 alt="TPC-H Query-by-Query Comparison"
 />
 

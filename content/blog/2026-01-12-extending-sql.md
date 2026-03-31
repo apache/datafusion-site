@@ -76,7 +76,7 @@ DataFusion turns SQL into executable work in stages:
 Each stage has extension points.
 
 <figure>
-  <img src="/blog/images/extending-sql/architecture.svg" alt="DataFusion SQL processing pipeline: SQL String flows through Parser to AST, then SqlToRel (with Extension Planners) to LogicalPlan, then PhysicalPlanner to ExecutionPlan" width="100%" class="img-responsive">
+  <img src="/blog/images/extending-sql/architecture.svg" alt="DataFusion SQL processing pipeline: SQL String flows through Parser to AST, then SqlToRel (with Extension Planners) to LogicalPlan, then PhysicalPlanner to ExecutionPlan" width="100%" class="img-fluid">
   <figcaption>
     <b>Figure 1:</b> SQL flows through three stages: parsing, logical planning (via <code>SqlToRel</code>, where the Extension Planners hook in), and physical planning. Each stage has extension points: wrap the parser, implement planner traits, or add physical operators.
   </figcaption>

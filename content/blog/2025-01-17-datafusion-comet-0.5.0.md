@@ -52,14 +52,14 @@ Comet 0.5.0 achieves a 1.9x speedup for single-node TPC-H @ 100 GB, an improveme
 <img
 src="/blog/images/comet-0.5.0/tpch_allqueries.png"
 width="100%"
-class="img-responsive"
+class="img-fluid"
 alt="Chart showing TPC-H benchmark results for Comet 0.5.0"
 />
 
 <img
 src="/blog/images/comet-0.5.0/tpch_queries_compare.png"
 width="100%"
-class="img-responsive"
+class="img-fluid"
 alt="Chart showing TPC-H benchmark results for Comet 0.5.0"
 />
 

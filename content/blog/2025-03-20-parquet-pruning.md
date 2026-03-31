@@ -49,7 +49,7 @@ The diagram below illustrates the [Parquet reading pipeline] in DataFusion, high
 
 [Parquet reading pipeline]: https://docs.rs/datafusion/46.0.0/datafusion/datasource/physical_plan/parquet/source/struct.ParquetSource.html
 
-<img src="/blog/images/parquet-pruning/read-parquet.jpg" alt="Parquet pruning pipeline in DataFusion" width="100%" class="img-responsive">
+<img src="/blog/images/parquet-pruning/read-parquet.jpg" alt="Parquet pruning pipeline in DataFusion" width="100%" class="img-fluid">
 
 
 #### Background: Parquet file structure
@@ -106,7 +106,7 @@ So far we have discussed techniques that prune the Parquet file using only the m
 
 Filter pushdown, also known as predicate pushdown or late materialization, is a technique that prunes data during scanning, with filters being generated and applied in the Parquet reader.
 
-<img src="/blog/images/parquet-pruning/filter-pushdown.jpg" alt="Filter pushdown in DataFusion" width="100%" class="img-responsive">
+<img src="/blog/images/parquet-pruning/filter-pushdown.jpg" alt="Filter pushdown in DataFusion" width="100%" class="img-fluid">
 
 Unlike metadata-based pruning which works at the row group or page level, filter pushdown operates at the row level, allowing DataFusion to filter out individual rows that don't match the query predicates during the decoding process.
 

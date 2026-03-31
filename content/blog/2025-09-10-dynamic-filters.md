@@ -70,7 +70,7 @@ SELECT * FROM hits WHERE "URL" LIKE '%google%' ORDER BY "EventTime" LIMIT 10;
 <img 
   src="/blog/images/dynamic-filters/execution-time.svg" 
   width="80%" 
-  class="img-responsive" 
+  class="img-fluid" 
   alt="Q23 Performance Improvement with Dynamic Filters and Late Materialization"
 />
 </div>
@@ -105,7 +105,7 @@ A straightforward, though slow, plan to answer this query is shown in Figure 2.
 <img 
   src="/blog/images/dynamic-filters/query-plan-naive.png" 
   width="80%" 
-  class="img-responsive" 
+  class="img-fluid" 
   alt="Naive Query Plan"
 />
 </div>
@@ -132,7 +132,7 @@ DuckDB]. The plan for Q23 using this specialized operator is shown in Figure 3.
 <img 
   src="/blog/images/dynamic-filters/query-plan-topk.png" 
   width="80%" 
-  class="img-responsive" 
+  class="img-fluid" 
   alt="TopK Query Plan"
 />
 </div>
@@ -161,7 +161,7 @@ of files. The plan for Q23 with dynamic filters is shown in Figure 4.
 <img 
   src="/blog/images/dynamic-filters/query-plan-topk-dynamic-filters.png" 
   width="100%" 
-  class="img-responsive" 
+  class="img-fluid" 
   alt="TopK Query Plan with Dynamic Filters"
 />
 </div>
@@ -372,7 +372,7 @@ other optimizations as shown in Figure 7.
 <img 
   src="/blog/images/dynamic-filters/join-performance.svg" 
   width="80%" 
-  class="img-responsive" 
+  class="img-fluid" 
   alt="Join Performance Improvements with Dynamic Filters"
 />
 </div>

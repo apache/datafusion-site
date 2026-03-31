@@ -48,7 +48,7 @@ which takes 30 minutes<sup>1</sup> (0.05GB/sec). On the same machine, it takes l
 It is finally convenient and efficient to run TPC-H queries locally when testing
 analytical engines such as DataFusion.
 
-<img src="/blog/images/fastest-tpch-generator/parquet-performance.png" alt="Time to create TPC-H parquet dataset for Scale Factor  1, 10, 100 and 1000" width="80%" class="img-responsive">
+<img src="/blog/images/fastest-tpch-generator/parquet-performance.png" alt="Time to create TPC-H parquet dataset for Scale Factor  1, 10, 100 and 1000" width="80%" class="img-fluid">
 
 **Figure 1**: Time to create TPC-H dataset for Scale Factor (see below) 1, 10,
 100 and 1000 as 8 individual SNAPPY compressed parquet files using a 22 core GCP
@@ -206,7 +206,7 @@ load the data, using `dbgen`, which is not ideal for several reasons:
 [here is how to do so]: https://github.com/apache/datafusion/blob/507f6b6773deac69dd9d90dbe60831f5ea5abed1/datafusion/sqllogictest/test_files/tpch/create_tables.slt.part#L24-L124
  
 
-<img src="/blog/images/fastest-tpch-generator/tbl-performance.png" alt="Time to generate TPC-H data in TBL format" width="80%" class="img-responsive">
+<img src="/blog/images/fastest-tpch-generator/tbl-performance.png" alt="Time to generate TPC-H data in TBL format" width="80%" class="img-fluid">
 
 **Figure 3**: Time to generate TPC-H data in TBL format. `tpchgen` is
 shown in blue. `tpchgen` restricted to a single core is shown in red. Unmodified
@@ -266,7 +266,7 @@ strings.
 [unsafe]: https://github.com/search?q=repo%3Aclflushopt%2Ftpchgen-rs%20unsafe&type=code
 [skip]: https://github.com/clflushopt/tpchgen-rs/blob/c651da1fc309f9cb3872cbdf71e4796904dc62c6/tpchgen/src/text.rs#L72
 
-<img src="/blog/images/fastest-tpch-generator/lamb-theory.png" alt="Lamb Theory on Evolution of Systems Languages" width="80%" class="img-responsive">
+<img src="/blog/images/fastest-tpch-generator/lamb-theory.png" alt="Lamb Theory on Evolution of Systems Languages" width="80%" class="img-fluid">
 
 **Figure 4**: Lamb Theory of System Language Evolution from [Boston University
 MiDAS Fall 2024 (Data Systems Seminar)] [slides(pdf)], [recording]. Special

@@ -86,7 +86,7 @@ Comet 0.2.0 provides a 62% speedup compared to Spark. This is slightly better th
 <img
 src="/blog/images/comet-0.2.0/tpch_allqueries.png"
 width="100%"
-class="img-responsive"
+class="img-fluid"
 alt="Chart showing TPC-H benchmark results for Comet 0.2.0"
 />
 
@@ -98,7 +98,7 @@ Comet 0.1.0, which did not provide any speedup for this benchmark.
 <img
 src="/blog/images/comet-0.2.0/tpcds_allqueries.png"
 width="100%"
-class="img-responsive"
+class="img-fluid"
 alt="Chart showing TPC-DS benchmark results for Comet 0.2.0"
 />
 
