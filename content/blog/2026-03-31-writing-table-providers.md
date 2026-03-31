@@ -210,7 +210,7 @@ to produce:
   if you can stop reading early once you have produced enough rows, this avoids
   unnecessary work.
 
-You can also use the  [scan_with_args()](https://docs.rs/datafusion/latest/datafusion/catalog/trait.TableProvider.html#method.scan_with_args)
+You can also use the [scan_with_args()](https://docs.rs/datafusion/latest/datafusion/catalog/trait.TableProvider.html#method.scan_with_args)
 variant that provides additional pushdown information for other advanced use cases.
 
 ### Keep `scan()` Lightweight
@@ -579,7 +579,12 @@ filter via `FilterExec` if you reported it as `Unsupported`.
 
 DataFusion already pushes filters as close to the data source as possible, typically placing them directly above the scan. `FilterExec` is also highly optimized, with vectorized evaluation and type-specialized kernels for fast predicate evaluation.
 
-Because of this, you should only implement filter pushdown when your data source can do strictly better. For example, avoid I/O by skipping data early using metadata. If your data source cannot eliminate I/O in this way, it is usually better to let DataFusion handle the filter, as its in-memory execution is already highly efficient (unless there are additional opportunities for deeper, application-specific optimizations).
+Because of this, you should only implement filter pushdown when your data source
+can do strictly better -- for example, by avoiding I/O entirely through
+skipping files or partitions based on metadata. If your data source cannot
+eliminate I/O in this way, it is usually better to let DataFusion handle the
+filter, as its in-memory execution is already highly efficient.
+
 ### Using EXPLAIN to Debug Your Table Provider
 
 The `EXPLAIN` statement is your best tool for understanding what DataFusion is
@@ -630,7 +635,7 @@ better output properties. Whenever your queries seem slower than expected,
 
 ### A Complete Filter Pushdown Example
 
-To make filter pushdown concrete, here is a full working example. Imagine a
+To make filter pushdown concrete, here is an illustrative example. Imagine a
 table provider that reads from a set of date-partitioned directories on disk
 (e.g., `data/2026-03-01/`, `data/2026-03-02/`, ...). Each directory contains
 one or more Parquet files for that date. By pushing down a filter on the `date`
@@ -690,6 +695,7 @@ impl TableProvider for DatePartitionedTable {
             .iter()
             .filter_map(|d| self.partitions.get(d).cloned())
             .collect();
+        let num_dirs = dirs.len();
 
         Ok(Arc::new(DatePartitionedExec {
             schema: Arc::clone(&self.schema),
@@ -700,7 +706,7 @@ impl TableProvider for DatePartitionedTable {
                 ),
                 // One partition per date directory -- these
                 // will be read in parallel.
-                Partitioning::UnknownPartitioning(dirs.len()),
+                Partitioning::UnknownPartitioning(num_dirs),
                 EmissionType::Incremental,
                 Boundedness::Bounded,
             ),
@@ -750,7 +756,7 @@ use arrow::record_batch::RecordBatch;
 use datafusion::catalog::TableProvider;
 use datafusion::common::Result;
 use datafusion::datasource::TableType;
-use datafusion::execution::context::SessionState;
+use datafusion::catalog::Session;
 use datafusion::execution::SendableRecordBatchStream;
 use datafusion::logical_expr::Expr;
 use datafusion::physical_expr::EquivalenceProperties;
@@ -862,8 +868,8 @@ impl ExecutionPlan for CountingExec {
 
 ## Acknowledgements
 
-I would like to thank [Rerun.io] for sponsoring the development of this work. [Rerun.io]
-is building a data visualization system for Physical AI and makes heavy use of DataFusion
+I would like to thank [Rerun.io] for sponsoring the development of this work. Rerun is
+building a data visualization system for Physical AI and makes heavy use of DataFusion
 table providers for working with data analytics.
 
 [Rerun.io]: https://rerun.io
