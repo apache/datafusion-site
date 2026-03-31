@@ -59,6 +59,7 @@
 <li><a href="#why-this-matters-for-table-providers">Why This Matters for Table Providers</a></li>
 </ul>
 </li>
+<li><a href="#choosing-the-right-starting-point">Choosing the Right Starting Point</a></li>
 <li><a href="#layer-1-tableprovider">Layer 1: TableProvider</a><ul>
 <li><a href="#keep-scan-lightweight">Keep scan() Lightweight</a></li>
 <li><a href="#existing-implementations-to-learn-from">Existing Implementations to Learn From</a></li>
@@ -87,13 +88,9 @@
 <li><a href="#a-complete-filter-pushdown-example">A Complete Filter Pushdown Example</a></li>
 </ul>
 </li>
-<li><a href="#scan-vs-scan_with_args">scan vs scan_with_args</a></li>
 <li><a href="#putting-it-all-together">Putting It All Together</a></li>
-<li><a href="#choosing-the-right-starting-point">Choosing the Right Starting Point</a><ul>
-<li><a href="#the-file-based-path-fileformat-filesource-and-fileopener">The File-Based Path: FileFormat, FileSource, and FileOpener</a></li>
-</ul>
-</li>
 <li><a href="#acknowledgements">Acknowledgements</a></li>
+<li><a href="#get-involved">Get Involved</a></li>
 <li><a href="#further-reading">Further Reading</a></li>
 </ul>
 </div>
@@ -192,6 +189,60 @@ planning, those hints are passed to you. By implementing capabilities like
 <code>supports_filters_pushdown</code>, you influence what the optimizer can do -- and the
 metadata you declare in your <code>ExecutionPlan</code> (partitioning, ordering) directly
 affects which physical optimizations apply.</p>
+<h2 id="choosing-the-right-starting-point">Choosing the Right Starting Point<a class="headerlink" href="#choosing-the-right-starting-point" title="Permanent link">¶</a></h2>
+<hr/>
+<p>Not every custom data source requires implementing all three layers from
+scratch. DataFusion provides building blocks that let you plug in at whatever
+level makes sense:</p>
+<table class="table">
+<thead>
+<tr>
+<th>If your data is...</th>
+<th>Start with</th>
+<th>You implement</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Already in <code>RecordBatch</code>es in memory</td>
+<td><a href="https://docs.rs/datafusion/latest/datafusion/datasource/memory/struct.MemTable.html">MemTable</a></td>
+<td>Nothing -- just construct it</td>
+</tr>
+<tr>
+<td>An async stream of batches</td>
+<td><a href="https://docs.rs/datafusion/latest/datafusion/datasource/stream/struct.StreamTable.html">StreamTable</a></td>
+<td>A stream factory</td>
+</tr>
+<tr>
+<td>A logical transformation of other tables</td>
+<td><a href="https://docs.rs/datafusion/latest/datafusion/datasource/view/struct.ViewTable.html">ViewTable</a> wrapping a logical plan</td>
+<td>The logical plan</td>
+</tr>
+<tr>
+<td>A variant of an existing file format</td>
+<td><a href="https://docs.rs/datafusion/latest/datafusion/datasource/listing/struct.ListingTable.html">ListingTable</a> with a custom <a href="https://docs.rs/datafusion/latest/datafusion/datasource/file_format/trait.FileFormat.html">FileFormat</a> wrapping an existing one</td>
+<td>A thin <code>FileFormat</code> wrapper</td>
+</tr>
+<tr>
+<td>Files in a custom format on disk or object storage</td>
+<td><a href="https://docs.rs/datafusion/latest/datafusion/datasource/listing/struct.ListingTable.html">ListingTable</a> with a custom <a href="https://docs.rs/datafusion/latest/datafusion/datasource/file_format/trait.FileFormat.html">FileFormat</a>, <a href="https://docs.rs/datafusion-datasource/latest/datafusion_datasource/file/trait.FileSource.html">FileSource</a>, and <a href="https://docs.rs/datafusion-datasource/latest/datafusion_datasource/file_stream/trait.FileOpener.html">FileOpener</a></td>
+<td>The format, source, and opener</td>
+</tr>
+<tr>
+<td>A custom source needing full control</td>
+<td><code>TableProvider</code> + <code>ExecutionPlan</code> + stream</td>
+<td>All three layers</td>
+</tr>
+</tbody>
+</table>
+<p>If your data is file-based, <code>ListingTable</code> handles file discovery, partition
+column inference, and plan construction -- you only need to implement
+<code>FileFormat</code>, <code>FileSource</code>, and <code>FileOpener</code> to describe how to read your
+files. See the <a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/custom_data_source/custom_file_format.rs">custom_file_format example</a> for a minimal wrapping approach,
+or <a href="https://docs.rs/datafusion/latest/datafusion/datasource/file_format/parquet/struct.ParquetSource.html">ParquetSource</a> and <a href="https://docs.rs/datafusion/latest/datafusion/datasource/file_format/parquet/struct.ParquetOpener.html">ParquetOpener</a> for a full custom implementation to
+use as a reference.</p>
+<p>The rest of this post focuses on the full <code>TableProvider</code> + <code>ExecutionPlan</code> +
+stream path, which gives you complete control and applies to any data source.</p>
 <h2 id="layer-1-tableprovider">Layer 1: TableProvider<a class="headerlink" href="#layer-1-tableprovider" title="Permanent link">¶</a></h2>
 <hr/>
 <p>A <a href="https://docs.rs/datafusion/latest/datafusion/catalog/trait.TableProvider.html">TableProvider</a> represents a queryable data source. For a minimal read-only
@@ -238,9 +289,11 @@ to produce:</p>
   if you can stop reading early once you have produced enough rows, this avoids
   unnecessary work.</li>
 </ul>
+<p>You can also use the <a href="https://docs.rs/datafusion/latest/datafusion/catalog/trait.TableProvider.html#method.scan_with_args">scan_with_args()</a>
+variant that provides additional pushdown information for other advanced use cases.</p>
 <h3 id="keep-scan-lightweight">Keep <code>scan()</code> Lightweight<a class="headerlink" href="#keep-scan-lightweight" title="Permanent link">¶</a></h3>
 <p>This is a critical point: <strong><code>scan()</code> runs during planning, not execution.</strong> It
-should return quickly. Best practices are to avoid performing I/O, network
+should return quickly. Best practice is to avoid performing I/O, network
 calls, or heavy computation here. The <code>scan</code> method's job is to <em>describe</em> how
 the data will be produced, not to produce it. All the real work belongs in the
 stream (Layer 3).</p>
@@ -449,7 +502,10 @@ offload to a dedicated thread pool and send results back through a channel:</p>
 }
 </code></pre>
 <p>This pattern keeps the async runtime responsive while long-running synchronous
-work runs on its own threads.</p>
+work runs on its own threads. For a working example that shows how to configure
+separate thread pools for I/O and CPU work, see the
+<a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/query_planning/thread_pools.rs">thread_pools example</a>
+in the DataFusion repository.</p>
 <h2 id="where-should-the-work-happen">Where Should the Work Happen?<a class="headerlink" href="#where-should-the-work-happen" title="Permanent link">¶</a></h2>
 <hr/>
 <p>This table summarizes what belongs at each layer:</p>
@@ -561,7 +617,11 @@ just eliminated 90% of the I/O. DataFusion still applies the <code>event_type</c
 filter via <code>FilterExec</code> if you reported it as <code>Unsupported</code>.</p>
 <h3 id="only-push-down-filters-when-the-data-source-can-do-better">Only Push Down Filters When the Data Source Can Do Better<a class="headerlink" href="#only-push-down-filters-when-the-data-source-can-do-better" title="Permanent link">¶</a></h3>
 <p>DataFusion already pushes filters as close to the data source as possible, typically placing them directly above the scan. <code>FilterExec</code> is also highly optimized, with vectorized evaluation and type-specialized kernels for fast predicate evaluation.</p>
-<p>Because of this, you should only implement filter pushdown when your data source can do strictly better. For example, avoid I/O by skipping data early using metadata. If your data source cannot eliminate I/O in this way, it is usually better to let DataFusion handle the filter, as its in-memory execution is already highly efficient (unless there are additional opportunities for deeper, application-specific optimizations).</p>
+<p>Because of this, you should only implement filter pushdown when your data source
+can do strictly better -- for example, by avoiding I/O entirely through
+skipping files or partitions based on metadata. If your data source cannot
+eliminate I/O in this way, it is usually better to let DataFusion handle the
+filter, as its in-memory execution is already highly efficient.</p>
 <h3 id="using-explain-to-debug-your-table-provider">Using EXPLAIN to Debug Your Table Provider<a class="headerlink" href="#using-explain-to-debug-your-table-provider" title="Permanent link">¶</a></h3>
 <p>The <code>EXPLAIN</code> statement is your best tool for understanding what DataFusion is
 actually doing with your table provider. It shows the physical plan that
@@ -593,34 +653,13 @@ been fully absorbed by your scan.</p>
 better output properties. Whenever your queries seem slower than expected,
 <code>EXPLAIN</code> is the first place to look.</p>
 <h3 id="a-complete-filter-pushdown-example">A Complete Filter Pushdown Example<a class="headerlink" href="#a-complete-filter-pushdown-example" title="Permanent link">¶</a></h3>
-<p>To make filter pushdown concrete, here is a full working example. Imagine a
+<p>To make filter pushdown concrete, here is an illustrative example. Imagine a
 table provider that reads from a set of date-partitioned directories on disk
 (e.g., <code>data/2026-03-01/</code>, <code>data/2026-03-02/</code>, ...). Each directory contains
 one or more Parquet files for that date. By pushing down a filter on the <code>date</code>
 column, the provider can skip entire directories -- avoiding the I/O of listing
 and reading files that cannot possibly match the query.</p>
-<pre><code class="language-rust">use std::any::Any;
-use std::collections::HashMap;
-use std::sync::Arc;
-
-use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
-use arrow::array::{Date32Array, Float64Array, StringArray};
-use arrow::record_batch::RecordBatch;
-use datafusion::catalog::TableProvider;
-use datafusion::common::Result;
-use datafusion::datasource::TableType;
-use datafusion::execution::SendableRecordBatchStream;
-use datafusion::logical_expr::Expr;
-use datafusion::logical_expr::TableProviderFilterPushDown;
-use datafusion::physical_expr::EquivalenceProperties;
-use datafusion::physical_plan::execution_plan::{Boundedness, EmissionType};
-use datafusion::physical_plan::stream::RecordBatchStreamAdapter;
-use datafusion::physical_plan::{
-    ExecutionPlan, Partitioning, PlanProperties,
-};
-use futures::stream;
-
-/// A table provider backed by date-partitioned directories.
+<pre><code class="language-rust">/// A table provider backed by date-partitioned directories.
 /// Each date directory contains data files; by filtering on the
 /// `date` column we can skip entire directories of I/O.
 struct DatePartitionedTable {
@@ -672,6 +711,7 @@ impl TableProvider for DatePartitionedTable {
             .iter()
             .filter_map(|d| self.partitions.get(d).cloned())
             .collect();
+        let num_dirs = dirs.len();
 
         Ok(Arc::new(DatePartitionedExec {
             schema: Arc::clone(&amp;self.schema),
@@ -682,7 +722,7 @@ impl TableProvider for DatePartitionedTable {
                 ),
                 // One partition per date directory -- these
                 // will be read in parallel.
-                Partitioning::UnknownPartitioning(dirs.len()),
+                Partitioning::UnknownPartitioning(num_dirs),
                 EmissionType::Incremental,
                 Boundedness::Bounded,
             ),
@@ -713,30 +753,6 @@ and the partition pruning (<code>scan()</code>) work together: the first tells D
 that a <code>FilterExec</code> is unnecessary for the <code>date</code> predicate, and the second
 ensures that only the relevant directories are scanned. The actual file reading
 happens later, in the stream produced by <code>execute()</code>.</p>
-<h2 id="scan-vs-scan_with_args"><code>scan</code> vs <code>scan_with_args</code><a class="headerlink" href="#scan-vs-scan_with_args" title="Permanent link">¶</a></h2>
-<hr/>
-<p>The examples above all use the <code>scan()</code> method, which receives projection,
-filters, and limit as separate parameters. DataFusion also provides
-<a href="https://docs.rs/datafusion/latest/datafusion/catalog/trait.TableProvider.html#method.scan_with_args">scan_with_args()</a>, which bundles these into a structured <a href="https://docs.rs/datafusion/latest/datafusion/catalog/struct.ScanArgs.html">ScanArgs</a>
-parameter:</p>
-<pre><code class="language-rust">async fn scan_with_args(
-    &amp;self,
-    args: ScanArgs&lt;'_&gt;,
-) -&gt; Result&lt;ScanResult&gt; {
-    let projection = args.projection();
-    let filters = args.filters();
-    let limit = args.limit();
-    // ...
-}
-</code></pre>
-<p><code>ScanArgs</code> is designed to be extensible -- new scan parameters can be added
-without breaking existing implementations. It also carries additional context
-not available in <code>scan()</code>, such as a <code>preferred_ordering</code> hint that lets the
-optimizer request a specific output order from your provider.</p>
-<p>If you are building a new table provider, consider implementing
-<code>scan_with_args()</code> instead of <code>scan()</code>. The default implementation of <code>scan()</code>
-delegates to <code>scan_with_args()</code>, so you only need to implement one. Existing
-providers that already implement <code>scan()</code> will continue to work without changes.</p>
 <h2 id="putting-it-all-together">Putting It All Together<a class="headerlink" href="#putting-it-all-together" title="Permanent link">¶</a></h2>
 <hr/>
 <p>Here is a minimal but complete example of a custom table provider that generates
@@ -744,13 +760,13 @@ data lazily during streaming:</p>
 <pre><code class="language-rust">use std::any::Any;
 use std::sync::Arc;
 
-use arrow::array::{Int64Array, StringArray};
+use arrow::array::Int64Array;
 use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
 use arrow::record_batch::RecordBatch;
 use datafusion::catalog::TableProvider;
 use datafusion::common::Result;
 use datafusion::datasource::TableType;
-use datafusion::execution::context::SessionState;
+use datafusion::catalog::Session;
 use datafusion::execution::SendableRecordBatchStream;
 use datafusion::logical_expr::Expr;
 use datafusion::physical_expr::EquivalenceProperties;
@@ -859,90 +875,22 @@ impl ExecutionPlan for CountingExec {
     }
 }
 </code></pre>
-<h2 id="choosing-the-right-starting-point">Choosing the Right Starting Point<a class="headerlink" href="#choosing-the-right-starting-point" title="Permanent link">¶</a></h2>
-<hr/>
-<p>Not every custom data source requires implementing all three layers from
-scratch. DataFusion provides building blocks that let you plug in at whatever
-level makes sense:</p>
-<table class="table">
-<thead>
-<tr>
-<th>If your data is...</th>
-<th>Start with</th>
-<th>You implement</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Already in <code>RecordBatch</code>es in memory</td>
-<td><a href="https://docs.rs/datafusion/latest/datafusion/datasource/memory/struct.MemTable.html">MemTable</a></td>
-<td>Nothing -- just construct it</td>
-</tr>
-<tr>
-<td>An async stream of batches</td>
-<td><a href="https://docs.rs/datafusion/latest/datafusion/datasource/stream/struct.StreamTable.html">StreamTable</a></td>
-<td>A stream factory</td>
-</tr>
-<tr>
-<td>A logical transformation of other tables</td>
-<td><a href="https://docs.rs/datafusion/latest/datafusion/datasource/view/struct.ViewTable.html">ViewTable</a> wrapping a logical plan</td>
-<td>The logical plan</td>
-</tr>
-<tr>
-<td>A variant of an existing file format</td>
-<td><a href="https://docs.rs/datafusion/latest/datafusion/datasource/listing/struct.ListingTable.html">ListingTable</a> with a custom <a href="https://docs.rs/datafusion/latest/datafusion/datasource/file_format/trait.FileFormat.html">FileFormat</a> wrapping an existing one</td>
-<td>A thin <code>FileFormat</code> wrapper</td>
-</tr>
-<tr>
-<td>Files in a custom format on disk or object storage</td>
-<td><a href="https://docs.rs/datafusion/latest/datafusion/datasource/listing/struct.ListingTable.html">ListingTable</a> with a custom <a href="https://docs.rs/datafusion/latest/datafusion/datasource/file_format/trait.FileFormat.html">FileFormat</a>, <a href="https://docs.rs/datafusion-datasource/latest/datafusion_datasource/file/trait.FileSource.html">FileSource</a>, and <a href="https://docs.rs/datafusion-datasource/latest/datafusion_datasource/file_stream/trait.FileOpener.html">FileOpener</a></td>
-<td>The format, source, and opener</td>
-</tr>
-<tr>
-<td>A custom source needing full control</td>
-<td><code>TableProvider</code> + <code>ExecutionPlan</code> + stream</td>
-<td>All three layers</td>
-</tr>
-</tbody>
-</table>
-<h3 id="the-file-based-path-fileformat-filesource-and-fileopener">The File-Based Path: FileFormat, FileSource, and FileOpener<a class="headerlink" href="#the-file-based-path-fileformat-filesource-and-fileopener" title="Permanent link">¶</a></h3>
-<p>If your data lives in files (local disk or object storage like S3), you do not
-need to build a <code>TableProvider</code> and <code>ExecutionPlan</code> from scratch. Instead, you
-can plug into <a href="https://docs.rs/datafusion/latest/datafusion/datasource/listing/struct.ListingTable.html">ListingTable</a> by implementing a stack of three traits:</p>
-<ol>
-<li><strong><a href="https://docs.rs/datafusion/latest/datafusion/datasource/file_format/trait.FileFormat.html">FileFormat</a></strong> -- The planning-level abstraction. Handles schema inference
-   (<code>infer_schema</code>), statistics (<code>infer_stats</code>), and produces a <code>FileSource</code> via
-   its <code>file_source()</code> method. If your format is a variant of an existing one,
-   you can wrap an existing <code>FileFormat</code> and delegate most methods.</li>
-<li><strong><a href="https://docs.rs/datafusion-datasource/latest/datafusion_datasource/file/trait.FileSource.html">FileSource</a></strong> -- The execution-level configuration. Holds format-specific
-   settings and creates a <code>FileOpener</code> in <code>create_file_opener()</code>. You can also
-   override provided methods for optimization hooks like filter pushdown,
-   projection pushdown, and repartitioning.</li>
-<li><strong><a href="https://docs.rs/datafusion-datasource/latest/datafusion_datasource/file_stream/trait.FileOpener.html">FileOpener</a></strong> -- The I/O layer. Has a single method,
-   <code>open(PartitionedFile)</code>, that reads a file (or byte range within a file)
-   and returns an async stream of <code>RecordBatch</code>es.</li>
-</ol>
-<p>The relationship flows downward:</p>
-<pre><code class="language-text">FileFormat  (planning: schema inference, statistics)
-  └── file_source() → FileSource  (execution: config + optimization hooks)
-        └── create_file_opener() → FileOpener  (I/O: reads files → RecordBatches)
-</code></pre>
-<p><code>ListingTable</code> handles everything else: file discovery, partition column
-inference, and wiring the result into a <a href="https://docs.rs/datafusion/latest/datafusion/datasource/struct.DataSourceExec.html">DataSourceExec</a> execution plan. You
-get file pruning, projection pushdown, and parallelism across files for free.</p>
-<p>If your format is a variant of an existing one, the <a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/custom_data_source/custom_file_format.rs">custom_file_format example</a>
-shows how to wrap <code>CsvFormat</code> to create a TSV format with minimal code -- you
-only need to implement <code>FileFormat</code>. For a fully custom format, a good approach
-is to study the built-in implementations like <a href="https://docs.rs/datafusion/latest/datafusion/datasource/file_format/parquet/struct.ParquetSource.html">ParquetSource</a> and <a href="https://docs.rs/datafusion/latest/datafusion/datasource/file_format/parquet/struct.ParquetOpener.html">ParquetOpener</a>
-to understand the full <code>FileSource</code> → <code>FileOpener</code> contract.</p>
-<p>For most non-file integrations, <a href="https://docs.rs/datafusion/latest/datafusion/datasource/stream/struct.StreamTable.html">StreamTable</a> combined with
-<a href="https://docs.rs/datafusion/latest/datafusion/physical_plan/stream/struct.RecordBatchStreamAdapter.html">RecordBatchStreamAdapter</a> provides a good balance of simplicity and
-flexibility. You provide a closure that returns a stream, and DataFusion handles
-the rest.</p>
 <h2 id="acknowledgements">Acknowledgements<a class="headerlink" href="#acknowledgements" title="Permanent link">¶</a></h2>
-<p>I would like to thank <a href="https://rerun.io">Rerun.io</a> for sponsoring the development of this work. <a href="https://rerun.io">Rerun.io</a>
-is building a data visualization system for Physical AI and makes heavy use of DataFusion
+<p>I would like to thank <a href="https://rerun.io">Rerun.io</a> for sponsoring the development of this work. Rerun is
+building a data visualization system for Physical AI and makes heavy use of DataFusion
 table providers for working with data analytics.</p>
+<p>I would also like to thank the reviewers of this post for their helpful feedback and
+suggestions: <a href="https://github.com/2010YOUY01">@2010YOUY01</a>, <a href="https://github.com/adriangb">@adriangb</a>, <a href="https://github.com/alamb">@alamb</a>, <a href="https://github.com/kevinjqliu">@kevinjqliu</a>, <a href="https://github.com/Omega359">@Omega359</a>,
+<a href="https://github.com/pgwhalen">@pgwhalen</a>, and <a href="https://github.com/stuhood">@stuhood</a>.</p>
+<h2 id="get-involved">Get Involved<a class="headerlink" href="#get-involved" title="Permanent link">¶</a></h2>
+<p>DataFusion is not a project built or driven by a single person, company, or
+foundation. Our community of users and contributors works together to build a
+shared technology that none of us could have built alone.</p>
+<p>If you are interested in joining us, we would love to have you. You can try out
+DataFusion on some of your own data and projects and let us know how it goes,
+contribute suggestions, documentation, bug reports, or a PR with documentation,
+tests, or code. A list of open issues suitable for beginners is <a href="https://github.com/apache/datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22">here</a>, and you
+can find out how to reach us on the <a href="https://datafusion.apache.org/contributor-guide/communication.html">communication doc</a>.</p>
 <h2 id="further-reading">Further Reading<a class="headerlink" href="#further-reading" title="Permanent link">¶</a></h2>
 <hr/>
 <ul>
@@ -994,6 +942,7 @@ table providers for working with data analytics.</p>
 <li><a href="#why-this-matters-for-table-providers">Why This Matters for Table Providers</a></li>
 </ul>
 </li>
+<li><a href="#choosing-the-right-starting-point">Choosing the Right Starting Point</a></li>
 <li><a href="#layer-1-tableprovider">Layer 1: TableProvider</a><ul>
 <li><a href="#keep-scan-lightweight">Keep scan() Lightweight</a></li>
 <li><a href="#existing-implementations-to-learn-from">Existing Implementations to Learn From</a></li>
@@ -1022,13 +971,9 @@ table providers for working with data analytics.</p>
 <li><a href="#a-complete-filter-pushdown-example">A Complete Filter Pushdown Example</a></li>
 </ul>
 </li>
-<li><a href="#scan-vs-scan_with_args">scan vs scan_with_args</a></li>
 <li><a href="#putting-it-all-together">Putting It All Together</a></li>
-<li><a href="#choosing-the-right-starting-point">Choosing the Right Starting Point</a><ul>
-<li><a href="#the-file-based-path-fileformat-filesource-and-fileopener">The File-Based Path: FileFormat, FileSource, and FileOpener</a></li>
-</ul>
-</li>
 <li><a href="#acknowledgements">Acknowledgements</a></li>
+<li><a href="#get-involved">Get Involved</a></li>
 <li><a href="#further-reading">Further Reading</a></li>
 </ul>
 </div>
