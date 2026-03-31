@@ -428,7 +428,10 @@ fn execute(
 ```
 
 This pattern keeps the async runtime responsive while long-running synchronous
-work runs on its own threads.
+work runs on its own threads. For a working example that shows how to configure
+separate thread pools for I/O and CPU work, see the
+[thread_pools example](https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/query_planning/thread_pools.rs)
+in the DataFusion repository.
 
 ## Where Should the Work Happen?
 
