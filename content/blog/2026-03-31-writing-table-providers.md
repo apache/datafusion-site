@@ -216,7 +216,7 @@ variant that provides additional pushdown information for other advanced use cas
 ### Keep `scan()` Lightweight
 
 This is a critical point: **`scan()` runs during planning, not execution.** It
-should return quickly. Best practices are to avoid performing I/O, network
+should return quickly. Best practice is to avoid performing I/O, network
 calls, or heavy computation here. The `scan` method's job is to *describe* how
 the data will be produced, not to produce it. All the real work belongs in the
 stream (Layer 3).
@@ -750,7 +750,7 @@ data lazily during streaming:
 use std::any::Any;
 use std::sync::Arc;
 
-use arrow::array::{Int64Array, StringArray};
+use arrow::array::Int64Array;
 use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
 use arrow::record_batch::RecordBatch;
 use datafusion::catalog::TableProvider;
@@ -873,10 +873,14 @@ building a data visualization system for Physical AI and makes heavy use of Data
 table providers for working with data analytics.
 
 I would also like to thank the reviewers of this post for their helpful feedback and
-suggestions: [@alamb], [@2010YOUY01], [@pgwhalen], and [@stuhood].
+suggestions: [@adriangb], [@alamb], [@2010YOUY01], [@kevinjqliu], [@Omega359],
+[@pgwhalen], and [@stuhood].
 
+[@adriangb]: https://github.com/adriangb
 [@alamb]: https://github.com/alamb
 [@2010YOUY01]: https://github.com/2010YOUY01
+[@kevinjqliu]: https://github.com/kevinjqliu
+[@Omega359]: https://github.com/Omega359
 [@pgwhalen]: https://github.com/pgwhalen
 [@stuhood]: https://github.com/stuhood
 
@@ -894,7 +898,7 @@ contribute suggestions, documentation, bug reports, or a PR with documentation,
 tests, or code. A list of open issues suitable for beginners is [here], and you
 can find out how to reach us on the [communication doc].
 
-[here]: https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22
+[here]: https://github.com/apache/datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22
 [communication doc]: https://datafusion.apache.org/contributor-guide/communication.html
 
 ## Further Reading
