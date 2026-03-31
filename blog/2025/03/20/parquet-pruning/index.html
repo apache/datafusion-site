@@ -94,7 +94,7 @@ limitations under the License.
 This post provides an overview of the techniques used in DataFusion to selectively read Parquet files.</p>
 <h3 id="the-pipeline">The pipeline<a class="headerlink" href="#the-pipeline" title="Permanent link">¶</a></h3>
 <p>The diagram below illustrates the <a href="https://docs.rs/datafusion/46.0.0/datafusion/datasource/physical_plan/parquet/source/struct.ParquetSource.html">Parquet reading pipeline</a> in DataFusion, highlighting how data flows through various pruning stages before being converted to Arrow format:</p>
-<p><img alt="Parquet pruning pipeline in DataFusion" class="img-responsive" src="/blog/images/parquet-pruning/read-parquet.jpg" width="100%"/></p>
+<p><img alt="Parquet pruning pipeline in DataFusion" class="img-fluid" src="/blog/images/parquet-pruning/read-parquet.jpg" width="100%"/></p>
 <h4 id="background-parquet-file-structure">Background: Parquet file structure<a class="headerlink" href="#background-parquet-file-structure" title="Permanent link">¶</a></h4>
 <p>As shown in the figure above, each Parquet file has multiple row groups. Each row group contains a set of columns, and each column contains a set of pages.</p>
 <p>Pages are the smallest units of data in Parquet files and typically contain compressed and encoded values for a specific column. This hierarchical structure enables efficient columnar access and forms the foundation for the pruning techniques we'll discuss.</p>
@@ -127,7 +127,7 @@ The last step is to <a href="https://github.com/apache/datafusion/blob/31701b8dc
 <h3 id="preview-of-coming-attractions-filter-pushdown">Preview of coming attractions: filter pushdown<a class="headerlink" href="#preview-of-coming-attractions-filter-pushdown" title="Permanent link">¶</a></h3>
 <p>So far we have discussed techniques that prune the Parquet file using only the metadata, i.e., before reading the actual data.</p>
 <p>Filter pushdown, also known as predicate pushdown or late materialization, is a technique that prunes data during scanning, with filters being generated and applied in the Parquet reader.</p>
-<p><img alt="Filter pushdown in DataFusion" class="img-responsive" src="/blog/images/parquet-pruning/filter-pushdown.jpg" width="100%"/></p>
+<p><img alt="Filter pushdown in DataFusion" class="img-fluid" src="/blog/images/parquet-pruning/filter-pushdown.jpg" width="100%"/></p>
 <p>Unlike metadata-based pruning which works at the row group or page level, filter pushdown operates at the row level, allowing DataFusion to filter out individual rows that don't match the query predicates during the decoding process.</p>
 <p>DataFusion <a href="https://github.com/apache/datafusion/blob/31701b8dc9c6486856c06a29a32107d9f4549cec/datafusion/core/src/datasource/physical_plan/parquet/row_filter.rs#L154">implements filter pushdown</a> but has <a href="https://github.com/apache/datafusion/blob/31701b8dc9c6486856c06a29a32107d9f4549cec/datafusion/common/src/config.rs#L382">not enabled it by default</a> due to <a href="https://github.com/apache/datafusion/issues/3463">some performance regressions</a>.</p>
 <p>We are working to remove the <a href="https://github.com/apache/arrow-rs/issues/5523#issuecomment-2429470872">remaining performance issues</a> and enable it by default, which we will discuss in the next blog post.</p>
@@ -140,12 +140,12 @@ Each step may reduce the amount of data to be read and processed, significantly 
   Loaded only after explicit visitor consent to comply with ASF policy.
 -->
 
-<div id="comments">
+<div>
   <hr>
-  <h3>Comments</h3>
+  <h3 id="comments">Comments<a class="headerlink" href="#comments" title="Permanent link">&para;</a></h3>
 
   <!-- Local loader script -->
-  <script src="/content/js/giscus-consent.js" defer></script>
+  <script src="/blog/js/giscus-consent.js" defer></script>
 
   <!-- Consent UI -->
   <div id="giscus-consent">

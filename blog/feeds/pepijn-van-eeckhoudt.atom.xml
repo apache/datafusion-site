@@ -172,7 +172,7 @@ END
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;Schematically, it will look as follows:&lt;/p&gt;
 &lt;figure&gt;
-&lt;img alt="Schematic representation of data flow in the original CASE implementation" class="img-responsive" src="/blog/images/case/original_loop.svg" width="100%"/&gt;
+&lt;img alt="Schematic representation of data flow in the original CASE implementation" class="img-fluid" src="/blog/images/case/original_loop.svg" width="100%"/&gt;
 &lt;figcaption&gt;One iteration of the `CASE` evaluation loop&lt;/figcaption&gt;
 &lt;/figure&gt;
 &lt;p&gt;This implementation works perfectly fine, but there's significant room for optimization, mostly related to the usage of &lt;code&gt;evaluate_selection&lt;/code&gt;.
@@ -195,7 +195,7 @@ Here's a simplified version of it that captures the relevant parts:&lt;/p&gt;
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;Going back to the same example as before, the data flow in &lt;code&gt;evaluate_selection&lt;/code&gt; looks like this:&lt;/p&gt;
 &lt;figure&gt;
-&lt;img alt="Schematic representation of `evaluate_selection` evaluation" class="img-responsive" src="/blog/images/case/evaluate_selection.svg" width="100%"/&gt;
+&lt;img alt="Schematic representation of `evaluate_selection` evaluation" class="img-fluid" src="/blog/images/case/evaluate_selection.svg" width="100%"/&gt;
 &lt;figcaption&gt;evaluate_selection data flow&lt;/figcaption&gt;
 &lt;/figure&gt;
 &lt;p&gt;The &lt;code&gt;evaluate_selection&lt;/code&gt; method first filters the input batch to only include rows that match the &lt;code&gt;selection&lt;/code&gt; mask.
@@ -257,7 +257,7 @@ for (when_expr, then_expr) in &amp;amp;self.when_then_expr {
 &lt;p&gt;The second optimization fundamentally restructures how the results of each loop iteration will be merged.
 The diagram below illustrates the optimized data flow when evaluating the &lt;code&gt;CASE WHEN col = 'b' THEN 100 ELSE 200 END&lt;/code&gt; from before:&lt;/p&gt;
 &lt;figure&gt;
-&lt;img alt="Schematic representation of optimized evaluation loop" class="img-responsive" src="/blog/images/case/merging.svg" width="100%"/&gt;
+&lt;img alt="Schematic representation of optimized evaluation loop" class="img-fluid" src="/blog/images/case/merging.svg" width="100%"/&gt;
 &lt;figcaption&gt;optimized evaluation loop&lt;/figcaption&gt;
 &lt;/figure&gt;
 &lt;p&gt;In the reworked implementation, the &lt;code&gt;evaluate_selection&lt;/code&gt; function is no longer used.
@@ -274,7 +274,7 @@ Instead, when all rows have been matched, we then merge the partial results usin
 &lt;p&gt;The diagram below illustrates how &lt;code&gt;merge_n&lt;/code&gt; works for an example where three &lt;code&gt;WHEN/THEN&lt;/code&gt; branches produced results.
 The first branch produced the result &lt;code&gt;A&lt;/code&gt; for row 2, the second produced &lt;code&gt;B&lt;/code&gt; for row 1, and the third produced &lt;code&gt;C&lt;/code&gt; and &lt;code&gt;D&lt;/code&gt; for rows 4 and 5.&lt;/p&gt;
 &lt;figure&gt;
-&lt;img alt="Schematic illustration of the merge_n algorithm" class="img-responsive" src="/blog/images/case/merge_n.svg" width="100%"/&gt;
+&lt;img alt="Schematic illustration of the merge_n algorithm" class="img-fluid" src="/blog/images/case/merge_n.svg" width="100%"/&gt;
 &lt;figcaption&gt;merge_n example&lt;/figcaption&gt;
 &lt;/figure&gt;
 &lt;p&gt;The &lt;code&gt;merge_n&lt;/code&gt; algorithm scans through the indices array.
@@ -294,14 +294,14 @@ FROM mailing_address
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;You can see that the &lt;code&gt;CASE&lt;/code&gt; expression only references the columns &lt;code&gt;country&lt;/code&gt; and &lt;code&gt;state&lt;/code&gt;, but because all columns are being queried, projection pushdown cannot reduce the number of columns being fed in to the projection operator.&lt;/p&gt;
 &lt;figure&gt;
-&lt;img alt="Schematic illustration of CASE evaluation without projection" class="img-responsive" src="/blog/images/case/no_projection.svg" width="100%"/&gt;
+&lt;img alt="Schematic illustration of CASE evaluation without projection" class="img-fluid" src="/blog/images/case/no_projection.svg" width="100%"/&gt;
 &lt;figcaption&gt;CASE evaluation without projection&lt;/figcaption&gt;
 &lt;/figure&gt;
 &lt;p&gt;During &lt;code&gt;CASE&lt;/code&gt; evaluation, the batch must be filtered using the &lt;code&gt;WHEN&lt;/code&gt; expression to evaluate the &lt;code&gt;THEN&lt;/code&gt; expression values.
 As the diagram above shows, this filtering creates a reduced copy of all columns.&lt;/p&gt;
 &lt;p&gt;This unnecessary copying can be avoided by first narrowing the batch to only include the columns that are actually needed.&lt;/p&gt;
 &lt;figure&gt;
-&lt;img alt="Schematic illustration of CASE evaluation with projection" class="img-responsive" src="/blog/images/case/projection.svg" width="100%"/&gt;
+&lt;img alt="Schematic illustration of CASE evaluation with projection" class="img-fluid" src="/blog/images/case/projection.svg" width="100%"/&gt;
 &lt;figcaption&gt;CASE evaluation with projection&lt;/figcaption&gt;
 &lt;/figure&gt;
 &lt;p&gt;At first glance, this might not seem beneficial, since we're introducing an additional processing step.
@@ -330,7 +330,7 @@ let else_value = else_expr.evaluate(&amp;amp;else_batch)?;
 In contrast to &lt;code&gt;zip&lt;/code&gt;, &lt;code&gt;merge&lt;/code&gt; does not require both of its value inputs to have the same length.
 Instead it requires that the sum of the length of the value inputs matches the length of the mask array.&lt;/p&gt;
 &lt;figure&gt;
-&lt;img alt="Schematic illustration of the merge algorithm" class="img-responsive" src="/blog/images/case/merge.svg" width="100%"/&gt;
+&lt;img alt="Schematic illustration of the merge algorithm" class="img-fluid" src="/blog/images/case/merge.svg" width="100%"/&gt;
 &lt;figcaption&gt;merge example&lt;/figcaption&gt;
 &lt;/figure&gt;
 &lt;p&gt;This eliminates unnecessary &lt;code&gt;scatter&lt;/code&gt; operations and memory allocations for one of the most common &lt;code&gt;CASE&lt;/code&gt; expression patterns.&lt;/p&gt;
@@ -372,7 +372,7 @@ The recorded times are presented as the blue series in the chart below.
 The green series shows the time measurement for the &lt;code&gt;SELECT * FROM orders&lt;/code&gt; to give an idea of the cost the addition of a &lt;code&gt;CASE&lt;/code&gt; expression in a query incurs.
 All measurements were made with a target partition count of &lt;code&gt;1&lt;/code&gt;.&lt;/p&gt;
 &lt;figure&gt;
-&lt;img alt="Performance measurements chart" class="img-responsive" src="/blog/images/case/results.png" width="100%"/&gt;
+&lt;img alt="Performance measurements chart" class="img-fluid" src="/blog/images/case/results.png" width="100%"/&gt;
 &lt;figcaption&gt;Performance measurements&lt;/figcaption&gt;
 &lt;/figure&gt;
 &lt;p&gt;What you can see in the chart is that the effect of the various optimizations compounds up to the &lt;code&gt;project&lt;/code&gt; measurement.
@@ -713,7 +713,7 @@ The task will then yield, after which the Tokio runtime resets the counter.&lt;/
 &lt;/figure&gt;
 &lt;p&gt;If we assume a task budget of 1 unit, each time Tokio schedules the task would result in the following sequence of function calls.&lt;/p&gt;
 &lt;figure&gt;
-&lt;img alt="Sequence diagram showing how the tokio task budget is used and reset." class="img-responsive" src="/blog/images/task-cancellation/tokio_budget.png" style="width: 100%; max-width: 100%"/&gt;
+&lt;img alt="Sequence diagram showing how the tokio task budget is used and reset." class="img-fluid" src="/blog/images/task-cancellation/tokio_budget.png" style="width: 100%; max-width: 100%"/&gt;
 &lt;figcaption&gt;Tokio task budget system, assuming the task budget is set to 1, for the plan above.&lt;/figcaption&gt;
 &lt;/figure&gt;
 &lt;p&gt;The aggregation stream would try to poll the merge stream in a loop.

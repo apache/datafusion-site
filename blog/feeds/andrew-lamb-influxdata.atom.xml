@@ -71,7 +71,7 @@ custom data platforms optimized for your specific
 needs&lt;sup&gt;&lt;a href="#footnote1"&gt;1&lt;/a&gt;&lt;/sup&gt;.&lt;/p&gt;
 &lt;h2 id="introduction-to-external-indexes-catalogs-metadata-stores-caches"&gt;Introduction to External Indexes / Catalogs / Metadata Stores / Caches&lt;a class="headerlink" href="#introduction-to-external-indexes-catalogs-metadata-stores-caches" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;div class="text-center"&gt;
-&lt;img alt="Using External Indexes to Accelerate Queries" class="img-responsive" src="/blog/images/external-parquet-indexes/external-index-overview.png" width="80%"/&gt;
+&lt;img alt="Using External Indexes to Accelerate Queries" class="img-fluid" src="/blog/images/external-parquet-indexes/external-index-overview.png" width="80%"/&gt;
 &lt;/div&gt;
 &lt;p&gt;&lt;strong&gt;Figure 1&lt;/strong&gt;: Using external indexes to speed up queries in an analytic system.
 Given a user's query (Step 1), the system uses an external index (one that is not
@@ -168,7 +168,7 @@ The standard approach is shown in Figure 2:&lt;/p&gt;
    predicate to the data&lt;/li&gt;
 &lt;/ol&gt;
 &lt;div class="text-center"&gt;
-&lt;img alt="Standard Pruning Layers." class="img-responsive" src="/blog/images/external-parquet-indexes/processing-pipeline.png" width="80%"/&gt;
+&lt;img alt="Standard Pruning Layers." class="img-fluid" src="/blog/images/external-parquet-indexes/processing-pipeline.png" width="80%"/&gt;
 &lt;/div&gt;
 &lt;p&gt;&lt;strong&gt;Figure 2&lt;/strong&gt;: Hierarchical Pruning: The system first rules out files, then
 Row Groups, then Data Pages, and finally reads only the relevant data pages.&lt;/p&gt;
@@ -185,7 +185,7 @@ If you are already familiar with Parquet, you can skip this section.&lt;/p&gt;
 &lt;p&gt;Logically, Parquet files are organized into  &lt;em&gt;Row Groups&lt;/em&gt; and &lt;em&gt;Column Chunks&lt;/em&gt; as
 shown below.&lt;/p&gt;
 &lt;div class="text-center"&gt;
-&lt;img alt="Logical Parquet File layout: Row Groups and Column Chunks." class="img-responsive" src="/blog/images/external-parquet-indexes/parquet-layout.png" width="80%"/&gt;
+&lt;img alt="Logical Parquet File layout: Row Groups and Column Chunks." class="img-fluid" src="/blog/images/external-parquet-indexes/parquet-layout.png" width="80%"/&gt;
 &lt;/div&gt;
 &lt;p&gt;&lt;strong&gt;Figure 3&lt;/strong&gt;: Logical Parquet File Layout: Data is first divided in horizontal slices
 called Row Groups. The data is then stored column by column in &lt;em&gt;Column Chunks&lt;/em&gt;.
@@ -194,7 +194,7 @@ for a query.&lt;/p&gt;
 &lt;p&gt;Physically, Parquet data is stored as a series of Data Pages along with metadata
 stored at the end of the file (in the footer), as shown below.&lt;/p&gt;
 &lt;div class="text-center"&gt;
-&lt;img alt="Physical Parquet File layout: Metadata and Footer." class="img-responsive" src="/blog/images/external-parquet-indexes/parquet-metadata.png" width="80%"/&gt;
+&lt;img alt="Physical Parquet File layout: Metadata and Footer." class="img-fluid" src="/blog/images/external-parquet-indexes/parquet-metadata.png" width="80%"/&gt;
 &lt;/div&gt;
 &lt;p&gt;&lt;strong&gt;Figure 4&lt;/strong&gt;: Physical Parquet File Layout: A typical Parquet file is composed
 of many data pages,  which contain the raw encoded data, and a footer that
@@ -216,7 +216,7 @@ Column Chunk.&lt;/p&gt;
 &lt;/ol&gt;
 &lt;p&gt;The high level mechanics of Parquet predicate pushdown is shown below:&lt;/p&gt;
 &lt;div class="text-center"&gt;
-&lt;img alt="Parquet Filter Pushdown: use filter predicate to skip pages." class="img-responsive" src="/blog/images/external-parquet-indexes/parquet-filter-pushdown.png" width="80%"/&gt;
+&lt;img alt="Parquet Filter Pushdown: use filter predicate to skip pages." class="img-fluid" src="/blog/images/external-parquet-indexes/parquet-filter-pushdown.png" width="80%"/&gt;
 &lt;/div&gt;
 &lt;p&gt;&lt;strong&gt;Figure 5&lt;/strong&gt;: Filter Pushdown in Parquet: query engines use the predicate,
 &lt;code&gt;C &amp;gt; 25&lt;/code&gt;, from the query along with statistics from the metadata, to identify
@@ -237,7 +237,7 @@ data:&lt;/p&gt;
 &lt;p&gt;then the index can quickly rule out files that only have data older than the
 most recent 7 days.&lt;/p&gt;
 &lt;div class="text-center"&gt;
-&lt;img alt="Data Skipping: Pruning Files." class="img-responsive" src="/blog/images/external-parquet-indexes/prune-files.png" width="80%"/&gt;
+&lt;img alt="Data Skipping: Pruning Files." class="img-fluid" src="/blog/images/external-parquet-indexes/prune-files.png" width="80%"/&gt;
 &lt;/div&gt;
 &lt;p&gt;&lt;strong&gt;Figure 6&lt;/strong&gt;: Step 1: File Pruning. Given a query predicate, systems use external
 indexes to quickly rule out files that cannot match the query. In this case, by
@@ -345,7 +345,7 @@ in ClickHouse&lt;/a&gt;. &lt;/p&gt;
 &lt;p&gt;For Parquet-based systems, the most common strategy is using the built-in metadata such
 as &lt;a href="https://github.com/apache/parquet-format/blob/1dbc814b97c9307687a2e4bee55545ab6a2ef106/src/main/thrift/parquet.thrift#L267"&gt;min/max statistics&lt;/a&gt; and &lt;a href="https://parquet.apache.org/docs/file-format/bloomfilter/"&gt;Bloom Filters&lt;/a&gt;. However, it is also possible to use external
 indexes for filtering &lt;em&gt;WITHIN&lt;/em&gt; Parquet files as shown below. &lt;/p&gt;
-&lt;p&gt;&lt;img alt="Data Skipping: Pruning Row Groups and DataPages" class="img-responsive" src="/blog/images/external-parquet-indexes/prune-row-groups.png" width="80%"/&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img alt="Data Skipping: Pruning Row Groups and DataPages" class="img-fluid" src="/blog/images/external-parquet-indexes/prune-row-groups.png" width="80%"/&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Figure 7&lt;/strong&gt;: Step 2: Pruning Parquet Row Groups and Data Pages. Given a query predicate,
 systems can use external indexes / metadata stores as well as Parquet's built-in
 structures to quickly rule out Row Groups and Data Pages that cannot match the query.
@@ -552,7 +552,7 @@ improving these components rather than building new file formats that are
 optimized for narrow use cases.&lt;/p&gt;
 &lt;p&gt;Come Join Us! 🎣 &lt;/p&gt;
 &lt;p&gt;&lt;a href="https://datafusion.apache.org/contributor-guide/communication.html"&gt;
-&lt;img alt="https://datafusion.apache.org/" class="img-responsive" src="/blog/images/logo_original4x.png" width="20%"/&gt;
+&lt;img alt="https://datafusion.apache.org/" class="img-fluid" src="/blog/images/logo_original4x.png" width="20%"/&gt;
 &lt;/a&gt;&lt;/p&gt;
 &lt;h2 id="about-the-author"&gt;About the Author&lt;a class="headerlink" href="#about-the-author" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;&lt;a href="https://www.linkedin.com/in/andrewalamb/"&gt;Andrew Lamb&lt;/a&gt; is a Staff Engineer at

@@ -117,7 +117,7 @@ FROM sensor_data
 WHERE date_time &gt; '2025-03-11' AND location = 'office';
 </code></pre>
 <figure>
-<img alt="Parquet pruning skips irrelevant files/row_groups, while filter pushdown skips irrelevant rows. Without filter pushdown, all rows from location, val, and date_time columns are decoded before `location='office'` is evaluated. Filter pushdown is especially useful when the filter is selective, i.e., removes many rows." class="img-responsive" src="/blog/images/parquet-pushdown/pushdown-vs-no-pushdown.jpg" width="80%"/>
+<img alt="Parquet pruning skips irrelevant files/row_groups, while filter pushdown skips irrelevant rows. Without filter pushdown, all rows from location, val, and date_time columns are decoded before `location='office'` is evaluated. Filter pushdown is especially useful when the filter is selective, i.e., removes many rows." class="img-fluid" src="/blog/images/parquet-pushdown/pushdown-vs-no-pushdown.jpg" width="80%"/>
 <figcaption>
     Parquet pruning skips irrelevant files/row_groups, while filter pushdown skips irrelevant rows. Without filter pushdown, all rows from location, val, and date_time columns are decoded before `location='office'` is evaluated. Filter pushdown is especially useful when the filter is selective, i.e., removes many rows.
   </figcaption>
@@ -133,7 +133,7 @@ This eliminates the waste of decoding rows that will be immediately filtered out
 <p>At a high level, the Parquet reader first builds a filter mask -- essentially a boolean array indicating which rows meet the filter criteria -- and then uses this mask to selectively decode only the needed rows from the remaining columns in the projection.</p>
 <p>Let's dig into details of <a href="https://github.com/apache/arrow-rs/blob/d5339f31a60a4bd8a4256e7120fe32603249d88e/parquet/src/arrow/async_reader/mod.rs#L618-L712">how filter pushdown is implemented</a> in the current Rust Parquet reader implementation, illustrated in the following figure.</p>
 <figure>
-<img alt="Implementation of filter pushdown in Rust Parquet readers" class="img-responsive" src="/blog/images/parquet-pushdown/baseline-impl.jpg" with="70%"/>
+<img alt="Implementation of filter pushdown in Rust Parquet readers" class="img-fluid" src="/blog/images/parquet-pushdown/baseline-impl.jpg" with="70%"/>
 <figcaption>
     Implementation of filter pushdown in Rust Parquet readers -- the first phase builds the filter mask, the second phase applies the filter mask to the other columns
   </figcaption>
@@ -203,7 +203,7 @@ This explains why filter pushdown is slower in some cases.</p>
 </ol>
 <p>This section describes my <a href="https://github.com/apache/arrow-rs/pull/6921#issuecomment-2718792433">&lt;700 LOC PR (with lots of comments and tests)</a> that <strong>reduces total ClickBench time by 15%, with up to 2x lower latency for some queries, no obvious regression on other queries, and caches at most 2 pages (~2MB) per column in memory</strong>.</p>
 <figure>
-<img alt="New decoding pipeline, building filter mask and output columns are interleaved in a single pass, allowing us to cache minimal pages for minimal amount of time" class="img-responsive" src="/blog/images/parquet-pushdown/new-pipeline.jpg" width="80%"/>
+<img alt="New decoding pipeline, building filter mask and output columns are interleaved in a single pass, allowing us to cache minimal pages for minimal amount of time" class="img-fluid" src="/blog/images/parquet-pushdown/new-pipeline.jpg" width="80%"/>
 <figcaption>
     New decoding pipeline, building filter mask and output columns are interleaved in a single pass, allowing us to cache minimal pages for minimal amount of time
   </figcaption>
@@ -237,7 +237,7 @@ WHERE date_time &gt; '2025-03-11' AND location = 'office';
 <p>Parquet by default encodes data using <a href="https://parquet.apache.org/docs/file-format/data-pages/encodings/">dictionary encoding</a>, which writes a dictionary page as the first page of a column chunk, followed by the keys referencing the dictionary.</p>
 <p>You can see this in action using <a href="https://parquet-viewer.xiangpeng.systems">parquet-viewer</a>:</p>
 <figure>
-<img alt="Parquet viewer shows the page layout of a column chunk" class="img-responsive" src="/blog/images/parquet-pushdown/parquet-viewer.jpg" width="80%"/>
+<img alt="Parquet viewer shows the page layout of a column chunk" class="img-fluid" src="/blog/images/parquet-pushdown/parquet-viewer.jpg" width="80%"/>
 <figcaption>
     Parquet viewer shows the page layout of a column chunk
   </figcaption>
@@ -246,7 +246,7 @@ WHERE date_time &gt; '2025-03-11' AND location = 'office';
 <p>This is why it caches 2 pages per column: one dictionary page and one data page.
 The data page slot will move forward as it reads the data; but the dictionary page slot always references the first page.</p>
 <figure>
-<img alt="Cached two pages, one for dictionary (pinned), one for data (moves as it reads the data)" class="img-responsive" src="/blog/images/parquet-pushdown/cached-pages.jpg" width="80%"/>
+<img alt="Cached two pages, one for dictionary (pinned), one for data (moves as it reads the data)" class="img-fluid" src="/blog/images/parquet-pushdown/cached-pages.jpg" width="80%"/>
 <figcaption>
     Cached two pages, one for dictionary (pinned), one for data (moves as it reads the data)
   </figcaption>
@@ -324,12 +324,12 @@ The challenge lies in efficiently navigating through the dynamics of decoding, f
   Loaded only after explicit visitor consent to comply with ASF policy.
 -->
 
-<div id="comments">
+<div>
   <hr>
-  <h3>Comments</h3>
+  <h3 id="comments">Comments<a class="headerlink" href="#comments" title="Permanent link">&para;</a></h3>
 
   <!-- Local loader script -->
-  <script src="/content/js/giscus-consent.js" defer></script>
+  <script src="/blog/js/giscus-consent.js" defer></script>
 
   <!-- Consent UI -->
   <div id="giscus-consent">

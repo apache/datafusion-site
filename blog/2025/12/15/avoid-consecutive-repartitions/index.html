@@ -78,7 +78,7 @@ Starting a journey learning about database internals can be daunting. With so ma
 
 </div>
 <div style="flex: 0 0 40%; text-align: center;">
-<img alt="Database System Components" class="img-responsive" src="/blog/images/avoid-consecutive-repartitions/database_system_diagram.png" width="100%"/>
+<img alt="Database System Components" class="img-fluid" src="/blog/images/avoid-consecutive-repartitions/database_system_diagram.png" width="100%"/>
 </div>
 </div>
 <hr/>
@@ -99,7 +99,7 @@ Starting a journey learning about database internals can be daunting. With so ma
 <p>When making your first contributions to an open-source project, start very small but go as deep as you can. Don't leave any stone unturned. I did this by looking for simpler issues, such as formatting or simple bug fixes, and stepping through the entire data flow that relates to the issue, noting what each component is responsible for.</p>
 <p>This will give you familiarity with the codebase and using your tools, like your debugger, within the project.</p>
 <div class="text-center">
-<img alt="Noot Noot Database Meme" class="img-responsive" src="/blog/images/avoid-consecutive-repartitions/noot_noot_database_meme.png" width="50%"/>
+<img alt="Noot Noot Database Meme" class="img-fluid" src="/blog/images/avoid-consecutive-repartitions/noot_noot_database_meme.png" width="50%"/>
 </div>
 <p><br/></p>
 <p>Now that we have some general knowledge of database internals, a niche or subsystem we want to dive deeper into, and the mindset for acquiring knowledge before contributing, let's start with our first core issue.</p>
@@ -112,7 +112,7 @@ Starting a journey learning about database internals can be daunting. With so ma
 <p>Before discussing this issue, it is essential to understand how DataFusion handles parallel execution.</p>
 <p>DataFusion implements a vectorized <a href="https://dl.acm.org/doi/10.1145/93605.98720">Volcano Model</a>, similar to other state of the art engines such as ClickHouse. The Volcano Model is built on the idea that each operation is abstracted into an operator, and a DAG can represent an entire query. Each operator implements a <code>next()</code> function that returns a batch of tuples or a <code>NULL</code> marker if no data is available.</p>
 <div class="text-center">
-<img alt="Vectorized Volcano Model Example" class="img-responsive" src="/blog/images/avoid-consecutive-repartitions/volcano_model_diagram.png" width="60%"/>
+<img alt="Vectorized Volcano Model Example" class="img-fluid" src="/blog/images/avoid-consecutive-repartitions/volcano_model_diagram.png" width="60%"/>
 </div>
 <p><br/>
 DataFusion achieves multi-core parallelism through the use of "exchange operators." Individual operators are implemented to use a single CPU core, and the <code>RepartitionExec</code> operator is responsible for distributing work across multiple processors.</p>
@@ -128,7 +128,7 @@ Round-robin repartitioning is useful when the data grouping isn't known or when 
 
 </div>
 <div style="flex: 0 0 25%; text-align: center;">
-<img alt="Round-Robin Repartitioning" class="img-responsive" src="/blog/images/avoid-consecutive-repartitions/round_robin_repartitioning.png" width="100%"/>
+<img alt="Round-Robin Repartitioning" class="img-fluid" src="/blog/images/avoid-consecutive-repartitions/round_robin_repartitioning.png" width="100%"/>
 </div>
 </div>
 <h4 id="hash-repartitioning"><strong>Hash Repartitioning</strong><a class="headerlink" href="#hash-repartitioning" title="Permanent link">&para;</a></h4>
@@ -141,12 +141,12 @@ Hash repartitioning is useful when working with grouped data. Imagine you have a
 
 </div>
 <div style="flex: 0 0 25%; text-align: center;">
-<img alt="Hash Repartitioning" class="img-responsive" src="/blog/images/avoid-consecutive-repartitions/hash_repartitioning.png" width="100%"/>
+<img alt="Hash Repartitioning" class="img-fluid" src="/blog/images/avoid-consecutive-repartitions/hash_repartitioning.png" width="100%"/>
 </div>
 </div>
 <p>Note, the benefit of hash opposed to round-robin partitioning in this scenario. Hash repartitioning consolidates all rows with the same store value in distinct partitions. Because of this property we can compute the complete results for each store in parallel and merge them to get the final outcome. This parallel processing wouldn&rsquo;t be possible with only round-robin partitioning as the same store value may be spread across multiple partitions, making the aggregation results partial, unable to merge them to produce a correct final outcome.</p>
 <div class="text-center">
-<img alt="Hash Repartitioning Example" class="img-responsive" src="/blog/images/avoid-consecutive-repartitions/hash_repartitioning_example.png" width="100%"/>
+<img alt="Hash Repartitioning Example" class="img-fluid" src="/blog/images/avoid-consecutive-repartitions/hash_repartitioning_example.png" width="100%"/>
 </div>
 <hr/>
 <h2 id="the-issue-consecutive-repartitions"><strong>The Issue: Consecutive Repartitions</strong><a class="headerlink" href="#the-issue-consecutive-repartitions" title="Permanent link">&para;</a></h2>
@@ -155,14 +155,14 @@ Hash repartitioning is useful when working with grouped data. Imagine you have a
 <pre><code class="language-sql">SELECT a, SUM(b) FROM data.parquet GROUP BY a;
 </code></pre>
 <div class="text-center">
-<img alt="Consecutive Repartition Query Plan" class="img-responsive" src="/blog/images/avoid-consecutive-repartitions/basic_before_query_plan.png" width="65%"/>
+<img alt="Consecutive Repartition Query Plan" class="img-fluid" src="/blog/images/avoid-consecutive-repartitions/basic_before_query_plan.png" width="65%"/>
 </div>
 <hr/>
 <h2 id="why-dont-we-want-consecutive-repartitions"><strong>Why Don&rsquo;t We Want Consecutive Repartitions?</strong><a class="headerlink" href="#why-dont-we-want-consecutive-repartitions" title="Permanent link">&para;</a></h2>
 <p>Repartitions would appear back-to-back in query plans, specifically a round-robin followed by a hash repartition.</p>
 <p>Why is this such a big deal? Well, repartitions do not process the data; their purpose is to redistribute it in ways that enable more efficient computation for other operators. Having consecutive repartitions is counterintuitive because we are redistributing data, then immediately redistributing it again, making the first repartition pointless. While this didn't create extreme overhead for queries, since round-robin repartitioning does not copy data, just the pointers to batches, the behavior was unclear and unnecessary.</p>
 <div class="text-center">
-<img alt="Consecutive Repartition Query Plan With Data" class="img-responsive" src="/blog/images/avoid-consecutive-repartitions/in_depth_before_query_plan.png" width="65%"/>
+<img alt="Consecutive Repartition Query Plan With Data" class="img-fluid" src="/blog/images/avoid-consecutive-repartitions/in_depth_before_query_plan.png" width="65%"/>
 </div>
 <p><br/></p>
 <p>Optimally the plan should do one of two things:</p>
@@ -171,7 +171,7 @@ Hash repartitioning is useful when working with grouped data. Imagine you have a
 <li>Otherwise, don't use any round-robin repartition and keep the hash repartition only in the middle of the two-stage aggregation.</li>
 </ol>
 <div class="text-center">
-<img alt="Optimal Query Plans" class="img-responsive" src="/blog/images/avoid-consecutive-repartitions/optimal_query_plans.png" width="100%"/>
+<img alt="Optimal Query Plans" class="img-fluid" src="/blog/images/avoid-consecutive-repartitions/optimal_query_plans.png" width="100%"/>
 </div>
 <p><br/></p>
 <p>As shown in the diagram for a large query plan above, the round-robin repartition takes place before the partial aggregation. This increases parallelism for this processing, which will yield great performance benefits in larger datasets.</p>
@@ -218,7 +218,7 @@ Hash repartitioning is useful when working with grouped data. Imagine you have a
 <p>Ok, great! We understand the different components DataFusion uses to indicate if repartitioning is beneficial. Now all that's left to do is see how repartitions are inserted.</p>
 <p>This logic takes place in the main loop of this rule. I find it helpful to draw algorithms like these into logic trees; this tends to make things much more straightforward and approachable:</p>
 <div class="text-center">
-<img alt="Incorrect Logic Tree" class="img-responsive" src="/blog/images/avoid-consecutive-repartitions/logic_tree_before.png" width="100%"/>
+<img alt="Incorrect Logic Tree" class="img-fluid" src="/blog/images/avoid-consecutive-repartitions/logic_tree_before.png" width="100%"/>
 </div>
 <p><br/></p>
 <p>Boom! This is the root of our problem: we are inserting a round-robin repartition, then still inserting a hash repartition afterwards. This means that if an operator indicates it would benefit from both round-robin and hash repartitioning, consecutive repartitions will occur.</p>
@@ -233,7 +233,7 @@ Hash repartitioning is useful when working with grouped data. Imagine you have a
 </ul>
 <p>The new logic tree looks like this:</p>
 <div class="text-center">
-<img alt="Correct Logic Tree" class="img-responsive" src="/blog/images/avoid-consecutive-repartitions/logic_tree_after.png" width="100%"/>
+<img alt="Correct Logic Tree" class="img-fluid" src="/blog/images/avoid-consecutive-repartitions/logic_tree_after.png" width="100%"/>
 </div>
 <p><br/></p>
 <p>All that deep digging paid off, one condition (see <a href="https://github.com/apache/datafusion/pull/18521">the final PR</a> for full details)!</p>
@@ -275,12 +275,12 @@ Hash repartitioning is useful when working with grouped data. Imagine you have a
 <p>For the benchmarking standard, TPCH, speedups were small but consistent:</p>
 <p><strong>TPCH Benchmark</strong></p>
 <div class="text-left">
-<img alt="TPCH Benchmark Results" class="img-responsive" src="/blog/images/avoid-consecutive-repartitions/tpch_benchmark.png" width="60%"/>
+<img alt="TPCH Benchmark Results" class="img-fluid" src="/blog/images/avoid-consecutive-repartitions/tpch_benchmark.png" width="60%"/>
 </div>
 <p><br/></p>
 <p><strong>TPCH10 Benchmark</strong></p>
 <div class="text-left">
-<img alt="TPCH10 Benchmark Results" class="img-responsive" src="/blog/images/avoid-consecutive-repartitions/tpch10_benchmark.png" width="60%"/>
+<img alt="TPCH10 Benchmark Results" class="img-fluid" src="/blog/images/avoid-consecutive-repartitions/tpch10_benchmark.png" width="60%"/>
 </div>
 <p><br/></p>
 <p>And there it is, our first core contribution for a database system!</p>
@@ -303,12 +303,12 @@ Hash repartitioning is useful when working with grouped data. Imagine you have a
   Loaded only after explicit visitor consent to comply with ASF policy.
 -->
 
-<div id="comments">
+<div>
   <hr>
-  <h3>Comments</h3>
+  <h3 id="comments">Comments<a class="headerlink" href="#comments" title="Permanent link">&para;</a></h3>
 
   <!-- Local loader script -->
-  <script src="/content/js/giscus-consent.js" defer></script>
+  <script src="/blog/js/giscus-consent.js" defer></script>
 
   <!-- Consent UI -->
   <div id="giscus-consent">
