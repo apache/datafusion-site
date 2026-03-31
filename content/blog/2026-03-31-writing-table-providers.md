@@ -882,6 +882,21 @@ suggestions: [@alamb], [@2010YOUY01], [@pgwhalen], and [@stuhood].
 
 [Rerun.io]: https://rerun.io
 
+## Get Involved
+
+DataFusion is not a project built or driven by a single person, company, or
+foundation. Our community of users and contributors works together to build a
+shared technology that none of us could have built alone.
+
+If you are interested in joining us, we would love to have you. You can try out
+DataFusion on some of your own data and projects and let us know how it goes,
+contribute suggestions, documentation, bug reports, or a PR with documentation,
+tests, or code. A list of open issues suitable for beginners is [here], and you
+can find out how to reach us on the [communication doc].
+
+[here]: https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22
+[communication doc]: https://datafusion.apache.org/contributor-guide/communication.html
+
 ## Further Reading
 
 ---
