@@ -208,7 +208,7 @@ END
 </code></pre>
 <p>Schematically, it will look as follows:</p>
 <figure>
-<img alt="Schematic representation of data flow in the original CASE implementation" class="img-responsive" src="/blog/images/case/original_loop.svg" width="100%"/>
+<img alt="Schematic representation of data flow in the original CASE implementation" class="img-fluid" src="/blog/images/case/original_loop.svg" width="100%"/>
 <figcaption>One iteration of the `CASE` evaluation loop</figcaption>
 </figure>
 <p>This implementation works perfectly fine, but there's significant room for optimization, mostly related to the usage of <code>evaluate_selection</code>.
@@ -231,7 +231,7 @@ Here's a simplified version of it that captures the relevant parts:</p>
 </code></pre>
 <p>Going back to the same example as before, the data flow in <code>evaluate_selection</code> looks like this:</p>
 <figure>
-<img alt="Schematic representation of `evaluate_selection` evaluation" class="img-responsive" src="/blog/images/case/evaluate_selection.svg" width="100%"/>
+<img alt="Schematic representation of `evaluate_selection` evaluation" class="img-fluid" src="/blog/images/case/evaluate_selection.svg" width="100%"/>
 <figcaption>evaluate_selection data flow</figcaption>
 </figure>
 <p>The <code>evaluate_selection</code> method first filters the input batch to only include rows that match the <code>selection</code> mask.
@@ -293,7 +293,7 @@ for (when_expr, then_expr) in &amp;self.when_then_expr {
 <p>The second optimization fundamentally restructures how the results of each loop iteration will be merged.
 The diagram below illustrates the optimized data flow when evaluating the <code>CASE WHEN col = 'b' THEN 100 ELSE 200 END</code> from before:</p>
 <figure>
-<img alt="Schematic representation of optimized evaluation loop" class="img-responsive" src="/blog/images/case/merging.svg" width="100%"/>
+<img alt="Schematic representation of optimized evaluation loop" class="img-fluid" src="/blog/images/case/merging.svg" width="100%"/>
 <figcaption>optimized evaluation loop</figcaption>
 </figure>
 <p>In the reworked implementation, the <code>evaluate_selection</code> function is no longer used.
@@ -310,7 +310,7 @@ Instead, when all rows have been matched, we then merge the partial results usin
 <p>The diagram below illustrates how <code>merge_n</code> works for an example where three <code>WHEN/THEN</code> branches produced results.
 The first branch produced the result <code>A</code> for row 2, the second produced <code>B</code> for row 1, and the third produced <code>C</code> and <code>D</code> for rows 4 and 5.</p>
 <figure>
-<img alt="Schematic illustration of the merge_n algorithm" class="img-responsive" src="/blog/images/case/merge_n.svg" width="100%"/>
+<img alt="Schematic illustration of the merge_n algorithm" class="img-fluid" src="/blog/images/case/merge_n.svg" width="100%"/>
 <figcaption>merge_n example</figcaption>
 </figure>
 <p>The <code>merge_n</code> algorithm scans through the indices array.
@@ -330,14 +330,14 @@ FROM mailing_address
 </code></pre>
 <p>You can see that the <code>CASE</code> expression only references the columns <code>country</code> and <code>state</code>, but because all columns are being queried, projection pushdown cannot reduce the number of columns being fed in to the projection operator.</p>
 <figure>
-<img alt="Schematic illustration of CASE evaluation without projection" class="img-responsive" src="/blog/images/case/no_projection.svg" width="100%"/>
+<img alt="Schematic illustration of CASE evaluation without projection" class="img-fluid" src="/blog/images/case/no_projection.svg" width="100%"/>
 <figcaption>CASE evaluation without projection</figcaption>
 </figure>
 <p>During <code>CASE</code> evaluation, the batch must be filtered using the <code>WHEN</code> expression to evaluate the <code>THEN</code> expression values.
 As the diagram above shows, this filtering creates a reduced copy of all columns.</p>
 <p>This unnecessary copying can be avoided by first narrowing the batch to only include the columns that are actually needed.</p>
 <figure>
-<img alt="Schematic illustration of CASE evaluation with projection" class="img-responsive" src="/blog/images/case/projection.svg" width="100%"/>
+<img alt="Schematic illustration of CASE evaluation with projection" class="img-fluid" src="/blog/images/case/projection.svg" width="100%"/>
 <figcaption>CASE evaluation with projection</figcaption>
 </figure>
 <p>At first glance, this might not seem beneficial, since we're introducing an additional processing step.
@@ -366,7 +366,7 @@ let else_value = else_expr.evaluate(&amp;else_batch)?;
 In contrast to <code>zip</code>, <code>merge</code> does not require both of its value inputs to have the same length.
 Instead it requires that the sum of the length of the value inputs matches the length of the mask array.</p>
 <figure>
-<img alt="Schematic illustration of the merge algorithm" class="img-responsive" src="/blog/images/case/merge.svg" width="100%"/>
+<img alt="Schematic illustration of the merge algorithm" class="img-fluid" src="/blog/images/case/merge.svg" width="100%"/>
 <figcaption>merge example</figcaption>
 </figure>
 <p>This eliminates unnecessary <code>scatter</code> operations and memory allocations for one of the most common <code>CASE</code> expression patterns.</p>
@@ -408,7 +408,7 @@ The recorded times are presented as the blue series in the chart below.
 The green series shows the time measurement for the <code>SELECT * FROM orders</code> to give an idea of the cost the addition of a <code>CASE</code> expression in a query incurs.
 All measurements were made with a target partition count of <code>1</code>.</p>
 <figure>
-<img alt="Performance measurements chart" class="img-responsive" src="/blog/images/case/results.png" width="100%"/>
+<img alt="Performance measurements chart" class="img-fluid" src="/blog/images/case/results.png" width="100%"/>
 <figcaption>Performance measurements</figcaption>
 </figure>
 <p>What you can see in the chart is that the effect of the various optimizations compounds up to the <code>project</code> measurement.

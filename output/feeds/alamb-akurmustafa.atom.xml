@@ -94,7 +94,7 @@ Spring 2025&lt;/a&gt;), is that it disconnects the
 language—it describes what answers are desired rather than an &lt;em&gt;imperative&lt;/em&gt;
 language such as Python, where you describe how to do the computation as shown
 in Figure 1.&lt;/p&gt;
-&lt;p&gt;&lt;img alt="Fig 1: Query Execution." class="img-responsive" src="/blog/images/optimizing-sql-dataframes/query-execution.png" width="80%"/&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img alt="Fig 1: Query Execution." class="img-fluid" src="/blog/images/optimizing-sql-dataframes/query-execution.png" width="80%"/&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Figure 1&lt;/strong&gt;: Query Execution: Users describe the answer they want using either
 SQL or a DataFrame. For SQL, a Query Planner translates the parsed query 
 into an &lt;em&gt;initial plan&lt;/em&gt;. The DataFrame API creates an initial plan directly.
@@ -114,7 +114,7 @@ modern APIs such as &lt;a href="https://docs.pola.rs/user-guide/lazy/using/"&gt;
 &lt;h2 id="example-of-query-optimizer"&gt;Example of Query Optimizer&lt;a class="headerlink" href="#example-of-query-optimizer" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;This section motivates the value of a Query Optimizer with an example. Let’s say
 you have some observations of animal behavior, as illustrated in Table 1.&lt;/p&gt;
-&lt;p&gt;&lt;img alt="Table 1: Observational Data." class="img-responsive" src="/blog/images/optimizing-sql-dataframes/table1.png" width="75%"/&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img alt="Table 1: Observational Data." class="img-fluid" src="/blog/images/optimizing-sql-dataframes/table1.png" width="75%"/&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Table 1&lt;/strong&gt;: Example observational data.&lt;/p&gt;
 &lt;p&gt;If the user wants to know the average population for some species in the last
 month, a user can write a SQL query or a DataFrame such as the following:&lt;/p&gt;
@@ -137,13 +137,13 @@ saying data flow graphs where the edges represent tabular data (rows + columns)
 and the nodes represent a transformation (see &lt;a href="https://youtu.be/EzZTLiSJnhY"&gt;this DataFusion overview video&lt;/a&gt;
 for more details). The initial &lt;code&gt;LogicalPlan&lt;/code&gt; for the queries above is shown in
 Figure 2.&lt;/p&gt;
-&lt;p&gt;&lt;img alt="Fig 2: Initial Logical Plan." class="img-responsive" src="/blog/images/optimizing-sql-dataframes/initial-logical-plan.png" width="72%"/&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img alt="Fig 2: Initial Logical Plan." class="img-fluid" src="/blog/images/optimizing-sql-dataframes/initial-logical-plan.png" width="72%"/&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Figure 2&lt;/strong&gt;: Example initial &lt;code&gt;LogicalPlan&lt;/code&gt; for SQL and DataFrame query. The
 plan is read from bottom to top, computing the results in each step.&lt;/p&gt;
 &lt;p&gt;The optimizer's job is to take this query plan and rewrite it into an alternate
 plan that computes the same results but faster, such as the one shown in Figure
 3.&lt;/p&gt;
-&lt;p&gt;&lt;img alt="Fig 3: Optimized Logical Plan." class="img-responsive" src="/blog/images/optimizing-sql-dataframes/optimized-logical-plan.png" width="80%"/&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img alt="Fig 3: Optimized Logical Plan." class="img-fluid" src="/blog/images/optimizing-sql-dataframes/optimized-logical-plan.png" width="80%"/&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Figure 3&lt;/strong&gt;: An example optimized plan that computes the same result as the
 plan in Figure 2 more efficiently. The diagram highlights where the optimizer
 has applied &lt;em&gt;Projection Pushdown&lt;/em&gt;, &lt;em&gt;Filter Pushdown&lt;/em&gt;, and &lt;em&gt;Constant Evaluation&lt;/em&gt;.
@@ -165,7 +165,7 @@ discuss this detail in this post.&lt;/p&gt;
 &lt;li&gt;Understand, implement, and test each pass in isolation&lt;/li&gt;
 &lt;li&gt;Easily extend the optimizer by adding new passes&lt;/li&gt;
 &lt;/ol&gt;
-&lt;p&gt;&lt;img alt="Fig 4: Query Optimizer Passes." class="img-responsive" src="/blog/images/optimizing-sql-dataframes/optimizer-passes.png" width="80%"/&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img alt="Fig 4: Query Optimizer Passes." class="img-fluid" src="/blog/images/optimizing-sql-dataframes/optimizer-passes.png" width="80%"/&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Figure 4&lt;/strong&gt;: Query Optimizers are implemented as a series of rules that each
 rewrite the query plan. Each rule’s algorithm is expressed as a transformation
 of a previous plan.&lt;/p&gt;
@@ -298,7 +298,7 @@ filtering combined with techniques such as partition and storage pruning (e.g.
 the population of all cities and discarding everything except Boston is much
 slower than only computing the population for Boston and so most Query
 Optimizers will evaluate the filter before the aggregation.&lt;/p&gt;
-&lt;p&gt;&lt;img alt="Fig 1: Filter Pushdown." class="img-responsive" src="/blog/images/optimizing-sql-dataframes/filter-pushdown.png" width="80%"/&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img alt="Fig 1: Filter Pushdown." class="img-fluid" src="/blog/images/optimizing-sql-dataframes/filter-pushdown.png" width="80%"/&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Figure 1&lt;/strong&gt;: Filter Pushdown.  In (&lt;strong&gt;A&lt;/strong&gt;) without filter pushdown, the operator
 processes more rows, reducing efficiency. In (&lt;strong&gt;B&lt;/strong&gt;) with filter pushdown, the
 operator receives fewer rows, resulting in less overall work and leading to a
@@ -320,7 +320,7 @@ efficiently reading only a subset of required columns, and is &lt;a href="https:
 powerful in combination with filter pushdown&lt;/a&gt;. Projection Pushdown is still
 important, but less effective for row oriented formats such as JSON or CSV where
 each column in each row must be parsed even if it is not used in the plan.&lt;/p&gt;
-&lt;p&gt;&lt;img alt="Fig 2: Projection Pushdown." class="img-responsive" src="/blog/images/optimizing-sql-dataframes/projection-pushdown.png" width="80%"/&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img alt="Fig 2: Projection Pushdown." class="img-fluid" src="/blog/images/optimizing-sql-dataframes/projection-pushdown.png" width="80%"/&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Figure 2:&lt;/strong&gt; In (&lt;strong&gt;A&lt;/strong&gt;) without projection pushdown, the operator receives more
 columns, reducing efficiency. In (&lt;strong&gt;B&lt;/strong&gt;) with projection pushdown, the operator
 receives fewer columns, leading to optimized execution.&lt;/p&gt;
@@ -337,7 +337,7 @@ some operators that can be used if there is a limit. The classic example is
 replacing a full sort + limit with a &lt;a href="https://docs.rs/datafusion/latest/datafusion/physical_plan/struct.TopK.html"&gt;TopK&lt;/a&gt; operator that only tracks the top
 values using a heap. Similarly,  DataFusion’s Parquet reader stops fetching and
 opening additional files once the limit has been hit.&lt;/p&gt;
-&lt;p&gt;&lt;img alt="Fig 3: Limit Pushdown." class="img-responsive" src="/blog/images/optimizing-sql-dataframes/limit-pushdown.png" width="80%"/&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img alt="Fig 3: Limit Pushdown." class="img-fluid" src="/blog/images/optimizing-sql-dataframes/limit-pushdown.png" width="80%"/&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Figure 3&lt;/strong&gt;: In (&lt;strong&gt;A&lt;/strong&gt;), without limit pushdown all data is sorted and
 everything except the first few rows are discarded. In (&lt;strong&gt;B&lt;/strong&gt;), with limit
 pushdown, Sort is replaced with TopK operator which does much less work.&lt;/p&gt;
@@ -375,7 +375,7 @@ WHERE customer.last_name = 'Lamb'
 customer, but fills in the fields with &lt;code&gt;null&lt;/code&gt;. All such rows will be filtered
 out by &lt;code&gt;customer.last_name = 'Lamb'&lt;/code&gt;, and thus an INNER JOIN produces the same
 answer. This is illustrated in Figure 4.&lt;/p&gt;
-&lt;p&gt;&lt;img alt="Fig 4: Join Rewrite." class="img-responsive" src="/blog/images/optimizing-sql-dataframes/join-rewrite.png" width="80%"/&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img alt="Fig 4: Join Rewrite." class="img-fluid" src="/blog/images/optimizing-sql-dataframes/join-rewrite.png" width="80%"/&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Figure 4&lt;/strong&gt;: Rewriting &lt;code&gt;OUTER JOIN&lt;/code&gt; to &lt;code&gt;INNER JOIN&lt;/code&gt;. In (A) the original query
 contains an &lt;code&gt;OUTER JOIN&lt;/code&gt; but also a filter on &lt;code&gt;customer.last_name&lt;/code&gt;, which
 filters out all rows that might be introduced by the &lt;code&gt;OUTER JOIN&lt;/code&gt;. In (B) the
@@ -453,7 +453,7 @@ FROM(SELECT date_bin('1 hour', time, '1970-01-01') as time_chunk
 WHERE time_chunk &amp;gt;= '2025-01-01 00:00:00'
 ORDER BY time_chunk
 &lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;&lt;img alt="Fig 5: Common Subquery Elimination." class="img-responsive" src="/blog/images/optimizing-sql-dataframes/common-subexpression-elimination.png" width="80%"/&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img alt="Fig 5: Common Subquery Elimination." class="img-fluid" src="/blog/images/optimizing-sql-dataframes/common-subexpression-elimination.png" width="80%"/&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Figure 5:&lt;/strong&gt; Adding a Projection to evaluate common complex sub expression
 decreases complexity for later stages.&lt;/p&gt;
 &lt;h3 id="algorithm-selection"&gt;Algorithm Selection&lt;a class="headerlink" href="#algorithm-selection" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
@@ -466,7 +466,7 @@ on properties of the query.&lt;/p&gt;
 &lt;code&gt;Sort&lt;/code&gt; if there is also a limit on the query. Similarly, it may choose to use the
 more efficient &lt;code&gt;PartialOrdered&lt;/code&gt; grouping operation when the data is sorted on
 group keys or a &lt;code&gt;MergeJoin&lt;/code&gt;&lt;/p&gt;
-&lt;p&gt;&lt;img alt="Fig 6: Specialized Grouping." class="img-responsive" src="/blog/images/optimizing-sql-dataframes/specialized-grouping.png" width="80%"/&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img alt="Fig 6: Specialized Grouping." class="img-fluid" src="/blog/images/optimizing-sql-dataframes/specialized-grouping.png" width="80%"/&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Figure 6: &lt;/strong&gt;An example of specialized operation for grouping. In (&lt;strong&gt;A&lt;/strong&gt;), input data has no specified ordering and DataFusion uses a hashing-based grouping operator (&lt;a href="https://github.com/apache/datafusion/blob/main/datafusion/physical-plan/src/aggregates/row_hash.rs"&gt;source&lt;/a&gt;) to determine distinct groups. In (&lt;strong&gt;B&lt;/strong&gt;), when the input data is ordered by the group keys, DataFusion uses a specialized grouping operator (&lt;a href="https://github.com/apache/datafusion/tree/main/datafusion/physical-plan/src/aggregates/order"&gt;source&lt;/a&gt;) to find boundaries that separate groups.&lt;/p&gt;
 &lt;h3 id="using-statistics-directly"&gt;Using Statistics Directly&lt;a class="headerlink" href="#using-statistics-directly" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;&lt;strong&gt;Why&lt;/strong&gt;: Using pre-computed statistics from a table, without actually reading or
@@ -478,7 +478,7 @@ exploration can be answered using only statistics. Optimizers often have access
 to statistics for other reasons (such as Access Path and Join Order Selection)
 and statistics are commonly stored in analytic file formats. For example, the
 &lt;a href="https://docs.rs/parquet/latest/parquet/file/metadata/index.html"&gt;Metadata&lt;/a&gt; of Apache Parquet files stores &lt;code&gt;MIN&lt;/code&gt;, &lt;code&gt;MAX&lt;/code&gt;, and &lt;code&gt;COUNT&lt;/code&gt; information.&lt;/p&gt;
-&lt;p&gt;&lt;img alt="Fig 7: Using Statistics." class="img-responsive" src="/blog/images/optimizing-sql-dataframes/using-statistics.png" width="80%"/&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img alt="Fig 7: Using Statistics." class="img-fluid" src="/blog/images/optimizing-sql-dataframes/using-statistics.png" width="80%"/&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Figure 7: &lt;/strong&gt;When the aggregation result is already stored in the statistics,
 the query can be evaluated using the values from statistics without looking at
 any compressed data. The optimizer replaces the Aggregation operation with
@@ -492,7 +492,7 @@ potentially (very) different performance. The major options in this category are
 &lt;li&gt;&lt;strong&gt;Access Paths:&lt;/strong&gt; Which copy of the data or index should be read to find matching tuples?&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;&lt;a href="https://en.wikipedia.org/wiki/Materialized_view"&gt;Materialized View&lt;/a&gt;&lt;/strong&gt;: Can the query can be rewritten to use a materialized view (partially computed query results)? This topic deserves its own blog (or book) and we don’t discuss further here.&lt;/li&gt;
 &lt;/ol&gt;
-&lt;p&gt;&lt;img alt="Fig 8: Access Path and Join Order." class="img-responsive" src="/blog/images/optimizing-sql-dataframes/access-path-and-join-order.png" width="80%"/&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img alt="Fig 8: Access Path and Join Order." class="img-fluid" src="/blog/images/optimizing-sql-dataframes/access-path-and-join-order.png" width="80%"/&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Figure 8:&lt;/strong&gt; Access Path and Join Order Selection in Query Optimizers. Optimizers use heuristics to enumerate some subset of potential join orders (shape) and access paths (color). The plan with the smallest estimated cost according to some cost model is chosen. In this case, Plan 2 with a cost of 180,000 is chosen for execution as it has the lowest estimated cost.&lt;/p&gt;
 &lt;p&gt;This class of optimizations is a hard problem for at least the following reasons:&lt;/p&gt;
 &lt;ol&gt;

@@ -74,7 +74,7 @@ the same pattern as our motivating example:&lt;/p&gt;
 &lt;pre&gt;&lt;code class="language-sql"&gt;SELECT * FROM hits WHERE "URL" LIKE '%google%' ORDER BY "EventTime" LIMIT 10;
 &lt;/code&gt;&lt;/pre&gt;
 &lt;div class="text-center"&gt;
-&lt;img alt="Q23 Performance Improvement with Dynamic Filters and Late Materialization" class="img-responsive" src="/blog/images/dynamic-filters/execution-time.svg" width="80%"/&gt;
+&lt;img alt="Q23 Performance Improvement with Dynamic Filters and Late Materialization" class="img-fluid" src="/blog/images/dynamic-filters/execution-time.svg" width="80%"/&gt;
 &lt;/div&gt;
 &lt;p&gt;&lt;strong&gt;Figure 1&lt;/strong&gt;: Execution times for ClickBench Q23 with and without dynamic
 filters (DF)&lt;sup id="fn1"&gt;&lt;a href="#footnote1"&gt;1&lt;/a&gt;&lt;/sup&gt;, and late materialization
@@ -93,7 +93,7 @@ LIMIT 10
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;A straightforward, though slow, plan to answer this query is shown in Figure 2.&lt;/p&gt;
 &lt;div class="text-center"&gt;
-&lt;img alt="Naive Query Plan" class="img-responsive" src="/blog/images/dynamic-filters/query-plan-naive.png" width="80%"/&gt;
+&lt;img alt="Naive Query Plan" class="img-fluid" src="/blog/images/dynamic-filters/query-plan-naive.png" width="80%"/&gt;
 &lt;/div&gt;
 &lt;p&gt;&lt;strong&gt;Figure 2&lt;/strong&gt;: Simple Query Plan for ClickBench Q23. Data flows in plans from the
 scan at the bottom to the limit at the top. This plan reads all 100M rows of the
@@ -106,7 +106,7 @@ than sorting all the data. For example, this operator
 is called &lt;a href="https://docs.rs/datafusion/latest/datafusion/physical_plan/struct.TopK.html"&gt;TopK in DataFusion&lt;/a&gt;, &lt;a href="https://docs.snowflake.com/en/user-guide/ui-snowsight-activity"&gt;SortWithLimit in Snowflake&lt;/a&gt;, and &lt;a href="https://duckdb.org/2024/10/25/topn.html#introduction-to-top-n"&gt;topn in
 DuckDB&lt;/a&gt;. The plan for Q23 using this specialized operator is shown in Figure 3.&lt;/p&gt;
 &lt;div class="text-center"&gt;
-&lt;img alt="TopK Query Plan" class="img-responsive" src="/blog/images/dynamic-filters/query-plan-topk.png" width="80%"/&gt;
+&lt;img alt="TopK Query Plan" class="img-fluid" src="/blog/images/dynamic-filters/query-plan-topk.png" width="80%"/&gt;
 &lt;/div&gt;
 &lt;p&gt;&lt;strong&gt;Figure 3&lt;/strong&gt;: Query plan for Q23 in DataFusion using the TopK operator. This
 plan still reads all 100M rows of the &lt;code&gt;hits&lt;/code&gt; table, but instead of first sorting
@@ -126,7 +126,7 @@ a runtime mechanism for the TopK operator to provide the current top values to
 the scan operator, allowing it to skip unnecessary rows, entire files, or portions
 of files. The plan for Q23 with dynamic filters is shown in Figure 4.&lt;/p&gt;
 &lt;div class="text-center"&gt;
-&lt;img alt="TopK Query Plan with Dynamic Filters" class="img-responsive" src="/blog/images/dynamic-filters/query-plan-topk-dynamic-filters.png" width="100%"/&gt;
+&lt;img alt="TopK Query Plan with Dynamic Filters" class="img-fluid" src="/blog/images/dynamic-filters/query-plan-topk-dynamic-filters.png" width="100%"/&gt;
 &lt;/div&gt;
 &lt;p&gt;&lt;strong&gt;Figure 4&lt;/strong&gt;: Query plan for Q23 in DataFusion with specialized TopK operator
 and dynamic filters. The TopK operator provides the minimum &lt;code&gt;EventTime&lt;/code&gt; of the
@@ -300,7 +300,7 @@ outside that range during the scan.&lt;/p&gt;
 significantly when combined with statistics pruning, late materialization, and
 other optimizations as shown in Figure 7.&lt;/p&gt;
 &lt;div class="text-center"&gt;
-&lt;img alt="Join Performance Improvements with Dynamic Filters" class="img-responsive" src="/blog/images/dynamic-filters/join-performance.svg" width="80%"/&gt;
+&lt;img alt="Join Performance Improvements with Dynamic Filters" class="img-fluid" src="/blog/images/dynamic-filters/join-performance.svg" width="80%"/&gt;
 &lt;/div&gt;
 &lt;p&gt;&lt;strong&gt;Figure 7&lt;/strong&gt;: Join performance with and without dynamic filters. In DataFusion
 49.0.2 the join takes 2.5s, even with late materialization (LM) enabled. In
