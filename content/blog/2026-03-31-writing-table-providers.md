@@ -175,6 +175,9 @@ to produce:
   if you can stop reading early once you have produced enough rows, this avoids
   unnecessary work.
 
+You can also use the  [scan_with_args()](https://docs.rs/datafusion/latest/datafusion/catalog/trait.TableProvider.html#method.scan_with_args)
+variant that provides additional pushdown information for other advanced use cases.
+
 ### Keep `scan()` Lightweight
 
 This is a critical point: **`scan()` runs during planning, not execution.** It
@@ -694,40 +697,6 @@ and the partition pruning (`scan()`) work together: the first tells DataFusion
 that a `FilterExec` is unnecessary for the `date` predicate, and the second
 ensures that only the relevant directories are scanned. The actual file reading
 happens later, in the stream produced by `execute()`.
-
-## `scan` vs `scan_with_args`
-
----
-
-The examples above all use the `scan()` method, which receives projection,
-filters, and limit as separate parameters. DataFusion also provides
-[scan_with_args()], which bundles these into a structured [ScanArgs]
-parameter:
-
-```rust
-async fn scan_with_args(
-    &self,
-    args: ScanArgs<'_>,
-) -> Result<ScanResult> {
-    let projection = args.projection();
-    let filters = args.filters();
-    let limit = args.limit();
-    // ...
-}
-```
-
-`ScanArgs` is designed to be extensible -- new scan parameters can be added
-without breaking existing implementations. It also carries additional context
-not available in `scan()`, such as a `preferred_ordering` hint that lets the
-optimizer request a specific output order from your provider.
-
-If you are building a new table provider, consider implementing
-`scan_with_args()` instead of `scan()`. The default implementation of `scan()`
-delegates to `scan_with_args()`, so you only need to implement one. Existing
-providers that already implement `scan()` will continue to work without changes.
-
-[scan_with_args()]: https://docs.rs/datafusion/latest/datafusion/catalog/trait.TableProvider.html#method.scan_with_args
-[ScanArgs]: https://docs.rs/datafusion/latest/datafusion/catalog/struct.ScanArgs.html
 
 ## Putting It All Together
 
