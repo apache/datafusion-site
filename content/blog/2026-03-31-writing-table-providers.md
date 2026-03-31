@@ -1,7 +1,7 @@
 ---
 layout: post
 title: Writing Custom Table Providers in Apache DataFusion
-date: 2026-03-20
+date: 2026-03-31
 author: Tim Saucer (rerun.io)
 categories: [tutorial]
 ---
