@@ -600,27 +600,6 @@ column, the provider can skip entire directories -- avoiding the I/O of listing
 and reading files that cannot possibly match the query.
 
 ```rust
-use std::any::Any;
-use std::collections::HashMap;
-use std::sync::Arc;
-
-use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
-use arrow::array::{Date32Array, Float64Array, StringArray};
-use arrow::record_batch::RecordBatch;
-use datafusion::catalog::TableProvider;
-use datafusion::common::Result;
-use datafusion::datasource::TableType;
-use datafusion::execution::SendableRecordBatchStream;
-use datafusion::logical_expr::Expr;
-use datafusion::logical_expr::TableProviderFilterPushDown;
-use datafusion::physical_expr::EquivalenceProperties;
-use datafusion::physical_plan::execution_plan::{Boundedness, EmissionType};
-use datafusion::physical_plan::stream::RecordBatchStreamAdapter;
-use datafusion::physical_plan::{
-    ExecutionPlan, Partitioning, PlanProperties,
-};
-use futures::stream;
-
 /// A table provider backed by date-partitioned directories.
 /// Each date directory contains data files; by filtering on the
 /// `date` column we can skip entire directories of I/O.
