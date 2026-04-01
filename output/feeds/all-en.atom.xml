@@ -2290,8 +2290,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 {% endcomment %}
 --&gt;
-&lt;div style="display: flex; align-items: center; gap: 20px; margin-bottom: 20px;"&gt;
-&lt;div style="flex: 1;"&gt;
+&lt;div class="row align-items-center mb-3"&gt;
+&lt;div class="col-md-7"&gt;
 
 Databases are some of the most complex yet interesting pieces of software. They are amazing pieces of abstraction: query engines optimize and execute complex plans, storage engines provide sophisticated infrastructure as the backbone of the system, while intricate file formats lay the groundwork for particular workloads. All of this is …&lt;/div&gt;&lt;/div&gt;</summary><content type="html">&lt;!--
 {% comment %}
@@ -2311,16 +2311,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 {% endcomment %}
 --&gt;
-&lt;div style="display: flex; align-items: center; gap: 20px; margin-bottom: 20px;"&gt;
-&lt;div style="flex: 1;"&gt;
+&lt;div class="row align-items-center mb-3"&gt;
+&lt;div class="col-md-7"&gt;
 
 Databases are some of the most complex yet interesting pieces of software. They are amazing pieces of abstraction: query engines optimize and execute complex plans, storage engines provide sophisticated infrastructure as the backbone of the system, while intricate file formats lay the groundwork for particular workloads. All of this is exposed by a user-friendly interface and query languages (typically a dialect of SQL).
 &lt;br/&gt;&lt;br/&gt;
 Starting a journey learning about database internals can be daunting. With so many topics that are whole PhD degrees themselves, finding a place to start is difficult. In this blog post, I will share my early journey in the database world and a quick lesson on one of the first topics I dove into. If you are new to the space, this post will help you get your first foot into the database world, and if you are already a veteran, you may still learn something new.
 
 &lt;/div&gt;
-&lt;div style="flex: 0 0 40%; text-align: center;"&gt;
-&lt;img alt="Database System Components" class="img-fluid" src="/blog/images/avoid-consecutive-repartitions/database_system_diagram.png" width="100%"/&gt;
+&lt;div class="col-md-5 text-center"&gt;
+&lt;img alt="Database System Components" class="img-fluid" src="/blog/images/avoid-consecutive-repartitions/database_system_diagram.png"/&gt;
 &lt;/div&gt;
 &lt;/div&gt;
 &lt;hr/&gt;
@@ -2361,29 +2361,29 @@ DataFusion achieves multi-core parallelism through the use of "exchange operator
 &lt;h3 id="what-is-repartitioning"&gt;What is Repartitioning?&lt;a class="headerlink" href="#what-is-repartitioning" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;Partitioning is a "divide-and-conquer" approach to executing a query. Each partition is a subset of the data that is being processed on a single core. Repartitioning is an operation that redistributes data across different partitions to balance workloads, reduce data skew, and increase parallelism. Two repartitioning methods are used in DataFusion: round-robin and hash.&lt;/p&gt;
 &lt;h4 id="round-robin-repartitioning"&gt;&lt;strong&gt;Round-Robin Repartitioning&lt;/strong&gt;&lt;a class="headerlink" href="#round-robin-repartitioning" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h4&gt;
-&lt;div style="display: flex; align-items: top; gap: 20px; margin-bottom: 20px;"&gt;
-&lt;div style="flex: 1;"&gt;
+&lt;div class="row align-items-start mb-3"&gt;
+&lt;div class="col-md-9"&gt;
 
 Round-robin repartitioning is the simplest partitioning strategy. Incoming data is processed in batches (chunks of rows), and these batches are distributed across partitions cyclically or sequentially, with each new batch assigned to the next available partition.
 &lt;br/&gt;&lt;br/&gt;
 Round-robin repartitioning is useful when the data grouping isn't known or when aiming for an even distribution across partitions. Because it simply assigns batches in order without inspecting their contents, it is a low-overhead way to increase parallelism for downstream operations.
 
 &lt;/div&gt;
-&lt;div style="flex: 0 0 25%; text-align: center;"&gt;
-&lt;img alt="Round-Robin Repartitioning" class="img-fluid" src="/blog/images/avoid-consecutive-repartitions/round_robin_repartitioning.png" width="100%"/&gt;
+&lt;div class="col-md-3 text-center"&gt;
+&lt;img alt="Round-Robin Repartitioning" class="img-fluid" src="/blog/images/avoid-consecutive-repartitions/round_robin_repartitioning.png"/&gt;
 &lt;/div&gt;
 &lt;/div&gt;
 &lt;h4 id="hash-repartitioning"&gt;&lt;strong&gt;Hash Repartitioning&lt;/strong&gt;&lt;a class="headerlink" href="#hash-repartitioning" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h4&gt;
-&lt;div style="display: flex; align-items: top; gap: 20px; margin-bottom: 20px;"&gt;
-&lt;div style="flex: 1;"&gt;
+&lt;div class="row align-items-start mb-3"&gt;
+&lt;div class="col-md-9"&gt;
 
 Hash repartitioning distributes data based on a hash function applied to one or more columns, called the partitioning key. Rows with the same hash value are placed in the same partition.
 &lt;br/&gt;&lt;br/&gt;
 Hash repartitioning is useful when working with grouped data. Imagine you have a database containing information on company sales, and you are looking to find the total revenue each store produced. Hash repartitioning would make this query much more efficient. Rather than iterating over the data on a single thread and keeping a running sum for each store, it would be better to hash repartition on the store column and have multiple threads calculate individual store sales.
 
 &lt;/div&gt;
-&lt;div style="flex: 0 0 25%; text-align: center;"&gt;
-&lt;img alt="Hash Repartitioning" class="img-fluid" src="/blog/images/avoid-consecutive-repartitions/hash_repartitioning.png" width="100%"/&gt;
+&lt;div class="col-md-3 text-center"&gt;
+&lt;img alt="Hash Repartitioning" class="img-fluid" src="/blog/images/avoid-consecutive-repartitions/hash_repartitioning.png"/&gt;
 &lt;/div&gt;
 &lt;/div&gt;
 &lt;p&gt;Note, the benefit of hash opposed to round-robin partitioning in this scenario. Hash repartitioning consolidates all rows with the same store value in distinct partitions. Because of this property we can compute the complete results for each store in parallel and merge them to get the final outcome. This parallel processing wouldn&amp;rsquo;t be possible with only round-robin partitioning as the same store value may be spread across multiple partitions, making the aggregation results partial, unable to merge them to produce a correct final outcome.&lt;/p&gt;
@@ -5556,24 +5556,24 @@ limitations under the License.
 &lt;hr/&gt;
 &lt;p&gt;A &lt;strong&gt;distinct value index&lt;/strong&gt; stores the unique values of a specific column. This type of index is effective for columns with a small number of distinct values and can be used to quickly skip files that do not match the query. These indexes are popular in several engines, such as the &lt;a href="https://clickhouse.com/docs/optimize/skipping-indexes#set"&gt;"set" Skip Index in ClickHouse&lt;/a&gt; and the &lt;a href="https://docs.influxdata.com/influxdb3/enterprise/admin/distinct-value-cache/"&gt;Distinct Value Cache&lt;/a&gt; in InfluxDB 3.0.&lt;/p&gt;
 &lt;p&gt;For example, if the files contain a column named &lt;code&gt;Category&lt;/code&gt; like this:&lt;/p&gt;
-&lt;table class="table" style="border-collapse:collapse;"&gt;
+&lt;table class="table"&gt;
 &lt;tr&gt;
-&lt;td style="border:1px solid #888;padding:2px 6px;"&gt;&lt;b&gt;&lt;code&gt;Category&lt;/code&gt;&lt;/b&gt;&lt;/td&gt;
+&lt;td&gt;&lt;b&gt;&lt;code&gt;Category&lt;/code&gt;&lt;/b&gt;&lt;/td&gt;
 &lt;/tr&gt;
 &lt;tr&gt;
-&lt;td style="border:1px solid #888;padding:2px 6px;"&gt;&lt;code&gt;foo&lt;/code&gt;&lt;/td&gt;
+&lt;td&gt;&lt;code&gt;foo&lt;/code&gt;&lt;/td&gt;
 &lt;/tr&gt;
 &lt;tr&gt;
-&lt;td style="border:1px solid #888;padding:2px 6px;"&gt;&lt;code&gt;bar&lt;/code&gt;&lt;/td&gt;
+&lt;td&gt;&lt;code&gt;bar&lt;/code&gt;&lt;/td&gt;
 &lt;/tr&gt;
 &lt;tr&gt;
-&lt;td style="border:1px solid #888;padding:2px 6px;"&gt;&lt;code&gt;...&lt;/code&gt;&lt;/td&gt;
+&lt;td&gt;&lt;code&gt;...&lt;/code&gt;&lt;/td&gt;
 &lt;/tr&gt;
 &lt;tr&gt;
-&lt;td style="border:1px solid #888;padding:2px 6px;"&gt;&lt;code&gt;baz&lt;/code&gt;&lt;/td&gt;
+&lt;td&gt;&lt;code&gt;baz&lt;/code&gt;&lt;/td&gt;
 &lt;/tr&gt;
 &lt;tr&gt;
-&lt;td style="border:1px solid #888;padding:2px 6px;"&gt;&lt;code&gt;foo&lt;/code&gt;&lt;/td&gt;
+&lt;td&gt;&lt;code&gt;foo&lt;/code&gt;&lt;/td&gt;
 &lt;/tr&gt;
 &lt;/table&gt;
 &lt;p&gt;The distinct value index will contain the values &lt;code&gt;foo&lt;/code&gt;, &lt;code&gt;bar&lt;/code&gt;, and &lt;code&gt;baz&lt;/code&gt;. In contrast, traditional min/max statistics would store only the minimum (&lt;code&gt;bar&lt;/code&gt;) and maximum (&lt;code&gt;foo&lt;/code&gt;) values, so a query like&lt;/p&gt;
@@ -6097,7 +6097,7 @@ the SQL &lt;code&gt;varchar&lt;/code&gt; columns will be mapped to the &lt;a hre
 logging, or metrics) across thread boundaries without depending on any specific instrumentation library.
 You can use the &lt;a href="https://docs.rs/datafusion/latest/datafusion/common/runtime/trait.JoinSetTracer.html"&gt;JoinSetTracer&lt;/a&gt; API to instrument DataFusion plans with your own tracing or logging libraries, or
 use pre-integrated community crates such as the &lt;a href="https://github.com/datafusion-contrib/datafusion-tracing"&gt;datafusion-tracing&lt;/a&gt; crate.&lt;/p&gt;
-&lt;div style="text-align: center;"&gt;
+&lt;div class="text-center"&gt;
 &lt;a href="https://github.com/datafusion-contrib/datafusion-tracing"&gt;
 &lt;img alt="DataFusion telemetry project logo" class="img-fluid" src="/blog/images/datafusion-47.0.0/datafusion-telemetry.png" width="50%"/&gt;
 &lt;/a&gt;
@@ -6621,7 +6621,7 @@ The task will then yield, after which the Tokio runtime resets the counter.&lt;/
 &lt;/figure&gt;
 &lt;p&gt;If we assume a task budget of 1 unit, each time Tokio schedules the task would result in the following sequence of function calls.&lt;/p&gt;
 &lt;figure&gt;
-&lt;img alt="Sequence diagram showing how the tokio task budget is used and reset." class="img-fluid" src="/blog/images/task-cancellation/tokio_budget.png" style="width: 100%; max-width: 100%"/&gt;
+&lt;img alt="Sequence diagram showing how the tokio task budget is used and reset." class="img-fluid" src="/blog/images/task-cancellation/tokio_budget.png"/&gt;
 &lt;figcaption&gt;Tokio task budget system, assuming the task budget is set to 1, for the plan above.&lt;/figcaption&gt;
 &lt;/figure&gt;
 &lt;p&gt;The aggregation stream would try to poll the merge stream in a loop.
@@ -7767,19 +7767,11 @@ limitations under the License.
 {% endcomment %}x
 --&gt;
 
-&lt;style&gt;
-/* Table borders */
-table, th, td {
-  border: 1px solid black;
-  border-collapse: collapse;
-}
-th, td {
-  padding: 3px;
-}
-&lt;/style&gt;
 &lt;p&gt;&lt;strong&gt;TLDR: TPC-H SF=100 in 1min using tpchgen-rs vs 30min+ with dbgen&lt;/strong&gt;.&lt;/p&gt;
 &lt;p&gt;3 members of the &lt;a href="https://datafusion.apache.org/"&gt;Apache DataFusion&lt;/a&gt; community used Rust and open source
-development to build &lt;a href="https://github.com/clflushopt/tpchgen-rs"&gt;tpchgen-rs&lt;/a&gt;, a fully open TPC-H data generator over …&lt;/p&gt;</summary><content type="html">&lt;!--
+development to build &lt;a href="https://github.com/clflushopt/tpchgen-rs"&gt;tpchgen-rs&lt;/a&gt;, a fully open TPC-H data generator over 20x
+faster than any other implementation we know of.&lt;/p&gt;
+&lt;p&gt;It is now possible to create …&lt;/p&gt;</summary><content type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -7796,16 +7788,6 @@ limitations under the License.
 {% endcomment %}x
 --&gt;
 
-&lt;style&gt;
-/* Table borders */
-table, th, td {
-  border: 1px solid black;
-  border-collapse: collapse;
-}
-th, td {
-  padding: 3px;
-}
-&lt;/style&gt;
 &lt;p&gt;&lt;strong&gt;TLDR: TPC-H SF=100 in 1min using tpchgen-rs vs 30min+ with dbgen&lt;/strong&gt;.&lt;/p&gt;
 &lt;p&gt;3 members of the &lt;a href="https://datafusion.apache.org/"&gt;Apache DataFusion&lt;/a&gt; community used Rust and open source
 development to build &lt;a href="https://github.com/clflushopt/tpchgen-rs"&gt;tpchgen-rs&lt;/a&gt;, a fully open TPC-H data generator over 20x
@@ -8355,8 +8337,8 @@ for the user to click on it to expand the data.&lt;/li&gt;
 &lt;/ul&gt;
 &lt;p&gt;In the below view you can see an example of some of these features such as the
 expandable text and scroll bars.&lt;/p&gt;
-&lt;figure style="text-align: center;"&gt;
-&lt;img alt="Fig 1: Example html rendering in a jupyter notebook." class="img-fluid" src="/blog/images/python-datafusion-46.0.0/html_rendering.png" width="100%"/&gt;
+&lt;figure class="text-center"&gt;
+&lt;img alt="Fig 1: Example html rendering in a jupyter notebook." class="img-fluid" src="/blog/images/python-datafusion-46.0.0/html_rendering.png"/&gt;
 &lt;figcaption&gt;
 &lt;b&gt;Figure 1&lt;/b&gt;: With the html rendering enhancements, tables are more easily
    viewable in jupyter notebooks.
@@ -9041,7 +9023,7 @@ limitations under the License.
 &lt;!-- see https://github.com/apache/datafusion/issues/11631 for details --&gt;
 &lt;h2 id="introduction"&gt;Introduction&lt;a class="headerlink" href="#introduction" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;In this blog post, we explain when an ordering requirement of an operator is satisfied by its input data. This analysis is essential for order-based optimizations and is often more complex than one might initially think.&lt;/p&gt;
-&lt;blockquote style="border-left: 4px solid #007bff; padding: 10px; background-color: #f8f9fa;"&gt;
+&lt;blockquote class="border-start border-primary border-4 ps-3 py-2 bg-light"&gt;
 &lt;strong&gt;Ordering Requirement&lt;/strong&gt; for an operator describes how the input data to that operator …&lt;/blockquote&gt;</summary><content type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
@@ -9064,7 +9046,7 @@ limitations under the License.
 &lt;!-- see https://github.com/apache/datafusion/issues/11631 for details --&gt;
 &lt;h2 id="introduction"&gt;Introduction&lt;a class="headerlink" href="#introduction" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;In this blog post, we explain when an ordering requirement of an operator is satisfied by its input data. This analysis is essential for order-based optimizations and is often more complex than one might initially think.&lt;/p&gt;
-&lt;blockquote style="border-left: 4px solid #007bff; padding: 10px; background-color: #f8f9fa;"&gt;
+&lt;blockquote class="border-start border-primary border-4 ps-3 py-2 bg-light"&gt;
 &lt;strong&gt;Ordering Requirement&lt;/strong&gt; for an operator describes how the input data to that operator must be sorted for the operator to compute the correct result. It is the job of the planner to make sure that these requirements are satisfied during execution (See DataFusion &lt;a href="https://docs.rs/datafusion/latest/datafusion/physical_optimizer/enforce_sorting/struct.EnforceSorting.html" target="_blank"&gt;EnforceSorting&lt;/a&gt; for an implementation of such a rule).
 &lt;/blockquote&gt;
 &lt;p&gt;There are various use cases where this type of analysis can be useful such as the following examples.&lt;/p&gt;
@@ -9145,7 +9127,7 @@ Being logically streamable does not guarantee that a query will execute in a str
 &lt;/tr&gt;
 &lt;/table&gt;
 &lt;p&gt;&lt;br/&gt;&lt;/p&gt;
-&lt;blockquote style="border-left: 4px solid #007bff; padding: 10px; background-color: #f8f9fa;"&gt;
+&lt;blockquote class="border-start border-primary border-4 ps-3 py-2 bg-light"&gt;
 &lt;strong&gt;How can a table have multiple orderings?&lt;/strong&gt; At first glance it may seem counterintuitive for a table to have more than one valid ordering. However, during query execution such scenarios can arise.
 
 For example consider the following query:
@@ -9206,7 +9188,7 @@ DataFusion leverages these functional dependencies to infer new orderings as dat
 &lt;li&gt;Equivalent Expression Groups (will be explained shortly)&lt;/li&gt;
 &lt;li&gt;Succinct Valid Orderings (will be explained shortly)&lt;/li&gt;
 &lt;/ul&gt;
-&lt;blockquote style="border-left: 4px solid #007bff; padding: 10px; background-color: #f8f9fa;"&gt;
+&lt;blockquote class="border-start border-primary border-4 ps-3 py-2 bg-light"&gt;
 &lt;strong&gt;Note:&lt;/strong&gt; These properties are implemented in the &lt;code&gt;EquivalenceProperties&lt;/code&gt; structure in &lt;code&gt;DataFusion&lt;/code&gt;, please see the &lt;a href="https://github.com/apache/datafusion/blob/f47ea73b87eec4af044f9b9923baf042682615b2/datafusion/physical-expr/src/equivalence/properties/mod.rs#L134" target="_blank"&gt;source&lt;/a&gt; for more details&lt;br/&gt;
 &lt;/blockquote&gt;
 &lt;p&gt;These properties allow us to analyze whether the ordering requirement is satisfied by the data already.&lt;/p&gt;
@@ -9216,7 +9198,7 @@ DataFusion leverages these functional dependencies to infer new orderings as dat
 &lt;ul&gt;
 &lt;li&gt;Columns &lt;code&gt;hostname&lt;/code&gt; and &lt;code&gt;currency&lt;/code&gt; are constant because every row in the table has the same value (&lt;code&gt;'app.example.com'&lt;/code&gt; for &lt;code&gt;hostname&lt;/code&gt;, and &lt;code&gt;'USD'&lt;/code&gt; for &lt;code&gt;currency&lt;/code&gt;) for these columns.&lt;/li&gt;
 &lt;/ul&gt;
-&lt;blockquote style="border-left: 4px solid #007bff; padding: 10px; background-color: #f8f9fa;"&gt;
+&lt;blockquote class="border-start border-primary border-4 ps-3 py-2 bg-light"&gt;
 &lt;strong&gt;Note:&lt;/strong&gt; Constant expressions can arise during query execution. For example, in following query:&lt;br/&gt;
 &lt;code&gt;SELECT hostname FROM logs&lt;/code&gt;&lt;br/&gt;&lt;code&gt;WHERE hostname='app.example.com'&lt;/code&gt; &lt;br/&gt;
     after filtering is done, for subsequent operators the &lt;code&gt;hostname&lt;/code&gt; column will be constant.
@@ -9224,7 +9206,7 @@ DataFusion leverages these functional dependencies to infer new orderings as dat
 &lt;h3 id="2-equivalent-expression-groups"&gt;2. Equivalent Expression Groups&lt;a class="headerlink" href="#2-equivalent-expression-groups" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;Equivalent expression groups are expressions that always hold the same value across rows. These expressions can be thought of as clones of each other and may arise from operations like &lt;code&gt;Filter&lt;/code&gt;, &lt;code&gt;Join&lt;/code&gt;, or &lt;code&gt;Projection&lt;/code&gt;.&lt;/p&gt;
 &lt;p&gt;In the example table, the expressions &lt;code&gt;price&lt;/code&gt; and &lt;code&gt;price_cloned&lt;/code&gt; form one equivalence group, and &lt;code&gt;time&lt;/code&gt; and &lt;code&gt;time_cloned&lt;/code&gt; form another equivalence group.&lt;/p&gt;
-&lt;blockquote style="border-left: 4px solid #007bff; padding: 10px; background-color: #f8f9fa;"&gt;
+&lt;blockquote class="border-start border-primary border-4 ps-3 py-2 bg-light"&gt;
 &lt;strong&gt;Note:&lt;/strong&gt; Equivalent expression groups can arise during the query execution. For example, in the following query:&lt;br/&gt;
 &lt;code&gt;SELECT time, time as time_cloned FROM logs&lt;/code&gt; &lt;br/&gt;
     after the projection is done, for subsequent operators &lt;code&gt;time&lt;/code&gt; and &lt;code&gt;time_cloned&lt;/code&gt; will form an equivalence group. As another example, in the following query:&lt;br/&gt;
@@ -9292,7 +9274,7 @@ Following third and fourth constraints for the simplified table, the succinct va
 &lt;code&gt;[amount ASC, price ASC]&lt;/code&gt;, &lt;br/&gt;
 &lt;code&gt;[time_bin ASC]&lt;/code&gt;,&lt;br/&gt;
 &lt;code&gt;[time ASC]&lt;/code&gt; &lt;/p&gt;
-&lt;blockquote style="border-left: 4px solid #007bff; padding: 10px; background-color: #f8f9fa;"&gt;
+&lt;blockquote class="border-start border-primary border-4 ps-3 py-2 bg-light"&gt;
 &lt;p&gt;&lt;strong&gt;How can DataFusion find orderings?&lt;/strong&gt;&lt;/p&gt; 
 DataFusion's &lt;code&gt;CREATE EXTERNAL TABLE&lt;/code&gt; has a &lt;code&gt;WITH ORDER&lt;/code&gt; clause (see &lt;a href="https://datafusion.apache.org/user-guide/sql/ddl.html#create-external-table"&gt;docs&lt;/a&gt;) to specify the known orderings of the table during table creation. For example the following query:&lt;br/&gt;
 &lt;pre&gt;&lt;code&gt;
@@ -11399,8 +11381,8 @@ the available functions and classes to see the breadth of available functionalit
 &lt;a href="https://jedi.readthedocs.io/en/latest/"&gt;Jedi&lt;/a&gt; to perform analysis of python code, provide useful
 hints, and identify usage errors. These are major tools in the python user community. With this
 release, users can fully use these tools in their workflow.&lt;/p&gt;
-&lt;figure style="text-align: center;"&gt;
-&lt;img alt="Fig 1: Enhanced tooltips in an IDE." class="img-fluid" src="/blog/images/python-datafusion-40.0.0/vscode_hover_tooltip.png" width="100%"/&gt;
+&lt;figure class="text-center"&gt;
+&lt;img alt="Fig 1: Enhanced tooltips in an IDE." class="img-fluid" src="/blog/images/python-datafusion-40.0.0/vscode_hover_tooltip.png"/&gt;
 &lt;figcaption&gt;
 &lt;b&gt;Figure 1&lt;/b&gt;: With the enhanced python wrappers, users can see helpful tool tips with
    type annotations directly in modern IDEs.
@@ -11408,8 +11390,8 @@ release, users can fully use these tools in their workflow.&lt;/p&gt;
 &lt;/figure&gt;
 &lt;p&gt;By having the type annotations, these IDEs can also identify quickly when a user has incorrectly
 used a function's arguments as shown in Figure 2.&lt;/p&gt;
-&lt;figure style="text-align: center;"&gt;
-&lt;img alt="Fig 2: Error checking in static analysis" class="img-fluid" src="/blog/images/python-datafusion-40.0.0/pylance_error_checking.png" width="100%"/&gt;
+&lt;figure class="text-center"&gt;
+&lt;img alt="Fig 2: Error checking in static analysis" class="img-fluid" src="/blog/images/python-datafusion-40.0.0/pylance_error_checking.png"/&gt;
 &lt;figcaption&gt;
 &lt;b&gt;Figure 2&lt;/b&gt;: Modern Python language servers can perform static analysis and quickly find
    errors in the arguments to functions.
@@ -12071,8 +12053,8 @@ a native Spark SQL Accelerator built on &lt;a href="https://arrow.apache.org/dat
 accelerate Spark workloads. It is designed as a drop-in
 replacement for Spark's JVM based SQL execution engine and offers significant
 performance improvements for some workloads as shown below.&lt;/p&gt;
-&lt;figure style="text-align: center;"&gt;
-&lt;img alt="Fig 1: Adaptive Arrow schema architecture overview." class="img-fluid" src="/blog/images/datafusion-comet/comet-architecture.png" width="100%"/&gt;
+&lt;figure class="text-center"&gt;
+&lt;img alt="Fig 1: Adaptive Arrow schema architecture overview." class="img-fluid" src="/blog/images/datafusion-comet/comet-architecture.png"/&gt;
 &lt;figcaption&gt;
 &lt;b&gt;Figure 1&lt;/b&gt;: With Comet, users interact with the same Spark ecosystem, tools
     and APIs such as Spark SQL. Queries still run through Spark's query optimizer and planner. 
@@ -12201,16 +12183,16 @@ more than 2x faster on &lt;a href="https://benchmark.clickhouse.com/"&gt;ClickBe
   Average runtime on 25.0.0: 7.2s (for the queries that actually ran)
   Average runtime on 34.0.0: 3.6s (for the same queries that ran in 25.0.0)
 --&gt;
-&lt;figure style="text-align: center;"&gt;
-&lt;img alt="Fig 1: Adaptive Arrow schema architecture overview." class="img-fluid" src="/blog/images/datafusion-34.0.0/compare-new.png" width="100%"/&gt;
+&lt;figure class="text-center"&gt;
+&lt;img alt="Fig 1: Adaptive Arrow schema architecture overview." class="img-fluid" src="/blog/images/datafusion-34.0.0/compare-new.png"/&gt;
 &lt;figcaption&gt;
 &lt;b&gt;Figure 1&lt;/b&gt;: Performance improvement between &lt;code&gt;25.0.0&lt;/code&gt; and &lt;code&gt;34.0.0&lt;/code&gt; on ClickBench. 
     Note that DataFusion &lt;code&gt;25.0.0&lt;/code&gt;, could not run several queries due to 
     unsupported SQL (Q9, Q11, Q12, Q14) or memory requirements (Q33).
   &lt;/figcaption&gt;
 &lt;/figure&gt;
-&lt;figure style="text-align: center;"&gt;
-&lt;img alt="Fig 1: Adaptive Arrow schema architecture overview." class="img-fluid" src="/blog/images/datafusion-34.0.0/compare.png" width="100%"/&gt;
+&lt;figure class="text-center"&gt;
+&lt;img alt="Fig 1: Adaptive Arrow schema architecture overview." class="img-fluid" src="/blog/images/datafusion-34.0.0/compare.png"/&gt;
 &lt;figcaption&gt;
 &lt;b&gt;Figure 2&lt;/b&gt;: Total query runtime for DataFusion &lt;code&gt;34.0.0&lt;/code&gt; and DataFusion &lt;code&gt;25.0.0&lt;/code&gt;.
   &lt;/figcaption&gt;
