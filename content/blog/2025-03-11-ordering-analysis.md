@@ -31,7 +31,7 @@ limitations under the License.
 
 ## Introduction
 In this blog post, we explain when an ordering requirement of an operator is satisfied by its input data. This analysis is essential for order-based optimizations and is often more complex than one might initially think.
-<blockquote style="border-left: 4px solid #007bff; padding: 10px; background-color: #f8f9fa;">
+<blockquote class="border-start border-primary border-4 ps-3 py-2 bg-light">
     <strong>Ordering Requirement</strong> for an operator describes how the input data to that operator must be sorted for the operator to compute the correct result. It is the job of the planner to make sure that these requirements are satisfied during execution (See DataFusion <a href="https://docs.rs/datafusion/latest/datafusion/physical_optimizer/enforce_sorting/struct.EnforceSorting.html" target="_blank">EnforceSorting</a> for an implementation of such a rule).
 </blockquote>
 
@@ -134,7 +134,7 @@ Let's start by creating an example table that we will refer throughout the post.
 
 <br>
 
-<blockquote style="border-left: 4px solid #007bff; padding: 10px; background-color: #f8f9fa;">
+<blockquote class="border-start border-primary border-4 ps-3 py-2 bg-light">
 <strong>How can a table have multiple orderings?</strong> At first glance it may seem counterintuitive for a table to have more than one valid ordering. However, during query execution such scenarios can arise.
 
 For example consider the following query:
@@ -197,7 +197,7 @@ To solve the shortcomings above DataFusion needs to track of following propertie
 - Equivalent Expression Groups (will be explained shortly)
 - Succinct Valid Orderings (will be explained shortly)
 
-<blockquote style="border-left: 4px solid #007bff; padding: 10px; background-color: #f8f9fa;">
+<blockquote class="border-start border-primary border-4 ps-3 py-2 bg-light">
     <strong>Note:</strong> These properties are implemented in the <code>EquivalenceProperties</code> structure in <code>DataFusion</code>, please see the <a href="https://github.com/apache/datafusion/blob/f47ea73b87eec4af044f9b9923baf042682615b2/datafusion/physical-expr/src/equivalence/properties/mod.rs#L134" target="_blank">source</a> for more details<br>
 </blockquote>
 
@@ -210,7 +210,7 @@ For instance in the example table:
 
 - Columns `hostname` and `currency` are constant because every row in the table has the same value (`'app.example.com'` for `hostname`, and `'USD'` for `currency`) for these columns.
 
-<blockquote style="border-left: 4px solid #007bff; padding: 10px; background-color: #f8f9fa;">
+<blockquote class="border-start border-primary border-4 ps-3 py-2 bg-light">
     <strong>Note:</strong> Constant expressions can arise during query execution. For example, in following query:<br>
     <code>SELECT hostname FROM logs</code><br><code>WHERE hostname='app.example.com'</code> <br>
     after filtering is done, for subsequent operators the <code>hostname</code> column will be constant.
@@ -221,7 +221,7 @@ Equivalent expression groups are expressions that always hold the same value acr
 
 In the example table, the expressions `price` and `price_cloned` form one equivalence group, and `time` and `time_cloned` form another equivalence group.
 
-<blockquote style="border-left: 4px solid #007bff; padding: 10px; background-color: #f8f9fa;">
+<blockquote class="border-start border-primary border-4 ps-3 py-2 bg-light">
     <strong>Note:</strong> Equivalent expression groups can arise during the query execution. For example, in the following query:<br>
     <code>SELECT time, time as time_cloned FROM logs</code> <br>
     after the projection is done, for subsequent operators <code>time</code> and <code>time_cloned</code> will form an equivalence group. As another example, in the following query:<br>
@@ -293,7 +293,7 @@ Following third and fourth constraints for the simplified table, the succinct va
 `[time_bin ASC]`,  
 `[time ASC]`  
 
-<blockquote style="border-left: 4px solid #007bff; padding: 10px; background-color: #f8f9fa;">
+<blockquote class="border-start border-primary border-4 ps-3 py-2 bg-light">
 <p><strong>How can DataFusion find orderings?</strong></p> 
 DataFusion's <code>CREATE EXTERNAL TABLE</code> has a <code>WITH ORDER</code> clause (see <a href="https://datafusion.apache.org/user-guide/sql/ddl.html#create-external-table">docs</a>) to specify the known orderings of the table during table creation. For example the following query:<br>
 <pre><code>
