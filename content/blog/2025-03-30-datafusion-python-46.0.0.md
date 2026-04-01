@@ -177,10 +177,9 @@ for the user to click on it to expand the data.
 In the below view you can see an example of some of these features such as the
 expandable text and scroll bars.
 
-<figure style="text-align: center;">
+<figure class="text-center">
   <img 
     src="/blog/images/python-datafusion-46.0.0/html_rendering.png" 
-    width="100%"
     class="img-fluid"
     alt="Fig 1: Example html rendering in a jupyter notebook."
   >

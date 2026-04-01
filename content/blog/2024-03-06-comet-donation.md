@@ -35,10 +35,9 @@ accelerate Spark workloads. It is designed as a drop-in
 replacement for Spark's JVM based SQL execution engine and offers significant
 performance improvements for some workloads as shown below.
 
-<figure style="text-align: center;">
+<figure class="text-center">
   <img 
     src="/blog/images/datafusion-comet/comet-architecture.png" 
-    width="100%" 
     class="img-fluid" 
     alt="Fig 1: Adaptive Arrow schema architecture overview."
   >
