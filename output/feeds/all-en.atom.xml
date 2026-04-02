@@ -1,5 +1,183 @@
 <?xml version="1.0" encoding="utf-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog</title><link href="https://datafusion.apache.org/blog/" rel="alternate"></link><link href="https://datafusion.apache.org/blog/feeds/all-en.atom.xml" rel="self"></link><id>https://datafusion.apache.org/blog/</id><updated>2026-03-31T00:00:00+00:00</updated><subtitle></subtitle><entry><title>Writing Custom Table Providers in Apache DataFusion</title><link href="https://datafusion.apache.org/blog/2026/03/31/writing-table-providers" rel="alternate"></link><published>2026-03-31T00:00:00+00:00</published><updated>2026-03-31T00:00:00+00:00</updated><author><name>Tim Saucer (rerun.io)</name></author><id>tag:datafusion.apache.org,2026-03-31:/blog/2026/03/31/writing-table-providers</id><summary type="html">&lt;!--
+<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog</title><link href="https://datafusion.apache.org/blog/" rel="alternate"></link><link href="https://datafusion.apache.org/blog/feeds/all-en.atom.xml" rel="self"></link><id>https://datafusion.apache.org/blog/</id><updated>2026-04-02T00:00:00+00:00</updated><subtitle></subtitle><entry><title>Apache DataFusion 53.0.0 Released</title><link href="https://datafusion.apache.org/blog/2026/04/02/datafusion-53.0.0" rel="alternate"></link><published>2026-04-02T00:00:00+00:00</published><updated>2026-04-02T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2026-04-02:/blog/2026/04/02/datafusion-53.0.0</id><summary type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+
+&lt;p&gt;We are proud to announce the release of &lt;a href="https://crates.io/crates/datafusion/53.0.0"&gt;DataFusion 53.0.0&lt;/a&gt;. This post highlights
+some of the major improvements since &lt;a href="https://datafusion.apache.org/blog/2026/01/12/datafusion-52.0.0/"&gt;DataFusion 52.0.0&lt;/a&gt;. The complete list of
+changes is available in the &lt;a href="https://github.com/apache/datafusion/blob/branch-53/dev/changelog/53.0.0.md"&gt;changelog&lt;/a&gt;. Thanks to the &lt;a href="https://github.com/apache/datafusion/blob/branch-53/dev/changelog/53.0.0.md#credits"&gt;114 contributors&lt;/a&gt; for
+making this release possible.&lt;/p&gt;
+&lt;h2 id="performance-improvements"&gt;Performance Improvements 🚀&lt;a class="headerlink" href="#performance-improvements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;&lt;img alt="Performance over time" class="img-fluid" src="/blog/images/datafusion-53.0.0/performance_over_time_clickbench.png" width="100%"/&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Figure 1&lt;/strong&gt;: Average …&lt;/p&gt;</summary><content type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+
+&lt;p&gt;We are proud to announce the release of &lt;a href="https://crates.io/crates/datafusion/53.0.0"&gt;DataFusion 53.0.0&lt;/a&gt;. This post highlights
+some of the major improvements since &lt;a href="https://datafusion.apache.org/blog/2026/01/12/datafusion-52.0.0/"&gt;DataFusion 52.0.0&lt;/a&gt;. The complete list of
+changes is available in the &lt;a href="https://github.com/apache/datafusion/blob/branch-53/dev/changelog/53.0.0.md"&gt;changelog&lt;/a&gt;. Thanks to the &lt;a href="https://github.com/apache/datafusion/blob/branch-53/dev/changelog/53.0.0.md#credits"&gt;114 contributors&lt;/a&gt; for
+making this release possible.&lt;/p&gt;
+&lt;h2 id="performance-improvements"&gt;Performance Improvements 🚀&lt;a class="headerlink" href="#performance-improvements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;&lt;img alt="Performance over time" class="img-fluid" src="/blog/images/datafusion-53.0.0/performance_over_time_clickbench.png" width="100%"/&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Figure 1&lt;/strong&gt;: Average and median normalized execution times for DataFusion 53.0.0 on ClickBench queries, compared to previous releases.
+Query times are normalized using the ClickBench definition. See the
+&lt;a href="https://alamb.github.io/datafusion-benchmarking/"&gt;DataFusion Benchmarking Page&lt;/a&gt;
+for more details.&lt;/p&gt;
+&lt;p&gt;DataFusion 53 continues the project-wide focus on performance. This release
+reduces planning overhead, skips more unnecessary I/O, and pushes more work
+into earlier and cheaper stages of execution.&lt;/p&gt;
+&lt;h3 id="limit-aware-parquet-row-group-pruning"&gt;&lt;code&gt;LIMIT&lt;/code&gt;-Aware Parquet Row Group Pruning&lt;a class="headerlink" href="#limit-aware-parquet-row-group-pruning" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;DataFusion 53 includes a new optimization that makes Parquet pruning aware of
+&lt;code&gt;LIMIT&lt;/code&gt;. This optimization is described in full in &lt;a href="https://datafusion.apache.org/blog/2026/03/20/limit-pruning/"&gt;limit pruning blog post&lt;/a&gt;. If
+DataFusion can prove that an entire row group matches the predicate, and those
+fully matching row groups contain enough rows to satisfy the &lt;code&gt;LIMIT&lt;/code&gt;, partially
+matching row groups are skipped entirely.&lt;/p&gt;
+&lt;figure&gt;
+&lt;img alt="Pruning pipeline with limit pruning highlighted" class="img-fluid" src="/blog/images/limit-pruning/pruning-pipeline.svg" width="80%"/&gt;
+&lt;figcaption&gt;&lt;b&gt;Figure 2&lt;/b&gt;: Limit pruning is inserted between row group and page index pruning.&lt;/figcaption&gt;
+&lt;/figure&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/xudong963"&gt;@xudong963&lt;/a&gt; for implementing this feature. Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/18868"&gt;#18868&lt;/a&gt;&lt;/p&gt;
+&lt;h3 id="improved-filter-pushdown"&gt;Improved Filter Pushdown&lt;a class="headerlink" href="#improved-filter-pushdown" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;DataFusion 53 pushes filters down through more join types and through &lt;code&gt;UnionExec&lt;/code&gt;,
+and expands support for pushing down &lt;a href="https://datafusion.apache.org/blog/2025/09/10/dynamic-filters"&gt;dynamic filters&lt;/a&gt;. More
+pushdown means fewer rows flow into joins, repartitions, and later operators,
+which reduces CPU, memory, and I/O.&lt;/p&gt;
+&lt;p&gt;For example:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT *
+FROM (
+    SELECT *
+    FROM t1
+    LEFT ANTI JOIN t2 ON t1.k = t2.k
+) a
+JOIN t1 b ON a.k = b.k
+WHERE b.v = 1;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Now DataFusion can often transform the physical plan so filters and
+&lt;a href="https://datafusion.apache.org/blog/2025/09/10/dynamic-filters"&gt;dynamic filters&lt;/a&gt; are pushed deeper into the plan, even through subqueries and
+nested joins. In this example, the filter on &lt;code&gt;b.v&lt;/code&gt; helps produce dynamic filters
+that can be pushed into both sides of the nested anti join.&lt;/p&gt;
+&lt;figure&gt;
+&lt;img alt="Before and after diagram of dynamic filter pushdown through a subquery with nested joins" class="img-fluid" src="/blog/images/datafusion-53.0.0/join-filter-pushdown.svg" width="100%"/&gt;
+&lt;figcaption&gt;&lt;b&gt;Figure 3&lt;/b&gt;: DataFusion 53 pushes dynamic filters through subqueries and into both sides of nested joins.&lt;/figcaption&gt;
+&lt;/figure&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/nuno-faria"&gt;@nuno-faria&lt;/a&gt;, &lt;a href="https://github.com/haohuaijin"&gt;@haohuaijin&lt;/a&gt;, and &lt;a href="https://github.com/jackkleeman"&gt;@jackkleeman&lt;/a&gt; for
+driving this work. Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/19918"&gt;#19918&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/20145"&gt;#20145&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/20192"&gt;#20192&lt;/a&gt;&lt;/p&gt;
+&lt;h3 id="faster-query-planning"&gt;Faster Query Planning&lt;a class="headerlink" href="#faster-query-planning" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;DataFusion 53 improves query planning performance by making immutable pieces of
+execution plans cheaper to clone. This helps applications that need extremely
+low latency, plan many or complex queries, or use prepared statements or
+parameterized queries. In some benchmarks, overall execution time drops from
+roughly 4-5 ms to about 100 us.&lt;/p&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/askalt"&gt;@askalt&lt;/a&gt; for leading this work. Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/19792"&gt;#19792&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/19893"&gt;#19893&lt;/a&gt;&lt;/p&gt;
+&lt;h3 id="faster-functions"&gt;Faster Functions&lt;a class="headerlink" href="#faster-functions" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;DataFusion includes &lt;a href="https://datafusion.apache.org/user-guide/sql/scalar_functions.html"&gt;235 built-in functions&lt;/a&gt;. Improving the performance of these
+functions benefits a wide range of workloads. This release improves the performance of 42 of those
+functions, such as &lt;a href="https://github.com/apache/datafusion/pull/20295"&gt;strpos&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/20344"&gt;replace&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/20317"&gt;concat&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/20305"&gt;translate&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/20374"&gt;array_has&lt;/a&gt;,
+&lt;a href="https://github.com/apache/datafusion/pull/20504"&gt;array_agg&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/19980"&gt;left&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/20069"&gt;right&lt;/a&gt;, and &lt;a href="https://github.com/apache/datafusion/pull/20097"&gt;case_when&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Thanks to the contributors who drove this work, especially &lt;a href="https://github.com/neilconway"&gt;@neilconway&lt;/a&gt;,
+&lt;a href="https://github.com/theirix"&gt;@theirix&lt;/a&gt;, &lt;a href="https://github.com/lyne7-sc"&gt;@lyne7-sc&lt;/a&gt;, &lt;a href="https://github.com/kumarUjjawal"&gt;@kumarUjjawal&lt;/a&gt;, &lt;a href="https://github.com/pepijnve"&gt;@pepijnve&lt;/a&gt;, &lt;a href="https://github.com/zhangxffff"&gt;@zhangxffff&lt;/a&gt;, and
+&lt;a href="https://github.com/UBarney"&gt;@UBarney&lt;/a&gt;.&lt;/p&gt;
+&lt;h3 id="nested-field-pushdown"&gt;Nested Field Pushdown&lt;a class="headerlink" href="#nested-field-pushdown" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;DataFusion 53 pushes expressions such as &lt;code&gt;get_field&lt;/code&gt; down the plan and into data
+sources. This is especially important for nested data such as structs in
+Parquet files. Instead of reading an entire struct column and then extracting
+the field of interest, DataFusion 53 pushes the field extraction into the scan.&lt;/p&gt;
+&lt;p&gt;For example, the following query reads a struct column &lt;code&gt;s&lt;/code&gt; and extracts the
+&lt;code&gt;label&lt;/code&gt; field for rows where the &lt;code&gt;value&lt;/code&gt; field is greater than 150:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT id, s['label']
+FROM t
+WHERE s['value'] &amp;gt; 150;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;figure&gt;
+&lt;img alt="Before and after diagram of field access pushdown into a data source" class="img-fluid" src="/blog/images/datafusion-53.0.0/field-access-pushdown.svg" width="80%"/&gt;
+&lt;figcaption&gt;&lt;b&gt;Figure 4&lt;/b&gt;: DataFusion 53 pushes field-access expressions closer to the scan.&lt;/figcaption&gt;
+&lt;/figure&gt;
+&lt;p&gt;Special thanks to &lt;a href="https://github.com/adriangb"&gt;@adriangb&lt;/a&gt; for designing and implementing this optimizer
+work. Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/20065"&gt;#20065&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/20117"&gt;#20117&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/20239"&gt;#20239&lt;/a&gt;&lt;/p&gt;
+&lt;h2 id="new-features"&gt;New Features ✨&lt;a class="headerlink" href="#new-features" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;JSON Array File Support&lt;/strong&gt;: DataFusion 53 can now read JSON arrays such as
+  &lt;code&gt;[{...}, {...}]&lt;/code&gt; directly as multiple rows, including streaming inputs from
+  object stores. Thanks to &lt;a href="https://github.com/zhuqi-lucas"&gt;@zhuqi-lucas&lt;/a&gt; for implementing this feature.
+  Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/19924"&gt;#19924&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Support for &lt;code&gt;:&lt;/code&gt; operator&lt;/strong&gt;: DataFusion can plan queries such as
+  &lt;code&gt;SELECT payload:'user_id' FROM events;&lt;/code&gt;, enabling better &lt;a href="https://parquet.apache.org/blog/2026/02/27/variant-type-in-apache-parquet-for-semi-structured-data/"&gt;Parquet Variant&lt;/a&gt;
+  support via &lt;a href="https://github.com/datafusion-contrib/datafusion-variant"&gt;datafusion-variant&lt;/a&gt;. Thanks to &lt;a href="https://github.com/Samyak2"&gt;@Samyak2&lt;/a&gt;. Related PRs:
+  &lt;a href="https://github.com/apache/datafusion/pull/20717"&gt;#20717&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;New SQL&lt;/strong&gt;: DataFusion supports additional set-comparison subqueries, null-aware
+  anti join, and deletion predicates. Thanks to &lt;a href="https://github.com/waynexia"&gt;@waynexia&lt;/a&gt;, &lt;a href="https://github.com/viirya"&gt;@viirya&lt;/a&gt;, and
+  &lt;a href="https://github.com/askalt"&gt;@askalt&lt;/a&gt; for key contributions in this area. Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/19109"&gt;#19109&lt;/a&gt;,
+  &lt;a href="https://github.com/apache/datafusion/pull/19635"&gt;#19635&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/20137"&gt;#20137&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Spark-Compatible Functions&lt;/strong&gt;: This release includes almost 20 new or improved
+  Spark-compatible functions and behaviors in the &lt;a href="https://docs.rs/datafusion-spark/latest/datafusion_spark/index.html"&gt;datafusion-spark crate&lt;/a&gt;.
+  It includes functions such as &lt;a href="https://github.com/apache/datafusion/pull/19699"&gt;collect_list&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/19845"&gt;date_diff&lt;/a&gt;,
+  &lt;a href="https://github.com/apache/datafusion/pull/19880"&gt;from_utc_timestamp&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/20412"&gt;json_tuple&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/20440"&gt;arrays_zip&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/20479"&gt;bin&lt;/a&gt;, and &lt;a href="https://github.com/apache/datafusion/pull/20685"&gt;array_contains&lt;/a&gt;.
+  Thanks to the contributors who drove this work, especially &lt;a href="https://github.com/cht42"&gt;@cht42&lt;/a&gt;,
+  &lt;a href="https://github.com/CuteChuanChuan"&gt;@CuteChuanChuan&lt;/a&gt;, &lt;a href="https://github.com/SubhamSinghal"&gt;@SubhamSinghal&lt;/a&gt;, &lt;a href="https://github.com/kazantsev-maksim"&gt;@kazantsev-maksim&lt;/a&gt;, &lt;a href="https://github.com/unknowntpo"&gt;@unknowntpo&lt;/a&gt;,
+  &lt;a href="https://github.com/aryan-212"&gt;@aryan-212&lt;/a&gt;, &lt;a href="https://github.com/hsiang-c"&gt;@hsiang-c&lt;/a&gt;, and &lt;a href="https://github.com/davidlghellin"&gt;@davidlghellin&lt;/a&gt;.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id="stability-and-release-engineering"&gt;Stability and Release Engineering 🦺&lt;a class="headerlink" href="#stability-and-release-engineering" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;The community spent significant time this release cycle stabilizing the release
+branch and improving the release process. While such improvements are not as
+headline-friendly as new features, they are highly important for real
+deployments. We are discussing ways to improve the process on &lt;a href="https://github.com/apache/datafusion/issues/21034"&gt;#21034&lt;/a&gt; and would
+welcome suggestions and contributions to help with release engineering work in
+the future.&lt;/p&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/comphead"&gt;@comphead&lt;/a&gt; for running this release, and to &lt;a href="https://github.com/jonathanc-n"&gt;@jonathanc-n&lt;/a&gt;, &lt;a href="https://github.com/alamb"&gt;@alamb&lt;/a&gt;,
+&lt;a href="https://github.com/xanderbailey"&gt;@xanderbailey&lt;/a&gt;, &lt;a href="https://github.com/haohuaijin"&gt;@haohuaijin&lt;/a&gt;, &lt;a href="https://github.com/friendlymatthew"&gt;@friendlymatthew&lt;/a&gt;, &lt;a href="https://github.com/fwojciec"&gt;@fwojciec&lt;/a&gt;,
+&lt;a href="https://github.com/Kontinuation"&gt;@Kontinuation&lt;/a&gt;, &lt;a href="https://github.com/nathanb9"&gt;@nathanb9&lt;/a&gt;, and many others who helped stabilize the release
+branch.&lt;/p&gt;
+&lt;h2 id="upgrade-notes"&gt;Upgrade Notes&lt;a class="headerlink" href="#upgrade-notes" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;DataFusion 53 includes some breaking changes, including updates to the SQL
+parser, optimizer behavior, and some physical-plan APIs. Please see the &lt;a href="https://datafusion.apache.org/library-user-guide/upgrading/index.html"&gt;upgrade
+guide&lt;/a&gt; and &lt;a href="https://github.com/apache/datafusion/blob/branch-53/dev/changelog/53.0.0.md"&gt;changelog&lt;/a&gt; for the full details before upgrading.&lt;/p&gt;
+&lt;h2 id="known-issues"&gt;Known Issues&lt;a class="headerlink" href="#known-issues" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;A small number of issues were discovered after the 53.0.0 release,
+and we expect to publish DataFusion 53.1.0 soon. See the &lt;a href="https://github.com/apache/datafusion/issues/21079"&gt;53.1.0 release tracking
+issue&lt;/a&gt; for the latest status.&lt;/p&gt;
+&lt;h2 id="thank-you"&gt;Thank You&lt;a class="headerlink" href="#thank-you" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Thank you to everyone in the DataFusion community who contributed code, reviews,
+testing, bug reports, documentation, and release engineering work for 53.0.0.
+This release contains direct contributions from 114 different people, and we are
+grateful for the time and effort that everyone put in to make it happen.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Writing Custom Table Providers in Apache DataFusion</title><link href="https://datafusion.apache.org/blog/2026/03/31/writing-table-providers" rel="alternate"></link><published>2026-03-31T00:00:00+00:00</published><updated>2026-03-31T00:00:00+00:00</updated><author><name>Tim Saucer (rerun.io)</name></author><id>tag:datafusion.apache.org,2026-03-31:/blog/2026/03/31/writing-table-providers</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
