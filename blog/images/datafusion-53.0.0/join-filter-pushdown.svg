@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 430">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#555"/>
+    </marker>
+  </defs>
+  <style>
+    text { font-family: 'Segoe UI', Arial, sans-serif; }
+    .title { font-size: 20px; font-weight: 700; fill: #222; }
+    .note { font-size: 13px; fill: #555; text-anchor: middle; }
+    .stage { fill: #f0f4ff; stroke: #4a7bcc; stroke-width: 1.5; rx: 8; }
+    .highlight { fill: #fff3e0; stroke: #e67e22; stroke-width: 2; rx: 8; }
+    .label { font-size: 14px; fill: #333; text-anchor: middle; font-weight: 600; }
+    .sublabel { font-size: 12px; fill: #666; text-anchor: middle; }
+    .group { fill: none; stroke: #cfd7e6; stroke-width: 1.5; stroke-dasharray: 5 4; rx: 10; }
+  </style>
+
+  <text class="title" x="300" y="30" text-anchor="middle">Before</text>
+  <text class="note" x="300" y="50" text-anchor="middle">Dynamic filters stop at the subquery boundary</text>
+  <line x1="40" y1="60" x2="560" y2="60" stroke="#ddd" stroke-width="1"/>
+
+  <rect class="stage" x="235" y="78" width="130" height="42"/>
+  <text class="label" x="300" y="104">HashJoinExec</text>
+  <text class="sublabel" x="300" y="118">a.k = b.k</text>
+
+  <line x1="270" y1="120" x2="170" y2="168" stroke="#555" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="330" y1="120" x2="430" y2="168" stroke="#555" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <rect class="group" x="35" y="172" width="290" height="190" rx="10"/>
+  <text class="note" x="180" y="190">Subquery a</text>
+
+  <rect class="stage" x="105" y="205" width="130" height="42"/>
+  <text class="label" x="170" y="231">HashJoinExec</text>
+  <text class="sublabel" x="170" y="245">LeftAnti</text>
+
+  <line x1="145" y1="247" x2="120" y2="290" stroke="#555" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="195" y1="247" x2="240" y2="290" stroke="#555" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <rect class="stage" x="60" y="294" width="120" height="52"/>
+  <text class="label" x="120" y="320">DataSourceExec</text>
+  <text class="sublabel" x="120" y="338">t1</text>
+
+  <rect class="stage" x="185" y="294" width="120" height="52"/>
+  <text class="label" x="245" y="320">DataSourceExec</text>
+  <text class="sublabel" x="245" y="338">t2</text>
+
+  <rect class="highlight" x="365" y="205" width="130" height="58"/>
+  <text class="label" x="430" y="230">FilterExec</text>
+  <text class="sublabel" x="430" y="248">b.v = 1</text>
+
+  <line x1="430" y1="263" x2="430" y2="290" stroke="#555" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <rect class="stage" x="365" y="294" width="130" height="52"/>
+  <text class="label" x="430" y="320">DataSourceExec</text>
+  <text class="sublabel" x="430" y="338">t1 as b</text>
+
+  <text class="note" x="180" y="382">No dynamic filters reach the nested join inputs</text>
+
+  <text class="title" x="900" y="30" text-anchor="middle">After</text>
+  <text class="note" x="900" y="50" text-anchor="middle">Dynamic filters pushed through the subquery into both scans</text>
+  <line x1="640" y1="60" x2="1160" y2="60" stroke="#ddd" stroke-width="1"/>
+
+  <rect class="stage" x="835" y="78" width="130" height="42"/>
+  <text class="label" x="900" y="104">HashJoinExec</text>
+  <text class="sublabel" x="900" y="118">a.k = b.k</text>
+
+  <line x1="870" y1="120" x2="790" y2="168" stroke="#555" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="930" y1="120" x2="1030" y2="168" stroke="#555" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <rect class="group" x="620" y="172" width="340" height="190" rx="10"/>
+  <text class="note" x="790" y="190">Subquery a</text>
+
+  <rect class="stage" x="725" y="205" width="130" height="42"/>
+  <text class="label" x="790" y="231">HashJoinExec</text>
+  <text class="sublabel" x="790" y="245">LeftAnti</text>
+
+  <line x1="765" y1="247" x2="720" y2="290" stroke="#555" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="815" y1="247" x2="880" y2="290" stroke="#555" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <rect class="highlight" x="640" y="294" width="150" height="68"/>
+  <text class="label" x="715" y="320">DataSourceExec</text>
+  <text class="sublabel" x="715" y="338">t1 IN &lt;Dynamic Filter&gt;</text>
+
+  <rect class="highlight" x="805" y="294" width="150" height="68"/>
+  <text class="label" x="880" y="320">DataSourceExec</text>
+  <text class="sublabel" x="880" y="338">t2 IN &lt;Dynamic Filter&gt;</text>
+
+  <rect class="highlight" x="965" y="205" width="130" height="58"/>
+  <text class="label" x="1030" y="230">FilterExec</text>
+  <text class="sublabel" x="1030" y="248">b.v = 1</text>
+
+  <line x1="1030" y1="263" x2="1030" y2="290" stroke="#555" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <rect class="stage" x="965" y="294" width="130" height="52"/>
+  <text class="label" x="1030" y="320">DataSourceExec</text>
+  <text class="sublabel" x="1030" y="338">t1 as b</text>
+
+  <text class="note" x="790" y="398">Dynamic filters are pushed into both sides of the nested anti join</text>
+</svg>

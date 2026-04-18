@@ -1,0 +1,248 @@
+<!doctype html>
+<html class="no-js" lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apache DataFusion Comet 0.15.0 Release - Apache DataFusion Blog</title>
+<link href="/blog/css/bootstrap.min.css" rel="stylesheet">
+<link href="/blog/css/fontawesome.all.min.css" rel="stylesheet">
+<link href="/blog/css/headerlink.css" rel="stylesheet">
+<link href="/blog/highlight/default.min.css" rel="stylesheet">
+<link href="/blog/css/app.css" rel="stylesheet">
+<link href="/blog/css/dark-mode.css" rel="stylesheet">
+<script src="/blog/js/dark-mode.js"></script>
+<script src="/blog/highlight/highlight.js"></script>
+<script>hljs.highlightAll();</script>  </head>
+  <body class="d-flex flex-column h-100">
+  <main class="flex-shrink-0">
+<!-- nav bar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark" aria-label="Fifth navbar example">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/blog/"><img src="/blog/images/logo_original4x.png" style="height: 32px;"/> Apache DataFusion Blog</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarADP" aria-controls="navbarADP" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarADP">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/about.html">About</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/feed.xml">RSS</a>
+                </li>
+            </ul>
+            <button id="dark-mode-toggle" type="button" class="dark-mode-toggle" aria-label="Toggle dark mode" aria-pressed="false" title="Toggle dark mode">
+                <span class="sun-icon" aria-hidden="true">☀</span>
+                <span class="moon-icon" aria-hidden="true">☾</span>
+            </button>
+        </div>
+    </div>
+</nav>    
+<!-- article contents -->
+<div id="contents">
+  <div class="bg-white p-4 p-md-5 rounded">
+    <div class="row justify-content-center">
+      <div class="col-12 col-md-8 main-content">
+        <h1>
+          Apache DataFusion Comet 0.15.0 Release
+        </h1>
+        <p>Posted on: Sat 18 April 2026 by pmc</p>
+
+        <aside class="toc-container d-md-none mb-2">
+          <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#key-features">Key Features</a><ul>
+<li><a href="#native-iceberg-reader-enabled-by-default">Native Iceberg Reader Enabled by Default</a></li>
+<li><a href="#auto-mode-enables-native_datafusion-scan">Auto Mode Enables native_datafusion Scan</a></li>
+<li><a href="#new-expressions-and-function-support">New Expressions and Function Support</a></li>
+<li><a href="#expanded-metrics-and-observability">Expanded Metrics and Observability</a></li>
+</ul>
+</li>
+<li><a href="#performance-improvements">Performance Improvements</a></li>
+<li><a href="#stability-and-correctness">Stability and Correctness</a></li>
+<li><a href="#dependency-upgrades">Dependency Upgrades</a></li>
+<li><a href="#deprecations-and-removals">Deprecations and Removals</a></li>
+<li><a href="#compatibility">Compatibility</a></li>
+</ul>
+</div>
+        </aside>
+
+        <!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+-->
+
+<p>The Apache DataFusion PMC is pleased to announce version 0.15.0 of the <a href="https://datafusion.apache.org/comet/">Comet</a> subproject.</p>
+<p>Comet is an accelerator for Apache Spark that translates Spark physical plans to DataFusion physical plans for
+improved performance and efficiency without requiring any code changes.</p>
+<p>This release covers approximately four weeks of development work and is the result of merging 142 PRs from 19
+contributors. See the <a href="https://github.com/apache/datafusion-comet/blob/main/dev/changelog/0.15.0.md">change log</a> for more information.</p>
+<h2 id="key-features">Key Features<a class="headerlink" href="#key-features" title="Permanent link">¶</a></h2>
+<h3 id="native-iceberg-reader-enabled-by-default">Native Iceberg Reader Enabled by Default<a class="headerlink" href="#native-iceberg-reader-enabled-by-default" title="Permanent link">¶</a></h3>
+<p>This release marks a major milestone for Iceberg users: <strong>Comet's fully-native Iceberg reader is now enabled by
+default</strong>. Workloads that read Iceberg tables will automatically benefit from native Rust-based scans built on
+iceberg-rust, with no additional configuration required.</p>
+<p>To support this change, the release bundles a broad set of Iceberg-focused improvements:</p>
+<ul>
+<li><strong>Correct classloader handling</strong>: Iceberg classes are now loaded via the thread context classloader, resolving
+  class-loading issues in environments where the executor classloader differs from the application classloader.</li>
+<li><strong>Continuous Iceberg CI</strong>: Iceberg Spark integration tests now run on every PR and push to <code>main</code>, providing
+  continuous validation of the native Iceberg code path. Test diffs for Spark 3.4 were updated to keep the matrix
+  green across supported Spark versions.</li>
+<li><strong>iceberg-rust upgrade</strong>: Comet picks up the latest iceberg-rust, pulling in fixes for Parquet reader edge cases
+  discovered in earlier testing.</li>
+<li><strong>Refreshed documentation</strong>: The Iceberg user guide has been rewritten to reflect current capabilities, and the
+  contributor guide now documents how to run the Iceberg Spark test suites locally.</li>
+</ul>
+<p>Users who need to fall back to the previous behavior can still opt out, but we encourage the community to exercise
+the native reader and report any issues.</p>
+<h3 id="auto-mode-enables-native_datafusion-scan">Auto Mode Enables <code>native_datafusion</code> Scan<a class="headerlink" href="#auto-mode-enables-native_datafusion-scan" title="Permanent link">¶</a></h3>
+<p>The <code>auto</code> scan mode now enables the <code>native_datafusion</code> scan where supported, giving users the benefits of the
+native Parquet reader without having to explicitly opt in. This is part of the ongoing effort to make
+<code>native_datafusion</code> the default Parquet path once the deprecation of <code>native_iceberg_compat</code> completes.</p>
+<h3 id="new-expressions-and-function-support">New Expressions and Function Support<a class="headerlink" href="#new-expressions-and-function-support" title="Permanent link">¶</a></h3>
+<p>This release adds support for the following:</p>
+<ul>
+<li><strong>Date/time functions</strong>: <code>days</code>, <code>hours</code>, <code>date_from_unix_date</code></li>
+<li><strong>String/JSON functions</strong>: native <code>get_json_object</code> with improved performance over the fallback path</li>
+<li><strong>Hash/math functions</strong>: <code>crc32c</code>, <code>bin</code></li>
+<li><strong>Array functions</strong>: <code>sort_array</code></li>
+<li><strong>Window functions</strong>: <code>LEAD</code> and <code>LAG</code> with <code>IGNORE NULLS</code></li>
+<li><strong>Aggregates</strong>: SQL <code>FILTER (WHERE ...)</code> clauses now execute natively; <code>Corr</code> aggregate enabled</li>
+</ul>
+<h3 id="expanded-metrics-and-observability">Expanded Metrics and Observability<a class="headerlink" href="#expanded-metrics-and-observability" title="Permanent link">¶</a></h3>
+<p>Comet metrics can now be exposed through Spark's external monitoring system, making it easier to integrate Comet
+execution statistics with existing observability dashboards. Native DataFusion scans also now report accurate
+<code>filesScanned</code> and <code>bytesScanned</code> input metrics, matching Spark's native Parquet scan reporting.</p>
+<h2 id="performance-improvements">Performance Improvements<a class="headerlink" href="#performance-improvements" title="Permanent link">¶</a></h2>
+<p>Performance was a major theme of this release, with a series of targeted optimizations across the shuffle, scan,
+and execution layers:</p>
+<ul>
+<li><strong>Shuffle read path</strong>: The native shuffle reader no longer uses FFI on the read side, removing a per-batch cost
+  that was particularly visible in shuffle-heavy queries.</li>
+<li><strong>Broadcast exchanges</strong>: Batches are now coalesced before broadcasting, reducing the number of small batches
+  crossing the JVM/native boundary.</li>
+<li><strong>Columnar-to-row (C2R)</strong>: Native C2R conversion is now exercised for a broader set of query shapes.</li>
+<li><strong>FFI-safe operators</strong>: More operators are marked as FFI-safe, avoiding unnecessary deep copies when crossing
+  the JVM/native boundary.</li>
+<li><strong>Shared memory pools</strong>: Unified memory pools are now shared across native execution contexts within a Spark
+  task, improving memory accounting and reducing fragmentation.</li>
+<li><strong>Object store caching</strong>: Object stores and bucket region lookups are cached, dramatically reducing DNS query
+  volume on workloads that open many files.</li>
+<li><strong><code>get_ranges</code> performance</strong>: Picked up an upstream <code>opendal</code> fix that restores fast range reads from object
+  storage.</li>
+<li><strong>Spill I/O</strong>: Removed a redundant <code>BufReader</code> wrapper when copying spill files to shuffle output.</li>
+</ul>
+<p>Together, these changes reduce CPU and memory overhead for shuffle-heavy, broadcast-heavy, and
+object-storage-bound workloads.</p>
+<h2 id="stability-and-correctness">Stability and Correctness<a class="headerlink" href="#stability-and-correctness" title="Permanent link">¶</a></h2>
+<p>A significant portion of this release is dedicated to stability and Spark compatibility. Highlights include:</p>
+<ul>
+<li><strong>Cast string to timestamp</strong>: Multiple fixes for UTC timestamps, timezone handling, special formats
+  (<code>epoch</code>, <code>now</code>, etc.), and compatibility with Spark's semantics.</li>
+<li><strong>Cast decimal to string</strong>: Added legacy mode handling to match Spark's output formatting.</li>
+<li><strong>String to decimal</strong>: Support for full-width characters, null characters, and negative scale.</li>
+<li><strong>Decimal arithmetic</strong>: Fixes for decimal division and additional test coverage for ANSI overflow handling,
+  including scalar decimal overflow.</li>
+<li><strong>Array expressions</strong>: Corrected <code>GetArrayItem</code> null handling for dynamic indices; <code>array_append</code> return type
+  fixed and marked <code>Compatible</code>; audited <code>array_insert</code> for correctness; <code>array_compact</code> marked <code>Compatible</code>;
+  array-to-array cast enabled.</li>
+<li><strong>DateTrunc/TimestampTrunc</strong>: Fixed native crashes when the input is a literal.</li>
+<li><strong>Ambiguous local times</strong>: Correct handling of ambiguous and non-existent local times across DST transitions.</li>
+<li><strong>Case-insensitive Parquet fields</strong>: <code>native_datafusion</code> now correctly detects duplicate/ambiguous fields in
+  case-insensitive mode and falls back where appropriate.</li>
+<li><strong>Shuffle planning</strong>: Shuffle fallback decisions are now "sticky" across planning passes, and Comet columnar
+  shuffle is skipped for stages containing DPP scans to avoid mismatched partitioning.</li>
+<li><strong>Error propagation</strong>: Native error messages are now propagated through <code>SparkException</code> even when the
+  <code>errorClass</code> is empty, and file-not-found errors flow through the standard Spark error JSON path.</li>
+<li><strong>Trigonometric compatibility</strong>: <code>tan</code> and <code>atan2</code> are now Spark-compatible.</li>
+</ul>
+<h2 id="dependency-upgrades">Dependency Upgrades<a class="headerlink" href="#dependency-upgrades" title="Permanent link">¶</a></h2>
+<p>This release upgrades to <strong>DataFusion 53.1</strong> and <strong>Arrow 58.1</strong>, and picks up the latest <code>iceberg-rust</code> release
+with additional reader fixes. The <code>jni</code> crate was upgraded to 0.22.4.</p>
+<h2 id="deprecations-and-removals">Deprecations and Removals<a class="headerlink" href="#deprecations-and-removals" title="Permanent link">¶</a></h2>
+<p>The <code>SupportsComet</code> interface has been removed, along with the Java-based Iceberg integration path (which is
+fully superseded by the native Iceberg reader). The <code>native_iceberg_compat</code> scan remains deprecated and is
+expected to be removed in a future release in favor of <code>native_datafusion</code>.</p>
+<h2 id="compatibility">Compatibility<a class="headerlink" href="#compatibility" title="Permanent link">¶</a></h2>
+<p>Supported platforms include Spark 3.4.3, 3.5.4–3.5.8, and Spark 4.0.x with various JDK and Scala combinations.</p>
+<p>The community encourages users to test Comet with existing Spark and Iceberg workloads and welcomes contributions
+to ongoing development.</p>
+
+<!--
+  Comments Section
+  Loaded only after explicit visitor consent to comply with ASF policy.
+-->
+
+<div>
+  <hr>
+  <h3 id="comments">Comments<a class="headerlink" href="#comments" title="Permanent link">&para;</a></h3>
+
+  <!-- Local loader script -->
+  <script src="/blog/js/giscus-consent.js" defer></script>
+
+  <!-- Consent UI -->
+  <div id="giscus-consent">
+    <p>
+        We use <a href="https://giscus.app/">Giscus</a> for comments, powered by GitHub Discussions.
+        To respect your privacy, Giscus and comments will load only if you click "Show Comments"
+    </p>
+
+    <div class="consent-actions">
+      <button id="giscus-load" type="button">Show Comments</button>
+      <button id="giscus-revoke" type="button" hidden>Hide Comments</button>
+    </div>
+
+    <noscript>JavaScript is required to load comments from Giscus.</noscript>
+  </div>
+
+  <!-- Container where Giscus will render -->
+  <div id="comment-thread"></div>
+</div>      </div>
+      <aside class="toc-container d-none d-md-block col-md-4 col-xl-3 ms-xl-2">
+        <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#key-features">Key Features</a><ul>
+<li><a href="#native-iceberg-reader-enabled-by-default">Native Iceberg Reader Enabled by Default</a></li>
+<li><a href="#auto-mode-enables-native_datafusion-scan">Auto Mode Enables native_datafusion Scan</a></li>
+<li><a href="#new-expressions-and-function-support">New Expressions and Function Support</a></li>
+<li><a href="#expanded-metrics-and-observability">Expanded Metrics and Observability</a></li>
+</ul>
+</li>
+<li><a href="#performance-improvements">Performance Improvements</a></li>
+<li><a href="#stability-and-correctness">Stability and Correctness</a></li>
+<li><a href="#dependency-upgrades">Dependency Upgrades</a></li>
+<li><a href="#deprecations-and-removals">Deprecations and Removals</a></li>
+<li><a href="#compatibility">Compatibility</a></li>
+</ul>
+</div>
+      </aside>
+    </div>
+  </div>
+</div>    
+    <!-- footer -->
+    <div class="row g-0">
+      <div class="col-12">
+        <p style="font-style: italic; font-size: 0.8rem; text-align: center;">
+          Copyright 2026, <a href="https://www.apache.org/">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a>.<br/>
+          Apache&reg; and the Apache feather logo are trademarks of The Apache Software Foundation.
+        </p>
+      </div>
+    </div>
+    <script src="/blog/js/bootstrap.bundle.min.js"></script>  </main>
+  </body>
+</html>

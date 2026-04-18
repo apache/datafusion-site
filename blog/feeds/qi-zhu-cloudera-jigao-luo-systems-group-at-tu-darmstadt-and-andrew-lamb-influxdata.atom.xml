@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - Qi Zhu (Cloudera), Jigao Luo (Systems Group at TU Darmstadt), and Andrew Lamb (InfluxData)</title><link href="https://datafusion.apache.org/blog/" rel="alternate"></link><link href="https://datafusion.apache.org/blog/feeds/qi-zhu-cloudera-jigao-luo-systems-group-at-tu-darmstadt-and-andrew-lamb-influxdata.atom.xml" rel="self"></link><id>https://datafusion.apache.org/blog/</id><updated>2025-07-14T00:00:00+00:00</updated><subtitle></subtitle><entry><title>Embedding User-Defined Indexes in Apache Parquet Files</title><link href="https://datafusion.apache.org/blog/2025/07/14/user-defined-parquet-indexes" rel="alternate"></link><published>2025-07-14T00:00:00+00:00</published><updated>2025-07-14T00:00:00+00:00</updated><author><name>Qi Zhu (Cloudera), Jigao Luo (Systems Group at TU Darmstadt), and Andrew Lamb (InfluxData)</name></author><id>tag:datafusion.apache.org,2025-07-14:/blog/2025/07/14/user-defined-parquet-indexes</id><summary type="html">&lt;!--
+<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - Qi Zhu (Cloudera), Jigao Luo (Systems Group at TU Darmstadt), and Andrew Lamb (InfluxData)</title><link href="https://datafusion.apache.org/blog/" rel="alternate"/><link href="https://datafusion.apache.org/blog/feeds/qi-zhu-cloudera-jigao-luo-systems-group-at-tu-darmstadt-and-andrew-lamb-influxdata.atom.xml" rel="self"/><id>https://datafusion.apache.org/blog/</id><updated>2025-07-14T00:00:00+00:00</updated><entry><title>Embedding User-Defined Indexes in Apache Parquet Files</title><link href="https://datafusion.apache.org/blog/2025/07/14/user-defined-parquet-indexes" rel="alternate"/><published>2025-07-14T00:00:00+00:00</published><updated>2025-07-14T00:00:00+00:00</updated><author><name>Qi Zhu (Cloudera), Jigao Luo (Systems Group at TU Darmstadt), and Andrew Lamb (InfluxData)</name></author><id>tag:datafusion.apache.org,2025-07-14:/blog/2025/07/14/user-defined-parquet-indexes</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -132,24 +132,24 @@ limitations under the License.
 &lt;hr/&gt;
 &lt;p&gt;A &lt;strong&gt;distinct value index&lt;/strong&gt; stores the unique values of a specific column. This type of index is effective for columns with a small number of distinct values and can be used to quickly skip files that do not match the query. These indexes are popular in several engines, such as the &lt;a href="https://clickhouse.com/docs/optimize/skipping-indexes#set"&gt;"set" Skip Index in ClickHouse&lt;/a&gt; and the &lt;a href="https://docs.influxdata.com/influxdb3/enterprise/admin/distinct-value-cache/"&gt;Distinct Value Cache&lt;/a&gt; in InfluxDB 3.0.&lt;/p&gt;
 &lt;p&gt;For example, if the files contain a column named &lt;code&gt;Category&lt;/code&gt; like this:&lt;/p&gt;
-&lt;table class="table" style="border-collapse:collapse;"&gt;
+&lt;table class="table"&gt;
 &lt;tr&gt;
-&lt;td style="border:1px solid #888;padding:2px 6px;"&gt;&lt;b&gt;&lt;code&gt;Category&lt;/code&gt;&lt;/b&gt;&lt;/td&gt;
+&lt;td&gt;&lt;b&gt;&lt;code&gt;Category&lt;/code&gt;&lt;/b&gt;&lt;/td&gt;
 &lt;/tr&gt;
 &lt;tr&gt;
-&lt;td style="border:1px solid #888;padding:2px 6px;"&gt;&lt;code&gt;foo&lt;/code&gt;&lt;/td&gt;
+&lt;td&gt;&lt;code&gt;foo&lt;/code&gt;&lt;/td&gt;
 &lt;/tr&gt;
 &lt;tr&gt;
-&lt;td style="border:1px solid #888;padding:2px 6px;"&gt;&lt;code&gt;bar&lt;/code&gt;&lt;/td&gt;
+&lt;td&gt;&lt;code&gt;bar&lt;/code&gt;&lt;/td&gt;
 &lt;/tr&gt;
 &lt;tr&gt;
-&lt;td style="border:1px solid #888;padding:2px 6px;"&gt;&lt;code&gt;...&lt;/code&gt;&lt;/td&gt;
+&lt;td&gt;&lt;code&gt;...&lt;/code&gt;&lt;/td&gt;
 &lt;/tr&gt;
 &lt;tr&gt;
-&lt;td style="border:1px solid #888;padding:2px 6px;"&gt;&lt;code&gt;baz&lt;/code&gt;&lt;/td&gt;
+&lt;td&gt;&lt;code&gt;baz&lt;/code&gt;&lt;/td&gt;
 &lt;/tr&gt;
 &lt;tr&gt;
-&lt;td style="border:1px solid #888;padding:2px 6px;"&gt;&lt;code&gt;foo&lt;/code&gt;&lt;/td&gt;
+&lt;td&gt;&lt;code&gt;foo&lt;/code&gt;&lt;/td&gt;
 &lt;/tr&gt;
 &lt;/table&gt;
 &lt;p&gt;The distinct value index will contain the values &lt;code&gt;foo&lt;/code&gt;, &lt;code&gt;bar&lt;/code&gt;, and &lt;code&gt;baz&lt;/code&gt;. In contrast, traditional min/max statistics would store only the minimum (&lt;code&gt;bar&lt;/code&gt;) and maximum (&lt;code&gt;foo&lt;/code&gt;) values, so a query like&lt;/p&gt;
@@ -489,4 +489,4 @@ it out, we would love for you to join us.&lt;/p&gt;
 &lt;p&gt;&lt;a id="footnote3"&gt;&lt;/a&gt;&lt;code&gt;3&lt;/code&gt;: &lt;a href="https://dl.gi.de/items/2a8571f8-0ef2-481c-8ee9-05f82ee258c8"&gt;Seamless Integration of Parquet Files into Data Processing. / Rey, Alice; Freitag, Michael; Neumann, Thomas. / BTW 2023&lt;/a&gt;&lt;/p&gt;
 &lt;p&gt;&lt;a id="footnote4"&gt;&lt;/a&gt;&lt;code&gt;4&lt;/code&gt;: For more information about external indexes, see &lt;a href="https://www.youtube.com/watch?v=74YsJT1-Rdk"&gt;this talk&lt;/a&gt; and the &lt;a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/parquet_index.rs"&gt;parquet_index.rs&lt;/a&gt; and &lt;a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/advanced_parquet_index.rs"&gt;advanced_parquet_index.rs&lt;/a&gt; examples in the DataFusion repository.&lt;/p&gt;
 &lt;p&gt;&lt;a id="footnote5"&gt;&lt;/a&gt;&lt;code&gt;5&lt;/code&gt;: For information about rewriting files to optimize for specific queries, such as resorting, repartitioning, and tuning data page and row group sizes, see &lt;a href="https://github.com/XiangpengHao/liquid-cache/issues/227"&gt;XiangpengHao/liquid‑cache#227&lt;/a&gt; and the conversation between &lt;a href="https://github.com/JigaoLuo"&gt;JigaoLuo&lt;/a&gt; and &lt;a href="https://github.com/XiangpengHao"&gt;XiangpengHao&lt;/a&gt; for details. We hope to make a future post about this topic.&lt;/p&gt;
-&lt;p&gt;&lt;a id="footnote6"&gt;&lt;/a&gt;&lt;code&gt;6&lt;/code&gt;: An index can also be stored inline in the key-value metadata. This approach is simple to implement and ensures the index is available once the footer is read, without additional I/O. However, it requires the index to be serialized as a UTF-8 string, which may be less efficient and increases the size of the footer metadata, impacting all Parquet readers, even those that ignore the index.&lt;/p&gt;</content><category term="blog"></category></entry></feed>
+&lt;p&gt;&lt;a id="footnote6"&gt;&lt;/a&gt;&lt;code&gt;6&lt;/code&gt;: An index can also be stored inline in the key-value metadata. This approach is simple to implement and ensures the index is available once the footer is read, without additional I/O. However, it requires the index to be serialized as a UTF-8 string, which may be less efficient and increases the size of the footer metadata, impacting all Parquet readers, even those that ignore the index.&lt;/p&gt;</content><category term="blog"/></entry></feed>

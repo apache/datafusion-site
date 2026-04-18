@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - Gene Bordegaray</title><link href="https://datafusion.apache.org/blog/" rel="alternate"></link><link href="https://datafusion.apache.org/blog/feeds/gene-bordegaray.atom.xml" rel="self"></link><id>https://datafusion.apache.org/blog/</id><updated>2025-12-15T00:00:00+00:00</updated><subtitle></subtitle><entry><title>Optimizing Repartitions in DataFusion: How I Went From Database Noob to Core Contribution</title><link href="https://datafusion.apache.org/blog/2025/12/15/avoid-consecutive-repartitions" rel="alternate"></link><published>2025-12-15T00:00:00+00:00</published><updated>2025-12-15T00:00:00+00:00</updated><author><name>Gene Bordegaray</name></author><id>tag:datafusion.apache.org,2025-12-15:/blog/2025/12/15/avoid-consecutive-repartitions</id><summary type="html">&lt;!--
+<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - Gene Bordegaray</title><link href="https://datafusion.apache.org/blog/" rel="alternate"/><link href="https://datafusion.apache.org/blog/feeds/gene-bordegaray.atom.xml" rel="self"/><id>https://datafusion.apache.org/blog/</id><updated>2025-12-15T00:00:00+00:00</updated><entry><title>Optimizing Repartitions in DataFusion: How I Went From Database Noob to Core Contribution</title><link href="https://datafusion.apache.org/blog/2025/12/15/avoid-consecutive-repartitions" rel="alternate"/><published>2025-12-15T00:00:00+00:00</published><updated>2025-12-15T00:00:00+00:00</updated><author><name>Gene Bordegaray</name></author><id>tag:datafusion.apache.org,2025-12-15:/blog/2025/12/15/avoid-consecutive-repartitions</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -17,8 +17,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 {% endcomment %}
 --&gt;
-&lt;div style="display: flex; align-items: center; gap: 20px; margin-bottom: 20px;"&gt;
-&lt;div style="flex: 1;"&gt;
+&lt;div class="row align-items-center mb-3"&gt;
+&lt;div class="col-md-7"&gt;
 
 Databases are some of the most complex yet interesting pieces of software. They are amazing pieces of abstraction: query engines optimize and execute complex plans, storage engines provide sophisticated infrastructure as the backbone of the system, while intricate file formats lay the groundwork for particular workloads. All of this is …&lt;/div&gt;&lt;/div&gt;</summary><content type="html">&lt;!--
 {% comment %}
@@ -38,16 +38,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 {% endcomment %}
 --&gt;
-&lt;div style="display: flex; align-items: center; gap: 20px; margin-bottom: 20px;"&gt;
-&lt;div style="flex: 1;"&gt;
+&lt;div class="row align-items-center mb-3"&gt;
+&lt;div class="col-md-7"&gt;
 
 Databases are some of the most complex yet interesting pieces of software. They are amazing pieces of abstraction: query engines optimize and execute complex plans, storage engines provide sophisticated infrastructure as the backbone of the system, while intricate file formats lay the groundwork for particular workloads. All of this is exposed by a user-friendly interface and query languages (typically a dialect of SQL).
 &lt;br/&gt;&lt;br/&gt;
 Starting a journey learning about database internals can be daunting. With so many topics that are whole PhD degrees themselves, finding a place to start is difficult. In this blog post, I will share my early journey in the database world and a quick lesson on one of the first topics I dove into. If you are new to the space, this post will help you get your first foot into the database world, and if you are already a veteran, you may still learn something new.
 
 &lt;/div&gt;
-&lt;div style="flex: 0 0 40%; text-align: center;"&gt;
-&lt;img alt="Database System Components" class="img-fluid" src="/blog/images/avoid-consecutive-repartitions/database_system_diagram.png" width="100%"/&gt;
+&lt;div class="col-md-5 text-center"&gt;
+&lt;img alt="Database System Components" class="img-fluid" src="/blog/images/avoid-consecutive-repartitions/database_system_diagram.png"/&gt;
 &lt;/div&gt;
 &lt;/div&gt;
 &lt;hr/&gt;
@@ -88,29 +88,29 @@ DataFusion achieves multi-core parallelism through the use of "exchange operator
 &lt;h3 id="what-is-repartitioning"&gt;What is Repartitioning?&lt;a class="headerlink" href="#what-is-repartitioning" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;Partitioning is a "divide-and-conquer" approach to executing a query. Each partition is a subset of the data that is being processed on a single core. Repartitioning is an operation that redistributes data across different partitions to balance workloads, reduce data skew, and increase parallelism. Two repartitioning methods are used in DataFusion: round-robin and hash.&lt;/p&gt;
 &lt;h4 id="round-robin-repartitioning"&gt;&lt;strong&gt;Round-Robin Repartitioning&lt;/strong&gt;&lt;a class="headerlink" href="#round-robin-repartitioning" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h4&gt;
-&lt;div style="display: flex; align-items: top; gap: 20px; margin-bottom: 20px;"&gt;
-&lt;div style="flex: 1;"&gt;
+&lt;div class="row align-items-start mb-3"&gt;
+&lt;div class="col-md-9"&gt;
 
 Round-robin repartitioning is the simplest partitioning strategy. Incoming data is processed in batches (chunks of rows), and these batches are distributed across partitions cyclically or sequentially, with each new batch assigned to the next available partition.
 &lt;br/&gt;&lt;br/&gt;
 Round-robin repartitioning is useful when the data grouping isn't known or when aiming for an even distribution across partitions. Because it simply assigns batches in order without inspecting their contents, it is a low-overhead way to increase parallelism for downstream operations.
 
 &lt;/div&gt;
-&lt;div style="flex: 0 0 25%; text-align: center;"&gt;
-&lt;img alt="Round-Robin Repartitioning" class="img-fluid" src="/blog/images/avoid-consecutive-repartitions/round_robin_repartitioning.png" width="100%"/&gt;
+&lt;div class="col-md-3 text-center"&gt;
+&lt;img alt="Round-Robin Repartitioning" class="img-fluid" src="/blog/images/avoid-consecutive-repartitions/round_robin_repartitioning.png"/&gt;
 &lt;/div&gt;
 &lt;/div&gt;
 &lt;h4 id="hash-repartitioning"&gt;&lt;strong&gt;Hash Repartitioning&lt;/strong&gt;&lt;a class="headerlink" href="#hash-repartitioning" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h4&gt;
-&lt;div style="display: flex; align-items: top; gap: 20px; margin-bottom: 20px;"&gt;
-&lt;div style="flex: 1;"&gt;
+&lt;div class="row align-items-start mb-3"&gt;
+&lt;div class="col-md-9"&gt;
 
 Hash repartitioning distributes data based on a hash function applied to one or more columns, called the partitioning key. Rows with the same hash value are placed in the same partition.
 &lt;br/&gt;&lt;br/&gt;
 Hash repartitioning is useful when working with grouped data. Imagine you have a database containing information on company sales, and you are looking to find the total revenue each store produced. Hash repartitioning would make this query much more efficient. Rather than iterating over the data on a single thread and keeping a running sum for each store, it would be better to hash repartition on the store column and have multiple threads calculate individual store sales.
 
 &lt;/div&gt;
-&lt;div style="flex: 0 0 25%; text-align: center;"&gt;
-&lt;img alt="Hash Repartitioning" class="img-fluid" src="/blog/images/avoid-consecutive-repartitions/hash_repartitioning.png" width="100%"/&gt;
+&lt;div class="col-md-3 text-center"&gt;
+&lt;img alt="Hash Repartitioning" class="img-fluid" src="/blog/images/avoid-consecutive-repartitions/hash_repartitioning.png"/&gt;
 &lt;/div&gt;
 &lt;/div&gt;
 &lt;p&gt;Note, the benefit of hash opposed to round-robin partitioning in this scenario. Hash repartitioning consolidates all rows with the same store value in distinct partitions. Because of this property we can compute the complete results for each store in parallel and merge them to get the final outcome. This parallel processing wouldn&amp;rsquo;t be possible with only round-robin partitioning as the same store value may be spread across multiple partitions, making the aggregation results partial, unable to merge them to produce a correct final outcome.&lt;/p&gt;
@@ -265,4 +265,4 @@ Hash repartitioning is useful when working with grouped data. Imagine you have a
 &lt;p&gt;I hope you gained something from my experience and have fun learning about databases.&lt;/p&gt;
 &lt;hr/&gt;
 &lt;h2 id="acknowledgements"&gt;&lt;strong&gt;Acknowledgements&lt;/strong&gt;&lt;a class="headerlink" href="#acknowledgements" title="Permanent link"&gt;&amp;para;&lt;/a&gt;&lt;/h2&gt;
-&lt;p&gt;Thank you to &lt;a href="https://github.com/NGA-TRAN"&gt;Nga Tran&lt;/a&gt; for continuous mentorship and guidance, the DataFusion community, specifically &lt;a href="https://github.com/alamb"&gt;Andrew Lamb&lt;/a&gt;, for lending me support throughout my work, and Datadog for providing the opportunity to work on such interesting systems.&lt;/p&gt;</content><category term="blog"></category></entry></feed>
+&lt;p&gt;Thank you to &lt;a href="https://github.com/NGA-TRAN"&gt;Nga Tran&lt;/a&gt; for continuous mentorship and guidance, the DataFusion community, specifically &lt;a href="https://github.com/alamb"&gt;Andrew Lamb&lt;/a&gt;, for lending me support throughout my work, and Datadog for providing the opportunity to work on such interesting systems.&lt;/p&gt;</content><category term="blog"/></entry></feed>
