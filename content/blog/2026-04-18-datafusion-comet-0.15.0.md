@@ -39,7 +39,7 @@ contributors. See the [change log] for more information.
 
 ## Performance
 
-**Comet 0.15.0 provides a 2x speedup for TPC-H @ 1TB, resulting in 50% cost savings.**
+**Comet 0.15.0 provides a 2x speedup for TPC-H @ SF1000 (1TB), resulting in 50% cost savings.**
 
 That 2x speedup gives you a choice: finish the same Spark workload in half the time on the cluster you already
 have, or match your current Spark performance on roughly half the resources. Either way, the gain translates
