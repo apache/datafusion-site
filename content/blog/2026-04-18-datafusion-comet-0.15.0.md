@@ -124,12 +124,11 @@ and execution layers:
 - **FFI-safe operators**: More operators are marked as FFI-safe, avoiding unnecessary deep copies when crossing
   the JVM/native boundary.
 - **Shared memory pools**: Unified memory pools are now shared across native execution contexts within a Spark
-  task, improving memory accounting and reducing fragmentation.
+  task, improving memory accounting and reducing OOMs.
 - **Object store caching**: Object stores and bucket region lookups are cached, dramatically reducing DNS query
   volume on workloads that open many files.
 - **`get_ranges` performance**: Picked up an upstream `opendal` fix that restores fast range reads from object
   storage.
-- **Spill I/O**: Removed a redundant `BufReader` wrapper when copying spill files to shuffle output.
 
 Together, these changes reduce CPU and memory overhead for shuffle-heavy, broadcast-heavy, and
 object-storage-bound workloads.
