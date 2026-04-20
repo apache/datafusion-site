@@ -37,6 +37,34 @@ contributors. See the [change log] for more information.
 
 [change log]: https://github.com/apache/datafusion-comet/blob/main/dev/changelog/0.15.0.md
 
+## Performance
+
+**Comet provides a 2x speedup for TPC-H @ 1TB, resulting in 50% cost savings.**
+
+That 2x speedup gives you a choice: finish the same Spark workload in half the time on the cluster you already
+have, or match your current Spark performance on roughly half the resources. Either way, the gain translates
+directly into lower cloud bills, reduced on-prem capacity, and lower energy usage, with no changes to your
+existing Spark SQL, DataFrame, or PySpark code. Comet runs on commodity hardware: no GPUs, FPGAs, or other
+specialized accelerators are required, so the savings come from better utilization of the infrastructure you
+already run on.
+
+<img
+src="/blog/images/comet-0.15.0/tpch_allqueries.png"
+width="100%"
+class="img-fluid"
+alt="TPC-H Overall Performance"
+/>
+
+<img
+src="/blog/images/comet-0.15.0/tpch_queries_compare.png"
+width="100%"
+class="img-fluid"
+alt="TPC-H Query-by-Query Comparison"
+/>
+
+See the [Comet Benchmarking Guide](https://datafusion.apache.org/comet/contributor-guide/benchmarking.html) for
+more details.
+
 ## Key Features
 
 ### Native Iceberg Reader Enabled by Default
