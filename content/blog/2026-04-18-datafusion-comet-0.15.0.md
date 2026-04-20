@@ -123,7 +123,27 @@ To support this change, the release bundles a broad set of Iceberg-focused impro
 
 Users who need to fall back to the previous behavior can still opt out, but we encourage the community to exercise
 the native reader and report any issues.
+### Sort-Merge Join Performance
 
+Comet relies heavily on sort-merge join (SMJ) because DataFusion's hash joins do not yet support spilling to
+disk. For larger-than-memory joins, SMJ is the only viable path, making its performance critical for real-world
+workloads at scale.
+
+DataFusion 53 includes several SMJ improvements that Comet 0.15.0 benefits from directly:
+
+- **Zero-copy slicing** instead of the take kernel ([datafusion#20463](https://github.com/apache/datafusion/pull/20463))
+- **Streaming output** instead of waiting for all input before emitting ([datafusion#20482](https://github.com/apache/datafusion/pull/20482))
+- **Cached row counts** to avoid O(n) recounting ([datafusion#20478](https://github.com/apache/datafusion/pull/20478))
+
+Additional SMJ work is landing in upstream DataFusion and will arrive in a future Comet release:
+
+- Specialized semi/anti join stream ([datafusion#20806](https://github.com/apache/datafusion/pull/20806))
+- Batch deferred filtering with 20–50x improvements for near-unique LEFT and FULL joins ([datafusion#21184](https://github.com/apache/datafusion/pull/21184))
+- DynComparator for ~5% TPC-H improvement ([datafusion#21484](https://github.com/apache/datafusion/pull/21484))
+- Vec-based filter state replacing HashMap ([datafusion#21517](https://github.com/apache/datafusion/pull/21517))
+- Full outer join correctness fix for NULL filter results ([datafusion#21660](https://github.com/apache/datafusion/pull/21660))
+
+With these performance improvements, the next release of Comet will enable SMJ with filters by default.
 ## Other Key Features
 
 ### New Expressions and Function Support
