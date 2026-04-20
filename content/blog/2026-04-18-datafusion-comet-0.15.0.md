@@ -39,7 +39,7 @@ contributors. See the [change log] for more information.
 
 ## Performance
 
-**Comet provides a 2x speedup for TPC-H @ 1TB, resulting in 50% cost savings.**
+**Comet 0.15.0 provides a 2x speedup for TPC-H @ 1TB, resulting in 50% cost savings.**
 
 That 2x speedup gives you a choice: finish the same Spark workload in half the time on the cluster you already
 have, or match your current Spark performance on roughly half the resources. Either way, the gain translates
@@ -65,9 +65,45 @@ alt="TPC-H Query-by-Query Comparison"
 See the [Comet Benchmarking Guide](https://datafusion.apache.org/comet/contributor-guide/benchmarking.html) for
 more details.
 
-## Key Features
+Performance was a major theme of this release, with a series of targeted optimizations across the shuffle, scan,
+and execution layers.
 
-### Native Iceberg Reader Enabled by Default
+### Reducing JVM/Native Boundary Overhead
+
+Several changes in this release target the cost of crossing between the JVM and native sides, which can dominate
+execution time in shuffle- and broadcast-heavy workloads:
+
+- **Shuffle read path**: The native shuffle reader no longer uses FFI on the read side, removing a per-batch cost
+  that was particularly visible in shuffle-heavy queries.
+- **Broadcast exchanges**: Batches are now coalesced before broadcasting, reducing the number of small batches
+  crossing the JVM/native boundary.
+- **FFI-safe operators**: More operators are marked as FFI-safe, avoiding unnecessary deep copies when crossing
+  the JVM/native boundary.
+
+### Expanded Native Execution Coverage
+
+- **Columnar-to-row (C2R)**: Native C2R conversion is now exercised for a broader set of query shapes.
+- **`auto` scan mode**: The `auto` scan mode now enables the `native_datafusion` scan where supported, giving
+  users the benefits of the native Parquet reader without having to explicitly opt in. This is part of the
+  ongoing effort to make `native_datafusion` the default Parquet path once the deprecation of
+  `native_iceberg_compat` completes.
+
+### Memory Management
+
+- **Shared memory pools**: Unified memory pools are now shared across native execution contexts within a Spark
+  task, improving memory accounting and reducing OOMs.
+
+### Object Storage I/O
+
+- **Object store caching**: Object stores and bucket region lookups are cached, dramatically reducing DNS query
+  volume on workloads that open many files.
+- **`get_ranges` performance**: Picked up an upstream `opendal` fix that restores fast range reads from object
+  storage.
+
+Together, these changes reduce CPU and memory overhead for shuffle-heavy, broadcast-heavy, and
+object-storage-bound workloads.
+
+## Native Iceberg Reader Enabled by Default
 
 This release marks a major milestone for Iceberg users: **Comet's fully-native Iceberg reader is now enabled by
 default**. Workloads that read Iceberg tables will automatically benefit from native Rust-based scans built on
@@ -88,11 +124,7 @@ To support this change, the release bundles a broad set of Iceberg-focused impro
 Users who need to fall back to the previous behavior can still opt out, but we encourage the community to exercise
 the native reader and report any issues.
 
-### Auto Mode Enables `native_datafusion` Scan
-
-The `auto` scan mode now enables the `native_datafusion` scan where supported, giving users the benefits of the
-native Parquet reader without having to explicitly opt in. This is part of the ongoing effort to make
-`native_datafusion` the default Parquet path once the deprecation of `native_iceberg_compat` completes.
+## Other Key Features
 
 ### New Expressions and Function Support
 
@@ -110,28 +142,6 @@ This release adds support for the following:
 Comet metrics can now be exposed through Spark's external monitoring system, making it easier to integrate Comet
 execution statistics with existing observability dashboards. Native DataFusion scans also now report accurate
 `filesScanned` and `bytesScanned` input metrics, matching Spark's native Parquet scan reporting.
-
-## Performance Improvements
-
-Performance was a major theme of this release, with a series of targeted optimizations across the shuffle, scan,
-and execution layers:
-
-- **Shuffle read path**: The native shuffle reader no longer uses FFI on the read side, removing a per-batch cost
-  that was particularly visible in shuffle-heavy queries.
-- **Broadcast exchanges**: Batches are now coalesced before broadcasting, reducing the number of small batches
-  crossing the JVM/native boundary.
-- **Columnar-to-row (C2R)**: Native C2R conversion is now exercised for a broader set of query shapes.
-- **FFI-safe operators**: More operators are marked as FFI-safe, avoiding unnecessary deep copies when crossing
-  the JVM/native boundary.
-- **Shared memory pools**: Unified memory pools are now shared across native execution contexts within a Spark
-  task, improving memory accounting and reducing OOMs.
-- **Object store caching**: Object stores and bucket region lookups are cached, dramatically reducing DNS query
-  volume on workloads that open many files.
-- **`get_ranges` performance**: Picked up an upstream `opendal` fix that restores fast range reads from object
-  storage.
-
-Together, these changes reduce CPU and memory overhead for shuffle-heavy, broadcast-heavy, and
-object-storage-bound workloads.
 
 ## Stability and Correctness
 
