@@ -59,7 +59,10 @@
 <li><a href="#object-storage-io">Object Storage I/O</a></li>
 </ul>
 </li>
-<li><a href="#native-iceberg-reader-enabled-by-default">Native Iceberg Reader Enabled by Default</a></li>
+<li><a href="#native-iceberg-reader-enabled-by-default">Native Iceberg Reader Enabled by Default</a><ul>
+<li><a href="#sort-merge-join-performance">Sort-Merge Join Performance</a></li>
+</ul>
+</li>
 <li><a href="#other-key-features">Other Key Features</a><ul>
 <li><a href="#new-expressions-and-function-support">New Expressions and Function Support</a></li>
 <li><a href="#expanded-metrics-and-observability">Expanded Metrics and Observability</a></li>
@@ -162,6 +165,25 @@ iceberg-rust, with no additional configuration required.</p>
 </ul>
 <p>Users who need to fall back to the previous behavior can still opt out, but we encourage the community to exercise
 the native reader and report any issues.</p>
+<h3 id="sort-merge-join-performance">Sort-Merge Join Performance<a class="headerlink" href="#sort-merge-join-performance" title="Permanent link">¶</a></h3>
+<p>Comet relies heavily on sort-merge join (SMJ) because DataFusion's hash joins do not yet support spilling to
+disk. For larger-than-memory joins, SMJ is the only viable path, making its performance critical for real-world
+workloads at scale.</p>
+<p>DataFusion 53 includes several SMJ improvements that Comet 0.15.0 benefits from directly:</p>
+<ul>
+<li><strong>Zero-copy slicing</strong> instead of the take kernel (<a href="https://github.com/apache/datafusion/pull/20463">datafusion#20463</a>)</li>
+<li><strong>Streaming output</strong> instead of waiting for all input before emitting (<a href="https://github.com/apache/datafusion/pull/20482">datafusion#20482</a>)</li>
+<li><strong>Cached row counts</strong> to avoid O(n) recounting (<a href="https://github.com/apache/datafusion/pull/20478">datafusion#20478</a>)</li>
+</ul>
+<p>Additional SMJ work is landing in upstream DataFusion and will arrive in a future Comet release:</p>
+<ul>
+<li>Specialized semi/anti join stream (<a href="https://github.com/apache/datafusion/pull/20806">datafusion#20806</a>)</li>
+<li>Batch deferred filtering with 20–50x improvements for near-unique LEFT and FULL joins (<a href="https://github.com/apache/datafusion/pull/21184">datafusion#21184</a>)</li>
+<li>DynComparator for ~5% TPC-H improvement (<a href="https://github.com/apache/datafusion/pull/21484">datafusion#21484</a>)</li>
+<li>Vec-based filter state replacing HashMap (<a href="https://github.com/apache/datafusion/pull/21517">datafusion#21517</a>)</li>
+<li>Full outer join correctness fix for NULL filter results (<a href="https://github.com/apache/datafusion/pull/21660">datafusion#21660</a>)</li>
+</ul>
+<p>With these performance improvements, the next release of Comet will enable SMJ with filters by default.</p>
 <h2 id="other-key-features">Other Key Features<a class="headerlink" href="#other-key-features" title="Permanent link">¶</a></h2>
 <h3 id="new-expressions-and-function-support">New Expressions and Function Support<a class="headerlink" href="#new-expressions-and-function-support" title="Permanent link">¶</a></h3>
 <p>This release adds support for the following:</p>
@@ -250,7 +272,10 @@ to ongoing development.</p>
 <li><a href="#object-storage-io">Object Storage I/O</a></li>
 </ul>
 </li>
-<li><a href="#native-iceberg-reader-enabled-by-default">Native Iceberg Reader Enabled by Default</a></li>
+<li><a href="#native-iceberg-reader-enabled-by-default">Native Iceberg Reader Enabled by Default</a><ul>
+<li><a href="#sort-merge-join-performance">Sort-Merge Join Performance</a></li>
+</ul>
+</li>
 <li><a href="#other-key-features">Other Key Features</a><ul>
 <li><a href="#new-expressions-and-function-support">New Expressions and Function Support</a></li>
 <li><a href="#expanded-metrics-and-observability">Expanded Metrics and Observability</a></li>
