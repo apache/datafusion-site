@@ -46,7 +46,7 @@ improved performance and efficiency without requiring any code changes.&lt;/p&gt
 &lt;p&gt;This release covers approximately four weeks of development work and is the result of merging 142 PRs from 19
 contributors. See the &lt;a href="https://github.com/apache/datafusion-comet/blob/main/dev/changelog/0.15.0.md"&gt;change log&lt;/a&gt; for more information.&lt;/p&gt;
 &lt;h2 id="performance"&gt;Performance&lt;a class="headerlink" href="#performance" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
-&lt;p&gt;&lt;strong&gt;Comet provides a 2x speedup for TPC-H @ 1TB, resulting in 50% cost savings.&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Comet 0.15.0 provides a 2x speedup for TPC-H @ 1TB, resulting in 50% cost savings.&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;That 2x speedup gives you a choice: finish the same Spark workload in half the time on the cluster you already
 have, or match your current Spark performance on roughly half the resources. Either way, the gain translates
 directly into lower cloud bills, reduced on-prem capacity, and lower energy usage, with no changes to your
@@ -57,8 +57,42 @@ already run on.&lt;/p&gt;
 &lt;p&gt;&lt;img alt="TPC-H Query-by-Query Comparison" class="img-fluid" src="/blog/images/comet-0.15.0/tpch_queries_compare.png" width="100%"/&gt;&lt;/p&gt;
 &lt;p&gt;See the &lt;a href="https://datafusion.apache.org/comet/contributor-guide/benchmarking.html"&gt;Comet Benchmarking Guide&lt;/a&gt; for
 more details.&lt;/p&gt;
-&lt;h2 id="key-features"&gt;Key Features&lt;a class="headerlink" href="#key-features" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
-&lt;h3 id="native-iceberg-reader-enabled-by-default"&gt;Native Iceberg Reader Enabled by Default&lt;a class="headerlink" href="#native-iceberg-reader-enabled-by-default" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Performance was a major theme of this release, with a series of targeted optimizations across the shuffle, scan,
+and execution layers.&lt;/p&gt;
+&lt;h3 id="reducing-jvmnative-boundary-overhead"&gt;Reducing JVM/Native Boundary Overhead&lt;a class="headerlink" href="#reducing-jvmnative-boundary-overhead" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Several changes in this release target the cost of crossing between the JVM and native sides, which can dominate
+execution time in shuffle- and broadcast-heavy workloads:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Shuffle read path&lt;/strong&gt;: The native shuffle reader no longer uses FFI on the read side, removing a per-batch cost
+  that was particularly visible in shuffle-heavy queries.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Broadcast exchanges&lt;/strong&gt;: Batches are now coalesced before broadcasting, reducing the number of small batches
+  crossing the JVM/native boundary.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;FFI-safe operators&lt;/strong&gt;: More operators are marked as FFI-safe, avoiding unnecessary deep copies when crossing
+  the JVM/native boundary.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id="expanded-native-execution-coverage"&gt;Expanded Native Execution Coverage&lt;a class="headerlink" href="#expanded-native-execution-coverage" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Columnar-to-row (C2R)&lt;/strong&gt;: Native C2R conversion is now exercised for a broader set of query shapes.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;&lt;code&gt;auto&lt;/code&gt; scan mode&lt;/strong&gt;: The &lt;code&gt;auto&lt;/code&gt; scan mode now enables the &lt;code&gt;native_datafusion&lt;/code&gt; scan where supported, giving
+  users the benefits of the native Parquet reader without having to explicitly opt in. This is part of the
+  ongoing effort to make &lt;code&gt;native_datafusion&lt;/code&gt; the default Parquet path once the deprecation of
+  &lt;code&gt;native_iceberg_compat&lt;/code&gt; completes.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id="memory-management"&gt;Memory Management&lt;a class="headerlink" href="#memory-management" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Shared memory pools&lt;/strong&gt;: Unified memory pools are now shared across native execution contexts within a Spark
+  task, improving memory accounting and reducing OOMs.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id="object-storage-io"&gt;Object Storage I/O&lt;a class="headerlink" href="#object-storage-io" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Object store caching&lt;/strong&gt;: Object stores and bucket region lookups are cached, dramatically reducing DNS query
+  volume on workloads that open many files.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;&lt;code&gt;get_ranges&lt;/code&gt; performance&lt;/strong&gt;: Picked up an upstream &lt;code&gt;opendal&lt;/code&gt; fix that restores fast range reads from object
+  storage.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Together, these changes reduce CPU and memory overhead for shuffle-heavy, broadcast-heavy, and
+object-storage-bound workloads.&lt;/p&gt;
+&lt;h2 id="native-iceberg-reader-enabled-by-default"&gt;Native Iceberg Reader Enabled by Default&lt;a class="headerlink" href="#native-iceberg-reader-enabled-by-default" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;This release marks a major milestone for Iceberg users: &lt;strong&gt;Comet's fully-native Iceberg reader is now enabled by
 default&lt;/strong&gt;. Workloads that read Iceberg tables will automatically benefit from native Rust-based scans built on
 iceberg-rust, with no additional configuration required.&lt;/p&gt;
@@ -76,10 +110,7 @@ iceberg-rust, with no additional configuration required.&lt;/p&gt;
 &lt;/ul&gt;
 &lt;p&gt;Users who need to fall back to the previous behavior can still opt out, but we encourage the community to exercise
 the native reader and report any issues.&lt;/p&gt;
-&lt;h3 id="auto-mode-enables-native_datafusion-scan"&gt;Auto Mode Enables &lt;code&gt;native_datafusion&lt;/code&gt; Scan&lt;a class="headerlink" href="#auto-mode-enables-native_datafusion-scan" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
-&lt;p&gt;The &lt;code&gt;auto&lt;/code&gt; scan mode now enables the &lt;code&gt;native_datafusion&lt;/code&gt; scan where supported, giving users the benefits of the
-native Parquet reader without having to explicitly opt in. This is part of the ongoing effort to make
-&lt;code&gt;native_datafusion&lt;/code&gt; the default Parquet path once the deprecation of &lt;code&gt;native_iceberg_compat&lt;/code&gt; completes.&lt;/p&gt;
+&lt;h2 id="other-key-features"&gt;Other Key Features&lt;a class="headerlink" href="#other-key-features" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;h3 id="new-expressions-and-function-support"&gt;New Expressions and Function Support&lt;a class="headerlink" href="#new-expressions-and-function-support" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;This release adds support for the following:&lt;/p&gt;
 &lt;ul&gt;
@@ -94,27 +125,6 @@ native Parquet reader without having to explicitly opt in. This is part of the o
 &lt;p&gt;Comet metrics can now be exposed through Spark's external monitoring system, making it easier to integrate Comet
 execution statistics with existing observability dashboards. Native DataFusion scans also now report accurate
 &lt;code&gt;filesScanned&lt;/code&gt; and &lt;code&gt;bytesScanned&lt;/code&gt; input metrics, matching Spark's native Parquet scan reporting.&lt;/p&gt;
-&lt;h2 id="performance-improvements"&gt;Performance Improvements&lt;a class="headerlink" href="#performance-improvements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
-&lt;p&gt;Performance was a major theme of this release, with a series of targeted optimizations across the shuffle, scan,
-and execution layers:&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;&lt;strong&gt;Shuffle read path&lt;/strong&gt;: The native shuffle reader no longer uses FFI on the read side, removing a per-batch cost
-  that was particularly visible in shuffle-heavy queries.&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;Broadcast exchanges&lt;/strong&gt;: Batches are now coalesced before broadcasting, reducing the number of small batches
-  crossing the JVM/native boundary.&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;Columnar-to-row (C2R)&lt;/strong&gt;: Native C2R conversion is now exercised for a broader set of query shapes.&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;FFI-safe operators&lt;/strong&gt;: More operators are marked as FFI-safe, avoiding unnecessary deep copies when crossing
-  the JVM/native boundary.&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;Shared memory pools&lt;/strong&gt;: Unified memory pools are now shared across native execution contexts within a Spark
-  task, improving memory accounting and reducing fragmentation.&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;Object store caching&lt;/strong&gt;: Object stores and bucket region lookups are cached, dramatically reducing DNS query
-  volume on workloads that open many files.&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;&lt;code&gt;get_ranges&lt;/code&gt; performance&lt;/strong&gt;: Picked up an upstream &lt;code&gt;opendal&lt;/code&gt; fix that restores fast range reads from object
-  storage.&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;Spill I/O&lt;/strong&gt;: Removed a redundant &lt;code&gt;BufReader&lt;/code&gt; wrapper when copying spill files to shuffle output.&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;Together, these changes reduce CPU and memory overhead for shuffle-heavy, broadcast-heavy, and
-object-storage-bound workloads.&lt;/p&gt;
 &lt;h2 id="stability-and-correctness"&gt;Stability and Correctness&lt;a class="headerlink" href="#stability-and-correctness" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;A significant portion of this release is dedicated to stability and Spark compatibility. Highlights include:&lt;/p&gt;
 &lt;ul&gt;
