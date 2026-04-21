@@ -153,6 +153,8 @@ default</strong>. Workloads that read Iceberg tables will automatically benefit 
 iceberg-rust, with no additional configuration required.</p>
 <p>To support this change, the release bundles a broad set of Iceberg-focused improvements:</p>
 <ul>
+<li><strong>Dynamic Partition Pruning (DPP)</strong>: The native Iceberg reader supports DPP, allowing partition filters
+  derived at runtime to prune Iceberg file scans and substantially reduce I/O for star-schema-style queries.</li>
 <li><strong>Correct classloader handling</strong>: Iceberg classes are now loaded via the thread context classloader, resolving
   class-loading issues in environments where the executor classloader differs from the application classloader.</li>
 <li><strong>Continuous Iceberg CI</strong>: Iceberg Spark integration tests now run on every PR and push to <code>main</code>, providing
@@ -190,7 +192,7 @@ workloads at scale.</p>
 <ul>
 <li><strong>Date/time functions</strong>: <code>days</code>, <code>hours</code>, <code>date_from_unix_date</code></li>
 <li><strong>String/JSON functions</strong>: native <code>get_json_object</code> with improved performance over the fallback path</li>
-<li><strong>Hash/math functions</strong>: <code>crc32c</code>, <code>bin</code></li>
+<li><strong>Hash/math functions</strong>: <code>bin</code></li>
 <li><strong>Array functions</strong>: <code>sort_array</code></li>
 <li><strong>Window functions</strong>: <code>LEAD</code> and <code>LAG</code> with <code>IGNORE NULLS</code></li>
 <li><strong>Aggregates</strong>: SQL <code>FILTER (WHERE ...)</code> clauses now execute natively; <code>Corr</code> aggregate enabled</li>
@@ -226,8 +228,9 @@ execution statistics with existing observability dashboards. Native DataFusion s
 with additional reader fixes. The <code>jni</code> crate was upgraded to 0.22.4.</p>
 <h2 id="deprecations-and-removals">Deprecations and Removals<a class="headerlink" href="#deprecations-and-removals" title="Permanent link">¶</a></h2>
 <p>The <code>SupportsComet</code> interface has been removed, along with the Java-based Iceberg integration path (which is
-fully superseded by the native Iceberg reader). The <code>native_iceberg_compat</code> scan remains deprecated and is
-expected to be removed in a future release in favor of <code>native_datafusion</code>.</p>
+fully superseded by the native Iceberg reader). See <a href="https://github.com/apache/datafusion-comet/issues/2921">comet#2921</a>
+for background on the decision to standardize on the native iceberg-rust integration. The <code>native_iceberg_compat</code>
+scan remains deprecated and is expected to be removed in a future release in favor of <code>native_datafusion</code>.</p>
 <h2 id="compatibility">Compatibility<a class="headerlink" href="#compatibility" title="Permanent link">¶</a></h2>
 <p>Supported platforms include Spark 3.4.3, 3.5.4–3.5.8, and Spark 4.0.x with various JDK and Scala combinations.</p>
 <p>The community encourages users to test Comet with existing Spark and Iceberg workloads and welcomes contributions
