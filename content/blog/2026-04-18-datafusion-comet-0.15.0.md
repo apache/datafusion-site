@@ -111,6 +111,8 @@ iceberg-rust, with no additional configuration required.
 
 To support this change, the release bundles a broad set of Iceberg-focused improvements:
 
+- **Dynamic Partition Pruning (DPP)**: The native Iceberg reader supports DPP, allowing partition filters
+  derived at runtime to prune Iceberg file scans and substantially reduce I/O for star-schema-style queries.
 - **Correct classloader handling**: Iceberg classes are now loaded via the thread context classloader, resolving
   class-loading issues in environments where the executor classloader differs from the application classloader.
 - **Continuous Iceberg CI**: Iceberg Spark integration tests now run on every PR and push to `main`, providing
@@ -123,6 +125,7 @@ To support this change, the release bundles a broad set of Iceberg-focused impro
 
 Users who need to fall back to the previous behavior can still opt out, but we encourage the community to exercise
 the native reader and report any issues.
+
 ### Sort-Merge Join Performance
 
 Comet relies heavily on sort-merge join (SMJ) because DataFusion's hash joins do not yet support spilling to
@@ -144,6 +147,7 @@ Additional SMJ work is landing in upstream DataFusion and will arrive in a futur
 - Full outer join correctness fix for NULL filter results ([datafusion#21660](https://github.com/apache/datafusion/pull/21660))
 
 With these performance improvements, the next release of Comet will enable SMJ with filters by default.
+
 ## Other Key Features
 
 ### New Expressions and Function Support
@@ -152,7 +156,7 @@ This release adds support for the following:
 
 - **Date/time functions**: `days`, `hours`, `date_from_unix_date`
 - **String/JSON functions**: native `get_json_object` with improved performance over the fallback path
-- **Hash/math functions**: `crc32c`, `bin`
+- **Hash/math functions**: `bin`
 - **Array functions**: `sort_array`
 - **Window functions**: `LEAD` and `LAG` with `IGNORE NULLS`
 - **Aggregates**: SQL `FILTER (WHERE ...)` clauses now execute natively; `Corr` aggregate enabled
@@ -194,8 +198,9 @@ with additional reader fixes. The `jni` crate was upgraded to 0.22.4.
 ## Deprecations and Removals
 
 The `SupportsComet` interface has been removed, along with the Java-based Iceberg integration path (which is
-fully superseded by the native Iceberg reader). The `native_iceberg_compat` scan remains deprecated and is
-expected to be removed in a future release in favor of `native_datafusion`.
+fully superseded by the native Iceberg reader). See [comet#2921](https://github.com/apache/datafusion-comet/issues/2921)
+for background on the decision to standardize on the native iceberg-rust integration. The `native_iceberg_compat`
+scan remains deprecated and is expected to be removed in a future release in favor of `native_datafusion`.
 
 ## Compatibility
 
