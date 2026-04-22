@@ -1,5 +1,188 @@
 <?xml version="1.0" encoding="utf-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - pmc</title><link href="https://datafusion.apache.org/blog/" rel="alternate"></link><link href="https://datafusion.apache.org/blog/feeds/pmc.atom.xml" rel="self"></link><id>https://datafusion.apache.org/blog/</id><updated>2026-04-02T00:00:00+00:00</updated><subtitle></subtitle><entry><title>Apache DataFusion 53.0.0 Released</title><link href="https://datafusion.apache.org/blog/2026/04/02/datafusion-53.0.0" rel="alternate"></link><published>2026-04-02T00:00:00+00:00</published><updated>2026-04-02T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2026-04-02:/blog/2026/04/02/datafusion-53.0.0</id><summary type="html">&lt;!--
+<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - pmc</title><link href="https://datafusion.apache.org/blog/" rel="alternate"/><link href="https://datafusion.apache.org/blog/feeds/pmc.atom.xml" rel="self"/><id>https://datafusion.apache.org/blog/</id><updated>2026-04-18T00:00:00+00:00</updated><entry><title>Apache DataFusion Comet 0.15.0 Release</title><link href="https://datafusion.apache.org/blog/2026/04/18/datafusion-comet-0.15.0" rel="alternate"/><published>2026-04-18T00:00:00+00:00</published><updated>2026-04-18T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2026-04-18:/blog/2026/04/18/datafusion-comet-0.15.0</id><summary type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+
+&lt;p&gt;The Apache DataFusion PMC is pleased to announce version 0.15.0 of the &lt;a href="https://datafusion.apache.org/comet/"&gt;Comet&lt;/a&gt; subproject.&lt;/p&gt;
+&lt;p&gt;Comet is an accelerator for Apache Spark that translates Spark physical plans to DataFusion physical plans for
+improved performance and efficiency without requiring any code changes.&lt;/p&gt;
+&lt;p&gt;This release covers approximately four weeks of development …&lt;/p&gt;</summary><content type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+
+&lt;p&gt;The Apache DataFusion PMC is pleased to announce version 0.15.0 of the &lt;a href="https://datafusion.apache.org/comet/"&gt;Comet&lt;/a&gt; subproject.&lt;/p&gt;
+&lt;p&gt;Comet is an accelerator for Apache Spark that translates Spark physical plans to DataFusion physical plans for
+improved performance and efficiency without requiring any code changes.&lt;/p&gt;
+&lt;p&gt;This release covers approximately four weeks of development work and is the result of merging 142 PRs from 19
+contributors. See the &lt;a href="https://github.com/apache/datafusion-comet/blob/main/dev/changelog/0.15.0.md"&gt;change log&lt;/a&gt; for more information.&lt;/p&gt;
+&lt;h2 id="performance"&gt;Performance&lt;a class="headerlink" href="#performance" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;&lt;strong&gt;Comet 0.15.0 provides a 2x speedup for TPC-H @ SF1000 (1TB), resulting in 50% cost savings.&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;That 2x speedup gives you a choice: finish the same Spark workload in half the time on the cluster you already
+have, or match your current Spark performance on roughly half the resources. Either way, the gain translates
+directly into lower cloud bills, reduced on-prem capacity, and lower energy usage, with no changes to your
+existing Spark SQL, DataFrame, or PySpark code. Comet runs on commodity hardware: no GPUs, FPGAs, or other
+specialized accelerators are required, so the savings come from better utilization of the infrastructure you
+already run on.&lt;/p&gt;
+&lt;p&gt;&lt;img alt="TPC-H Overall Performance" class="img-fluid" src="/blog/images/comet-0.15.0/tpch_allqueries.png" width="100%"/&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img alt="TPC-H Query-by-Query Comparison" class="img-fluid" src="/blog/images/comet-0.15.0/tpch_queries_compare.png" width="100%"/&gt;&lt;/p&gt;
+&lt;p&gt;See the &lt;a href="https://datafusion.apache.org/comet/contributor-guide/benchmarking.html"&gt;Comet Benchmarking Guide&lt;/a&gt; for
+more details.&lt;/p&gt;
+&lt;p&gt;Performance was a major theme of this release, with a series of targeted optimizations across the shuffle, scan,
+and execution layers.&lt;/p&gt;
+&lt;h3 id="reducing-jvmnative-boundary-overhead"&gt;Reducing JVM/Native Boundary Overhead&lt;a class="headerlink" href="#reducing-jvmnative-boundary-overhead" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Several changes in this release target the cost of crossing between the JVM and native sides, which can dominate
+execution time in shuffle- and broadcast-heavy workloads:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Shuffle read path&lt;/strong&gt;: The native shuffle reader no longer uses FFI on the read side, removing a per-batch cost
+  that was particularly visible in shuffle-heavy queries.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Broadcast exchanges&lt;/strong&gt;: Batches are now coalesced before broadcasting, reducing the number of small batches
+  crossing the JVM/native boundary.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;FFI-safe operators&lt;/strong&gt;: More operators are marked as FFI-safe, avoiding unnecessary deep copies when crossing
+  the JVM/native boundary.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id="expanded-native-execution-coverage"&gt;Expanded Native Execution Coverage&lt;a class="headerlink" href="#expanded-native-execution-coverage" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Columnar-to-row (C2R)&lt;/strong&gt;: Native C2R conversion is now exercised for a broader set of query shapes.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;&lt;code&gt;auto&lt;/code&gt; scan mode&lt;/strong&gt;: The &lt;code&gt;auto&lt;/code&gt; scan mode now enables the &lt;code&gt;native_datafusion&lt;/code&gt; scan where supported, giving
+  users the benefits of the native Parquet reader without having to explicitly opt in. This is part of the
+  ongoing effort to make &lt;code&gt;native_datafusion&lt;/code&gt; the default Parquet path once the deprecation of
+  &lt;code&gt;native_iceberg_compat&lt;/code&gt; completes.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id="memory-management"&gt;Memory Management&lt;a class="headerlink" href="#memory-management" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Shared memory pools&lt;/strong&gt;: Unified memory pools are now shared across native execution contexts within a Spark
+  task, improving memory accounting and reducing OOMs.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id="object-storage-io"&gt;Object Storage I/O&lt;a class="headerlink" href="#object-storage-io" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Object store caching&lt;/strong&gt;: Object stores and bucket region lookups are cached, dramatically reducing DNS query
+  volume on workloads that open many files.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;&lt;code&gt;get_ranges&lt;/code&gt; performance&lt;/strong&gt;: Picked up an upstream &lt;code&gt;opendal&lt;/code&gt; fix that restores fast range reads from object
+  storage.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Together, these changes reduce CPU and memory overhead for shuffle-heavy, broadcast-heavy, and
+object-storage-bound workloads.&lt;/p&gt;
+&lt;h2 id="native-iceberg-reader-enabled-by-default"&gt;Native Iceberg Reader Enabled by Default&lt;a class="headerlink" href="#native-iceberg-reader-enabled-by-default" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;This release marks a major milestone for Iceberg users: &lt;strong&gt;Comet's fully-native Iceberg reader is now enabled by
+default&lt;/strong&gt;. Workloads that read Iceberg tables will automatically benefit from native Rust-based scans built on
+iceberg-rust, with no additional configuration required.&lt;/p&gt;
+&lt;p&gt;To support this change, the release bundles a broad set of Iceberg-focused improvements:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Dynamic Partition Pruning (DPP)&lt;/strong&gt;: The native Iceberg reader supports DPP, allowing partition filters
+  derived at runtime to prune Iceberg file scans and substantially reduce I/O for star-schema-style queries.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Correct classloader handling&lt;/strong&gt;: Iceberg classes are now loaded via the thread context classloader, resolving
+  class-loading issues in environments where the executor classloader differs from the application classloader.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Continuous Iceberg CI&lt;/strong&gt;: Iceberg Spark integration tests now run on every PR and push to &lt;code&gt;main&lt;/code&gt;, providing
+  continuous validation of the native Iceberg code path. Test diffs for Spark 3.4 were updated to keep the matrix
+  green across supported Spark versions.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;iceberg-rust upgrade&lt;/strong&gt;: Comet picks up the latest iceberg-rust, pulling in fixes for Parquet reader edge cases
+  discovered in earlier testing.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Refreshed documentation&lt;/strong&gt;: The Iceberg user guide has been rewritten to reflect current capabilities, and the
+  contributor guide now documents how to run the Iceberg Spark test suites locally.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Users who need to fall back to the previous behavior can still opt out, but we encourage the community to exercise
+the native reader and report any issues.&lt;/p&gt;
+&lt;h3 id="sort-merge-join-performance"&gt;Sort-Merge Join Performance&lt;a class="headerlink" href="#sort-merge-join-performance" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Comet relies heavily on sort-merge join (SMJ) because DataFusion's hash joins do not yet support spilling to
+disk. For larger-than-memory joins, SMJ is the only viable path, making its performance critical for real-world
+workloads at scale.&lt;/p&gt;
+&lt;p&gt;DataFusion 53 includes several SMJ improvements that Comet 0.15.0 benefits from directly:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Zero-copy slicing&lt;/strong&gt; instead of the take kernel (&lt;a href="https://github.com/apache/datafusion/pull/20463"&gt;datafusion#20463&lt;/a&gt;)&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Streaming output&lt;/strong&gt; instead of waiting for all input before emitting (&lt;a href="https://github.com/apache/datafusion/pull/20482"&gt;datafusion#20482&lt;/a&gt;)&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Cached row counts&lt;/strong&gt; to avoid O(n) recounting (&lt;a href="https://github.com/apache/datafusion/pull/20478"&gt;datafusion#20478&lt;/a&gt;)&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Additional SMJ work is landing in upstream DataFusion and will arrive in a future Comet release:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Specialized semi/anti join stream (&lt;a href="https://github.com/apache/datafusion/pull/20806"&gt;datafusion#20806&lt;/a&gt;)&lt;/li&gt;
+&lt;li&gt;Batch deferred filtering with 20–50x improvements for near-unique LEFT and FULL joins (&lt;a href="https://github.com/apache/datafusion/pull/21184"&gt;datafusion#21184&lt;/a&gt;)&lt;/li&gt;
+&lt;li&gt;DynComparator for ~5% TPC-H improvement (&lt;a href="https://github.com/apache/datafusion/pull/21484"&gt;datafusion#21484&lt;/a&gt;)&lt;/li&gt;
+&lt;li&gt;Vec-based filter state replacing HashMap (&lt;a href="https://github.com/apache/datafusion/pull/21517"&gt;datafusion#21517&lt;/a&gt;)&lt;/li&gt;
+&lt;li&gt;Full outer join correctness fix for NULL filter results (&lt;a href="https://github.com/apache/datafusion/pull/21660"&gt;datafusion#21660&lt;/a&gt;)&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;With these performance improvements, the next release of Comet will enable SMJ with filters by default.&lt;/p&gt;
+&lt;h2 id="other-key-features"&gt;Other Key Features&lt;a class="headerlink" href="#other-key-features" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;h3 id="new-expressions-and-function-support"&gt;New Expressions and Function Support&lt;a class="headerlink" href="#new-expressions-and-function-support" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;This release adds support for the following:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Date/time functions&lt;/strong&gt;: &lt;code&gt;days&lt;/code&gt;, &lt;code&gt;hours&lt;/code&gt;, &lt;code&gt;date_from_unix_date&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;String/JSON functions&lt;/strong&gt;: native &lt;code&gt;get_json_object&lt;/code&gt; with improved performance over the fallback path&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Hash/math functions&lt;/strong&gt;: &lt;code&gt;bin&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Array functions&lt;/strong&gt;: &lt;code&gt;sort_array&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Window functions&lt;/strong&gt;: &lt;code&gt;LEAD&lt;/code&gt; and &lt;code&gt;LAG&lt;/code&gt; with &lt;code&gt;IGNORE NULLS&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Aggregates&lt;/strong&gt;: SQL &lt;code&gt;FILTER (WHERE ...)&lt;/code&gt; clauses now execute natively; &lt;code&gt;Corr&lt;/code&gt; aggregate enabled&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id="expanded-metrics-and-observability"&gt;Expanded Metrics and Observability&lt;a class="headerlink" href="#expanded-metrics-and-observability" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Comet metrics can now be exposed through Spark's external monitoring system, making it easier to integrate Comet
+execution statistics with existing observability dashboards. Native DataFusion scans also now report accurate
+&lt;code&gt;filesScanned&lt;/code&gt; and &lt;code&gt;bytesScanned&lt;/code&gt; input metrics, matching Spark's native Parquet scan reporting.&lt;/p&gt;
+&lt;h2 id="stability-and-correctness"&gt;Stability and Correctness&lt;a class="headerlink" href="#stability-and-correctness" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;A significant portion of this release is dedicated to stability and Spark compatibility. Highlights include:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Cast string to timestamp&lt;/strong&gt;: Multiple fixes for UTC timestamps, timezone handling, special formats
+  (&lt;code&gt;epoch&lt;/code&gt;, &lt;code&gt;now&lt;/code&gt;, etc.), and compatibility with Spark's semantics.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Cast decimal to string&lt;/strong&gt;: Added legacy mode handling to match Spark's output formatting.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;String to decimal&lt;/strong&gt;: Support for full-width characters, null characters, and negative scale.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Decimal arithmetic&lt;/strong&gt;: Fixes for decimal division and additional test coverage for ANSI overflow handling,
+  including scalar decimal overflow.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Array expressions&lt;/strong&gt;: Corrected &lt;code&gt;GetArrayItem&lt;/code&gt; null handling for dynamic indices; &lt;code&gt;array_append&lt;/code&gt; return type
+  fixed and marked &lt;code&gt;Compatible&lt;/code&gt;; audited &lt;code&gt;array_insert&lt;/code&gt; for correctness; &lt;code&gt;array_compact&lt;/code&gt; marked &lt;code&gt;Compatible&lt;/code&gt;;
+  array-to-array cast enabled.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;DateTrunc/TimestampTrunc&lt;/strong&gt;: Fixed native crashes when the input is a literal.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Ambiguous local times&lt;/strong&gt;: Correct handling of ambiguous and non-existent local times across DST transitions.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Case-insensitive Parquet fields&lt;/strong&gt;: &lt;code&gt;native_datafusion&lt;/code&gt; now correctly detects duplicate/ambiguous fields in
+  case-insensitive mode and falls back where appropriate.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Shuffle planning&lt;/strong&gt;: Shuffle fallback decisions are now "sticky" across planning passes, and Comet columnar
+  shuffle is skipped for stages containing DPP scans to avoid mismatched partitioning.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Error propagation&lt;/strong&gt;: Native error messages are now propagated through &lt;code&gt;SparkException&lt;/code&gt; even when the
+  &lt;code&gt;errorClass&lt;/code&gt; is empty, and file-not-found errors flow through the standard Spark error JSON path.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Trigonometric compatibility&lt;/strong&gt;: &lt;code&gt;tan&lt;/code&gt; and &lt;code&gt;atan2&lt;/code&gt; are now Spark-compatible.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id="dependency-upgrades"&gt;Dependency Upgrades&lt;a class="headerlink" href="#dependency-upgrades" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;This release upgrades to &lt;strong&gt;DataFusion 53.1&lt;/strong&gt; and &lt;strong&gt;Arrow 58.1&lt;/strong&gt;, and picks up the latest &lt;code&gt;iceberg-rust&lt;/code&gt; release
+with additional reader fixes. The &lt;code&gt;jni&lt;/code&gt; crate was upgraded to 0.22.4.&lt;/p&gt;
+&lt;h2 id="deprecations-and-removals"&gt;Deprecations and Removals&lt;a class="headerlink" href="#deprecations-and-removals" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;The &lt;code&gt;SupportsComet&lt;/code&gt; interface has been removed, along with the Java-based Iceberg integration path (which is
+fully superseded by the native Iceberg reader). See &lt;a href="https://github.com/apache/datafusion-comet/issues/2921"&gt;comet#2921&lt;/a&gt;
+for background on the decision to standardize on the native iceberg-rust integration. The &lt;code&gt;native_iceberg_compat&lt;/code&gt;
+scan remains deprecated and is expected to be removed in a future release in favor of &lt;code&gt;native_datafusion&lt;/code&gt;.&lt;/p&gt;
+&lt;h2 id="compatibility"&gt;Compatibility&lt;a class="headerlink" href="#compatibility" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Supported platforms include Spark 3.4.3, 3.5.4–3.5.8, and Spark 4.0.x with various JDK and Scala combinations.&lt;/p&gt;
+&lt;p&gt;The community encourages users to test Comet with existing Spark and Iceberg workloads and welcomes contributions
+to ongoing development.&lt;/p&gt;
+&lt;h2 id="get-started-with-comet-0150"&gt;Get Started with Comet 0.15.0&lt;a class="headerlink" href="#get-started-with-comet-0150" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Ready to try it out? Follow the &lt;a href="https://datafusion.apache.org/comet/user-guide/0.15/installation.html"&gt;Comet 0.15.0 Installation Guide&lt;/a&gt;
+to get up and running, then point Comet at your existing Spark workloads and see the speedup for yourself.&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Apache DataFusion 53.0.0 Released</title><link href="https://datafusion.apache.org/blog/2026/04/02/datafusion-53.0.0" rel="alternate"/><published>2026-04-02T00:00:00+00:00</published><updated>2026-04-02T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2026-04-02:/blog/2026/04/02/datafusion-53.0.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -177,7 +360,7 @@ issue&lt;/a&gt; for the latest status.&lt;/p&gt;
 &lt;p&gt;Thank you to everyone in the DataFusion community who contributed code, reviews,
 testing, bug reports, documentation, and release engineering work for 53.0.0.
 This release contains direct contributions from 114 different people, and we are
-grateful for the time and effort that everyone put in to make it happen.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Apache DataFusion Comet 0.14.0 Release</title><link href="https://datafusion.apache.org/blog/2026/03/18/datafusion-comet-0.14.0" rel="alternate"></link><published>2026-03-18T00:00:00+00:00</published><updated>2026-03-18T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2026-03-18:/blog/2026/03/18/datafusion-comet-0.14.0</id><summary type="html">&lt;!--
+grateful for the time and effort that everyone put in to make it happen.&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Apache DataFusion Comet 0.14.0 Release</title><link href="https://datafusion.apache.org/blog/2026/03/18/datafusion-comet-0.14.0" rel="alternate"/><published>2026-03-18T00:00:00+00:00</published><updated>2026-03-18T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2026-03-18:/blog/2026/03/18/datafusion-comet-0.14.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -278,7 +461,7 @@ that the &lt;code&gt;native_iceberg_compat&lt;/code&gt; scan is now deprecated a
 &lt;p&gt;This release upgrades to DataFusion 52.3, Arrow 57.3, and iceberg-rust 0.9.0. Published binaries now target
 x86-64-v3 and neoverse-n1 CPU architectures for improved performance on modern hardware.&lt;/p&gt;
 &lt;p&gt;Supported platforms include Spark 3.4.3, 3.5.4-3.5.8, and Spark 4.0.x with various JDK and Scala combinations.&lt;/p&gt;
-&lt;p&gt;The community encourages users to test Comet with existing Spark workloads and welcomes contributions to ongoing development.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Apache DataFusion Comet 0.13.0 Release</title><link href="https://datafusion.apache.org/blog/2026/01/30/datafusion-comet-0.13.0" rel="alternate"></link><published>2026-01-30T00:00:00+00:00</published><updated>2026-01-30T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2026-01-30:/blog/2026/01/30/datafusion-comet-0.13.0</id><summary type="html">&lt;!--
+&lt;p&gt;The community encourages users to test Comet with existing Spark workloads and welcomes contributions to ongoing development.&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Apache DataFusion Comet 0.13.0 Release</title><link href="https://datafusion.apache.org/blog/2026/01/30/datafusion-comet-0.13.0" rel="alternate"/><published>2026-01-30T00:00:00+00:00</published><updated>2026-01-30T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2026-01-30:/blog/2026/01/30/datafusion-comet-0.13.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -394,7 +577,7 @@ spark.comet.parquet.write.enabled=true
 &lt;h2 id="compatibility"&gt;Compatibility&lt;a class="headerlink" href="#compatibility" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;This release upgrades to DataFusion 51, Arrow 57, and the latest iceberg-rust. The minimum supported Rust version is now 1.88.&lt;/p&gt;
 &lt;p&gt;Supported platforms include Spark 3.4.3, 3.5.4-3.5.7, and Spark 4.0.x with various JDK and Scala combinations.&lt;/p&gt;
-&lt;p&gt;The community encourages users to test Comet with existing Spark workloads and welcomes contributions to ongoing development.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Apache DataFusion 52.0.0 Released</title><link href="https://datafusion.apache.org/blog/2026/01/12/datafusion-52.0.0" rel="alternate"></link><published>2026-01-12T00:00:00+00:00</published><updated>2026-01-12T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2026-01-12:/blog/2026/01/12/datafusion-52.0.0</id><summary type="html">&lt;!--
+&lt;p&gt;The community encourages users to test Comet with existing Spark workloads and welcomes contributions to ongoing development.&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Apache DataFusion 52.0.0 Released</title><link href="https://datafusion.apache.org/blog/2026/01/12/datafusion-52.0.0" rel="alternate"/><published>2026-01-12T00:00:00+00:00</published><updated>2026-01-12T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2026-01-12:/blog/2026/01/12/datafusion-52.0.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -633,7 +816,7 @@ build a shared technology that none of us could have built alone.&lt;/p&gt;
 DataFusion on some of your own data and projects and let us know how it goes,
 contribute suggestions, documentation, bug reports, or a PR with documentation,
 tests, or code. A list of open issues suitable for beginners is &lt;a href="https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22"&gt;here&lt;/a&gt;, and you
-can find out how to reach us on the &lt;a href="https://datafusion.apache.org/contributor-guide/communication.html"&gt;communication doc&lt;/a&gt;.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Apache DataFusion Comet 0.12.0 Release</title><link href="https://datafusion.apache.org/blog/2025/12/04/datafusion-comet-0.12.0" rel="alternate"></link><published>2025-12-04T00:00:00+00:00</published><updated>2025-12-04T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2025-12-04:/blog/2025/12/04/datafusion-comet-0.12.0</id><summary type="html">&lt;!--
+can find out how to reach us on the &lt;a href="https://datafusion.apache.org/contributor-guide/communication.html"&gt;communication doc&lt;/a&gt;.&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Apache DataFusion Comet 0.12.0 Release</title><link href="https://datafusion.apache.org/blog/2025/12/04/datafusion-comet-0.12.0" rel="alternate"/><published>2025-12-04T00:00:00+00:00</published><updated>2025-12-04T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2025-12-04:/blog/2025/12/04/datafusion-comet-0.12.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -755,7 +938,7 @@ project and have a weekly &lt;a href="https://docs.google.com/document/d/1NBpkIA
 &lt;p&gt;The easiest way to get involved is to test Comet with your current Spark jobs and file issues for any bugs or
 performance regressions that you find. See the &lt;a href="https://datafusion.apache.org/comet/user-guide/installation.html"&gt;Getting Started&lt;/a&gt; guide for instructions on downloading and installing
 Comet.&lt;/p&gt;
-&lt;p&gt;There are also many &lt;a href="https://github.com/apache/datafusion-comet/contribute"&gt;good first issues&lt;/a&gt; waiting for contributions.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Apache DataFusion 51.0.0 Released</title><link href="https://datafusion.apache.org/blog/2025/11/25/datafusion-51.0.0" rel="alternate"></link><published>2025-11-25T00:00:00+00:00</published><updated>2025-11-25T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2025-11-25:/blog/2025/11/25/datafusion-51.0.0</id><summary type="html">&lt;!--
+&lt;p&gt;There are also many &lt;a href="https://github.com/apache/datafusion-comet/contribute"&gt;good first issues&lt;/a&gt; waiting for contributions.&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Apache DataFusion 51.0.0 Released</title><link href="https://datafusion.apache.org/blog/2025/11/25/datafusion-51.0.0" rel="alternate"/><published>2025-11-25T00:00:00+00:00</published><updated>2025-11-25T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2025-11-25:/blog/2025/11/25/datafusion-51.0.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -981,7 +1164,7 @@ build a shared technology that none of us could have built alone.&lt;/p&gt;
 DataFusion on some of your own data and projects and let us know how it goes,
 contribute suggestions, documentation, bug reports, or a PR with documentation,
 tests, or code. A list of open issues suitable for beginners is &lt;a href="https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22"&gt;here&lt;/a&gt;, and you
-can find out how to reach us on the &lt;a href="https://datafusion.apache.org/contributor-guide/communication.html"&gt;communication doc&lt;/a&gt;.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Apache DataFusion Comet 0.11.0 Release</title><link href="https://datafusion.apache.org/blog/2025/10/21/datafusion-comet-0.11.0" rel="alternate"></link><published>2025-10-21T00:00:00+00:00</published><updated>2025-10-21T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2025-10-21:/blog/2025/10/21/datafusion-comet-0.11.0</id><summary type="html">&lt;!--
+can find out how to reach us on the &lt;a href="https://datafusion.apache.org/contributor-guide/communication.html"&gt;communication doc&lt;/a&gt;.&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Apache DataFusion Comet 0.11.0 Release</title><link href="https://datafusion.apache.org/blog/2025/10/21/datafusion-comet-0.11.0" rel="alternate"/><published>2025-10-21T00:00:00+00:00</published><updated>2025-10-21T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2025-10-21:/blog/2025/10/21/datafusion-comet-0.11.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -1128,7 +1311,7 @@ project and have a weekly &lt;a href="https://docs.google.com/document/d/1NBpkIA
 &lt;p&gt;The easiest way to get involved is to test Comet with your current Spark jobs and file issues for any bugs or
 performance regressions that you find. See the &lt;a href="https://datafusion.apache.org/comet/user-guide/installation.html"&gt;Getting Started&lt;/a&gt; guide for instructions on downloading and installing
 Comet.&lt;/p&gt;
-&lt;p&gt;There are also many &lt;a href="https://github.com/apache/datafusion-comet/contribute"&gt;good first issues&lt;/a&gt; waiting for contributions.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Apache DataFusion 50.0.0 Released</title><link href="https://datafusion.apache.org/blog/2025/09/29/datafusion-50.0.0" rel="alternate"></link><published>2025-09-29T00:00:00+00:00</published><updated>2025-09-29T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2025-09-29:/blog/2025/09/29/datafusion-50.0.0</id><summary type="html">&lt;!--
+&lt;p&gt;There are also many &lt;a href="https://github.com/apache/datafusion-comet/contribute"&gt;good first issues&lt;/a&gt; waiting for contributions.&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Apache DataFusion 50.0.0 Released</title><link href="https://datafusion.apache.org/blog/2025/09/29/datafusion-50.0.0" rel="alternate"/><published>2025-09-29T00:00:00+00:00</published><updated>2025-09-29T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2025-09-29:/blog/2025/09/29/datafusion-50.0.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -1468,7 +1651,7 @@ build a shared technology that none of us could have built alone.&lt;/p&gt;
 DataFusion on some of your own data and projects and let us know how it goes,
 contribute suggestions, documentation, bug reports, or a PR with documentation,
 tests, or code. A list of open issues suitable for beginners is &lt;a href="https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22"&gt;here&lt;/a&gt;, and you
-can find out how to reach us on the &lt;a href="https://datafusion.apache.org/contributor-guide/communication.html"&gt;communication doc&lt;/a&gt;.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Apache DataFusion Comet 0.10.0 Release</title><link href="https://datafusion.apache.org/blog/2025/09/16/datafusion-comet-0.10.0" rel="alternate"></link><published>2025-09-16T00:00:00+00:00</published><updated>2025-09-16T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2025-09-16:/blog/2025/09/16/datafusion-comet-0.10.0</id><summary type="html">&lt;!--
+can find out how to reach us on the &lt;a href="https://datafusion.apache.org/contributor-guide/communication.html"&gt;communication doc&lt;/a&gt;.&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Apache DataFusion Comet 0.10.0 Release</title><link href="https://datafusion.apache.org/blog/2025/09/16/datafusion-comet-0.10.0" rel="alternate"/><published>2025-09-16T00:00:00+00:00</published><updated>2025-09-16T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2025-09-16:/blog/2025/09/16/datafusion-comet-0.10.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -1581,7 +1764,7 @@ project and have a weekly &lt;a href="https://docs.google.com/document/d/1NBpkIA
 &lt;p&gt;The easiest way to get involved is to test Comet with your current Spark jobs and file issues for any bugs or
 performance regressions that you find. See the &lt;a href="https://datafusion.apache.org/comet/user-guide/installation.html"&gt;Getting Started&lt;/a&gt; guide for instructions on downloading and installing
 Comet.&lt;/p&gt;
-&lt;p&gt;There are also many &lt;a href="https://github.com/apache/datafusion-comet/contribute"&gt;good first issues&lt;/a&gt; waiting for contributions.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Apache DataFusion 49.0.0 Released</title><link href="https://datafusion.apache.org/blog/2025/07/28/datafusion-49.0.0" rel="alternate"></link><published>2025-07-28T00:00:00+00:00</published><updated>2025-07-28T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2025-07-28:/blog/2025/07/28/datafusion-49.0.0</id><summary type="html">&lt;!--
+&lt;p&gt;There are also many &lt;a href="https://github.com/apache/datafusion-comet/contribute"&gt;good first issues&lt;/a&gt; waiting for contributions.&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Apache DataFusion 49.0.0 Released</title><link href="https://datafusion.apache.org/blog/2025/07/28/datafusion-49.0.0" rel="alternate"/><published>2025-07-28T00:00:00+00:00</published><updated>2025-07-28T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2025-07-28:/blog/2025/07/28/datafusion-49.0.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -1889,7 +2072,7 @@ build a shared technology that none of us could have built alone.&lt;/p&gt;
 DataFusion on some of your own data and projects and let us know how it goes,
 contribute suggestions, documentation, bug reports, or a PR with documentation,
 tests, or code. A list of open issues suitable for beginners is &lt;a href="https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22"&gt;here&lt;/a&gt;, and you
-can find out how to reach us on the &lt;a href="https://datafusion.apache.org/contributor-guide/communication.html"&gt;communication doc&lt;/a&gt;.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Apache DataFusion 48.0.0 Released</title><link href="https://datafusion.apache.org/blog/2025/07/16/datafusion-48.0.0" rel="alternate"></link><published>2025-07-16T00:00:00+00:00</published><updated>2025-07-16T00:00:00+00:00</updated><author><name>PMC</name></author><id>tag:datafusion.apache.org,2025-07-16:/blog/2025/07/16/datafusion-48.0.0</id><summary type="html">&lt;!--
+can find out how to reach us on the &lt;a href="https://datafusion.apache.org/contributor-guide/communication.html"&gt;communication doc&lt;/a&gt;.&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Apache DataFusion 48.0.0 Released</title><link href="https://datafusion.apache.org/blog/2025/07/16/datafusion-48.0.0" rel="alternate"/><published>2025-07-16T00:00:00+00:00</published><updated>2025-07-16T00:00:00+00:00</updated><author><name>PMC</name></author><id>tag:datafusion.apache.org,2025-07-16:/blog/2025/07/16/datafusion-48.0.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -2085,7 +2268,7 @@ community discussions – whether you have questions, want to share how you’re
 contribute, we’d love to hear from you. A list of open issues suitable for beginners
 is &lt;a href="https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22"&gt;here&lt;/a&gt; and you
 can find how to reach us on the &lt;a href="https://datafusion.apache.org/contributor-guide/communication.html"&gt;communication doc&lt;/a&gt;.&lt;/p&gt;
-&lt;p&gt;Happy querying!&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Apache DataFusion 47.0.0 Released</title><link href="https://datafusion.apache.org/blog/2025/07/11/datafusion-47.0.0" rel="alternate"></link><published>2025-07-11T00:00:00+00:00</published><updated>2025-07-11T00:00:00+00:00</updated><author><name>PMC</name></author><id>tag:datafusion.apache.org,2025-07-11:/blog/2025/07/11/datafusion-47.0.0</id><summary type="html">&lt;!--
+&lt;p&gt;Happy querying!&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Apache DataFusion 47.0.0 Released</title><link href="https://datafusion.apache.org/blog/2025/07/11/datafusion-47.0.0" rel="alternate"/><published>2025-07-11T00:00:00+00:00</published><updated>2025-07-11T00:00:00+00:00</updated><author><name>PMC</name></author><id>tag:datafusion.apache.org,2025-07-11:/blog/2025/07/11/datafusion-47.0.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -2327,7 +2510,7 @@ community discussions – whether you have questions, want to share how you’re
 contribute, we’d love to hear from you. A list of open issues suitable for beginners
 is &lt;a href="https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22"&gt;here&lt;/a&gt; and you
 can find how to reach us on the &lt;a href="https://datafusion.apache.org/contributor-guide/communication.html"&gt;communication doc&lt;/a&gt;.&lt;/p&gt;
-&lt;p&gt;Happy querying!&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Apache DataFusion Comet 0.9.0 Release</title><link href="https://datafusion.apache.org/blog/2025/07/01/datafusion-comet-0.9.0" rel="alternate"></link><published>2025-07-01T00:00:00+00:00</published><updated>2025-07-01T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2025-07-01:/blog/2025/07/01/datafusion-comet-0.9.0</id><summary type="html">&lt;!--
+&lt;p&gt;Happy querying!&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Apache DataFusion Comet 0.9.0 Release</title><link href="https://datafusion.apache.org/blog/2025/07/01/datafusion-comet-0.9.0" rel="alternate"/><published>2025-07-01T00:00:00+00:00</published><updated>2025-07-01T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2025-07-01:/blog/2025/07/01/datafusion-comet-0.9.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -2474,7 +2657,7 @@ project and have a weekly &lt;a href="https://docs.google.com/document/d/1NBpkIA
 &lt;p&gt;The easiest way to get involved is to test Comet with your current Spark jobs and file issues for any bugs or
 performance regressions that you find. See the &lt;a href="https://datafusion.apache.org/comet/user-guide/installation.html"&gt;Getting Started&lt;/a&gt; guide for instructions on downloading and installing
 Comet.&lt;/p&gt;
-&lt;p&gt;There are also many &lt;a href="https://github.com/apache/datafusion-comet/contribute"&gt;good first issues&lt;/a&gt; waiting for contributions.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Apache DataFusion Comet 0.8.0 Release</title><link href="https://datafusion.apache.org/blog/2025/05/06/datafusion-comet-0.8.0" rel="alternate"></link><published>2025-05-06T00:00:00+00:00</published><updated>2025-05-06T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2025-05-06:/blog/2025/05/06/datafusion-comet-0.8.0</id><summary type="html">&lt;!--
+&lt;p&gt;There are also many &lt;a href="https://github.com/apache/datafusion-comet/contribute"&gt;good first issues&lt;/a&gt; waiting for contributions.&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Apache DataFusion Comet 0.8.0 Release</title><link href="https://datafusion.apache.org/blog/2025/05/06/datafusion-comet-0.8.0" rel="alternate"/><published>2025-05-06T00:00:00+00:00</published><updated>2025-05-06T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2025-05-06:/blog/2025/05/06/datafusion-comet-0.8.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -2561,7 +2744,7 @@ project and have a weekly &lt;a href="https://docs.google.com/document/d/1NBpkIA
 &lt;p&gt;The easiest way to get involved is to test Comet with your current Spark jobs and file issues for any bugs or
 performance regressions that you find. See the &lt;a href="https://datafusion.apache.org/comet/user-guide/installation.html"&gt;Getting Started&lt;/a&gt; guide for instructions on downloading and installing
 Comet.&lt;/p&gt;
-&lt;p&gt;There are also many &lt;a href="https://github.com/apache/datafusion-comet/contribute"&gt;good first issues&lt;/a&gt; waiting for contributions.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Apache DataFusion Comet 0.7.0 Release</title><link href="https://datafusion.apache.org/blog/2025/03/20/datafusion-comet-0.7.0" rel="alternate"></link><published>2025-03-20T00:00:00+00:00</published><updated>2025-03-20T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2025-03-20:/blog/2025/03/20/datafusion-comet-0.7.0</id><summary type="html">&lt;!--
+&lt;p&gt;There are also many &lt;a href="https://github.com/apache/datafusion-comet/contribute"&gt;good first issues&lt;/a&gt; waiting for contributions.&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Apache DataFusion Comet 0.7.0 Release</title><link href="https://datafusion.apache.org/blog/2025/03/20/datafusion-comet-0.7.0" rel="alternate"/><published>2025-03-20T00:00:00+00:00</published><updated>2025-03-20T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2025-03-20:/blog/2025/03/20/datafusion-comet-0.7.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -2663,7 +2846,7 @@ project and have a weekly &lt;a href="https://docs.google.com/document/d/1NBpkIA
 &lt;p&gt;The easiest way to get involved is to test Comet with your current Spark jobs and file issues for any bugs or
 performance regressions that you find. See the &lt;a href="https://datafusion.apache.org/comet/user-guide/installation.html"&gt;Getting Started&lt;/a&gt; guide for instructions on downloading and installing
 Comet.&lt;/p&gt;
-&lt;p&gt;There are also many &lt;a href="https://github.com/apache/datafusion-comet/contribute"&gt;good first issues&lt;/a&gt; waiting for contributions.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Apache DataFusion 45.0.0 Released</title><link href="https://datafusion.apache.org/blog/2025/02/20/datafusion-45.0.0" rel="alternate"></link><published>2025-02-20T00:00:00+00:00</published><updated>2025-02-20T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2025-02-20:/blog/2025/02/20/datafusion-45.0.0</id><summary type="html">&lt;!--
+&lt;p&gt;There are also many &lt;a href="https://github.com/apache/datafusion-comet/contribute"&gt;good first issues&lt;/a&gt; waiting for contributions.&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Apache DataFusion 45.0.0 Released</title><link href="https://datafusion.apache.org/blog/2025/02/20/datafusion-45.0.0" rel="alternate"/><published>2025-02-20T00:00:00+00:00</published><updated>2025-02-20T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2025-02-20:/blog/2025/02/20/datafusion-45.0.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -2853,7 +3036,7 @@ build a shared technology that none of us could have built alone.&lt;/p&gt;
 DataFusion on some of your own data and projects and let us know how it goes,
 contribute suggestions, documentation, bug reports, or a PR with documentation,
 tests or code. A list of open issues suitable for beginners is &lt;a href="https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22"&gt;here&lt;/a&gt; and you
-can find how to reach us on the &lt;a href="https://datafusion.apache.org/contributor-guide/communication.html"&gt;communication doc&lt;/a&gt;.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Apache DataFusion Comet 0.6.0 Release</title><link href="https://datafusion.apache.org/blog/2025/02/17/datafusion-comet-0.6.0" rel="alternate"></link><published>2025-02-17T00:00:00+00:00</published><updated>2025-02-17T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2025-02-17:/blog/2025/02/17/datafusion-comet-0.6.0</id><summary type="html">&lt;!--
+can find how to reach us on the &lt;a href="https://datafusion.apache.org/contributor-guide/communication.html"&gt;communication doc&lt;/a&gt;.&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Apache DataFusion Comet 0.6.0 Release</title><link href="https://datafusion.apache.org/blog/2025/02/17/datafusion-comet-0.6.0" rel="alternate"/><published>2025-02-17T00:00:00+00:00</published><updated>2025-02-17T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2025-02-17:/blog/2025/02/17/datafusion-comet-0.6.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -2933,7 +3116,7 @@ project and have a weekly &lt;a href="https://docs.google.com/document/d/1NBpkIA
 &lt;p&gt;The easiest way to get involved is to test Comet with your current Spark jobs and file issues for any bugs or
 performance regressions that you find. See the &lt;a href="https://datafusion.apache.org/comet/user-guide/installation.html"&gt;Getting Started&lt;/a&gt; guide for instructions on downloading and installing
 Comet.&lt;/p&gt;
-&lt;p&gt;There are also many &lt;a href="https://github.com/apache/datafusion-comet/contribute"&gt;good first issues&lt;/a&gt; waiting for contributions.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Apache DataFusion Comet 0.5.0 Release</title><link href="https://datafusion.apache.org/blog/2025/01/17/datafusion-comet-0.5.0" rel="alternate"></link><published>2025-01-17T00:00:00+00:00</published><updated>2025-01-17T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2025-01-17:/blog/2025/01/17/datafusion-comet-0.5.0</id><summary type="html">&lt;!--
+&lt;p&gt;There are also many &lt;a href="https://github.com/apache/datafusion-comet/contribute"&gt;good first issues&lt;/a&gt; waiting for contributions.&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Apache DataFusion Comet 0.5.0 Release</title><link href="https://datafusion.apache.org/blog/2025/01/17/datafusion-comet-0.5.0" rel="alternate"/><published>2025-01-17T00:00:00+00:00</published><updated>2025-01-17T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2025-01-17:/blog/2025/01/17/datafusion-comet-0.5.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -3028,7 +3211,7 @@ project and have a weekly &lt;a href="https://docs.google.com/document/d/1NBpkIA
 &lt;p&gt;The easiest way to get involved is to test Comet with your current Spark jobs and file issues for any bugs or
 performance regressions that you find. See the &lt;a href="https://datafusion.apache.org/comet/user-guide/installation.html"&gt;Getting Started&lt;/a&gt; guide for instructions on downloading and installing
 Comet.&lt;/p&gt;
-&lt;p&gt;There are also many &lt;a href="https://github.com/apache/datafusion-comet/contribute"&gt;good first issues&lt;/a&gt; waiting for contributions.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Apache DataFusion Comet 0.4.0 Release</title><link href="https://datafusion.apache.org/blog/2024/11/20/datafusion-comet-0.4.0" rel="alternate"></link><published>2024-11-20T00:00:00+00:00</published><updated>2024-11-20T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2024-11-20:/blog/2024/11/20/datafusion-comet-0.4.0</id><summary type="html">&lt;!--
+&lt;p&gt;There are also many &lt;a href="https://github.com/apache/datafusion-comet/contribute"&gt;good first issues&lt;/a&gt; waiting for contributions.&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Apache DataFusion Comet 0.4.0 Release</title><link href="https://datafusion.apache.org/blog/2024/11/20/datafusion-comet-0.4.0" rel="alternate"/><published>2024-11-20T00:00:00+00:00</published><updated>2024-11-20T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2024-11-20:/blog/2024/11/20/datafusion-comet-0.4.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -3128,7 +3311,7 @@ project and have a weekly &lt;a href="https://docs.google.com/document/d/1NBpkIA
 &lt;p&gt;The easiest way to get involved is to test Comet with your current Spark jobs and file issues for any bugs or
 performance regressions that you find. See the &lt;a href="https://datafusion.apache.org/comet/user-guide/installation.html"&gt;Getting Started&lt;/a&gt; guide for instructions on downloading and installing
 Comet.&lt;/p&gt;
-&lt;p&gt;There are also many &lt;a href="https://github.com/apache/datafusion-comet/contribute"&gt;good first issues&lt;/a&gt; waiting for contributions.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Apache DataFusion Comet 0.3.0 Release</title><link href="https://datafusion.apache.org/blog/2024/09/27/datafusion-comet-0.3.0" rel="alternate"></link><published>2024-09-27T00:00:00+00:00</published><updated>2024-09-27T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2024-09-27:/blog/2024/09/27/datafusion-comet-0.3.0</id><summary type="html">&lt;!--
+&lt;p&gt;There are also many &lt;a href="https://github.com/apache/datafusion-comet/contribute"&gt;good first issues&lt;/a&gt; waiting for contributions.&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Apache DataFusion Comet 0.3.0 Release</title><link href="https://datafusion.apache.org/blog/2024/09/27/datafusion-comet-0.3.0" rel="alternate"/><published>2024-09-27T00:00:00+00:00</published><updated>2024-09-27T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2024-09-27:/blog/2024/09/27/datafusion-comet-0.3.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -3214,7 +3397,7 @@ project.&lt;/p&gt;
 &lt;p&gt;The easiest way to get involved is to test Comet with your current Spark jobs and file issues for any bugs or
 performance regressions that you find. See the &lt;a href="https://datafusion.apache.org/comet/user-guide/installation.html"&gt;Getting Started&lt;/a&gt; guide for instructions on downloading and installing
 Comet.&lt;/p&gt;
-&lt;p&gt;There are also many &lt;a href="https://github.com/apache/datafusion-comet/contribute"&gt;good first issues&lt;/a&gt; waiting for contributions.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Apache DataFusion Comet 0.2.0 Release</title><link href="https://datafusion.apache.org/blog/2024/08/28/datafusion-comet-0.2.0" rel="alternate"></link><published>2024-08-28T00:00:00+00:00</published><updated>2024-08-28T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2024-08-28:/blog/2024/08/28/datafusion-comet-0.2.0</id><summary type="html">&lt;!--
+&lt;p&gt;There are also many &lt;a href="https://github.com/apache/datafusion-comet/contribute"&gt;good first issues&lt;/a&gt; waiting for contributions.&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Apache DataFusion Comet 0.2.0 Release</title><link href="https://datafusion.apache.org/blog/2024/08/28/datafusion-comet-0.2.0" rel="alternate"/><published>2024-08-28T00:00:00+00:00</published><updated>2024-08-28T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2024-08-28:/blog/2024/08/28/datafusion-comet-0.2.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -3303,7 +3486,7 @@ project.&lt;/p&gt;
 &lt;p&gt;The easiest way to get involved is to test Comet with your current Spark jobs and file issues for any bugs or
 performance regressions that you find. See the &lt;a href="https://datafusion.apache.org/comet/user-guide/installation.html"&gt;Getting Started&lt;/a&gt; guide for instructions on downloading and installing
 Comet.&lt;/p&gt;
-&lt;p&gt;There are also many &lt;a href="https://github.com/apache/datafusion-comet/contribute"&gt;good first issues&lt;/a&gt; waiting for contributions.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Apache DataFusion 40.0.0 Released</title><link href="https://datafusion.apache.org/blog/2024/07/24/datafusion-40.0.0" rel="alternate"></link><published>2024-07-24T00:00:00+00:00</published><updated>2024-07-24T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2024-07-24:/blog/2024/07/24/datafusion-40.0.0</id><summary type="html">&lt;!--
+&lt;p&gt;There are also many &lt;a href="https://github.com/apache/datafusion-comet/contribute"&gt;good first issues&lt;/a&gt; waiting for contributions.&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Apache DataFusion 40.0.0 Released</title><link href="https://datafusion.apache.org/blog/2024/07/24/datafusion-40.0.0" rel="alternate"/><published>2024-07-24T00:00:00+00:00</published><updated>2024-07-24T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2024-07-24:/blog/2024/07/24/datafusion-40.0.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -3630,7 +3813,7 @@ build a shared technology that none of us could have built alone.&lt;/p&gt;
 DataFusion on some of your own data and projects and let us know how it goes,
 contribute suggestions, documentation, bug reports, or a PR with documentation,
 tests or code. A list of open issues suitable for beginners is &lt;a href="https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22"&gt;here&lt;/a&gt; and you
-can find how to reach us on the &lt;a href="https://datafusion.apache.org/contributor-guide/communication.html"&gt;communication doc&lt;/a&gt;.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Apache DataFusion Comet 0.1.0 Release</title><link href="https://datafusion.apache.org/blog/2024/07/20/datafusion-comet-0.1.0" rel="alternate"></link><published>2024-07-20T00:00:00+00:00</published><updated>2024-07-20T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2024-07-20:/blog/2024/07/20/datafusion-comet-0.1.0</id><summary type="html">&lt;!--
+can find how to reach us on the &lt;a href="https://datafusion.apache.org/contributor-guide/communication.html"&gt;communication doc&lt;/a&gt;.&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Apache DataFusion Comet 0.1.0 Release</title><link href="https://datafusion.apache.org/blog/2024/07/20/datafusion-comet-0.1.0" rel="alternate"/><published>2024-07-20T00:00:00+00:00</published><updated>2024-07-20T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2024-07-20:/blog/2024/07/20/datafusion-comet-0.1.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -3746,7 +3929,7 @@ recordings of previous calls.&lt;/p&gt;
 &lt;p&gt;The easiest way to get involved is to test Comet with your current Spark jobs and file issues for any bugs or
 performance regressions that you find. See the &lt;a href="https://datafusion.apache.org/comet/user-guide/installation.html"&gt;Getting Started&lt;/a&gt; guide for instructions on downloading and installing
 Comet.&lt;/p&gt;
-&lt;p&gt;There are also many &lt;a href="https://github.com/apache/datafusion-comet/contribute"&gt;good first issues&lt;/a&gt; waiting for contributions.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Announcing Apache Arrow DataFusion is now Apache DataFusion</title><link href="https://datafusion.apache.org/blog/2024/05/07/datafusion-tlp" rel="alternate"></link><published>2024-05-07T00:00:00+00:00</published><updated>2024-05-07T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2024-05-07:/blog/2024/05/07/datafusion-tlp</id><summary type="html">&lt;!--
+&lt;p&gt;There are also many &lt;a href="https://github.com/apache/datafusion-comet/contribute"&gt;good first issues&lt;/a&gt; waiting for contributions.&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Announcing Apache Arrow DataFusion is now Apache DataFusion</title><link href="https://datafusion.apache.org/blog/2024/05/07/datafusion-tlp" rel="alternate"/><published>2024-05-07T00:00:00+00:00</published><updated>2024-05-07T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2024-05-07:/blog/2024/05/07/datafusion-tlp</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -3825,7 +4008,7 @@ DataFusion&lt;/a&gt; website.&lt;/p&gt;
 us. Get in touch using &lt;a href="https://datafusion.apache.org/contributor-guide/communication.html"&gt;Communication Doc&lt;/a&gt; and learn how to get involved in the
 &lt;a href="https://datafusion.apache.org/contributor-guide/index.html"&gt;Contributor Guide&lt;/a&gt;. We welcome everyone to try DataFusion on their
 own data and projects and let us know how it goes, contribute suggestions,
-documentation, bug reports, or a PR with documentation, tests or code.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Announcing Apache Arrow DataFusion Comet</title><link href="https://datafusion.apache.org/blog/2024/03/06/comet-donation" rel="alternate"></link><published>2024-03-06T00:00:00+00:00</published><updated>2024-03-06T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2024-03-06:/blog/2024/03/06/comet-donation</id><summary type="html">&lt;!--
+documentation, bug reports, or a PR with documentation, tests or code.&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Announcing Apache Arrow DataFusion Comet</title><link href="https://datafusion.apache.org/blog/2024/03/06/comet-donation" rel="alternate"/><published>2024-03-06T00:00:00+00:00</published><updated>2024-03-06T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2024-03-06:/blog/2024/03/06/comet-donation</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -3909,7 +4092,7 @@ expect to post another update with more details at that time.&lt;/p&gt;
 &lt;li&gt;
 &lt;p&gt;Try out the project and provide feedback, file issues, and contribute code.&lt;/p&gt;
 &lt;/li&gt;
-&lt;/ul&gt;</content><category term="blog"></category></entry><entry><title>Apache Arrow DataFusion 34.0.0 Released, Looking Forward to 2024</title><link href="https://datafusion.apache.org/blog/2024/01/19/datafusion-34.0.0" rel="alternate"></link><published>2024-01-19T00:00:00+00:00</published><updated>2024-01-19T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2024-01-19:/blog/2024/01/19/datafusion-34.0.0</id><summary type="html">&lt;!--
+&lt;/ul&gt;</content><category term="blog"/></entry><entry><title>Apache Arrow DataFusion 34.0.0 Released, Looking Forward to 2024</title><link href="https://datafusion.apache.org/blog/2024/01/19/datafusion-34.0.0" rel="alternate"/><published>2024-01-19T00:00:00+00:00</published><updated>2024-01-19T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2024-01-19:/blog/2024/01/19/datafusion-34.0.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -4176,7 +4359,7 @@ suitable for beginners is &lt;a href="https://github.com/apache/arrow-datafusion
 meetings. Timezones are always a challenge for such meetings, but we hope to
 have two calls that can work for most attendees. If you are interested
 in helping, or just want to say hi, please drop us a note via one of 
-the methods listed in our &lt;a href="https://arrow.apache.org/datafusion/contributor-guide/communication.html"&gt;Communication Doc&lt;/a&gt;.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Apache Arrow DataFusion 26.0.0</title><link href="https://datafusion.apache.org/blog/2023/06/24/datafusion-25.0.0" rel="alternate"></link><published>2023-06-24T00:00:00+00:00</published><updated>2023-06-24T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2023-06-24:/blog/2023/06/24/datafusion-25.0.0</id><summary type="html">&lt;!--
+the methods listed in our &lt;a href="https://arrow.apache.org/datafusion/contributor-guide/communication.html"&gt;Communication Doc&lt;/a&gt;.&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Apache Arrow DataFusion 26.0.0</title><link href="https://datafusion.apache.org/blog/2023/06/24/datafusion-25.0.0" rel="alternate"/><published>2023-06-24T00:00:00+00:00</published><updated>2023-06-24T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2023-06-24:/blog/2023/06/24/datafusion-25.0.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -4396,7 +4579,7 @@ data and projects and let us know how it goes or contribute a PR with
 documentation, tests or code. A list of open issues suitable for
 beginners is &lt;a href="https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22"&gt;here&lt;/a&gt;.&lt;/p&gt;
 &lt;p&gt;Check out our &lt;a href="https://arrow.apache.org/datafusion/contributor-guide/communication.html"&gt;Communication Doc&lt;/a&gt; for more ways to engage with the
-community.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Apache Arrow DataFusion 16.0.0 Project Update</title><link href="https://datafusion.apache.org/blog/2023/01/19/datafusion-16.0.0" rel="alternate"></link><published>2023-01-19T00:00:00+00:00</published><updated>2023-01-19T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2023-01-19:/blog/2023/01/19/datafusion-16.0.0</id><summary type="html">&lt;!--
+community.&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Apache Arrow DataFusion 16.0.0 Project Update</title><link href="https://datafusion.apache.org/blog/2023/01/19/datafusion-16.0.0" rel="alternate"/><published>2023-01-19T00:00:00+00:00</published><updated>2023-01-19T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2023-01-19:/blog/2023/01/19/datafusion-16.0.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -4640,7 +4823,7 @@ ways to engage with the community.&lt;/p&gt;
      1  yujie.zhang
      1  zembunia
      1  哇呜哇呜呀咦耶
-&lt;/code&gt;&lt;/pre&gt;</content><category term="blog"></category></entry><entry><title>Apache Arrow Ballista 0.9.0 Release</title><link href="https://datafusion.apache.org/blog/2022/10/28/ballista-0.9.0" rel="alternate"></link><published>2022-10-28T00:00:00+00:00</published><updated>2022-10-28T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2022-10-28:/blog/2022/10/28/ballista-0.9.0</id><summary type="html">&lt;!--
+&lt;/code&gt;&lt;/pre&gt;</content><category term="blog"/></entry><entry><title>Apache Arrow Ballista 0.9.0 Release</title><link href="https://datafusion.apache.org/blog/2022/10/28/ballista-0.9.0" rel="alternate"/><published>2022-10-28T00:00:00+00:00</published><updated>2022-10-28T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2022-10-28:/blog/2022/10/28/ballista-0.9.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -4740,7 +4923,7 @@ tuning Ballista.&lt;/p&gt;
 &lt;h2 id="getting-involved"&gt;Getting Involved&lt;a class="headerlink" href="#getting-involved" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;Ballista has a friendly community and we welcome contributions. A good place to start is to following the instructions
 in the &lt;a href="https://arrow.apache.org/ballista/"&gt;user guide&lt;/a&gt; and try using Ballista with your own SQL queries and ETL pipelines, and file issues
-for any bugs or feature suggestions.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Apache Arrow DataFusion 13.0.0 Project Update</title><link href="https://datafusion.apache.org/blog/2022/10/25/datafusion-13.0.0" rel="alternate"></link><published>2022-10-25T00:00:00+00:00</published><updated>2022-10-25T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2022-10-25:/blog/2022/10/25/datafusion-13.0.0</id><summary type="html">&lt;!--
+for any bugs or feature suggestions.&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Apache Arrow DataFusion 13.0.0 Project Update</title><link href="https://datafusion.apache.org/blog/2022/10/25/datafusion-13.0.0" rel="alternate"/><published>2022-10-25T00:00:00+00:00</published><updated>2022-10-25T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2022-10-25:/blog/2022/10/25/datafusion-13.0.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -4957,7 +5140,7 @@ ways to engage with the community.&lt;/p&gt;
      1  nvartolomei
      1  yourenawo
      1  Özgür Akkurt
-&lt;/code&gt;&lt;/pre&gt;</content><category term="blog"></category></entry><entry><title>Apache Arrow DataFusion 8.0.0 Release</title><link href="https://datafusion.apache.org/blog/2022/05/16/datafusion-8.0.0" rel="alternate"></link><published>2022-05-16T00:00:00+00:00</published><updated>2022-05-16T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2022-05-16:/blog/2022/05/16/datafusion-8.0.0</id><summary type="html">&lt;!--
+&lt;/code&gt;&lt;/pre&gt;</content><category term="blog"/></entry><entry><title>Apache Arrow DataFusion 8.0.0 Release</title><link href="https://datafusion.apache.org/blog/2022/05/16/datafusion-8.0.0" rel="alternate"/><published>2022-05-16T00:00:00+00:00</published><updated>2022-05-16T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2022-05-16:/blog/2022/05/16/datafusion-8.0.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -5147,7 +5330,7 @@ love to have you join us on the journey! You can help by trying out DataFusion o
 and let us know how it goes or contribute a PR with documentation, tests or code. A list of open issues suitable
 for beginners is &lt;a href="https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22"&gt;here&lt;/a&gt;&lt;/p&gt;
 &lt;p&gt;Check out our new &lt;a href="https://arrow.apache.org/datafusion/community/communication.html"&gt;Communication Doc&lt;/a&gt; on more
-ways to engage with the community.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Introducing Apache Arrow DataFusion Contrib</title><link href="https://datafusion.apache.org/blog/2022/03/21/datafusion-contrib" rel="alternate"></link><published>2022-03-21T00:00:00+00:00</published><updated>2022-03-21T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2022-03-21:/blog/2022/03/21/datafusion-contrib</id><summary type="html">&lt;!--
+ways to engage with the community.&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Introducing Apache Arrow DataFusion Contrib</title><link href="https://datafusion.apache.org/blog/2022/03/21/datafusion-contrib" rel="alternate"/><published>2022-03-21T00:00:00+00:00</published><updated>2022-03-21T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2022-03-21:/blog/2022/03/21/datafusion-contrib</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -5301,7 +5484,7 @@ the art query processing, we would love to have you join us on the journey! You
 can help by trying out DataFusion on some of your own data and projects and let us know how it goes or contribute a PR with documentation, tests or code. A list of open issues suitable for beginners is &lt;a href="https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22"&gt;here&lt;/a&gt;&lt;/p&gt;
 &lt;p&gt;The best way to find out about creating new extensions within DataFusion-Contrib is reaching out on the &lt;code&gt;#arrow-rust&lt;/code&gt; channel of the Apache Software Foundation &lt;a href="https://join.slack.com/t/the-asf/shared_invite/zt-vlfbf7ch-HkbNHiU_uDlcH_RvaHv9gQ"&gt;Slack&lt;/a&gt; workspace.&lt;/p&gt;
 &lt;p&gt;You can also check out our new &lt;a href="https://arrow.apache.org/datafusion/community/communication.html"&gt;Communication Doc&lt;/a&gt; on more ways to engage with the community.&lt;/p&gt;
-&lt;p&gt;Links for each DataFusion-Contrib repository are provided above if you would like to contribute to those.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Apache Arrow DataFusion 7.0.0 Release</title><link href="https://datafusion.apache.org/blog/2022/02/28/datafusion-7.0.0" rel="alternate"></link><published>2022-02-28T00:00:00+00:00</published><updated>2022-02-28T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2022-02-28:/blog/2022/02/28/datafusion-7.0.0</id><summary type="html">&lt;!--
+&lt;p&gt;Links for each DataFusion-Contrib repository are provided above if you would like to contribute to those.&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Apache Arrow DataFusion 7.0.0 Release</title><link href="https://datafusion.apache.org/blog/2022/02/28/datafusion-7.0.0" rel="alternate"/><published>2022-02-28T00:00:00+00:00</published><updated>2022-02-28T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2022-02-28:/blog/2022/02/28/datafusion-7.0.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -5459,7 +5642,7 @@ git shortlog -sn 5.0.0..6.0.0 datafusion datafusion-cli datafusion-examples | wc
 the art query processing, we would love to have you join us on the journey! You
 can help by trying out DataFusion on some of your own data and projects and let us know how it goes or contribute a PR with documentation, tests or code. A list of open issues suitable for beginners is &lt;a href="https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22"&gt;here&lt;/a&gt;&lt;/p&gt;
 &lt;p&gt;Check out our new &lt;a href="https://arrow.apache.org/datafusion/community/communication.html"&gt;Communication Doc&lt;/a&gt; on more
-ways to engage with the community.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Apache Arrow DataFusion 6.0.0 Release</title><link href="https://datafusion.apache.org/blog/2021/11/19/2021-11-8-datafusion-6.0.0.md" rel="alternate"></link><published>2021-11-19T00:00:00+00:00</published><updated>2021-11-19T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2021-11-19:/blog/2021/11/19/2021-11-8-datafusion-6.0.0.md</id><summary type="html">&lt;!--
+ways to engage with the community.&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Apache Arrow DataFusion 6.0.0 Release</title><link href="https://datafusion.apache.org/blog/2021/11/19/2021-11-8-datafusion-6.0.0.md" rel="alternate"/><published>2021-11-19T00:00:00+00:00</published><updated>2021-11-19T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2021-11-19:/blog/2021/11/19/2021-11-8-datafusion-6.0.0.md</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -5615,7 +5798,7 @@ improve the documentation, or contribute to the documentation, tests or code. A 
 beginners is &lt;a href="https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22"&gt;here&lt;/a&gt;
 and the full list is &lt;a href="https://github.com/apache/arrow-datafusion/issues"&gt;here&lt;/a&gt;.&lt;/p&gt;
 &lt;p&gt;Check out our new &lt;a href="https://arrow.apache.org/datafusion/community/communication.html"&gt;Communication Doc&lt;/a&gt; on more
-ways to engage with the community.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Apache Arrow Ballista 0.5.0 Release</title><link href="https://datafusion.apache.org/blog/2021/08/18/ballista-0.5.0" rel="alternate"></link><published>2021-08-18T00:00:00+00:00</published><updated>2021-08-18T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2021-08-18:/blog/2021/08/18/ballista-0.5.0</id><summary type="html">&lt;!--
+ways to engage with the community.&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Apache Arrow Ballista 0.5.0 Release</title><link href="https://datafusion.apache.org/blog/2021/08/18/ballista-0.5.0" rel="alternate"/><published>2021-08-18T00:00:00+00:00</published><updated>2021-08-18T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2021-08-18:/blog/2021/08/18/ballista-0.5.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -5701,7 +5884,7 @@ scalability as well as improving the documentation.&lt;/p&gt;
 can help by trying out Ballista on some of your own data and projects and filing bug reports and helping to
 improve the documentation, or contribute to the documentation, tests or code. A list of open issues suitable for
 beginners is &lt;a href="https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22"&gt;here&lt;/a&gt;
-and the full list is &lt;a href="https://github.com/apache/arrow-datafusion/issues"&gt;here&lt;/a&gt;.&lt;/p&gt;</content><category term="blog"></category></entry><entry><title>Apache Arrow DataFusion 5.0.0 Release</title><link href="https://datafusion.apache.org/blog/2021/08/18/datafusion-5.0.0" rel="alternate"></link><published>2021-08-18T00:00:00+00:00</published><updated>2021-08-18T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2021-08-18:/blog/2021/08/18/datafusion-5.0.0</id><summary type="html">&lt;!--
+and the full list is &lt;a href="https://github.com/apache/arrow-datafusion/issues"&gt;here&lt;/a&gt;.&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Apache Arrow DataFusion 5.0.0 Release</title><link href="https://datafusion.apache.org/blog/2021/08/18/datafusion-5.0.0" rel="alternate"/><published>2021-08-18T00:00:00+00:00</published><updated>2021-08-18T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2021-08-18:/blog/2021/08/18/datafusion-5.0.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -5818,4 +6001,4 @@ performance of individual TPC-H queries compared to the previous release.&lt;/p&
 can help by trying out DataFusion on some of your own data and projects and filing bug reports and helping to 
 improve the documentation, or contribute to the documentation, tests or code. A list of open issues suitable for 
 beginners is &lt;a href="https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22"&gt;here&lt;/a&gt; 
-and the full list is &lt;a href="https://github.com/apache/arrow-datafusion/issues"&gt;here&lt;/a&gt;.&lt;/p&gt;</content><category term="blog"></category></entry></feed>
+and the full list is &lt;a href="https://github.com/apache/arrow-datafusion/issues"&gt;here&lt;/a&gt;.&lt;/p&gt;</content><category term="blog"/></entry></feed>
