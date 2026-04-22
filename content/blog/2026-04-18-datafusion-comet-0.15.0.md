@@ -208,3 +208,8 @@ Supported platforms include Spark 3.4.3, 3.5.4–3.5.8, and Spark 4.0.x with var
 
 The community encourages users to test Comet with existing Spark and Iceberg workloads and welcomes contributions
 to ongoing development.
+
+## Get Started with Comet 0.15.0
+
+Ready to try it out? Follow the [Comet 0.15.0 Installation Guide](https://datafusion.apache.org/comet/user-guide/0.15/installation.html)
+to get up and running, then point Comet at your existing Spark workloads and see the speedup for yourself.
