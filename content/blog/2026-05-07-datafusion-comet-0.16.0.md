@@ -186,7 +186,7 @@ This release adds native support for the following Spark expressions:
   and ±0.0 are partitioned consistently with Spark.
 - **Broadcast / AQE coalescing**: Broadcast exchanges now bypass AQE partition coalescing, fixing plans that
   could otherwise be coalesced into invalid shapes.
-- **JNI local frames**: JNI local frame management has been hardened with explicit error handling.
+- **JNI**: JNI local frame management has been hardened with explicit error handling.
 - **Shuffle fallback logic**: Shuffle fallback decisions have been improved, with a new config to gate
   conversion of Spark shuffle to Comet shuffle when the child plan is non-Comet, and a fix to avoid
   redundant columnar shuffle when both parent and child are non-Comet.
