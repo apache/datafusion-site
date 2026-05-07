@@ -1,0 +1,324 @@
+<!doctype html>
+<html class="no-js" lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apache DataFusion Comet 0.16.0 Release - Apache DataFusion Blog</title>
+<link href="/blog/favicon.ico" rel="icon" type="image/x-icon">
+<link href="/blog/favicon.ico" rel="shortcut icon" type="image/x-icon">
+<link href="/blog/css/bootstrap.min.css" rel="stylesheet">
+<link href="/blog/css/fontawesome.all.min.css" rel="stylesheet">
+<link href="/blog/css/headerlink.css" rel="stylesheet">
+<link href="/blog/highlight/default.min.css" rel="stylesheet">
+<link href="/blog/css/app.css" rel="stylesheet">
+<link href="/blog/css/dark-mode.css" rel="stylesheet">
+<script src="/blog/js/dark-mode.js"></script>
+<script src="/blog/highlight/highlight.js"></script>
+<script>hljs.highlightAll();</script>  </head>
+  <body class="d-flex flex-column h-100">
+  <main class="flex-shrink-0">
+<!-- nav bar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark" aria-label="Fifth navbar example">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/blog/"><img src="/blog/images/logo_original4x.png" style="height: 32px;"/> Apache DataFusion Blog</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarADP" aria-controls="navbarADP" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarADP">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/about.html">About</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/feed.xml">RSS</a>
+                </li>
+            </ul>
+            <button id="dark-mode-toggle" type="button" class="dark-mode-toggle" aria-label="Toggle dark mode" aria-pressed="false" title="Toggle dark mode">
+                <span class="sun-icon" aria-hidden="true">☀</span>
+                <span class="moon-icon" aria-hidden="true">☾</span>
+            </button>
+        </div>
+    </div>
+</nav>    
+<!-- article contents -->
+<div id="contents">
+  <div class="bg-white p-4 p-md-5 rounded">
+    <div class="row justify-content-center">
+      <div class="col-12 col-md-8 main-content">
+        <h1>
+          Apache DataFusion Comet 0.16.0 Release
+        </h1>
+        <p>Posted on: Thu 07 May 2026 by pmc</p>
+
+        <aside class="toc-container d-md-none mb-2">
+          <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#expanded-spark-4-support">Expanded Spark 4 Support</a><ul>
+<li><a href="#adapting-to-spark-4-behavior-changes">Adapting to Spark 4 Behavior Changes</a></li>
+<li><a href="#ansi-sql-semantics">ANSI SQL Semantics</a></li>
+</ul>
+</li>
+<li><a href="#dynamic-partition-pruning-for-native-parquet-scans">Dynamic Partition Pruning for Native Parquet Scans</a></li>
+<li><a href="#other-key-features">Other Key Features</a><ul>
+<li><a href="#hash-join-improvements">Hash Join Improvements</a></li>
+<li><a href="#aggregation">Aggregation</a></li>
+<li><a href="#new-expression-support">New Expression Support</a></li>
+<li><a href="#object-storage">Object Storage</a></li>
+<li><a href="#native-scan-improvements">Native Scan Improvements</a></li>
+<li><a href="#metrics-and-observability">Metrics and Observability</a></li>
+</ul>
+</li>
+<li><a href="#stability-and-correctness">Stability and Correctness</a></li>
+<li><a href="#compatibility">Compatibility</a></li>
+<li><a href="#get-started-with-comet-0160">Get Started with Comet 0.16.0</a></li>
+</ul>
+</div>
+        </aside>
+
+        <!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+-->
+
+<p>The Apache DataFusion PMC is pleased to announce version 0.16.0 of the <a href="https://datafusion.apache.org/comet/">Comet</a> subproject.</p>
+<p>Comet is an accelerator for Apache Spark that translates Spark physical plans to DataFusion physical plans for
+improved performance and efficiency without requiring any code changes.</p>
+<p>This release covers approximately three weeks of development work and is the result of merging 115 PRs from 17
+contributors. See the <a href="https://github.com/apache/datafusion-comet/blob/main/dev/changelog/0.16.0.md">change log</a> for more information.</p>
+<h2 id="expanded-spark-4-support">Expanded Spark 4 Support<a class="headerlink" href="#expanded-spark-4-support" title="Permanent link">¶</a></h2>
+<p>Spark 4 is a major theme of this release. Comet now ships first-class support for both Spark 4.0.2 and
+Spark 4.1.1, with dedicated Maven profiles, shim sources, and CI matrices for each.</p>
+<ul>
+<li><strong>Spark 4.1.1</strong>: New <code>spark-4.1</code> Maven profile and shim sources, with Comet's PR test matrix and Spark SQL
+  test suites enabled against Spark 4.1.1. The default Maven profile has been updated to Spark 4.1 / Scala 2.13
+  to reflect that this is now the primary development target.</li>
+<li><strong>Shared 4.x shims</strong>: Identical pieces of the Spark 4.0 and 4.1 shims have been consolidated into a shared
+  <code>spark-4.x</code> source tree, reducing duplication as more 4.x minor versions land.</li>
+<li><strong>Spark 4.0 / JDK 21</strong>: Added a Spark 4.0 / JDK 21 CI profile to validate Comet on the JDK most users are
+  expected to deploy with Spark 4.</li>
+</ul>
+<h3 id="adapting-to-spark-4-behavior-changes">Adapting to Spark 4 Behavior Changes<a class="headerlink" href="#adapting-to-spark-4-behavior-changes" title="Permanent link">¶</a></h3>
+<p>Spark 4 introduced a number of type, planner, and on-disk format changes relative to Spark 3.x. Several
+correctness fixes this cycle bring Comet's behavior in line with these changes:</p>
+<ul>
+<li><strong><code>Variant</code> type (new in Spark 4.0)</strong>: Spark 4.0 added a new <code>Variant</code> data type for semi-structured
+  data. Comet does not yet read the shredded Variant on-disk format natively, and delegates these scans
+  to Spark.</li>
+<li><strong>String collation (new in Spark 4.0)</strong>: Spark 4.0 added collation support for <code>StringType</code>. Comet's
+  native operators do not yet implement non-default collations, so hash join and sort-merge join reject
+  collated string join keys, and shuffle, sort, and aggregate fall back to Spark when keys carry a
+  non-default collation.</li>
+<li><strong>Wider <code>TimestampNTZType</code> usage</strong>: Spark 4 uses <code>TimestampNTZType</code> (timestamp without time zone) in
+  more places than 3.x — for example, in expression return types and as the inferred type for some
+  literal forms. Comet adds support this cycle for cast to and from <code>timestamp_ntz</code>, cast from string to
+  <code>timestamp_ntz</code>, and <code>unix_timestamp</code> over <code>TimestampNTZType</code> inputs.</li>
+<li><strong>DSv2 scalar subquery pushdown (<a href="https://issues.apache.org/jira/browse/SPARK-43402">SPARK-43402</a>)</strong>:
+  Spark extended scalar subquery pushdown and reuse to V2 file scans. <code>CometNativeScanExec</code> now
+  participates in this pushdown so DSv2 plans benefit from the same subquery reuse as Spark's own scan.</li>
+<li><strong><code>to_json</code> and <code>array_compact</code> (Spark 4.0)</strong>: Spark 4.0 adjusted output formatting and return-type
+  metadata for these expressions; Comet now matches the new behavior.</li>
+<li><strong>BloomFilter V2 (new in Spark 4.1)</strong>: Spark 4.1 introduced a new BloomFilter binary format with
+  different bit-scattering. Comet now reads this format so that runtime filters produced by Spark 4.1
+  remain usable in native execution.</li>
+<li><strong>Spark 4.1.1 analyzer refinements</strong>: Spark 4.1.1 changed how struct projections handle the case where
+  every requested child field is missing from the Parquet file, and how <code>allowDecimalPrecisionLoss</code>
+  flows through the <code>DecimalPrecision</code> rule. Comet now preserves parent-struct nullness in the first
+  case and the stored <code>allowDecimalPrecisionLoss</code> flag in the second.</li>
+</ul>
+<p>Most of these behavior differences were caught because <strong>Comet runs the full Apache Spark SQL test suite
+against each supported Spark version</strong> — 3.4.3, 3.5.8, 4.0.2, and 4.1.1 — as part of CI. Running Spark's
+own correctness tests through Comet's native execution path is what surfaces semantic shifts like
+<code>TimestampNTZType</code> propagation, ANSI-driven cast and overflow changes, BloomFilter V2 encoding, and the
+4.1.1 analyzer rule changes, often before they show up in user workloads. As more Spark 4.x minor releases
+land, this same harness is what gives us confidence that Comet keeps up.</p>
+<h3 id="ansi-sql-semantics">ANSI SQL Semantics<a class="headerlink" href="#ansi-sql-semantics" title="Permanent link">¶</a></h3>
+<p>Spark 4 enables ANSI SQL semantics by default. ANSI mode changes how arithmetic overflow, invalid casts,
+division by zero, and similar error conditions are handled, and Spark itself now treats this as the standard
+configuration rather than an opt-in.</p>
+<p>This is a critical area for any Spark accelerator: an engine that falls back to vanilla Spark whenever ANSI is
+enabled effectively does not run on Spark 4 by default. <strong>Comet implements ANSI semantics for the expressions
+it supports natively</strong>, including arithmetic overflow checks, ANSI cast behavior, and <code>try_*</code> variants.
+Queries running with <code>spark.sql.ansi.enabled=true</code> continue to be accelerated rather than falling back.</p>
+<p>See the <a href="https://datafusion.apache.org/comet/user-guide/latest/compatibility/index.html">Comet Compatibility Guide</a> for details on which expressions have full ANSI coverage, and the
+<a href="https://github.com/apache/datafusion-comet/issues/313">ANSI mode tracking issue</a> for ongoing work to extend
+coverage further.</p>
+<h2 id="dynamic-partition-pruning-for-native-parquet-scans">Dynamic Partition Pruning for Native Parquet Scans<a class="headerlink" href="#dynamic-partition-pruning-for-native-parquet-scans" title="Permanent link">¶</a></h2>
+<p>Comet 0.15.0 introduced Dynamic Partition Pruning (DPP) for the native Iceberg reader. Comet 0.16.0 extends
+DPP support across the rest of Comet's native scan paths, making it the default for the workloads most users
+actually run.</p>
+<ul>
+<li><strong>Non-AQE DPP for native Parquet scans</strong> (<a href="https://github.com/apache/datafusion-comet/pull/4011">#4011</a>):
+  DPP filters derived from broadcast subqueries are now honored by Comet's native Parquet scan, with broadcast
+  exchanges reused across the DPP subquery and the join.</li>
+<li><strong>AQE DPP for native Parquet scans</strong> (<a href="https://github.com/apache/datafusion-comet/pull/4112">#4112</a>):
+  When Adaptive Query Execution is enabled, broadcast reuse for DPP subqueries is wired through the AQE
+  re-planning path so DPP pruning fires after AQE rewrites the plan.</li>
+<li><strong>AQE DPP broadcast reuse for native Iceberg scans</strong> (<a href="https://github.com/apache/datafusion-comet/pull/4215">#4215</a>):
+  Brings the same AQE-aware broadcast reuse to the native Iceberg reader, completing DPP coverage across
+  Comet's native scan implementations.</li>
+</ul>
+<p>For star-schema-style workloads, DPP can substantially reduce I/O by pruning fact-table partitions based on
+filters applied to dimension tables at runtime. With this release, those benefits apply uniformly whether the
+underlying table is Parquet or Iceberg, and whether or not AQE is enabled.</p>
+<p>A number of previously-skipped DPP tests have been re-enabled this cycle as the implementation matured,
+including non-AQE DPP test cases and the <code>DynamicPartitionPruning</code> static-scan-metrics test.</p>
+<h2 id="other-key-features">Other Key Features<a class="headerlink" href="#other-key-features" title="Permanent link">¶</a></h2>
+<h3 id="hash-join-improvements">Hash Join Improvements<a class="headerlink" href="#hash-join-improvements" title="Permanent link">¶</a></h3>
+<ul>
+<li><strong><code>BuildRight</code> + <code>LeftAnti</code></strong> (<a href="https://github.com/apache/datafusion-comet/pull/4073">#4073</a>): Regular hash
+  joins now support the <code>BuildRight</code> + <code>LeftAnti</code> combination, eliminating a common fallback path. Tests
+  previously gated on <code>InjectRuntimeFilterSuite</code> issues have been re-enabled.</li>
+</ul>
+<h3 id="aggregation">Aggregation<a class="headerlink" href="#aggregation" title="Permanent link">¶</a></h3>
+<ul>
+<li><strong><code>PartialMerge</code> aggregation mode</strong> (<a href="https://github.com/apache/datafusion-comet/pull/4003">#4003</a>): The
+  <code>PartialMerge</code> mode is now executed natively, allowing more multi-stage aggregation plans to remain in
+  Comet without falling back to Spark.</li>
+<li><strong><code>collect_set</code></strong> (<a href="https://github.com/apache/datafusion-comet/pull/3954">#3954</a>): Native support for the
+  <code>collect_set</code> aggregate.</li>
+</ul>
+<h3 id="new-expression-support">New Expression Support<a class="headerlink" href="#new-expression-support" title="Permanent link">¶</a></h3>
+<p>This release adds native support for the following Spark expressions:</p>
+<ul>
+<li><strong>Math</strong>: <code>Pi</code>, <code>Cbrt</code>, <code>Acosh</code>, <code>Asinh</code>, <code>Atanh</code>, <code>ToDegrees</code>, <code>ToRadians</code></li>
+<li><strong>Date/time</strong>: <code>timestamp_seconds</code>, <code>unix_timestamp</code> with <code>TimestampNTZType</code></li>
+<li><strong>String / URL</strong>: <code>url_encode</code>, <code>url_decode</code>, <code>try_url_decode</code>, <code>str_to_map</code></li>
+<li><strong>Array / map</strong>: <code>arrays_zip</code>, <code>array_position</code>, <code>array_union</code>, <code>array_distinct</code>, <code>arrays_overlap</code>,
+  <code>MapSort</code> (Spark 4.0)</li>
+<li><strong>Cast</strong>: string to <code>timestamp_ntz</code>, cast to and from <code>timestamp_ntz</code></li>
+</ul>
+<p><code>array_insert</code> and <code>array_compact</code> have been audited and promoted to <code>Compatible</code>.</p>
+<h3 id="object-storage">Object Storage<a class="headerlink" href="#object-storage" title="Permanent link">¶</a></h3>
+<ul>
+<li><strong>OpenDAL 0.56.0</strong>: Picks up the latest OpenDAL release, including upstream object-store fixes.</li>
+<li><strong>Profile credential chain</strong>: <code>ProfileCredentialsProvider</code> is now mapped to the AWS profile credential
+  chain, matching the credential resolution behavior users expect.</li>
+</ul>
+<h3 id="native-scan-improvements">Native Scan Improvements<a class="headerlink" href="#native-scan-improvements" title="Permanent link">¶</a></h3>
+<ul>
+<li><strong>Parquet field ID matching</strong>: The <code>native_datafusion</code> scan now supports field-ID-based column resolution,
+  matching Spark's behavior for files written with field IDs.</li>
+<li><strong>Schema-mismatch errors</strong>: <code>native_datafusion</code> now throws <code>SchemaColumnConvertNotSupportedException</code> on
+  schema mismatch, allowing Spark's standard error handling to engage.</li>
+<li><strong>Stricter type validation</strong>: The <code>native_datafusion</code> scan now detects incompatible decimal precision/scale
+  and string/binary columns read as numeric, and delegates these reads to Spark.</li>
+</ul>
+<h3 id="metrics-and-observability">Metrics and Observability<a class="headerlink" href="#metrics-and-observability" title="Permanent link">¶</a></h3>
+<ul>
+<li><strong>Spark UI task output metrics</strong>: Native execution now reports task output metrics through the standard
+  Spark UI path.</li>
+<li><strong>Iceberg input metrics</strong>: Task-level <code>bytesRead</code> is now reported for the Iceberg native scan, matching
+  Comet's native Parquet scan.</li>
+<li><strong>Shuffle encode time</strong>: Shuffle operations now track encode time as a separate metric, making it easier
+  to attribute shuffle cost.</li>
+</ul>
+<h2 id="stability-and-correctness">Stability and Correctness<a class="headerlink" href="#stability-and-correctness" title="Permanent link">¶</a></h2>
+<ul>
+<li><strong>Substring with negative start index</strong>: Fixed a Spark-incompatibility in <code>substring</code> for negative indices.</li>
+<li><strong>Strict floating-point comparison</strong>: <code>RangePartitioning</code> now honors <code>strictFloatingPoint</code>, ensuring NaN
+  and ±0.0 are partitioned consistently with Spark.</li>
+<li><strong>Broadcast / AQE coalescing</strong>: Broadcast exchanges now bypass AQE partition coalescing, fixing plans that
+  could otherwise be coalesced into invalid shapes.</li>
+<li><strong>JNI local frames</strong>: JNI local frame management has been hardened with explicit error handling.</li>
+<li><strong>Shuffle fallback logic</strong>: Shuffle fallback decisions have been improved, with a new config to gate
+  conversion of Spark shuffle to Comet shuffle when the child plan is non-Comet, and a fix to avoid
+  redundant columnar shuffle when both parent and child are non-Comet.</li>
+</ul>
+<h2 id="compatibility">Compatibility<a class="headerlink" href="#compatibility" title="Permanent link">¶</a></h2>
+<p>Supported platforms include:</p>
+<ul>
+<li><strong>Spark 3.4.3</strong> with Java 11/17 and Scala 2.12/2.13</li>
+<li><strong>Spark 3.5.8</strong> with Java 11/17 and Scala 2.12/2.13</li>
+<li><strong>Spark 4.0.2</strong> with Java 17 and Scala 2.13</li>
+<li><strong>Spark 4.1.1</strong> with Java 17 and Scala 2.13</li>
+</ul>
+<p>See the <a href="https://datafusion.apache.org/comet/user-guide/latest/compatibility/spark-versions.html">Spark Version Compatibility</a> page for known limitations specific to each version.</p>
+<p>This release continues to build on <strong>DataFusion 53.1</strong> and <strong>Arrow 58.1</strong>.</p>
+<h2 id="get-started-with-comet-0160">Get Started with Comet 0.16.0<a class="headerlink" href="#get-started-with-comet-0160" title="Permanent link">¶</a></h2>
+<p>Ready to try it out? Follow the <a href="https://datafusion.apache.org/comet/user-guide/0.16/installation.html">Comet 0.16.0 Installation Guide</a>
+to get up and running, then point Comet at your existing Spark workloads — including Spark 4 with ANSI mode
+enabled — and see the speedup for yourself.</p>
+
+<!--
+  Comments Section
+  Loaded only after explicit visitor consent to comply with ASF policy.
+-->
+
+<div>
+  <hr>
+  <h3 id="comments">Comments<a class="headerlink" href="#comments" title="Permanent link">&para;</a></h3>
+
+  <!-- Local loader script -->
+  <script src="/blog/js/giscus-consent.js" defer></script>
+
+  <!-- Consent UI -->
+  <div id="giscus-consent">
+    <p>
+        We use <a href="https://giscus.app/">Giscus</a> for comments, powered by GitHub Discussions.
+        To respect your privacy, Giscus and comments will load only if you click "Show Comments"
+    </p>
+
+    <div class="consent-actions">
+      <button id="giscus-load" type="button">Show Comments</button>
+      <button id="giscus-revoke" type="button" hidden>Hide Comments</button>
+    </div>
+
+    <noscript>JavaScript is required to load comments from Giscus.</noscript>
+  </div>
+
+  <!-- Container where Giscus will render -->
+  <div id="comment-thread"></div>
+</div>      </div>
+      <aside class="toc-container d-none d-md-block col-md-4 col-xl-3 ms-xl-2">
+        <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#expanded-spark-4-support">Expanded Spark 4 Support</a><ul>
+<li><a href="#adapting-to-spark-4-behavior-changes">Adapting to Spark 4 Behavior Changes</a></li>
+<li><a href="#ansi-sql-semantics">ANSI SQL Semantics</a></li>
+</ul>
+</li>
+<li><a href="#dynamic-partition-pruning-for-native-parquet-scans">Dynamic Partition Pruning for Native Parquet Scans</a></li>
+<li><a href="#other-key-features">Other Key Features</a><ul>
+<li><a href="#hash-join-improvements">Hash Join Improvements</a></li>
+<li><a href="#aggregation">Aggregation</a></li>
+<li><a href="#new-expression-support">New Expression Support</a></li>
+<li><a href="#object-storage">Object Storage</a></li>
+<li><a href="#native-scan-improvements">Native Scan Improvements</a></li>
+<li><a href="#metrics-and-observability">Metrics and Observability</a></li>
+</ul>
+</li>
+<li><a href="#stability-and-correctness">Stability and Correctness</a></li>
+<li><a href="#compatibility">Compatibility</a></li>
+<li><a href="#get-started-with-comet-0160">Get Started with Comet 0.16.0</a></li>
+</ul>
+</div>
+      </aside>
+    </div>
+  </div>
+</div>    
+    <!-- footer -->
+    <div class="row g-0">
+      <div class="col-12">
+        <p style="font-style: italic; font-size: 0.8rem; text-align: center;">
+          Copyright 2026, <a href="https://www.apache.org/">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a>.<br/>
+          Apache&reg; and the Apache feather logo are trademarks of The Apache Software Foundation.
+        </p>
+      </div>
+    </div>
+    <script src="/blog/js/bootstrap.bundle.min.js"></script>  </main>
+  </body>
+</html>
