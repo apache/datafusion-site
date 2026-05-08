@@ -156,6 +156,10 @@ natively. Representative examples:
 Several Spark SQL DPP tests that Comet previously skipped are re-enabled to guarantee Spark compatibility
 and prevent regressions.
 
+## Improved TPC-DS Benchmark Results
+
+TODO: side-by-side TPC-DS benchmark results comparing 0.15.0 and 0.16.0.
+
 ## Other Key Features
 
 ### Hash Join Improvements
