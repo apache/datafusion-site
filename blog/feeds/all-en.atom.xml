@@ -59,7 +59,7 @@ Spark 4.1.1, with dedicated Maven profiles, shim sources, and CI matrices for ea
 &lt;/ul&gt;
 &lt;h3 id="adapting-to-spark-4-behavior-changes"&gt;Adapting to Spark 4 Behavior Changes&lt;a class="headerlink" href="#adapting-to-spark-4-behavior-changes" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;Spark 4 introduced a number of type, planner, and on-disk format changes relative to Spark 3.x. Several
-correctness fixes this cycle bring Comet's behavior in line with these changes:&lt;/p&gt;
+correctness fixes this release bring Comet's behavior in line with these changes:&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;&lt;strong&gt;&lt;code&gt;Variant&lt;/code&gt; type (new in Spark 4.0)&lt;/strong&gt;: Spark 4.0 added a new &lt;code&gt;Variant&lt;/code&gt; data type for semi-structured
   data. Comet does not yet read the shredded Variant on-disk format natively, and delegates these scans
@@ -72,9 +72,6 @@ correctness fixes this cycle bring Comet's behavior in line with these changes:&
   more places than 3.x — for example, in expression return types and as the inferred type for some
   literal forms. Comet adds support this cycle for cast to and from &lt;code&gt;timestamp_ntz&lt;/code&gt;, cast from string to
   &lt;code&gt;timestamp_ntz&lt;/code&gt;, and &lt;code&gt;unix_timestamp&lt;/code&gt; over &lt;code&gt;TimestampNTZType&lt;/code&gt; inputs.&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;DSv2 scalar subquery pushdown (&lt;a href="https://issues.apache.org/jira/browse/SPARK-43402"&gt;SPARK-43402&lt;/a&gt;)&lt;/strong&gt;:
-  Spark extended scalar subquery pushdown and reuse to V2 file scans. &lt;code&gt;CometNativeScanExec&lt;/code&gt; now
-  participates in this pushdown so DSv2 plans benefit from the same subquery reuse as Spark's own scan.&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;&lt;code&gt;to_json&lt;/code&gt; and &lt;code&gt;array_compact&lt;/code&gt; (Spark 4.0)&lt;/strong&gt;: Spark 4.0 adjusted output formatting and return-type
   metadata for these expressions; Comet now matches the new behavior.&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;BloomFilter V2 (new in Spark 4.1)&lt;/strong&gt;: Spark 4.1 introduced a new BloomFilter binary format with
@@ -99,29 +96,88 @@ configuration rather than an opt-in.&lt;/p&gt;
 enabled effectively does not run on Spark 4 by default. &lt;strong&gt;Comet implements ANSI semantics for the expressions
 it supports natively&lt;/strong&gt;, including arithmetic overflow checks, ANSI cast behavior, and &lt;code&gt;try_*&lt;/code&gt; variants.
 Queries running with &lt;code&gt;spark.sql.ansi.enabled=true&lt;/code&gt; continue to be accelerated rather than falling back.&lt;/p&gt;
-&lt;p&gt;See the &lt;a href="https://datafusion.apache.org/comet/user-guide/latest/compatibility/index.html"&gt;Comet Compatibility Guide&lt;/a&gt; for details on which expressions have full ANSI coverage, and the
-&lt;a href="https://github.com/apache/datafusion-comet/issues/313"&gt;ANSI mode tracking issue&lt;/a&gt; for ongoing work to extend
-coverage further.&lt;/p&gt;
-&lt;h2 id="dynamic-partition-pruning-for-native-parquet-scans"&gt;Dynamic Partition Pruning for Native Parquet Scans&lt;a class="headerlink" href="#dynamic-partition-pruning-for-native-parquet-scans" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
-&lt;p&gt;Comet 0.15.0 introduced Dynamic Partition Pruning (DPP) for the native Iceberg reader. Comet 0.16.0 extends
-DPP support across the rest of Comet's native scan paths, making it the default for the workloads most users
-actually run.&lt;/p&gt;
+&lt;p&gt;See the &lt;a href="https://datafusion.apache.org/comet/user-guide/latest/compatibility/index.html"&gt;Comet Compatibility Guide&lt;/a&gt; for details on which expressions have full ANSI coverage.&lt;/p&gt;
+&lt;h2 id="expanded-adaptive-execution-support"&gt;Expanded Adaptive Execution Support&lt;a class="headerlink" href="#expanded-adaptive-execution-support" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Modern Spark plans are adaptive: AQE re-plans stages at runtime, Dynamic Partition Pruning (DPP) prunes
+fact-table partitions based on broadcast dimension filters, and &lt;code&gt;ReuseExchange&lt;/code&gt; and &lt;code&gt;ReuseSubquery&lt;/code&gt; ensure
+that a broadcast or subquery referenced in multiple places executes only once. For star-schema workloads,
+these mechanisms are not optional. They are often the difference between a query that reads 1% of the fact
+table and one that reads all of it.&lt;/p&gt;
+&lt;p&gt;Prior to 0.16.0, Comet's native scans only partially participated in this machinery. &lt;code&gt;CometNativeScanExec&lt;/code&gt;
+(the DataFusion-based native Parquet scan) fell back to Spark entirely whenever a DPP filter was present.
+&lt;code&gt;CometIcebergNativeScanExec&lt;/code&gt; supported non-AQE DPP as of 0.15.0
+(&lt;a href="https://github.com/apache/datafusion-comet/pull/3349"&gt;#3349&lt;/a&gt;), but without broadcast exchange reuse, so
+the DPP subquery re-executed the dimension broadcast.&lt;/p&gt;
+&lt;p&gt;Comet 0.16.0 closes both gaps and aligns the native Parquet and native Iceberg scans on a single DPP and
+subquery-resolution path:&lt;/p&gt;
 &lt;ul&gt;
-&lt;li&gt;&lt;strong&gt;Non-AQE DPP for native Parquet scans&lt;/strong&gt; (&lt;a href="https://github.com/apache/datafusion-comet/pull/4011"&gt;#4011&lt;/a&gt;):
-  DPP filters derived from broadcast subqueries are now honored by Comet's native Parquet scan, with broadcast
-  exchanges reused across the DPP subquery and the join.&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;AQE DPP for native Parquet scans&lt;/strong&gt; (&lt;a href="https://github.com/apache/datafusion-comet/pull/4112"&gt;#4112&lt;/a&gt;):
-  When Adaptive Query Execution is enabled, broadcast reuse for DPP subqueries is wired through the AQE
-  re-planning path so DPP pruning fires after AQE rewrites the plan.&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;AQE DPP broadcast reuse for native Iceberg scans&lt;/strong&gt; (&lt;a href="https://github.com/apache/datafusion-comet/pull/4215"&gt;#4215&lt;/a&gt;):
-  Brings the same AQE-aware broadcast reuse to the native Iceberg reader, completing DPP coverage across
-  Comet's native scan implementations.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Non-AQE DPP for native Parquet, with broadcast exchange reuse&lt;/strong&gt;
+  (&lt;a href="https://github.com/apache/datafusion-comet/pull/4011"&gt;#4011&lt;/a&gt;,
+  &lt;a href="https://github.com/apache/datafusion-comet/pull/4037"&gt;#4037&lt;/a&gt;): A new &lt;code&gt;CometSubqueryBroadcastExec&lt;/code&gt; replaces
+  Spark's &lt;code&gt;SubqueryBroadcastExec&lt;/code&gt; in DPP expressions and wraps a &lt;code&gt;CometBroadcastExchangeExec&lt;/code&gt;, so
+  &lt;code&gt;ReuseExchangeAndSubquery&lt;/code&gt; matches the join side and the DPP subquery and broadcasts the dimension exactly
+  once.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;AQE DPP for native Parquet&lt;/strong&gt; (&lt;a href="https://github.com/apache/datafusion-comet/pull/4112"&gt;#4112&lt;/a&gt;): Under AQE,
+  Spark's &lt;code&gt;PlanAdaptiveDynamicPruningFilters&lt;/code&gt; cannot match Comet's broadcast hash join and would otherwise
+  rewrite DPP to &lt;code&gt;TrueLiteral&lt;/code&gt;, disabling pruning. 0.16.0 intercepts &lt;code&gt;SubqueryAdaptiveBroadcastExec&lt;/code&gt; before
+  Spark's rule runs, and applies Spark's decision tree in a Comet-aware rule that searches both the current
+  stage and the root plan for a reusable broadcast. DPP subqueries are registered in AQE's shared
+  &lt;code&gt;subqueryCache&lt;/code&gt; so cross-plan DPP (for example, a main query and a scalar subquery referencing the same
+  dimension) deduplicates correctly. A narrower tagging-based fallback covers Spark 3.4, which lacks the
+  &lt;code&gt;injectQueryStageOptimizerRule&lt;/code&gt; extension point.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;AQE DPP broadcast reuse for native Iceberg&lt;/strong&gt;
+  (&lt;a href="https://github.com/apache/datafusion-comet/pull/4215"&gt;#4215&lt;/a&gt;): Lifts &lt;code&gt;runtimeFilters&lt;/code&gt; to a top-level
+  constructor field on &lt;code&gt;CometIcebergNativeScanExec&lt;/code&gt; (mirroring &lt;code&gt;BatchScanExec&lt;/code&gt;), so Spark's
+  expression-rewrite passes can see and convert the DPP subquery. The same &lt;code&gt;CometSubqueryBroadcastExec&lt;/code&gt;
+  machinery from the Parquet path now handles the Iceberg case.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Scalar subquery pushdown and AQE subquery reuse&lt;/strong&gt;
+  (&lt;a href="https://github.com/apache/datafusion-comet/pull/4053"&gt;#4053&lt;/a&gt;,
+  &lt;a href="https://issues.apache.org/jira/browse/SPARK-43402"&gt;SPARK-43402&lt;/a&gt;): &lt;code&gt;CometNativeScanExec&lt;/code&gt; now participates
+  in scalar subquery pushdown into Parquet data filters, and in AQE-time subquery deduplication via a new
+  &lt;code&gt;CometReuseSubquery&lt;/code&gt; rule that re-applies Spark's &lt;code&gt;ReuseAdaptiveSubquery&lt;/code&gt; algorithm after Comet's node
+  replacements.&lt;/li&gt;
 &lt;/ul&gt;
-&lt;p&gt;For star-schema-style workloads, DPP can substantially reduce I/O by pruning fact-table partitions based on
-filters applied to dimension tables at runtime. With this release, those benefits apply uniformly whether the
-underlying table is Parquet or Iceberg, and whether or not AQE is enabled.&lt;/p&gt;
-&lt;p&gt;A number of previously-skipped DPP tests have been re-enabled this cycle as the implementation matured,
-including non-AQE DPP test cases and the &lt;code&gt;DynamicPartitionPruning&lt;/code&gt; static-scan-metrics test.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Measured impact on TPC-DS:&lt;/strong&gt; 78 queries previously fell back to Spark whenever
+DPP filters were planned, running 30–50% natively. With native DPP in 0.16.0, the same queries run 80–97%
+natively. Representative examples:&lt;/p&gt;
+&lt;table class="table"&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Query&lt;/th&gt;
+&lt;th&gt;Before&lt;/th&gt;
+&lt;th&gt;After&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;q1&lt;/td&gt;
+&lt;td&gt;36%&lt;/td&gt;
+&lt;td&gt;96%&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;q4&lt;/td&gt;
+&lt;td&gt;31%&lt;/td&gt;
+&lt;td&gt;95%&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;q31&lt;/td&gt;
+&lt;td&gt;31%&lt;/td&gt;
+&lt;td&gt;95%&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;q74&lt;/td&gt;
+&lt;td&gt;32%&lt;/td&gt;
+&lt;td&gt;95%&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;q92&lt;/td&gt;
+&lt;td&gt;36%&lt;/td&gt;
+&lt;td&gt;95%&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;Several Spark SQL DPP tests that Comet previously skipped are re-enabled to guarantee Spark compatibility
+and prevent regressions.&lt;/p&gt;
 &lt;h2 id="other-key-features"&gt;Other Key Features&lt;a class="headerlink" href="#other-key-features" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;h3 id="hash-join-improvements"&gt;Hash Join Improvements&lt;a class="headerlink" href="#hash-join-improvements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;ul&gt;
