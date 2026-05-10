@@ -6,6 +6,19 @@
 
   if (!container || !btnLoad || !btnRevoke) return;
 
+  // Giscus only works on the production origin listed in giscus.json.
+  // Show a notice instead of a broken iframe when running elsewhere.
+  if (location.origin !== 'https://datafusion.apache.org') {
+    btnLoad.hidden = true;
+    const notice = document.createElement('p');
+    notice.style.color = '#888';
+    notice.textContent =
+      'Giscus comments are disabled on localhost. ' +
+      'They will appear on the production site (https://datafusion.apache.org/blog).';
+    container.appendChild(notice);
+    return;
+  }
+
   // Giscus configuration 
   // 
   // <script src="https://giscus.app/client.js"
