@@ -13,8 +13,8 @@
     const notice = document.createElement('p');
     notice.style.color = '#888';
     notice.textContent =
-      'Giscus comments are disabled on localhost. ' +
-      'They will appear on the production site (https://datafusion.apache.org/blog).';
+      'Giscus comments are only available on the production site ' +
+      '(https://datafusion.apache.org/blog).';
     container.appendChild(notice);
     return;
   }
