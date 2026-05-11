@@ -158,7 +158,14 @@ and prevent regressions.
 
 ## Improved TPC-DS Benchmark Results
 
-TODO: side-by-side TPC-DS benchmark results comparing 0.15.0 and 0.16.0.
+TPC-DS performance increased significantly compared to the 0.15.0 release and Comet is now very close to 2x faster than Spark.
+
+<img
+src="/blog/images/comet-0.16.0/tpcds_speedup.png"
+width="100%"
+class="img-fluid"
+alt="TPC-DS Overall Performance"
+/>
 
 ## Other Key Features
 
