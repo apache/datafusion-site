@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 320">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#555"/>
+    </marker>
+    <marker id="arr-r" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#c0392b"/>
+    </marker>
+    <marker id="arr-g" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#27ae60"/>
+    </marker>
+  </defs>
+  <style>
+    text { font-family: 'Segoe UI', Arial, sans-serif; }
+    .lbl { font-size: 13px; fill: #333; text-anchor: middle; font-weight: 600; }
+    .sub { font-size: 11px; fill: #666; text-anchor: middle; }
+    .code { font-family: 'Courier New', monospace; font-size: 11px; fill: #444; text-anchor: middle; }
+  </style>
+
+  <!-- Step 1: Original Predicate -->
+  <rect x="250" y="10" width="300" height="44" rx="8" fill="#e3f2fd" stroke="#1976d2" stroke-width="1.5"/>
+  <text class="lbl" x="400" y="28">Original Predicate</text>
+  <text class="code" x="400" y="44">species LIKE 'Alpine%' AND s >= 50</text>
+
+  <line x1="400" y1="54" x2="400" y2="74" stroke="#555" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Step 2: Negate -->
+  <rect x="220" y="80" width="360" height="44" rx="8" fill="#fff3e0" stroke="#e67e22" stroke-width="1.5"/>
+  <text class="lbl" x="400" y="98">Negate the Predicate</text>
+  <text class="code" x="400" y="114">NOT(species LIKE 'Alpine%' AND s >= 50)</text>
+
+  <line x1="400" y1="124" x2="400" y2="144" stroke="#555" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Step 3: Simplify -->
+  <rect x="190" y="150" width="420" height="44" rx="8" fill="#f3e5f5" stroke="#8e24aa" stroke-width="1.5"/>
+  <text class="lbl" x="400" y="168">Simplify via PhysicalExprSimplifier</text>
+  <text class="code" x="400" y="184">species &lt; 'Alpine' OR species >= 'Alpinf' OR s &lt; 50</text>
+
+  <line x1="400" y1="194" x2="400" y2="214" stroke="#555" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Step 4: Evaluate -->
+  <rect x="220" y="220" width="360" height="36" rx="8" fill="#fce4ec" stroke="#c62828" stroke-width="1.5"/>
+  <text class="lbl" x="400" y="243">Evaluate Against Row Group Stats</text>
+
+  <!-- Left branch: Not Pruned → Partially Matched -->
+  <line x1="300" y1="256" x2="200" y2="280" stroke="#c0392b" stroke-width="1.5" marker-end="url(#arr-r)"/>
+  <rect x="80" y="272" width="240" height="36" rx="6" fill="#fde8e8" stroke="#c0392b" stroke-width="1.5"/>
+  <text class="lbl" x="200" y="290" fill="#c0392b">Not Pruned → Partially Matched</text>
+
+  <!-- Right branch: Pruned → Fully Matched -->
+  <line x1="500" y1="256" x2="600" y2="280" stroke="#27ae60" stroke-width="1.5" marker-end="url(#arr-g)"/>
+  <rect x="480" y="272" width="240" height="36" rx="6" fill="#e8f5e9" stroke="#27ae60" stroke-width="1.5"/>
+  <text class="lbl" x="600" y="290" fill="#27ae60">Pruned → Fully Matched</text>
+</svg>

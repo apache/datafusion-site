@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 260">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#555"/>
+    </marker>
+    <marker id="ag" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#27ae60"/>
+    </marker>
+    <marker id="ar" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#999"/>
+    </marker>
+  </defs>
+  <style>
+    text { font-family: 'Segoe UI', Arial, sans-serif; }
+    .lbl { font-size: 13px; fill: #333; text-anchor: middle; font-weight: 600; }
+    .sub { font-size: 11px; fill: #666; text-anchor: middle; }
+    .yn { font-size: 11px; font-weight: 700; font-family: 'Segoe UI', Arial, sans-serif; }
+  </style>
+
+  <!-- Main flow: left to right, centered at y=55 -->
+
+  <!-- 1. Iterate -->
+  <rect x="15" y="33" width="120" height="44" rx="8" fill="#e3f2fd" stroke="#1976d2" stroke-width="1.5"/>
+  <text class="lbl" x="75" y="51">Iterate RGs</text>
+  <text class="sub" x="75" y="66">in plan order</text>
+  <line x1="135" y1="55" x2="168" y2="55" stroke="#555" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- 2. Fully matched? -->
+  <rect x="173" y="33" width="150" height="44" rx="8" fill="#f3e5f5" stroke="#8e24aa" stroke-width="1.5"/>
+  <text class="lbl" x="248" y="60">Fully matched?</text>
+
+  <!-- YES → right to Accumulate -->
+  <line x1="323" y1="55" x2="368" y2="55" stroke="#27ae60" stroke-width="1.5" marker-end="url(#ag)"/>
+  <text class="yn" x="346" y="47" fill="#27ae60">YES</text>
+
+  <!-- NO → loop back below to Iterate -->
+  <line x1="248" y1="77" x2="248" y2="130" stroke="#999" stroke-width="1.5"/>
+  <line x1="248" y1="130" x2="75" y2="130" stroke="#999" stroke-width="1.5"/>
+  <line x1="75" y1="130" x2="75" y2="82" stroke="#999" stroke-width="1.5" marker-end="url(#ar)"/>
+  <text class="yn" x="262" y="105" fill="#999">NO</text>
+  <text class="sub" x="162" y="145" fill="#999">skip, next RG</text>
+
+  <!-- 3. Accumulate -->
+  <rect x="373" y="33" width="120" height="44" rx="8" fill="#e8f5e9" stroke="#27ae60" stroke-width="1.5"/>
+  <text class="lbl" x="433" y="51">Accumulate</text>
+  <text class="sub" x="433" y="66" font-family="'Courier New', monospace">total += rows</text>
+  <line x1="493" y1="55" x2="528" y2="55" stroke="#555" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- 4. total >= LIMIT? -->
+  <rect x="533" y="33" width="130" height="44" rx="8" fill="#fff3e0" stroke="#e67e22" stroke-width="1.5"/>
+  <text class="lbl" x="598" y="60">total >= LIMIT?</text>
+
+  <!-- YES → down to Rewrite -->
+  <line x1="598" y1="77" x2="598" y2="148" stroke="#27ae60" stroke-width="2" marker-end="url(#ag)"/>
+  <text class="yn" x="614" y="116" fill="#27ae60">YES</text>
+
+  <!-- NO → loop back above to Iterate -->
+  <line x1="663" y1="55" x2="720" y2="55" stroke="#999" stroke-width="1.5" stroke-dasharray="5"/>
+  <line x1="720" y1="55" x2="720" y2="15" stroke="#999" stroke-width="1.5" stroke-dasharray="5"/>
+  <line x1="720" y1="15" x2="75" y2="15" stroke="#999" stroke-width="1.5" stroke-dasharray="5"/>
+  <line x1="75" y1="15" x2="75" y2="28" stroke="#999" stroke-width="1.5" stroke-dasharray="5" marker-end="url(#ar)"/>
+  <text class="yn" x="740" y="40" fill="#999">NO</text>
+
+  <!-- 5. Rewrite Access Plan -->
+  <rect x="498" y="155" width="200" height="50" rx="8" fill="#c8e6c9" stroke="#2e7d32" stroke-width="2"/>
+  <text class="lbl" x="598" y="177" fill="#2e7d32">Rewrite Access Plan</text>
+  <text class="sub" x="598" y="194" fill="#2e7d32">Scan only fully matched RGs</text>
+
+  <!-- Footer -->
+  <text x="400" y="240" text-anchor="middle" font-size="11" fill="#aaa" font-family="'Segoe UI', Arial, sans-serif">If fully matched rows never reach LIMIT, fall back to the original plan.</text>
+</svg>

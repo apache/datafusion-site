@@ -1,0 +1,216 @@
+<!doctype html>
+<html class="no-js" lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apache Arrow Ballista 0.9.0 Release - Apache DataFusion Blog</title>
+<link href="/blog/favicon.ico" rel="icon" type="image/x-icon">
+<link href="/blog/favicon.ico" rel="shortcut icon" type="image/x-icon">
+<link href="/blog/css/bootstrap.min.css" rel="stylesheet">
+<link href="/blog/css/fontawesome.all.min.css" rel="stylesheet">
+<link href="/blog/css/headerlink.css" rel="stylesheet">
+<link href="/blog/highlight/default.min.css" rel="stylesheet">
+<link href="/blog/css/app.css" rel="stylesheet">
+<link href="/blog/css/dark-mode.css" rel="stylesheet">
+<script src="/blog/js/dark-mode.js"></script>
+<script src="/blog/highlight/highlight.js"></script>
+<script>hljs.highlightAll();</script>  </head>
+  <body class="d-flex flex-column h-100">
+  <main class="flex-shrink-0">
+<!-- nav bar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark" aria-label="Fifth navbar example">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/blog/"><img src="/blog/images/logo_original4x.png" style="height: 32px;"/> Apache DataFusion Blog</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarADP" aria-controls="navbarADP" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarADP">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/about.html">About</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/feed.xml">RSS</a>
+                </li>
+            </ul>
+            <button id="dark-mode-toggle" type="button" class="dark-mode-toggle" aria-label="Toggle dark mode" aria-pressed="false" title="Toggle dark mode">
+                <span class="sun-icon" aria-hidden="true">☀</span>
+                <span class="moon-icon" aria-hidden="true">☾</span>
+            </button>
+        </div>
+    </div>
+</nav>    
+<!-- article contents -->
+<div id="contents">
+  <div class="bg-white p-4 p-md-5 rounded">
+    <div class="row justify-content-center">
+      <div class="col-12 col-md-8 main-content">
+        <h1>
+          Apache Arrow Ballista 0.9.0 Release
+        </h1>
+        <p>Posted on: Fri 28 October 2022 by pmc</p>
+
+        <aside class="toc-container d-md-none mb-2">
+          <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#introduction">Introduction</a><ul>
+<li><a href="#release-highlights">Release Highlights</a><ul>
+<li><a href="#support-for-cloud-object-stores-and-distributed-file-systems">Support for Cloud Object Stores and Distributed File Systems</a></li>
+<li><a href="#flight-sql-jdbc-support">Flight SQL &amp; JDBC support</a></li>
+<li><a href="#python-bindings">Python Bindings</a></li>
+<li><a href="#scheduler-web-user-interface-and-rest-api">Scheduler Web User Interface and REST API</a></li>
+<li><a href="#simplified-kubernetes-deployment">Simplified Kubernetes Deployment</a></li>
+<li><a href="#user-guide">User Guide</a></li>
+</ul>
+</li>
+<li><a href="#roadmap">Roadmap</a></li>
+<li><a href="#getting-involved">Getting Involved</a></li>
+</ul>
+</li>
+</ul>
+</div>
+        </aside>
+
+        <!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+-->
+
+<h1 id="introduction">Introduction<a class="headerlink" href="#introduction" title="Permanent link">¶</a></h1>
+<p><a href="https://github.com/apache/arrow-ballista">Ballista</a> is an Arrow-native distributed SQL query engine implemented in Rust.</p>
+<p>Ballista 0.9.0 is now available and is the most significant release since the project was <a href="http://arrow.apache.org/blog/2021/04/12/ballista-donation/">donated</a> to Apache
+Arrow in 2021.</p>
+<p>This release represents 4 weeks of work, with 66 commits from 14 contributors:</p>
+<pre><code>    22  Andy Grove
+    12  yahoNanJing
+     6  Daniël Heres
+     4  Brent Gardner
+     4  dependabot[bot]
+     4  r.4ntix
+     3  Stefan Stanciulescu
+     3  mingmwang
+     2  Ken Suenobu
+     2  Yang Jiang
+     1  Metehan Yıldırım
+     1  Trent Feda
+     1  askoa
+     1  yangzhong
+</code></pre>
+<h2 id="release-highlights">Release Highlights<a class="headerlink" href="#release-highlights" title="Permanent link">¶</a></h2>
+<p>The release notes below are not exhaustive and only expose selected highlights of the release. Many other bug fixes
+and improvements have been made: we refer you to the <a href="https://github.com/apache/arrow-ballista/blob/0.9.0-rc2/ballista/CHANGELOG.md">complete changelog</a>.</p>
+<h3 id="support-for-cloud-object-stores-and-distributed-file-systems">Support for Cloud Object Stores and Distributed File Systems<a class="headerlink" href="#support-for-cloud-object-stores-and-distributed-file-systems" title="Permanent link">¶</a></h3>
+<p>This is the first release of Ballista to have documented support for querying data from distributed file systems and
+object stores. Currently, S3 and HDFS are supported. Support for Google Cloud Storage and Azure Blob Storage is planned
+for the next release.</p>
+<h3 id="flight-sql-jdbc-support">Flight SQL &amp; JDBC support<a class="headerlink" href="#flight-sql-jdbc-support" title="Permanent link">¶</a></h3>
+<p>The Ballista scheduler now implements the <a href="https://arrow.apache.org/blog/2022/02/16/introducing-arrow-flight-sql/">Flight SQL protocol</a>, enabling any compliant Flight SQL client
+to connect to and run queries against a Ballista cluster.</p>
+<p>The Apache Arrow Flight SQL JDBC driver can be used to connect Business Intelligence tools to a Ballista cluster.</p>
+<h3 id="python-bindings">Python Bindings<a class="headerlink" href="#python-bindings" title="Permanent link">¶</a></h3>
+<p>It is now possible to connect to a Ballista cluster from Python and execute queries using both the DataFrame and SQL
+interfaces.</p>
+<h3 id="scheduler-web-user-interface-and-rest-api">Scheduler Web User Interface and REST API<a class="headerlink" href="#scheduler-web-user-interface-and-rest-api" title="Permanent link">¶</a></h3>
+<p>The scheduler now has a web user interface for monitoring queries. It is also possible to view graphical query plans
+that show how the query was executed, along with metrics.</p>
+<p><img src="/blog/images/2022-10-28-ballista-web-ui.png" width="800"/></p>
+<p>The REST API that powers the user interface can also be accessed directly.</p>
+<h3 id="simplified-kubernetes-deployment">Simplified Kubernetes Deployment<a class="headerlink" href="#simplified-kubernetes-deployment" title="Permanent link">¶</a></h3>
+<p>Ballista now provides a <a href="https://github.com/apache/arrow-ballista/tree/master/helm">Helm chart</a> for simplified Kubernetes deployment.</p>
+<h3 id="user-guide">User Guide<a class="headerlink" href="#user-guide" title="Permanent link">¶</a></h3>
+<p>The user guide is published at <a href="https://arrow.apache.org/ballista/">https://arrow.apache.org/ballista/</a> and provides
+deployment instructions for Docker, Docker Compose, and Kubernetes, as well as references for configuring and
+tuning Ballista.</p>
+<h2 id="roadmap">Roadmap<a class="headerlink" href="#roadmap" title="Permanent link">¶</a></h2>
+<p>The Ballista community is currently focused on the following tasks for the next release:</p>
+<ul>
+<li>Support for Azure Blob Storage and Google Cloud Storage</li>
+<li>Improve benchmark performance by implementing more query optimizations</li>
+<li>Improve scheduler web user interface</li>
+<li>Publish Docker images to GitHub Container Registry</li>
+</ul>
+<p>The detailed list of issues planned for the 0.10.0 release can be found in the <a href="https://github.com/apache/arrow-ballista/issues/361">tracking issue</a>.</p>
+<h2 id="getting-involved">Getting Involved<a class="headerlink" href="#getting-involved" title="Permanent link">¶</a></h2>
+<p>Ballista has a friendly community and we welcome contributions. A good place to start is to following the instructions
+in the <a href="https://arrow.apache.org/ballista/">user guide</a> and try using Ballista with your own SQL queries and ETL pipelines, and file issues
+for any bugs or feature suggestions.</p>
+
+<!--
+  Comments Section
+  Loaded only after explicit visitor consent to comply with ASF policy.
+-->
+
+<div>
+  <hr>
+  <h3 id="comments">Comments<a class="headerlink" href="#comments" title="Permanent link">&para;</a></h3>
+
+  <!-- Local loader script -->
+  <script src="/blog/js/giscus-consent.js" defer></script>
+
+  <!-- Consent UI -->
+  <div id="giscus-consent">
+    <p>
+        We use <a href="https://giscus.app/">Giscus</a> for comments, powered by GitHub Discussions.
+        To respect your privacy, Giscus and comments will load only if you click "Show Comments"
+    </p>
+
+    <div class="consent-actions">
+      <button id="giscus-load" type="button">Show Comments</button>
+      <button id="giscus-revoke" type="button" hidden>Hide Comments</button>
+    </div>
+
+    <noscript>JavaScript is required to load comments from Giscus.</noscript>
+  </div>
+
+  <!-- Container where Giscus will render -->
+  <div id="comment-thread"></div>
+</div>      </div>
+      <aside class="toc-container d-none d-md-block col-md-4 col-xl-3 ms-xl-2">
+        <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#introduction">Introduction</a><ul>
+<li><a href="#release-highlights">Release Highlights</a><ul>
+<li><a href="#support-for-cloud-object-stores-and-distributed-file-systems">Support for Cloud Object Stores and Distributed File Systems</a></li>
+<li><a href="#flight-sql-jdbc-support">Flight SQL &amp; JDBC support</a></li>
+<li><a href="#python-bindings">Python Bindings</a></li>
+<li><a href="#scheduler-web-user-interface-and-rest-api">Scheduler Web User Interface and REST API</a></li>
+<li><a href="#simplified-kubernetes-deployment">Simplified Kubernetes Deployment</a></li>
+<li><a href="#user-guide">User Guide</a></li>
+</ul>
+</li>
+<li><a href="#roadmap">Roadmap</a></li>
+<li><a href="#getting-involved">Getting Involved</a></li>
+</ul>
+</li>
+</ul>
+</div>
+      </aside>
+    </div>
+  </div>
+</div>    
+    <!-- footer -->
+    <div class="row g-0">
+      <div class="col-12">
+        <p style="font-style: italic; font-size: 0.8rem; text-align: center;">
+          Copyright 2026, <a href="https://www.apache.org/">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a>.<br/>
+          Apache&reg; and the Apache feather logo are trademarks of The Apache Software Foundation.
+        </p>
+      </div>
+    </div>
+    <script src="/blog/js/bootstrap.bundle.min.js"></script>  </main>
+  </body>
+</html>
