@@ -167,17 +167,6 @@ class="img-fluid"
 alt="TPC-DS Overall Performance"
 />
 
-Comet now accelerates 98 out of 103 queries for this benchmark.
-
-<a href="/blog/images/comet-0.16.0/tpcds_queries_speedup_rel.png">
-<img
-src="/blog/images/comet-0.16.0/tpcds_queries_speedup_rel.png"
-width="60%"
-class="img-fluid"
-alt="TPC-DS per-query speedup (Comet 0.16.0 vs. Spark 3.5.8)"
-/>
-</a>
-
 See the [Comet Benchmarking Guide] for more details about these benchmark results.
 
 [Comet Benchmarking Guide]: https://datafusion.apache.org/comet/contributor-guide/benchmarking.html
