@@ -1,7 +1,7 @@
 ---
 layout: post
 title: Sort Pushdown in DataFusion: Skip Sorts, Skip I/O
-date: 2026-05-11
+date: 2026-05-25
 author: Qi Zhu
 categories: [performance]
 ---
