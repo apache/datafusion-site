@@ -56,8 +56,10 @@ adding upstream in [arrow-rs] will push the gains further still.
 ## TL;DR
 
 * DataFusion can now **skip `SortExec` entirely** when input files are
-  already in the requested order.
-* Two phases:
+  already in the requested order, and **read the most-promising data
+  first** when they aren't — so `TopK` converges fast and the rest
+  gets pruned by statistics.
+* Three phases:
   * **Phase 1** — establish the `PushdownSort` rule and the
     `Exact` / `Inexact` / `Unsupported` protocol; ship the reverse
     row-group case for `ORDER BY ... DESC` (reports `Inexact`).
@@ -65,9 +67,16 @@ adding upstream in [arrow-rs] will push the gains further still.
     `min/max` statistics and *prove* non-overlap, upgrading
     `Unsupported` to `Exact` so `PushdownSort` removes the `SortExec`
     that `EnforceSorting` inserted earlier.
-* Real-world benchmarks on the `sort_pushdown` suite:
-  `ORDER BY ... LIMIT` queries get **27× and 49× faster**; full
-  `ORDER BY` scans get **~2×** faster.
+  * **Phase 3** ([#21956]) — generalise `Inexact`: whenever the
+    leading sort key is a plain column in the file schema (or the
+    source's reversed declared ordering satisfies the request),
+    `try_pushdown_sort` stamps two flags on the source and the
+    opener runs a three-step runtime pipeline — file-level reorder
+    in the shared morsel queue, row-group reorder by min/max stats,
+    then optional iteration reverse for `DESC` requests.
+* Real-world benchmarks on the `sort_pushdown` suite (Phase 2's
+  `Exact` upgrade): `ORDER BY ... LIMIT` queries get **27× and 49×
+  faster**; full `ORDER BY` scans get **~2×** faster.
 * Reverse scans (`ORDER BY ... DESC`) ride the same machinery: a
   merged row-group-level reverse returns `Inexact` (Sort stays, but
   `TopK` terminates early); the page-level reverse primitive needed
@@ -183,10 +192,9 @@ covered later in this post); otherwise it returns `Unsupported`.
 Phase 1's scope was deliberately narrow. It set up the API and
 delivered the reverse-scan case end-to-end, but it did **not** add
 any statistics-based file rearrangement — that came later in Phase 2.
-A finer-grained extension that reorders row groups *within* each file
-by min/max statistics — so the row group with the best sort-key value
-is read first and TopK can tighten its threshold faster — is also
-in progress in [#21956].
+A finer-grained extension that broadens this `Inexact` path with a
+three-step runtime reorder pipeline lands in [#21956] — covered in
+[Phase 3](#phase-3-runtime-reorder-for-inexact-pushdown) below.
 
 Phase 1 also produced a useful side improvement:
 
@@ -258,6 +266,12 @@ sort only fires when every `ORDER BY` expression is a plain column.
 is no per-file min/max for the function output to compare against.
 Extending sort pushdown across monotonic function wrappers is one of
 the open follow-ups.
+
+*(Within #21956's `Inexact` path, `EquivalenceProperties`'s
+monotonicity inference does let function-wrapped sorts benefit from
+row-group iteration reverse when the source declares a compatible
+natural ordering — but stats-based reorder still needs a plain
+column.)*
 
 <img src="/blog/images/sort-pushdown/phase2-stats-overlap.svg" alt="Phase 2: detecting non-overlapping ranges via min/max statistics" width="100%" class="img-fluid"/>
 
@@ -347,6 +361,130 @@ The default multi-partition execution path is unchanged: those plans
 already produced correct orderings via byte-range splitting, so
 Phase 2 simply does not trigger. There is no regression and no behavior
 change for the typical multi-threaded query.
+
+## Phase 3: Runtime Reorder for Inexact Pushdown
+
+Phase 2 handles the `Exact` upgrade — strong correctness, sort
+elimination — but only when the table has a declared
+`output_ordering` *and* the files are provably non-overlapping after
+sorting by min. Two large classes of queries fall outside that
+window:
+
+* **Unsorted data** — no `WITH ORDER`, no parquet `sorting_columns`.
+  Phase 2 cannot fire because there is no ordering claim to upgrade.
+* **Overlapping ranges** — files written by different ingestion
+  jobs share time windows. Phase 2 keeps the `SortExec` because the
+  global ordering can't be proven, even though the files often do
+  contain large stretches of in-order data.
+
+For both, a full external `SortExec` is overkill. The parquet
+metadata is right there, and reading the *most-promising* data
+first lets `TopK`'s dynamic filter threshold tighten quickly so the
+rest gets pruned. Phase 3 ([#21956]) wires that up by generalising
+the `Inexact` path Phase 1 introduced.
+
+### `try_pushdown_sort` — one decision, three outcomes
+
+<img src="/blog/images/sort-pushdown/pr21956-decision.svg" alt="try_pushdown_sort decision tree: Exact, Inexact, or Unsupported" width="100%" class="img-fluid"/>
+
+The `Exact` / `Inexact` / `Unsupported` protocol from Phase 1 stays.
+Phase 3 broadens the **conditions** that route a query into
+`Inexact`:
+
+| Condition | Outcome |
+| --- | --- |
+| `eq_properties.ordering_satisfy(request)` | `Exact` — Phase 1 / 2 sort elimination |
+| Leading sort key is a plain `Column` in the file schema, **or** the source's reversed declared ordering satisfies the request | `Inexact` — Phase 3 runtime pipeline |
+| Neither | `Unsupported` — `SortExec` stays, no source-side optimisation |
+
+The "reversed satisfies" branch is what handles function-wrapped
+sorts (`date_trunc('day', ts) DESC`, `ceil(value) DESC`,
+`CAST(x AS Date) DESC`) — `EquivalenceProperties`'s monotonicity
+reasoning recognises that `f(col) DESC` is satisfied by `col ASC`
+reversed, even though parquet has no stats keyed by `f(col)`
+itself.
+
+### Two flags on `ParquetSource`, three runtime steps
+
+<img src="/blog/images/sort-pushdown/pr21956-runtime-pipeline.svg" alt="Phase 3 runtime pipeline: file reorder, RG reorder, then optional reverse" width="100%" class="img-fluid"/>
+
+When `try_pushdown_sort` returns `Inexact`, it stamps two fields on
+the `ParquetSource`:
+
+```rust
+struct ParquetSource {
+    sort_order_for_reorder: Option<LexOrdering>,  // what to reorder by
+    reverse_row_groups:     bool,                 // whether to flip iteration
+    // ...
+}
+```
+
+The opener reads them at scan time to drive three composable steps:
+
+1. **File-level reorder.** `FileSource::reorder_files` sits in the
+   shared morsel queue (the [#21351] work-stealing primitive) and
+   sorts the partitioned-file list by `min(col)`. The first file
+   picked across all partitions is globally the most-promising one.
+2. **Row-group-level reorder.** Once a file is opened,
+   `PreparedAccessPlan::reorder_by_statistics` sorts that file's
+   `row_group_indexes` by `min(col)` ASC. The row group most likely
+   to contribute to `TopK` is decoded first.
+3. **Reverse.** For `DESC` requests,
+   `PreparedAccessPlan::reverse` flips the iteration after the
+   stats reorder normalises everything to ASC-by-min. Same
+   primitive Phase 1 introduced for declared reverse scans — Phase
+   3 just routes more queries through it.
+
+The two layers **nest by construction**: file `i`'s `min(col)` is
+a lower bound on every row group inside it, so the file queue's
+order is a natural prefix of the within-file row-group order.
+Choosing the same key (`min`) in both layers keeps the strategies
+consistent.
+
+`reverse_row_groups`'s meaning depends on which way `Inexact` was
+reached. When the column-in-schema condition fires, the stats
+reorder produces ASC-by-min, so `reverse_row_groups` simply mirrors
+the request direction. When only the reversed-equivalence
+condition fires (function-wrapped case with a declared source
+ordering), `reverse_row_groups` is `true` unconditionally — there
+is no stats reorder to compose with, just a flip of the file's
+natural order.
+
+Both flags surface on the `DataSourceExec` line in `EXPLAIN` so
+plan inspection and snapshot tests can confirm the pushdown fired:
+
+```text
+DataSourceExec: file_groups=..., file_type=parquet,
+  sort_order_for_reorder=[a@0 ASC], reverse_row_groups=true
+```
+
+Absence of either flag means the corresponding runtime step is a
+no-op.
+
+### When Phase 3 does *not* fire
+
+* **Aggregations on top of the sort key.** `SELECT URL, COUNT(*) AS c
+  FROM hits GROUP BY URL ORDER BY c DESC LIMIT 10` (the ClickBench
+  TopK shape) — the leading sort key (`c`) is an aggregation result
+  and has no per-RG stats in the parquet file, so the
+  column-in-schema check fails. Pushing sort metadata through
+  `AggregateExec` is a separate problem: the aggregated value
+  doesn't exist before aggregation, so even if the metadata reached
+  the scan there'd be nothing actionable to do with it.
+* **Multi-column sort secondary keys.** The reorder currently only
+  uses the leading sort expression — secondary keys are ignored.
+  Tracked as a follow-up in [#22198].
+* **Function-wrapped sort without a source-declared ordering.**
+  Without a declared ordering to invert, the reversed-equivalence
+  branch has nothing to satisfy. Tracked in the same follow-up.
+* **Source declares a forward prefix of the request.** When the
+  source's declared `output_ordering` is a non-empty proper prefix
+  of the request (e.g. source `[a DESC, b ASC]`, request
+  `[a DESC, b ASC, c DESC]`), `try_pushdown_sort` returns
+  `Unsupported` so the surrounding `SortExec` can keep its
+  `sort_prefix` annotation — prefix-aware early termination in
+  `TopK` is strictly better than the Phase 3 reorder on data that
+  is already in prefix order on disk.
 
 ## Reverse Scans for `ORDER BY ... DESC`
 
@@ -464,9 +602,11 @@ not alternatives; they compose:
   that shared queue by per-file statistics *before* any partition
   picks, so the first file read is globally optimal and tightens the
   dynamic filter immediately. Combined with **TopK threshold init from
-  parquet statistics** ([#21712]) and **row-group reorder within each
-  file** ([#21956]), the threshold can be set before reading a single
-  byte. The combined statistics-driven `TopK` pipeline is in flight
+  parquet statistics** ([#21712]) and **`try_pushdown_sort` driving
+  runtime row-group / file reorder + reverse** ([#21956], landed),
+  the threshold can be set before reading a single byte. The reorder
+  mechanism applies to any `ORDER BY <plain_col> [LIMIT N]` on
+  parquet, not just TopK queries with a dynamic filter. The combined statistics-driven `TopK` pipeline is in flight
   as [#21580].
 
   The mechanism here is **RG-level pruning, not mid-stream early
@@ -516,9 +656,9 @@ not alternatives; they compose:
   narrows what's decoded inside the row groups the reader does
   open. `Exact` or finer-grained scheduling is what eventually
   closes the tap once `TopK` is satisfied.
-* **Phase 3 — filter + sort early termination.** `WHERE filter ORDER
-  BY ts DESC LIMIT N` is the dominant observability query shape and
-  the one where the arrow-rs page-reverse primitive matters most:
+* **Filtered reverse TopK end-to-end.** `WHERE filter ORDER BY ts
+  DESC LIMIT N` is the dominant observability query shape and the
+  one where the arrow-rs page-reverse primitive matters most:
   `RowSelection::with_limit` cannot pre-compute the last `N` matching
   rows when the filter is selective, so the only correct strategy is
   to stream pages backward, evaluate the filter, and stop when `N`
@@ -535,9 +675,17 @@ not alternatives; they compose:
 * **OFFSET pushdown to parquet** ([#21828]) so `ORDER BY ts LIMIT K
   OFFSET N` queries can skip the first `N` rows at the row-group level
   instead of decoding and discarding them. In progress.
+* **Multi-column and function-wrapped reorder follow-ups** ([#22198]).
+  The reorder mechanism in #21956 currently only uses the leading
+  sort key and only fires on plain columns. Lexicographic multi-key
+  reorder via `arrow::compute::lexsort_to_indices` is low-hanging
+  fruit; extending to monotonic function wrappers via leaf-column
+  extraction (e.g. `date_trunc('day', ts)` → use `min(ts)`) needs a
+  bit more `EquivalenceProperties` integration but is doable.
 
 [#21976]: https://github.com/apache/datafusion/pull/21976
 [#21956]: https://github.com/apache/datafusion/pull/21956
+[#22198]: https://github.com/apache/datafusion/issues/22198
 [#21712]: https://github.com/apache/datafusion/pull/21712
 [#21580]: https://github.com/apache/datafusion/pull/21580
 [#21828]: https://github.com/apache/datafusion/pull/21828
