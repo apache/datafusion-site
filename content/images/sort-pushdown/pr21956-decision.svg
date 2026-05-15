@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 420">
+  <style>
+    text { font-family: 'Segoe UI', Arial, sans-serif; }
+    .title { font-size: 14px; font-weight: 700; fill: #222; }
+    .node { font-size: 12px; font-weight: 600; fill: #fff; }
+    .detail { font-size: 10px; font-family: 'Courier New', monospace; fill: #333; }
+    .branchlabel { font-size: 11px; font-weight: 600; fill: #555; }
+    .arrow { fill: none; stroke: #555; stroke-width: 1.4; marker-end: url(#arr); }
+  </style>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#555"/>
+    </marker>
+  </defs>
+
+  <text class="title" x="410" y="24" text-anchor="middle">try_pushdown_sort: Exact / Inexact / Unsupported decision</text>
+
+  <!-- Entry node -->
+  <rect x="290" y="44" width="240" height="44" rx="8" fill="#34495e"/>
+  <text class="node" x="410" y="66" text-anchor="middle">PushdownSort rule</text>
+  <text class="detail" x="410" y="80" text-anchor="middle" fill="#fff">source.try_pushdown_sort(req, eq)</text>
+
+  <line class="arrow" x1="410" y1="92" x2="410" y2="110"/>
+
+  <!-- Diamond 1: natural ordering check -->
+  <polygon points="410,114 600,168 410,222 220,168" fill="#fff" stroke="#5b8def" stroke-width="1.6"/>
+  <text class="detail" x="410" y="160" text-anchor="middle">eq.ordering_satisfy(req)?</text>
+  <text class="detail" x="410" y="174" text-anchor="middle">(natural ordering already matches?)</text>
+
+  <!-- yes → Exact -->
+  <line class="arrow" x1="600" y1="168" x2="690" y2="168"/>
+  <text class="branchlabel" x="640" y="158" text-anchor="middle">yes</text>
+  <rect x="690" y="146" width="110" height="44" rx="8" fill="#27ae60"/>
+  <text class="node" x="745" y="168" text-anchor="middle">Exact</text>
+  <text class="detail" x="745" y="182" text-anchor="middle" fill="#fff">drop SortExec</text>
+
+  <!-- no → next diamond -->
+  <line class="arrow" x1="410" y1="222" x2="410" y2="246"/>
+  <text class="branchlabel" x="400" y="240" text-anchor="end">no</text>
+
+  <!-- Diamond 2: column_in_file_schema || reversed_satisfies -->
+  <polygon points="410,250 620,310 410,370 200,310" fill="#fff" stroke="#5b8def" stroke-width="1.6"/>
+  <text class="detail" x="410" y="302" text-anchor="middle">column_in_file_schema</text>
+  <text class="detail" x="410" y="316" text-anchor="middle">|| reversed_satisfies ?</text>
+
+  <!-- yes → Inexact -->
+  <line class="arrow" x1="620" y1="310" x2="690" y2="310"/>
+  <text class="branchlabel" x="655" y="300" text-anchor="middle">yes</text>
+  <rect x="690" y="288" width="110" height="44" rx="8" fill="#e67e22"/>
+  <text class="node" x="745" y="310" text-anchor="middle">Inexact</text>
+  <text class="detail" x="745" y="324" text-anchor="middle" fill="#fff">set both flags</text>
+
+  <!-- no → Unsupported -->
+  <line class="arrow" x1="200" y1="310" x2="130" y2="310"/>
+  <text class="branchlabel" x="165" y="300" text-anchor="middle">no</text>
+  <rect x="20" y="288" width="110" height="44" rx="8" fill="#95a5a6"/>
+  <text class="node" x="75" y="310" text-anchor="middle">Unsupported</text>
+  <text class="detail" x="75" y="324" text-anchor="middle" fill="#fff">SortExec stays</text>
+
+  <!-- Legend / explanation strip -->
+  <rect x="20" y="380" width="780" height="34" rx="6" fill="#f6f7fa" stroke="#cfd6dc"/>
+  <text class="detail" x="30" y="400">Exact</text>
+  <text class="detail" x="80" y="400">→ Phase 2 sort elimination · fetch becomes static limit</text>
+  <text class="detail" x="30" y="412">Inexact</text>
+  <text class="detail" x="80" y="412">→ #21956 runtime pipeline: file reorder + RG reorder + reverse · SortExec / TopK kept on top for correctness</text>
+</svg>
