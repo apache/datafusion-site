@@ -556,14 +556,16 @@ latency went **up**, not down. A few cost components stack up on the
   ~1M sort-column decodes regardless of `N`; the LIMIT only saves
   work on non-sort columns inside the same row group and on whole
   *subsequent* row groups that the tightened threshold can prune.
-  The internal `Exact` reverse path, by contrast, deletes the
-  `SortExec` so the LIMIT becomes a static fetch on the source.
-  The source walks pages of the target row group from the back,
-  decodes each batch, reverses the batch row-wise, emits — and
-  stops the moment K rows have been delivered. For
-  `ORDER BY ts DESC LIMIT 10` on a 1M-row row group that is one
-  batch worth of decode work, not 1M. No filter machinery, no
-  heap, no per-row threshold check.
+  The internal RG-level `Exact` reverse path, by contrast, deletes
+  the `SortExec` so the LIMIT becomes a static fetch on the source.
+  The source still has to decode the target row group in full —
+  parquet does not allow partial row-group reads, so this part is
+  the same as `Inexact` — but it then reverses the buffer in
+  memory, takes the first K rows, and **stops**. No subsequent row
+  group is opened, no stats check, no filter machinery, no per-row
+  heap maintenance, no `SortExec` final ordering pass. The wins
+  come from removing those per-row and per-RG overheads on top, not
+  from decoding less sort-column data on the target row group.
 * **`SortExec` itself adds ordering work on top of `Inexact`.** The
   reversed-RG stream is not strictly DESC (rows within each RG are
   still forward), so `Inexact` keeps the surrounding `SortExec`.
@@ -588,20 +590,9 @@ filter evaluation, and the `SortExec` final ordering pass that
 in-house but cannot land it as the upstream default for the same
 memory reason that closed `#18817`.
 
-**That is the direct motivation behind the page-level `Exact`
-reverse work we are pushing upstream in arrow-rs `#9937`.** It
-shrinks the unit of work from one whole row group down to one
-page (~1 MB): the reader uses parquet's `OffsetIndex` to `seek`
-to the last page of the column chunk, decode it forward, reverse
-the resulting batch, and emit — without ever materialising the
-rest of the row group in memory. The streaming memory profile is
-preserved and the runtime advantage we measured internally is
-kept. Once `#9937` and the DataFusion follow-up land, the
-upstream default for `ORDER BY ts DESC LIMIT N` becomes `Exact`
-reverse at page granularity: `SortExec` removed, static fetch on
-the source, peak memory in the streaming regime, no `TopK` heap
-overhead, with K rows returned after roughly one page's worth of
-decode work.
+**The fix that keeps both the runtime win and a streaming memory
+profile is page-level `Exact` reverse via arrow-rs [#9937]**,
+described next.
 
 That primitive is the **page-level** reverse traversal. Parquet's
 `OffsetIndex` already gives us byte-precise locations for every data
