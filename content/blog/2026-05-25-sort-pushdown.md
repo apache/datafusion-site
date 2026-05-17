@@ -193,7 +193,7 @@ Phase 1's scope was deliberately narrow. It set up the API and
 delivered the reverse-scan case end-to-end, but it did **not** add
 any statistics-based file rearrangement — that came later in Phase 2.
 A finer-grained extension that broadens this `Inexact` path with a
-three-step runtime reorder pipeline lands in [#21956] — covered in
+three-step runtime reorder pipeline landed in [#21956] — covered in
 [Phase 3](#phase-3-runtime-reorder-for-inexact-pushdown) below.
 
 Phase 1 also produced a useful side improvement:
