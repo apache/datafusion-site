@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 340">
+  <style>
+    text { font-family: 'Segoe UI', Arial, sans-serif; }
+    .title { font-size: 14px; font-weight: 700; fill: #222; }
+    .panel { font-size: 13px; font-weight: 700; }
+    .node { font-size: 12px; font-weight: 600; fill: #fff; }
+    .detail { font-size: 10px; font-family: 'Courier New', monospace; fill: #333; }
+    .label { font-size: 11px; fill: #555; }
+    .arrow { fill: none; stroke: #555; stroke-width: 1.4; marker-end: url(#arr2); }
+    .crossed { stroke: #c0392b; stroke-width: 2; }
+  </style>
+  <defs>
+    <marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#555"/>
+    </marker>
+  </defs>
+
+  <text class="title" x="410" y="22" text-anchor="middle">EXPLAIN before / after sort pushdown</text>
+
+  <!-- BEFORE -->
+  <rect x="20" y="40" width="370" height="280" rx="8" fill="#fff" stroke="#c0392b" stroke-width="1.5"/>
+  <text class="panel" x="205" y="62" text-anchor="middle" fill="#c0392b">Before — SortExec on top</text>
+
+  <rect x="105" y="78" width="200" height="34" rx="4" fill="#34495e"/>
+  <text class="node" x="205" y="100" text-anchor="middle">CoalescePartitionsExec</text>
+
+  <line class="arrow" x1="205" y1="118" x2="205" y2="132"/>
+
+  <rect x="105" y="134" width="200" height="44" rx="4" fill="#c0392b"/>
+  <text class="node" x="205" y="156" text-anchor="middle">SortExec</text>
+  <text class="detail" x="205" y="170" text-anchor="middle" fill="#fff">expr=[ts ASC], full sort</text>
+
+  <line class="arrow" x1="205" y1="184" x2="205" y2="200"/>
+
+  <rect x="105" y="202" width="200" height="34" rx="4" fill="#34495e"/>
+  <text class="node" x="205" y="223" text-anchor="middle">RepartitionExec</text>
+
+  <line class="arrow" x1="205" y1="240" x2="205" y2="254"/>
+
+  <rect x="65" y="256" width="280" height="44" rx="4" fill="#5b8def"/>
+  <text class="node" x="205" y="278" text-anchor="middle">DataSourceExec</text>
+  <text class="detail" x="205" y="292" text-anchor="middle" fill="#fff">files: [a.parquet, b.parquet, c.parquet]</text>
+
+  <!-- AFTER -->
+  <rect x="430" y="40" width="370" height="280" rx="8" fill="#fff" stroke="#27ae60" stroke-width="1.5"/>
+  <text class="panel" x="615" y="62" text-anchor="middle" fill="#27ae60">After — SortExec eliminated</text>
+
+  <rect x="515" y="78" width="200" height="34" rx="4" fill="#34495e"/>
+  <text class="node" x="615" y="100" text-anchor="middle">SortPreservingMergeExec</text>
+
+  <line class="arrow" x1="615" y1="118" x2="615" y2="132"/>
+
+  <!-- "removed" placeholder, crossed-out SortExec -->
+  <rect x="515" y="134" width="200" height="44" rx="4" fill="#f9f9f9" stroke="#c0392b" stroke-dasharray="4,3"/>
+  <text class="node" x="615" y="156" text-anchor="middle" fill="#c0392b">SortExec (removed)</text>
+  <text class="detail" x="615" y="170" text-anchor="middle" fill="#c0392b">no longer needed</text>
+  <line class="crossed" x1="515" y1="134" x2="715" y2="178"/>
+  <line class="crossed" x1="715" y1="134" x2="515" y2="178"/>
+
+  <line class="arrow" x1="615" y1="184" x2="615" y2="200"/>
+
+  <rect x="515" y="202" width="200" height="34" rx="4" fill="#34495e"/>
+  <text class="node" x="615" y="223" text-anchor="middle">RepartitionExec</text>
+
+  <line class="arrow" x1="615" y1="240" x2="615" y2="254"/>
+
+  <rect x="475" y="256" width="280" height="44" rx="4" fill="#27ae60"/>
+  <text class="node" x="615" y="278" text-anchor="middle">DataSourceExec</text>
+  <text class="detail" x="615" y="292" text-anchor="middle" fill="#fff">files: [c.parquet, b.parquet, a.parquet]</text>
+</svg>
