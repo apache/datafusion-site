@@ -44,12 +44,14 @@ already in that order. CPU wasted. Memory wasted. Streaming defeated.
 
 [Apache DataFusion]: https://datafusion.apache.org/
 
-This post walks through the **sort pushdown** work that closed that
-gap. It covers two complementary capabilities — sort elimination via
-statistics, and runtime reorder for `TopK` convergence — and lands
-real benchmark speedups of **2.1×–49× on common queries**. The same
-machinery extends to `ORDER BY ... DESC`, and the page-level reverse
-primitive we are adding upstream in [arrow-rs] will push the gains
+This post walks through the **sort pushdown** work that closed
+that gap. It covers two complementary capabilities — **sort
+elimination via statistics** (the `Exact` path, which deletes the
+`SortExec`) and **runtime reorder** (the `Inexact` path, which
+keeps the `SortExec` but reads the most-promising data first for
+`TopK` and `DESC` queries) — and lands real benchmark speedups of
+**2.1×–49× on common queries**. The page-level reverse primitive
+we are adding upstream in [arrow-rs] will push the `DESC` gains
 further still.
 
 [arrow-rs]: https://github.com/apache/arrow-rs
@@ -72,16 +74,15 @@ further still.
     upgrades the source's ordering claim from `Unsupported` to
     `Exact` and **removes the `SortExec`** that `EnforceSorting`
     inserted earlier.
-  * **Runtime reorder for `TopK` convergence** — when the leading
-    sort key is a plain column (or the reversed source ordering
-    satisfies the request), the scan reorders files and row groups
-    by `min/max` stats so the most-promising data is read first.
-    `SortExec` stays, but `TopK`'s dynamic filter tightens fast
-    and the rest is pruned.
-  * **Reverse scans for `ORDER BY ... DESC`** — a row-group-level
-    reverse returns `Inexact`. Full `SortExec` removal on `DESC`
-    requires a page-level reverse primitive that's in flight in
-    arrow-rs.
+  * **Runtime reorder for `TopK` and `DESC` queries** — when the
+    leading sort key is a plain column (or the reversed source
+    ordering satisfies the request), the scan reorders files and
+    row groups by `min/max` stats so the most-promising data is
+    read first; for `DESC` requests it additionally flips
+    iteration. `SortExec` stays `Inexact`, but `TopK`'s dynamic
+    filter tightens fast and the rest is pruned. Full `SortExec`
+    removal on `DESC` requires a page-level reverse primitive
+    that's in flight in arrow-rs.
 * Real-world benchmarks on the `sort_pushdown` suite (`Exact` path):
   `ORDER BY ... LIMIT` queries get **27× and 49× faster**; full
   `ORDER BY` scans get **~2×** faster.
@@ -179,13 +180,13 @@ The **`PushdownSort`** physical optimizer rule asks each
 1. "Can you produce output in *this* ordering?"
 2. "If yes, please rearrange yourself so that it actually does."
 
-The answer is one of `Exact`, `Inexact`, `Unsupported`. The Parquet
-`FileSource` answers by comparing the requested ordering against
-the per-file declared ordering: natural ordering satisfies →
-`Exact`; reversed satisfies → `Inexact` (sets
-`reverse_row_groups=true`); otherwise → `Unsupported`. The rest of
-this post is what each merged capability does on top of this
-protocol.
+The answer is one of `Exact`, `Inexact`, `Unsupported`. `Exact`
+means the surrounding `SortExec` can be deleted entirely; `Inexact`
+means the source will read the data in a near-sorted order so
+`TopK` and other consumers benefit, but `SortExec` stays for
+strict correctness. The rest of this post is what each merged
+capability does on top of this protocol — first the `Exact` path,
+then the `Inexact` path.
 
 ## Sort Elimination via Statistics
 
@@ -335,12 +336,12 @@ so stats-based sort elimination simply does not fire there. No
 regression and no behavior change for typical multi-threaded
 queries.
 
-## Runtime Reorder for TopK Convergence
+## Runtime Reorder for `TopK` and `DESC` Queries
 
 Stats-based sort elimination handles the `Exact` upgrade — strong
 correctness, sort elimination — but only when the table has a
 declared `output_ordering` *and* the files are provably
-non-overlapping after sorting by min. Two large classes of queries
+non-overlapping after sorting by min. Three classes of queries
 fall outside that window:
 
 * **Unsorted data** — no `WITH ORDER`, no parquet `sorting_columns`.
@@ -350,40 +351,58 @@ fall outside that window:
   jobs share time windows. The `Exact` upgrade keeps the `SortExec`
   because the global ordering can't be proven, even though the
   files often do contain large stretches of in-order data.
+* **`ORDER BY ... DESC` on ASC-sorted data** — flipping iteration
+  at the row-group level emits "RGs descending × rows ascending",
+  close to the requested order but not strictly DESC, so the
+  `SortExec` has to stay for correctness.
 
-For both, a full external `SortExec` is overkill. The parquet
+For all three, a full external `SortExec` is overkill. The parquet
 metadata is right there, and reading the *most-promising* data
 first lets `TopK`'s dynamic filter threshold tighten quickly so the
 rest gets pruned. Runtime reorder wires that up by generalising
 the `Inexact` path the rule introduced.
 
-### `try_pushdown_sort` — one decision, three outcomes
+### Two independent triggers for `Inexact`
 
 <img src="/blog/images/sort-pushdown/pr21956-decision.svg" alt="try_pushdown_sort decision tree: Exact, Inexact, or Unsupported" width="100%" class="img-fluid"/>
 
-The `Exact` / `Inexact` / `Unsupported` protocol stays. The
-runtime reorder path broadens the **conditions** that route a
-query into `Inexact`:
+`try_pushdown_sort` first checks whether the natural ordering
+already satisfies the request (→ `Exact`) or whether a non-empty
+*proper prefix* of the request is already satisfied (→
+`Unsupported`, so the outer `SortExec`'s `sort_prefix`
+optimisation can fire instead). Otherwise it looks at two
+**independent** Inexact signals — either one is enough, and they
+compose when both apply:
 
-| Condition | Outcome |
-| --- | --- |
-| `eq_properties.ordering_satisfy(request)` | `Exact` — sort elimination |
-| Leading sort key is a plain `Column` in the file schema, **or** the source's reversed declared ordering satisfies the request | `Inexact` — runtime reorder pipeline |
-| Neither | `Unsupported` — `SortExec` stays, no source-side optimisation |
+**Stats-based RG reorder** — fires when the leading sort key is a
+plain `Column` in the file schema. The opener sorts row groups by
+`min(col)` via parquet statistics. Restrictive (plain physical
+column only), but lets the scan globally reorder data so the
+most-promising row group is decoded first.
 
-The "reversed satisfies" branch is what handles function-wrapped
-sorts (`date_trunc('day', ts) DESC`, `ceil(value) DESC`,
-`CAST(x AS Date) DESC`) — `EquivalenceProperties`'s monotonicity
-reasoning recognises that `f(col) DESC` is satisfied by `col ASC`
-reversed, even though parquet has no stats keyed by `f(col)`
-itself.
+**Iteration reverse** — fires when the source's declared ordering,
+**reversed**, satisfies the request. This goes through the full
+`EquivalenceProperties` reasoning machinery and is **strictly more
+powerful** than the column-in-schema check above. It fires for:
 
-### Two flags on `ParquetSource`, three runtime steps
+* **Function monotonicity** — file declares `ts DESC`, request is
+  `date_trunc('day', ts) ASC` → reversed `ts ASC` satisfies the
+  request via monotonicity even though parquet has no stats keyed
+  by the function. Same for `ceil(value)`, `CAST(x AS Date)`, etc.
+* **Constant columns from filters** — `WHERE region = 'us'` marks
+  `region` as constant in the equivalence class, so a request
+  involving `region` is trivially satisfied.
+* **Equivalence relationships** — `WHERE a = b` transfers a known
+  ordering on `a` to a request on `b`.
+* **Multi-column composite orderings** — the source's declared
+  multi-key ordering reversed satisfies the multi-key request as a
+  whole.
+
+### Three runtime steps in the opener
 
 <img src="/blog/images/sort-pushdown/pr21956-runtime-pipeline.svg" alt="Runtime reorder pipeline: file reorder, RG reorder, then optional reverse" width="100%" class="img-fluid"/>
 
-When `try_pushdown_sort` returns `Inexact`, it stamps two fields on
-the `ParquetSource`:
+The two triggers above set two fields on `ParquetSource`:
 
 ```rust
 struct ParquetSource {
@@ -393,114 +412,76 @@ struct ParquetSource {
 }
 ```
 
-The opener reads them at scan time to drive three composable steps:
+The opener consumes them in three composable steps:
 
-1. **File-level reorder.** `FileSource::reorder_files` sits in the
-   shared morsel queue (a work-stealing primitive that lets sibling
-   partitions share a single file pool) and sorts the
-   partitioned-file list by `min(col)`. The first file picked across
-   all partitions is globally the most-promising one.
-2. **Row-group-level reorder.** Once a file is opened,
-   `PreparedAccessPlan::reorder_by_statistics` sorts that file's
-   `row_group_indexes` by `min(col)` ASC. The row group most likely
-   to contribute to `TopK` is decoded first.
-3. **Reverse.** For `DESC` requests,
-   `PreparedAccessPlan::reverse` flips the iteration after the
-   stats reorder normalises everything to ASC-by-min. Same
-   primitive the rule originally introduced for declared reverse
-   scans — the runtime pipeline just routes more queries through
-   it.
+1. **File-level reorder** (`FileSource::reorder_files`). The shared
+   morsel queue — a work-stealing primitive that lets sibling
+   partitions share a single file pool — sorts the partitioned-file
+   list by `min(col)`. The first file picked across all partitions
+   is globally the most-promising one. Skipped when the stats
+   reorder trigger didn't fire.
+2. **Row-group-level reorder**
+   (`PreparedAccessPlan::reorder_by_statistics`). Once a file is
+   opened, sort its row groups by `min(col)` ASC so the most-promising
+   row group is decoded first. Same trigger as step 1; the two
+   layers nest because a file's `min(col)` is the minimum over its
+   row groups' `min(col)` values.
+3. **Iteration reverse** (`PreparedAccessPlan::reverse`). Flips the
+   row-group iteration order. For `DESC` requests on a plain
+   column the flip composes with steps 1–2 (ASC-by-min → reverse →
+   DESC-by-min). For the function-wrapped / constants-from-filters /
+   multi-column cases, steps 1–2 are skipped and this is the only
+   step that runs — just a flip of the file's natural order.
 
-The two layers compose naturally because they sort by the same
-key. A file's `min(col)` is the minimum over its row groups'
-`min(col)` values, so the file with the smallest `min` contains
-the row group with the smallest `min`. Sorting files by `min(col)`
-and then sorting row groups by `min(col)` within each file
-produces an approximately min-ordered global stream — the first
-batch comes from the most-promising row group in the
-most-promising file, exactly what `TopK`'s dynamic filter needs
-to tighten its threshold fast.
-
-`reverse_row_groups`'s meaning depends on which way `Inexact` was
-reached. When the column-in-schema condition fires, the stats
-reorder produces ASC-by-min, so `reverse_row_groups` simply mirrors
-the request direction. When only the reversed-equivalence
-condition fires (function-wrapped case with a declared source
-ordering), `reverse_row_groups` is `true` unconditionally — there
-is no stats reorder to compose with, just a flip of the file's
-natural order.
-
-Both flags surface on the `DataSourceExec` line in `EXPLAIN` so
-plan inspection and snapshot tests can confirm the pushdown fired:
+Both flags surface on the `DataSourceExec` line in `EXPLAIN`:
 
 ```text
 DataSourceExec: file_groups=..., file_type=parquet,
   sort_order_for_reorder=[a@0 ASC], reverse_row_groups=true
 ```
 
-Absence of either flag means the corresponding runtime step is a
-no-op.
+### `ORDER BY ... DESC` in practice
 
-### When runtime reorder does *not* fire
+A `DESC` request on an ASC-sorted plain column goes through both
+triggers — the stats reorder normalises to ASC-by-min and the
+iteration reverse flips to DESC-by-min. The result is *"RGs
+descending × rows ascending"* — close to the requested order but
+not strictly DESC, hence `Inexact`. The `SortExec` stays for
+correctness, but `TopK`'s dynamic filter tightens fast because the
+first row groups read already contain values near the final
+answer, so subsequent row groups can be skipped via min/max
+statistics. This is what powers fast `ORDER BY ts DESC LIMIT N` on
+ASC-sorted files today.
 
-* **Aggregations on top of the sort key.** `SELECT URL, COUNT(*) AS c
-  FROM hits GROUP BY URL ORDER BY c DESC LIMIT 10` (the ClickBench
-  TopK shape) — the leading sort key (`c`) is an aggregation result
-  and has no per-RG stats in the parquet file, so the
-  column-in-schema check fails. Pushing sort metadata through
-  `AggregateExec` is a separate problem: the aggregated value
-  doesn't exist before aggregation, so even if the metadata reached
-  the scan there'd be nothing actionable to do with it.
-* **Multi-column sort secondary keys.** The reorder currently only
-  uses the leading sort expression — secondary keys are ignored.
-  An open follow-up.
-* **Function-wrapped sort without a source-declared ordering.**
-  Without a declared ordering to invert, the reversed-equivalence
-  branch has nothing to satisfy. Same follow-up.
-* **Source declares a forward prefix of the request.** When the
-  source's declared `output_ordering` is a non-empty proper prefix
-  of the request (e.g. source `[a DESC, b ASC]`, request
-  `[a DESC, b ASC, c DESC]`), `try_pushdown_sort` returns
-  `Unsupported` so the surrounding `SortExec` can keep its
-  `sort_prefix` annotation — prefix-aware early termination in
-  `TopK` is strictly better than the runtime reorder on data that
-  is already in prefix order on disk.
-
-## Reverse Scans for `ORDER BY ... DESC`
-
-<img src="/blog/images/sort-pushdown/reverse-scan.svg" alt="Row-group reverse vs page reverse: 128MB and 8 pages vs 1MB and 1 page" width="100%" class="img-fluid"/>
-
-`ORDER BY ts DESC` is the same problem in reverse. If a file is sorted
-ascending and the query wants descending, we should be able to skip
-the sort — we just need to read the data in the opposite order.
-
-The first iteration of this operates at the **row group** level:
-it reverses the *iteration order of row groups* so the last RG is
-opened first, but rows within each RG are still decoded forward.
-The resulting stream is "RGs descending × rows ascending" — close
-to the requested order, but not strictly DESC. The optimizer
-therefore reports this as `Inexact` and leaves the `SortExec` in
-place; the win is that `TopK`'s dynamic filter tightens much
-faster, because the very first row groups read already contain
-values near the final answer. A tight threshold means subsequent
-row groups can be skipped via min/max statistics. This ships today
-and is what powers fast `ORDER BY ts DESC LIMIT N` on ASC-sorted
-files.
-
-Why not full `Exact` reverse that deletes the `SortExec`?
-Decoding a whole row group forward, reversing the buffer, and
+Why not full `Exact` reverse that deletes the `SortExec` outright?
+Decoding a whole row group forward, reversing the buffer, then
 emitting works — but peaks at ~128 MB vs. the few-MB-per-batch
 streaming profile readers expect. `Exact` reverse waits on a
 page-level primitive that keeps the runtime win on a streaming
-memory budget — see the roadmap below.
+memory budget — covered in the roadmap below.
+
+### When neither Inexact trigger fires
+
+* **Aggregations on the sort key** — `SELECT URL, COUNT(*) AS c FROM
+  hits GROUP BY URL ORDER BY c DESC LIMIT 10` (the ClickBench TopK
+  shape). The leading sort key `c` is an aggregate result with no
+  per-RG stats and no equivalence to a file column, so neither
+  trigger fires. Pushing sort metadata through `AggregateExec` is a
+  separate problem entirely.
+* **Function-wrapped sort with no source-declared ordering** — the
+  reversed-equivalence branch has nothing to invert.
+* **Source declares a forward prefix of the request** —
+  `try_pushdown_sort` returns `Unsupported` so the surrounding
+  `SortExec` can keep its `sort_prefix` annotation; prefix-aware
+  early termination in `TopK` is strictly better than reorder on
+  data that's already in prefix order on disk.
 
 ## Current Bottlenecks
 
-Stats-based **sort elimination** removes the `SortExec` entirely
-when ranges are non-overlapping — there's nothing more to optimize
-on that path. But the `Inexact` paths (**runtime reorder** for
-`TopK`, and **row-group reverse** for `DESC`) leave three concrete
-inefficiencies on the table when `Exact` cannot fire:
+Sort elimination removes the `SortExec` entirely when ranges are
+non-overlapping — there's nothing more to optimize on that path.
+The `Inexact` runtime-reorder path is where the merged work still
+leaves performance on the table. Three concrete inefficiencies:
 
 ### Bottleneck 1: `SortExec` stays on top, so `LIMIT N` does not propagate as a static stop signal
 
@@ -550,6 +531,8 @@ open* file gets read to completion.
 ## Roadmap: Removing the Bottlenecks
 
 ### Page-level `Exact` reverse — addresses bottlenecks 1 + 2
+
+<img src="/blog/images/sort-pushdown/reverse-scan.svg" alt="Row-group reverse (128 MB peak, ~8 pages decoded) vs page reverse (1 MB peak, 1 page decoded)" width="100%" class="img-fluid"/>
 
 Parquet's `OffsetIndex` gives us byte-precise locations for every
 data page in a column chunk, so we can `seek` directly to the last
@@ -651,10 +634,11 @@ what pushes it further.
   queries can skip the first `N` rows at the row-group level
   instead of decoding and discarding them. In progress.
 * [Multi-column and function-wrapped reorder follow-ups]. The
-  reorder mechanism currently only uses the leading sort key and
-  only fires on plain columns. Lexicographic multi-key reorder
-  via `arrow::compute::lexsort_to_indices` is low-hanging fruit;
-  extending to monotonic function wrappers via leaf-column
+  **stats reorder step** currently only uses the leading sort key
+  on a plain column (reverse handles the rest via
+  `EquivalenceProperties` reasoning). Lexicographic multi-key
+  reorder via `arrow::compute::lexsort_to_indices` is low-hanging
+  fruit; extending to monotonic function wrappers via leaf-column
   extraction (e.g. `date_trunc('day', ts)` → use `min(ts)`) needs
   a bit more `EquivalenceProperties` integration but is doable.
 
