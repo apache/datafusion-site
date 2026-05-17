@@ -448,11 +448,15 @@ The opener reads them at scan time to drive three composable steps:
    primitive [#19064] introduced for declared reverse scans —
    [#21956] just routes more queries through it.
 
-The two layers **nest by construction**: file `i`'s `min(col)` is
-a lower bound on every row group inside it, so the file queue's
-order is a natural prefix of the within-file row-group order.
-Choosing the same key (`min`) in both layers keeps the strategies
-consistent.
+The two layers compose naturally because they sort by the same
+key. A file's `min(col)` is the minimum over its row groups'
+`min(col)` values, so the file with the smallest `min` contains
+the row group with the smallest `min`. Sorting files by `min(col)`
+and then sorting row groups by `min(col)` within each file
+produces an approximately min-ordered global stream — the first
+batch comes from the most-promising row group in the
+most-promising file, exactly what `TopK`'s dynamic filter needs
+to tighten its threshold fast.
 
 `reverse_row_groups`'s meaning depends on which way `Inexact` was
 reached. When the column-in-schema condition fires, the stats
