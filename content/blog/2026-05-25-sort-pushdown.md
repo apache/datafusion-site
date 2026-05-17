@@ -581,11 +581,29 @@ granularity. For a selective filter, the saving compounds.
 ### Row-group-level dynamic early termination — addresses bottleneck 3
 
 The work queue today holds `PartitionedFile`. Switching it to
-hold **row-group descriptors** instead lets a partition release
-its current file's remaining row groups back to the pool the
-moment a global signal says enough `TopK` winners have been
-found. A natural extension of the existing morsel-style work
-scheduling but not yet on a PR.
+hold **row-group descriptors** lets a partition stop mid-file the
+moment a global signal says `TopK` has K confirmed winners. Two
+flavors depending on whether file ranges actually overlap after
+stats reorder:
+
+* **Non-overlapping ranges.** The first file globally contains
+  the smallest values, the second contains the next batch, and so
+  on. Once `TopK`'s threshold passes file 0's max, every
+  subsequent file is pruned by stats already — the only fix
+  needed is the RG-granular queue so the partition currently
+  inside file 0 also stops at the right RG.
+* **Overlapping ranges.** The smallest *next* value could sit in
+  any of several open files. Matching the non-overlap efficiency
+  requires actively comparing each open file's next-RG `min` and
+  pulling from whichever is smallest — a **k-way merge across
+  files** at RG granularity. The dynamic-filter pushdown already
+  approximates this implicitly (an RG whose `max < threshold` is
+  dropped), but explicit k-way comparison would close the tap
+  earlier when the filter tightens slowly across overlapping
+  files.
+
+A natural extension of the existing morsel-style work scheduling
+but not yet on a PR.
 
 The two roadmap items above are *complementary*, not
 alternatives:
