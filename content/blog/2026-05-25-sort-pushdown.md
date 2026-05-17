@@ -72,20 +72,16 @@ further still.
     upgrades the source's ordering claim from `Unsupported` to
     `Exact` and **removes the `SortExec`** that `EnforceSorting`
     inserted earlier.
-  * **Runtime reorder for `TopK` convergence** — whenever the
-    leading sort key is a plain column in the file schema (or the
-    source's reversed declared ordering satisfies the request),
-    `try_pushdown_sort` stamps two flags on the source and the
-    opener runs a three-step runtime pipeline — file-level reorder
-    in the shared morsel queue, row-group reorder by min/max stats,
-    then optional iteration reverse for `DESC` requests. `SortExec`
-    stays, but `TopK`'s dynamic filter tightens fast on the
-    most-promising data and the rest is pruned.
+  * **Runtime reorder for `TopK` convergence** — when the leading
+    sort key is a plain column (or the reversed source ordering
+    satisfies the request), the scan reorders files and row groups
+    by `min/max` stats so the most-promising data is read first.
+    `SortExec` stays, but `TopK`'s dynamic filter tightens fast
+    and the rest is pruned.
   * **Reverse scans for `ORDER BY ... DESC`** — a row-group-level
-    reverse returns `Inexact` (Sort stays, but `TopK` terminates
-    early). The page-level reverse primitive needed for `Exact`
-    reverse — and so for full `SortExec` removal on `DESC` queries
-    — is in flight in arrow-rs.
+    reverse returns `Inexact`. Full `SortExec` removal on `DESC`
+    requires a page-level reverse primitive that's in flight in
+    arrow-rs.
 * Real-world benchmarks on the `sort_pushdown` suite (`Exact` path):
   `ORDER BY ... LIMIT` queries get **27× and 49× faster**; full
   `ORDER BY` scans get **~2×** faster.
@@ -158,8 +154,8 @@ follow:
   heap tightens, the filter's threshold tightens with it, and entire
   row groups can be skipped by checking the live threshold against
   the row group's min/max statistics. (See the earlier
-  [dynamic filters][dyn-filters-blog] and [limit pruning][limit-pruning-blog]
-  posts for the full background on this mechanism.)
+  [dynamic filters][dyn-filters-blog] post for the full background
+  on this mechanism.)
 
 Both paths use the same underlying min/max statistics, but for
 different purposes: `Exact` uses them at plan time to prove
@@ -167,7 +163,6 @@ non-overlap and justify removing the sort; `Inexact` uses them at
 runtime to skip row groups that can no longer improve the heap.
 
 [dyn-filters-blog]: https://datafusion.apache.org/blog/2025/09/10/dynamic-filters/
-[limit-pruning-blog]: https://datafusion.apache.org/blog/2026/03/20/limit-pruning/
 
 The diagram above shows the result we want: the plan after sort
 pushdown loses the `SortExec` node. Everything downstream — the
@@ -178,32 +173,19 @@ producing the order requested.
 
 ## The `PushdownSort` Rule
 
-The **`PushdownSort`** physical optimizer rule defines a uniform
-API for asking each `ExecutionPlan` two questions:
+The **`PushdownSort`** physical optimizer rule asks each
+`ExecutionPlan` two questions:
 
 1. "Can you produce output in *this* ordering?"
 2. "If yes, please rearrange yourself so that it actually does."
 
-The protocol uses three results — `Exact`, `Inexact`, `Unsupported` —
-that downstream operators can interpret uniformly. The Parquet
-`FileSource` answers by comparing the requested ordering against the
-per-file declared ordering: if natural ordering satisfies the request,
-it returns `Exact`; if the *reverse* of the declared ordering does,
-it returns `Inexact` and flips on `reverse_row_groups=true` so the
-scan reads row groups from last to first (the row-group-level reverse
-covered later in this post); otherwise it returns `Unsupported`.
-
-The rule's initial scope was deliberately narrow. It set up the
-API and delivered the reverse-scan case end-to-end, but did **not**
-add any statistics-based file rearrangement — that came later,
-covered in
-[Sort Elimination via Statistics](#sort-elimination-via-statistics)
-below. A finer-grained extension that broadens this `Inexact` path
-with a three-step runtime reorder pipeline is covered in
-[Runtime Reorder for TopK Convergence](#runtime-reorder-for-topk-convergence).
-
-The same rule also handles **reverse-output** for `DESC` queries —
-picked up again in the reverse-scan section below.
+The answer is one of `Exact`, `Inexact`, `Unsupported`. The Parquet
+`FileSource` answers by comparing the requested ordering against
+the per-file declared ordering: natural ordering satisfies →
+`Exact`; reversed satisfies → `Inexact` (sets
+`reverse_row_groups=true`); otherwise → `Unsupported`. The rest of
+this post is what each merged capability does on top of this
+protocol.
 
 ## Sort Elimination via Statistics
 
@@ -264,11 +246,9 @@ is no per-file min/max for the function output to compare against.
 Extending sort pushdown across monotonic function wrappers is one of
 the open follow-ups.
 
-*(The runtime reorder path covered later does let function-wrapped
-sorts benefit from row-group iteration reverse via
-`EquivalenceProperties`'s monotonicity inference, when the source
-declares a compatible natural ordering — but stats-based sort
-elimination still needs a plain column.)*
+(Runtime reorder covered later does handle some function-wrapped
+sorts via monotonicity inference — but stats-based sort elimination
+still needs a plain column.)
 
 <img src="/blog/images/sort-pushdown/phase2-stats-overlap.svg" alt="Detecting non-overlapping ranges via min/max statistics" width="100%" class="img-fluid"/>
 
@@ -304,15 +284,12 @@ The implementation handles a few edge cases worth calling out:
   `SortPreservingMergeExec` then picks rows across streams in value
   order to produce the final globally sorted output. The rule only
   has to prove the per-stream property.
-* **Single-partition vs multi-partition execution**. With the default
-  multi-partition setup, `EnforceDistribution` byte-range-splits files
-  into single-file groups, after which `validated_output_ordering()`
-  works correctly on its own. Stats-based reorder only triggers when
-  files have not been split — typically `--partitions 1` runs, or
-  files small enough that the splitter leaves them alone. In the
-  typical `--partitions 1` case the "per-group" distinction collapses
-  (one group equals the whole table), which is why the example earlier
-  in this section is drawn that way.
+* **Single-partition vs multi-partition execution.** The default
+  multi-partition setup byte-range-splits files into single-file
+  groups, after which `validated_output_ordering()` works on its
+  own. Stats-based reorder only fires when files aren't split —
+  typically `--partitions 1` or files small enough that the
+  splitter leaves them alone.
 
 [`BufferExec`]: https://github.com/apache/datafusion/blob/main/datafusion/physical-plan/src/buffer.rs
 [`sort_pushdown_buffer_capacity`]: https://github.com/apache/datafusion/pull/21426
@@ -352,12 +329,11 @@ removed:
   the runtime-difference section above. A 342 ms full-file scan
   collapses into a 7 ms K-row read.
 
-It is worth saying explicitly what this change does **not** affect.
-The default multi-partition execution path is unchanged: those plans
-already produced correct orderings via byte-range splitting, so
-stats-based sort elimination simply does not trigger. There is no
-regression and no behavior change for the typical multi-threaded
-query.
+The default multi-partition execution path is unaffected: those
+plans already produce correct orderings via byte-range splitting,
+so stats-based sort elimination simply does not fire there. No
+regression and no behavior change for typical multi-threaded
+queries.
 
 ## Runtime Reorder for TopK Convergence
 
@@ -511,21 +487,12 @@ row groups can be skipped via min/max statistics. This ships today
 and is what powers fast `ORDER BY ts DESC LIMIT N` on ASC-sorted
 files.
 
-Why not full `Exact` reverse, which would delete the `SortExec`
-outright? An earlier proposal — primarily reviewed by
-[@2010YOUY01] — that decoded an entire row group forward,
-materialized all rows, reversed the buffer, then emitted was
-correct but had a prohibitive memory profile: a peak of one whole
-row group (~128 MB) of decoded data vs. the few-MB-per-batch
-streaming profile readers normally have. The agreed direction was
-to ship the narrower `Inexact` row-group-reverse first, and to
-build `Exact` reverse on a finer-grained primitive once `arrow-rs`
-exposed one. The bottleneck section below details what that
-`Inexact`-keeps-`SortExec` decision costs at runtime, and the
-roadmap section after it describes how the page-level primitive
-removes the cost.
-
-[@2010YOUY01]: https://github.com/2010YOUY01
+Why not full `Exact` reverse that deletes the `SortExec`?
+Decoding a whole row group forward, reversing the buffer, and
+emitting works — but peaks at ~128 MB vs. the few-MB-per-batch
+streaming profile readers expect. `Exact` reverse waits on a
+page-level primitive that keeps the runtime win on a streaming
+memory budget — see the roadmap below.
 
 ## Current Bottlenecks
 
@@ -725,10 +692,9 @@ invariants — is what made this work possible.
 
 ## References
 
-Prior posts this work builds on:
+Prior post this work builds on:
 
 * [Dynamic Filters: Passing Information Between Operators During Execution for 25x Faster Queries][dyn-filters-blog] — the dynamic filter primitive `TopK` uses.
-* [Turning LIMIT into an I/O Optimization: Inside DataFusion's Multi-Layer Pruning Stack][limit-pruning-blog] — the pruning pipeline this work plugs into.
 
 Landed PRs that make up this work:
 
