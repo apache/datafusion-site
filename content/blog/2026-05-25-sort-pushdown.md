@@ -621,34 +621,24 @@ the Bottleneck-1 and Bottleneck-3 overheads listed above. The
 deliver; `Exact` reverse + row-group-level early termination is
 what pushes it further.
 
-### Other follow-ups
+### Extending the stats reorder step
 
-* [Unifying `EnforceDistribution` and `EnforceSorting`] into a
-  single `EnsureRequirements` rule. The two existing rules are
-  coupled through `SortExec.preserve_partitioning`, which makes
-  their composition non-idempotent and has caused a class of
-  production bugs. Other engines (Spark's `EnsureRequirements`,
-  Trino's `AddExchanges`) handle both in a single rule. In
-  progress.
-* [OFFSET pushdown to parquet] so `ORDER BY ts LIMIT K OFFSET N`
-  queries can skip the first `N` rows at the row-group level
-  instead of decoding and discarding them. In progress.
-* [Multi-column and function-wrapped reorder follow-ups]. The
-  **stats reorder step** currently only uses the leading sort key
-  on a plain column (reverse handles the rest via
-  `EquivalenceProperties` reasoning). Lexicographic multi-key
-  reorder via `arrow::compute::lexsort_to_indices` is low-hanging
-  fruit; extending to monotonic function wrappers via leaf-column
-  extraction (e.g. `date_trunc('day', ts)` → use `min(ts)`) needs
-  a bit more `EquivalenceProperties` integration but is doable.
+Alongside removing the bottlenecks above, the
+[stats reorder step itself has room to grow][stats-reorder-followup].
+Today it only uses the leading sort key on a plain column — reverse
+already handles function-wrapped and multi-column cases via
+`EquivalenceProperties` reasoning, but stats-based RG ordering only
+fires on a plain leading column. Lexicographic multi-key reorder via
+`arrow::compute::lexsort_to_indices` is low-hanging fruit; extending
+to monotonic function wrappers via leaf-column extraction (e.g.
+`date_trunc('day', ts)` → use `min(ts)`) needs a bit more
+`EquivalenceProperties` integration but is doable.
 
 [morsel-style work scheduling]: https://github.com/apache/datafusion/pull/21351
 [global file reorder in the shared queue]: https://github.com/apache/datafusion/issues/21733
 [TopK threshold init from parquet statistics]: https://github.com/apache/datafusion/pull/21712
 [combined statistics-driven `TopK` pipeline]: https://github.com/apache/datafusion/pull/21580
-[Unifying `EnforceDistribution` and `EnforceSorting`]: https://github.com/apache/datafusion/pull/21976
-[OFFSET pushdown to parquet]: https://github.com/apache/datafusion/pull/21828
-[Multi-column and function-wrapped reorder follow-ups]: https://github.com/apache/datafusion/issues/22198
+[stats-reorder-followup]: https://github.com/apache/datafusion/issues/22198
 
 Concretely useful issues for new contributors:
 
@@ -694,8 +684,6 @@ Landed PRs that make up this work:
 In flight / open:
 
 * Page-level reverse (arrow-rs): [apache/arrow-rs#9937](https://github.com/apache/arrow-rs/pull/9937), discussion in [apache/arrow-rs#9934](https://github.com/apache/arrow-rs/issues/9934)
-* `EnsureRequirements`: [apache/datafusion#21976](https://github.com/apache/datafusion/pull/21976)
-* OFFSET pushdown to parquet: [apache/datafusion#21828](https://github.com/apache/datafusion/pull/21828)
 * TopK threshold init from parquet statistics: [apache/datafusion#21712](https://github.com/apache/datafusion/pull/21712)
 * Combined statistics-driven `TopK` pipeline: [apache/datafusion#21580](https://github.com/apache/datafusion/pull/21580)
 * Global file reorder in shared queue: [apache/datafusion#21733](https://github.com/apache/datafusion/issues/21733)
