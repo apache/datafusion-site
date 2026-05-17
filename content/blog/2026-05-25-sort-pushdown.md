@@ -511,118 +511,107 @@ row groups can be skipped via min/max statistics. This ships today
 and is what powers fast `ORDER BY ts DESC LIMIT N` on ASC-sorted
 files.
 
-To turn this into `Exact` reverse — so the `SortExec` can be removed
-outright — each emitted batch itself has to be in DESC order. The
-straightforward row-group-level approach (decode an entire RG forward,
-materialize all rows, reverse the buffer, then emit) is correct and
-was actually proposed first, in an earlier iteration of this work
-that was later closed and split into smaller pieces. Review
-feedback there — primarily from [@2010YOUY01] — flagged the memory
-profile as too aggressive: caching an entire row group's worth of
-decoded rows before any batch can be emitted is roughly:
-
-* **Peak buffer of one whole row group** (~128 MB by default), versus
-  the few-MB-per-batch streaming profile readers normally have.
-* **First-batch latency = full last-row-group decode**. For
-  `ORDER BY ts DESC LIMIT 10` that means decoding ~1 million rows to
-  return 10 — defeating the point of the `LIMIT`.
-
-The agreed direction coming out of that discussion was to ship the
-narrower `Inexact` row-group-reverse first, and to build `Exact`
-reverse on a finer-grained primitive once `arrow-rs` exposed one.
-
-### Empirical note — runtime cost of `Inexact` + `TopK`
-
-We run an internal row-group-level `Exact` reverse implementation in
-production and tested swapping in upstream's `Inexact` row-group
-reverse + `TopK` on `ORDER BY ts DESC LIMIT N` queries. End-to-end
-latency went **up**, not down. A few cost components stack up on the
-`Inexact` + `TopK` side:
-
-* **`LIMIT N` does not propagate as a static stop signal to the
-  source.** In the `Inexact` path the `SortExec` stays on top and
-  `TopK`'s fetch belongs to `SortExec`, not to the parquet scan. The
-  only mechanism that can cut work below the `SortExec` is the
-  dynamic-filter pushdown: as the heap fills, the filter (`ts >
-  threshold`) is pushed to the source and its threshold tightens
-  with every batch. That filter is enough to **stats-prune
-  subsequent, not-yet-opened row groups** entirely — if a row
-  group's `max(ts) < threshold` it is skipped without decode. But
-  inside the row group the source is currently reading, the
-  filter pushdown does not unwind to "stop": the sort column has
-  to be **fully decoded** so the filter can be evaluated row by
-  row, the surviving rows feed the heap to tighten the threshold,
-  and only then can the resulting `RowSelection` skip the *other*
-  columns for rows that didn't pass. For
-  `ORDER BY ts DESC LIMIT 10` on a 1M-row row group that is still
-  ~1M sort-column decodes regardless of `N`; the LIMIT only saves
-  work on non-sort columns inside the same row group and on whole
-  *subsequent* row groups that the tightened threshold can prune.
-  The internal RG-level `Exact` reverse path, by contrast, deletes
-  the `SortExec` so the LIMIT becomes a static fetch on the source.
-  The source still has to decode the target row group in full —
-  parquet does not allow partial row-group reads, so this part is
-  the same as `Inexact` — but it then reverses the buffer in
-  memory, takes the first K rows, and **stops**. No subsequent row
-  group is opened, no stats check, no filter machinery, no per-row
-  heap maintenance, no `SortExec` final ordering pass. The wins
-  come from removing those per-row and per-RG overheads on top, not
-  from decoding less sort-column data on the target row group.
-* **`SortExec` itself adds ordering work on top of `Inexact`.** The
-  reversed-RG stream is not strictly DESC (rows within each RG are
-  still forward), so `Inexact` keeps the surrounding `SortExec`.
-  Even when the heap is settled and the dynamic filter has
-  pruned the tail, the outer operator does its own final ordering
-  pass — overhead that `Exact` (which deletes the `SortExec`)
-  does not pay.
-
-Why didn't we just upstream the internal `Exact` reverse, then?
-**Memory.** Parquet does not allow reading only part of a row
-group, so any RG-level `Exact` implementation — ours included —
-has to decode the entire row group, reverse the buffer in
-memory, and only then emit. That is the same memory profile that
-got the earlier RG-level proposal rejected: a peak of one whole
-row group (~128 MB) of decoded data, vs. the few-MB-per-batch
-streaming profile readers normally have. Our runtime advantage
-over `Inexact` + `TopK` does *not* come from decoding less —
-both paths decode the relevant row group's sort column in full —
-it comes from skipping the per-row heap maintenance, the dynamic
-filter evaluation, and the `SortExec` final ordering pass that
-`Inexact` keeps on top. So we end up running our `Exact` reverse
-in-house but cannot land it as the upstream default, for the
-same memory reason that closed the earlier proposal.
-
-**The fix that keeps both the runtime win and a streaming memory
-profile is page-level `Exact` reverse via arrow-rs**, described
-next.
-
-That primitive is the **page-level** reverse traversal. Parquet's
-`OffsetIndex` already gives us byte-precise locations for every data
-page in a column chunk, so we can `seek` directly to the last page,
-decode it forward, reverse the resulting batch, and emit. Peak buffer
-drops to one page (~1 MB) and first-batch latency drops to the cost
-of one page decode — the row-group-level memory cliff disappears.
-
-We are landing this primitive upstream in arrow-rs. Early numbers
-on a 100k-row, 98-page column chunk show **~50× faster
-time-to-first-N** for `n ≤ 1 page` and **~9× faster** for `n`
-spanning 10 pages, compared with the row-group-level Exact reverse
-described above. The DataFusion-side integration that turns this
-primitive into an `Exact` result is a follow-up and is gated on
-the arrow-rs merge.
+Why not full `Exact` reverse, which would delete the `SortExec`
+outright? An earlier proposal — primarily reviewed by
+[@2010YOUY01] — that decoded an entire row group forward,
+materialized all rows, reversed the buffer, then emitted was
+correct but had a prohibitive memory profile: a peak of one whole
+row group (~128 MB) of decoded data vs. the few-MB-per-batch
+streaming profile readers normally have. The agreed direction was
+to ship the narrower `Inexact` row-group-reverse first, and to
+build `Exact` reverse on a finer-grained primitive once `arrow-rs`
+exposed one. The bottleneck section below details what that
+`Inexact`-keeps-`SortExec` decision costs at runtime, and the
+roadmap section after it describes how the page-level primitive
+removes the cost.
 
 [@2010YOUY01]: https://github.com/2010YOUY01
 
-One natural question: why not reverse the rows *within* a page
-directly? Because we can't. Parquet's page encodings (RLE, dictionary,
-delta, bit-packing) are all forward streams — you cannot decode the
-last value without decoding every value that came before it. The
-design therefore is: **reverse the page traversal, forward-decode
-each page, reverse the resulting RecordBatch**. This is the algorithm
-shape DataFusion's `RecordBatchReader` integration will use once
-arrow-rs ships the primitive.
+## Current Bottlenecks
 
-The killer use case is **filtered reverse TopK**:
+Stats-based **sort elimination** removes the `SortExec` entirely
+when ranges are non-overlapping — there's nothing more to optimize
+on that path. But the `Inexact` paths (**runtime reorder** for
+`TopK`, and **row-group reverse** for `DESC`) leave three concrete
+inefficiencies on the table when `Exact` cannot fire:
+
+### Bottleneck 1: `SortExec` stays on top, so `LIMIT N` does not propagate as a static stop signal
+
+In the `Inexact` path the `SortExec` stays in the plan and
+`TopK`'s fetch belongs to `SortExec`, not to the parquet scan.
+The only thing that can cut work below the `SortExec` is the
+dynamic-filter pushdown: as the heap fills, the filter
+(`ts > threshold`) is pushed to the source and its threshold
+tightens with every batch. That filter does **stats-prune
+subsequent, not-yet-opened row groups** — if a row group's
+`max(ts) < threshold` it is skipped without decode. But the
+`SortExec` keeps pulling batches, and the outer operator does its
+own final ordering pass on the "RGs descending × rows ascending"
+stream even after the heap is settled. We have measured this
+in-house: swapping our internal `Exact` reverse for upstream's
+`Inexact` reverse + `TopK` on `ORDER BY ts DESC LIMIT N` makes
+end-to-end latency go **up**, not down — exactly because the
+`SortExec` final pass and the per-row heap maintenance pile up on
+top.
+
+### Bottleneck 2: Inside the currently-open row group, the sort column is fully decoded
+
+Even with the dynamic filter pushed all the way to parquet, the
+filter has to be evaluated row-by-row inside the open row group:
+the sort column has to be **fully decoded** so each value can be
+compared against the threshold, the surviving rows feed the heap
+to tighten the threshold, and only then can the resulting
+`RowSelection` skip the *other* columns for rows that didn't
+pass. For `ORDER BY ts DESC LIMIT 10` on a 1M-row row group that
+is ~1M sort-column decodes regardless of `N`. Parquet doesn't
+allow partial row-group reads, so even an RG-level `Exact`
+reverse would pay this same cost — the only way to materially
+reduce it is to drop to page granularity.
+
+### Bottleneck 3: File-granular work scheduling can't close the tap mid-file
+
+Once a `FileStream` picks up a file from the shared work queue,
+it has to finish that file. Today's dynamic work scheduling is
+**file-granular**: idle partitions stop pulling new files from
+the queue once a global limit is satisfied, but the partition
+that's currently inside a file decodes that file's remaining row
+groups regardless. The work queue holds `PartitionedFile`, not
+row-group descriptors. So even with a tight threshold and
+aggressive stats pruning of un-opened row groups, the *currently
+open* file gets read to completion.
+
+## Roadmap: Removing the Bottlenecks
+
+### Page-level `Exact` reverse — addresses bottlenecks 1 + 2
+
+Parquet's `OffsetIndex` gives us byte-precise locations for every
+data page in a column chunk, so we can `seek` directly to the last
+page, decode it forward, reverse the resulting batch, and emit.
+Peak buffer drops from ~128 MB (one row group) to ~1 MB (one
+page), and first-batch latency drops to the cost of one page
+decode — the row-group-level memory cliff disappears. With each
+batch already in DESC order, `PushdownSort` can finally return
+`Exact` for `DESC` requests, the `SortExec` is removed, and
+`LIMIT N` becomes a static fetch on the source. The
+`Inexact`-final-ordering-pass overhead from Bottleneck 1 goes
+away outright, and the Bottleneck-2 decode reduces to the rows
+the page-level seek actually pulls in.
+
+Why not reverse the rows *within* a page directly? Because we
+can't. Parquet's page encodings (RLE, dictionary, delta,
+bit-packing) are all forward streams — you cannot decode the last
+value without decoding every value that came before it. The
+design is: **reverse the page traversal, forward-decode each
+page, reverse the resulting `RecordBatch`**.
+
+The primitive is landing upstream in arrow-rs. Early numbers on a
+100k-row, 98-page column chunk show **~50× faster
+time-to-first-N** for `n ≤ 1 page` and **~9× faster** for `n`
+spanning 10 pages, compared with the row-group-level `Exact`
+reverse. The DataFusion-side integration that turns this primitive
+into an `Exact` result is a follow-up gated on the arrow-rs merge.
+
+The killer use case is **filtered reverse `TopK`**:
 
 ```sql
 SELECT * FROM events
@@ -631,115 +620,66 @@ ORDER BY ts DESC
 LIMIT 10
 ```
 
-Here `RowSelection::with_limit` cannot help — you don't know in
-advance which rows match `user_id = 42`, so you can't pre-compute a
-selection of the "last 10 matching rows". The only correct strategy
-is to stream pages backward, evaluate the filter on each, and stop
-when 10 matches are collected. Row-group reverse stops at a
-~128 MB granularity. Page reverse stops at ~1 MB granularity. For a
-selective filter, the saving compounds.
+`RowSelection::with_limit` cannot help here — you don't know in
+advance which rows match `user_id = 42`, so you can't pre-compute
+a selection of the "last 10 matching rows". The only correct
+strategy is to stream pages backward, evaluate the filter on
+each, and stop when 10 matches are collected. Row-group reverse
+stops at a ~128 MB granularity. Page reverse stops at ~1 MB
+granularity. For a selective filter, the saving compounds.
 
-## What's Next
+### Row-group-level dynamic early termination — addresses bottleneck 3
 
-Sort pushdown is a long-running line of work and there is more to do.
-Beyond the `Exact` path described above, there is a complementary
-**dynamic / TopK-driven path** that helps when `Exact` cannot apply —
-e.g. when file ranges genuinely overlap, or when the sort is on a
-function output rather than a plain column. The two directions are
-not alternatives; they compose:
+The work queue today holds `PartitionedFile`. Switching it to
+hold **row-group descriptors** instead lets a partition release
+its current file's remaining row groups back to the pool the
+moment a global signal says enough `TopK` winners have been
+found. A natural extension of the existing morsel-style work
+scheduling but not yet on a PR.
 
-* [`Exact` reverse for `ORDER BY ... DESC`]. Today's row-group
-  reverse returns `Inexact` and the `SortExec` stays on top; the
-  arrow-rs page-level reverse primitive is what unlocks `Exact`
-  reverse on `DESC` queries (and therefore full `SortExec`
-  elimination on `DESC`). Memory + first-batch latency rule out
-  doing the same thing at the row-group level. Gated on the
-  arrow-rs side.
-* **Dynamic / TopK-driven path.** When `Exact` cannot fire,
-  `TopK`'s [dynamic filter][dyn-filters-blog] still benefits
-  enormously from reading the *best* data first. This thread also
-  builds on the [limit pruning][limit-pruning-blog] work that
-  turned `LIMIT` into an I/O optimization across the pruning
-  pipeline. The recently-merged [morsel-style work scheduling] in
-  `FileStream` gives sibling partitions a *shared work queue* with
-  file-level work-stealing — no CPU sits idle when one partition
-  runs out of files. The proposed
-  [global file reorder in the shared queue] sorts files in that
-  shared queue by per-file statistics *before* any partition
-  picks, so the first file read is globally optimal and tightens
-  the dynamic filter immediately. Combined with
-  [TopK threshold init from parquet statistics] and the runtime
-  row-group / file reorder + reverse path described above, the
-  threshold can be set before reading a single byte. The reorder
-  mechanism applies to any `ORDER BY <plain_col> [LIMIT N]` on
-  parquet, not just TopK queries with a dynamic filter. The
-  [combined statistics-driven `TopK` pipeline] is in flight.
+The two roadmap items above are *complementary*, not
+alternatives:
 
-  The mechanism here is **RG-level pruning, not mid-stream early
-  return**. With the threshold known up front, the parquet
-  `PruningPredicate` rejects entire row groups against their
-  min/max statistics before any I/O — those row groups are never
-  decoded. The row group(s) the reader *does* open still have
-  their sort column decoded in full to feed the dynamic filter.
-  On the in-flight microbenchmark (single file, 61 sorted row
-  groups, `--partitions 1`), **60 of the 61 row groups are
-  skipped** and only one is decoded:
+* `Exact` reverse closes the tap for `DESC` queries by removing
+  the `SortExec` entirely.
+* Row-group-level scheduling closes the tap for `Inexact` queries
+  where `Exact` still cannot fire (function-wrapped sorts,
+  overlapping ranges) — the `SortExec` stays, but the scan stops
+  pulling row groups once `TopK` is satisfied.
 
-  | Query                          | Baseline | With pipeline | Speedup |
-  | ------------------------------ | -------: | ------------: | ------: |
-  | `ORDER BY col DESC LIMIT 100`  | 28.5 ms  | 1.64 ms       | **17×** |
-  | `ORDER BY col DESC LIMIT 1000` | 22.2 ms  | 0.37 ms       | **60×** |
-  | `SELECT * ORDER BY ... LIMIT 100`  | 22.5 ms  | 0.66 ms       | **34×** |
-  | `SELECT * ORDER BY ... LIMIT 1000` | 22.4 ms  | 0.61 ms       | **37×** |
+### Preview: the combined statistics-driven `TopK` pipeline
 
-  The stack reports `Inexact` — the `SortExec` stays on top to
-  enforce correctness across overlapping ranges — so this path
-  cannot do *true* mid-stream early return. Once the parquet
-  reader opens a row group, the sort column has to be decoded all
-  the way through; once a `FileStream` picks up a file from the
-  shared work queue, it has to finish that file. Today's dynamic
-  work scheduling is **file-granular**: idle partitions stop
-  pulling new files from the queue once a global limit is
-  satisfied, but the partition that's currently inside a file
-  decodes that file's remaining row groups regardless. Mid-file
-  RG-level early return on `TopK` convergence is **not implemented
-  yet** — the work queue holds `PartitionedFile`, not row-group
-  descriptors.
+The [combined statistics-driven `TopK` pipeline] is the in-flight
+work that stacks several of these mechanisms: pre-scan
+[TopK threshold init from parquet statistics],
+[global file reorder in the shared queue], and the runtime
+row-group / file reorder + reverse already merged. On a
+microbenchmark (single file, 61 sorted row groups, `--partitions 1`)
+**60 of the 61 row groups are skipped**, only one is decoded:
 
-  Closing the tap the moment `TopK` has K confirmed winners
-  therefore needs either:
+| Query                          | Baseline | With pipeline | Speedup |
+| ------------------------------ | -------: | ------------: | ------: |
+| `ORDER BY col DESC LIMIT 100`  | 28.5 ms  | 1.64 ms       | **17×** |
+| `ORDER BY col DESC LIMIT 1000` | 22.2 ms  | 0.37 ms       | **60×** |
+| `SELECT * ORDER BY ... LIMIT 100`  | 22.5 ms  | 0.66 ms       | **34×** |
+| `SELECT * ORDER BY ... LIMIT 1000` | 22.4 ms  | 0.61 ms       | **37×** |
 
-  * the **`Exact` path**, where the `SortExec` is gone entirely
-    and the data source's own `fetch` becomes a static limit that
-    the reader can honour at batch granularity; or
-  * **finer-grained dynamic scheduling** — having the shared queue
-    hold row-group descriptors instead of whole files, so a
-    partition can release its current file's remaining row groups
-    back to the pool once a global signal says enough TopK
-    winners have been found. A natural extension of the existing
-    morsel work but not yet on a PR.
+This pipeline still reports `Inexact` — the `SortExec` stays on
+top to enforce correctness across overlapping ranges — so it pays
+the Bottleneck-1 and Bottleneck-3 overheads listed above. The
+17×–60× is what statistics-driven RG-level pruning alone can
+deliver; `Exact` reverse + row-group-level early termination is
+what pushes it further.
 
-  The three mechanisms compose. Stats pruning saves the row
-  groups that *can't* matter (skipped without I/O). The dynamic
-  filter narrows what's decoded inside the row groups the reader
-  does open. `Exact` or finer-grained scheduling is what
-  eventually closes the tap once `TopK` is satisfied.
-* **Filtered reverse `TopK` end-to-end.** `WHERE filter ORDER BY
-  ts DESC LIMIT N` is the dominant observability query shape and
-  the one where the arrow-rs page-reverse primitive matters most:
-  `RowSelection::with_limit` cannot pre-compute the last `N`
-  matching rows when the filter is selective, so the only correct
-  strategy is to stream pages backward, evaluate the filter, and
-  stop when `N` matches are collected. The DataFusion-side
-  integration is a follow-up to the arrow-rs primitive.
+### Other follow-ups
+
 * [Unifying `EnforceDistribution` and `EnforceSorting`] into a
   single `EnsureRequirements` rule. The two existing rules are
   coupled through `SortExec.preserve_partitioning`, which makes
   their composition non-idempotent and has caused a class of
   production bugs. Other engines (Spark's `EnsureRequirements`,
-  Trino's `AddExchanges`) handle both in a single rule. Merging
-  them also gives future sort-related optimizations a single
-  coherent place to live. In progress.
+  Trino's `AddExchanges`) handle both in a single rule. In
+  progress.
 * [OFFSET pushdown to parquet] so `ORDER BY ts LIMIT K OFFSET N`
   queries can skip the first `N` rows at the row-group level
   instead of decoding and discarding them. In progress.
@@ -751,7 +691,6 @@ not alternatives; they compose:
   extraction (e.g. `date_trunc('day', ts)` → use `min(ts)`) needs
   a bit more `EquivalenceProperties` integration but is doable.
 
-[`Exact` reverse for `ORDER BY ... DESC`]: https://github.com/apache/arrow-rs/pull/9937
 [morsel-style work scheduling]: https://github.com/apache/datafusion/pull/21351
 [global file reorder in the shared queue]: https://github.com/apache/datafusion/issues/21733
 [TopK threshold init from parquet statistics]: https://github.com/apache/datafusion/pull/21712
