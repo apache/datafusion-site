@@ -1,5 +1,222 @@
 <?xml version="1.0" encoding="utf-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - blog</title><link href="https://datafusion.apache.org/blog/" rel="alternate"/><link href="https://datafusion.apache.org/blog/feeds/blog.atom.xml" rel="self"/><id>https://datafusion.apache.org/blog/</id><updated>2026-05-07T00:00:00+00:00</updated><entry><title>Apache DataFusion Comet 0.16.0 Release</title><link href="https://datafusion.apache.org/blog/2026/05/07/datafusion-comet-0.16.0" rel="alternate"/><published>2026-05-07T00:00:00+00:00</published><updated>2026-05-07T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2026-05-07:/blog/2026/05/07/datafusion-comet-0.16.0</id><summary type="html">&lt;!--
+<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - blog</title><link href="https://datafusion.apache.org/blog/" rel="alternate"/><link href="https://datafusion.apache.org/blog/feeds/blog.atom.xml" rel="self"/><id>https://datafusion.apache.org/blog/</id><updated>2026-05-24T00:00:00+00:00</updated><entry><title>Apache DataFusion Ballista 53.0.0 Released</title><link href="https://datafusion.apache.org/blog/2026/05/24/datafusion-ballista-53.0.0" rel="alternate"/><published>2026-05-24T00:00:00+00:00</published><updated>2026-05-24T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2026-05-24:/blog/2026/05/24/datafusion-ballista-53.0.0</id><summary type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+
+&lt;p&gt;We are pleased to announce version &lt;a href="https://github.com/apache/datafusion-ballista/blob/main/CHANGELOG.md#5300-2026-05-19"&gt;53.0.0&lt;/a&gt; of &lt;a href="https://datafusion.apache.org/ballista/"&gt;Apache DataFusion Ballista&lt;/a&gt;. Ballista is a distributed query
+execution engine that enhances &lt;a href="https://datafusion.apache.org"&gt;Apache DataFusion&lt;/a&gt; by enabling parallel execution of workloads across multiple
+nodes.&lt;/p&gt;
+&lt;p&gt;The last Ballista blog post covered &lt;a href="/blog/2025/02/02/datafusion-ballista-43.0.0/"&gt;43.0.0&lt;/a&gt;, released in January 2025. In the year and …&lt;/p&gt;</summary><content type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+
+&lt;p&gt;We are pleased to announce version &lt;a href="https://github.com/apache/datafusion-ballista/blob/main/CHANGELOG.md#5300-2026-05-19"&gt;53.0.0&lt;/a&gt; of &lt;a href="https://datafusion.apache.org/ballista/"&gt;Apache DataFusion Ballista&lt;/a&gt;. Ballista is a distributed query
+execution engine that enhances &lt;a href="https://datafusion.apache.org"&gt;Apache DataFusion&lt;/a&gt; by enabling parallel execution of workloads across multiple
+nodes.&lt;/p&gt;
+&lt;p&gt;The last Ballista blog post covered &lt;a href="/blog/2025/02/02/datafusion-ballista-43.0.0/"&gt;43.0.0&lt;/a&gt;, released in January 2025. In the year and a bit since, the
+project has quietly shipped a release for every DataFusion release through 53.0.0. This post catches up
+on what changed across that span, what landed specifically in 53.0.0, and where the project is heading.&lt;/p&gt;
+&lt;h2 id="how-ballista-has-changed-since-4300"&gt;How Ballista has changed since 43.0.0&lt;a class="headerlink" href="#how-ballista-has-changed-since-4300" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;The story of 43.0.0 was one of simplification: experimental features were removed, the &lt;code&gt;BallistaContext&lt;/code&gt; was
+deprecated in favor of the standard DataFusion &lt;code&gt;SessionContext&lt;/code&gt;, and the project's release cadence was
+aligned with DataFusion's. The story of the year that followed has been one of putting things back, but
+under a more deliberate design.&lt;/p&gt;
+&lt;h3 id="production-deployment"&gt;Production deployment&lt;a class="headerlink" href="#production-deployment" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;A lot of the work over this period has been about running Ballista in real clusters rather than just on a
+developer's laptop:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;S3 object store support&lt;/strong&gt; has been added to both the executor and scheduler binaries, including
+  credentials derived from the standard AWS environment, instance metadata, and explicit configuration.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;&lt;a href="https://datafusion.apache.org/ballista/user-guide/deployment/docker.html"&gt;Docker images&lt;/a&gt;&lt;/strong&gt; for the scheduler and executor are now published on each release, making Docker
+  Compose and Kubernetes deployments straightforward.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Cluster RPC&lt;/strong&gt; can be configured with TLS and custom headers, enabling deployments that need encrypted
+  inter-component traffic or pass-through authentication.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Push-based task scheduling&lt;/strong&gt; is now the default, replacing pull-staged scheduling. Push scheduling
+  generally results in lower latency for short queries. Both modes remain available.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Configurable gRPC timeouts&lt;/strong&gt;, retry policies, and message size limits make it easier to operate clusters
+  under varying network conditions.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Memory bounds for executors&lt;/strong&gt; can now be set with &lt;code&gt;--memory-pool-size&lt;/code&gt;, so executors no longer rely on
+  unbounded growth.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id="shuffle-subsystem"&gt;Shuffle subsystem&lt;a class="headerlink" href="#shuffle-subsystem" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;The shuffle subsystem received the largest single rework over this period.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;A new &lt;strong&gt;sort-based shuffle writer&lt;/strong&gt; was added in 52.0.0 and made the default in 53.0.0. The hash-based
+  writer remains available behind a configuration flag.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Buffered I/O&lt;/strong&gt; in the shuffle writer significantly reduces the number of small writes, and disk I/O
+  has been moved off the Tokio worker threads so that I/O latency does not block scheduling.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Per-task spill thresholds&lt;/strong&gt; bound writer memory in the sort-based path, and a deferred materialization
+  step using &lt;code&gt;interleave_record_batch&lt;/code&gt; reduces allocator pressure during shuffle write.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Remote shuffle reads&lt;/strong&gt; now use Arrow Flight directly, with a client cache on the executor side, giving
+  better throughput and resource utilization for shuffle-heavy queries.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Shuffle reader cleanup&lt;/strong&gt; removes job-local data once a job completes.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id="rest-api-and-observability"&gt;REST API and observability&lt;a class="headerlink" href="#rest-api-and-observability" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;The scheduler's &lt;a href="https://datafusion.apache.org/ballista/user-guide/scheduler.html#rest-api"&gt;REST API&lt;/a&gt; has grown from a small status surface to the primary control plane for
+inspecting running and completed jobs:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;The REST API is now enabled by default.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;/api/jobs&lt;/code&gt; and &lt;code&gt;/api/jobs/&amp;lt;job_id&amp;gt;&lt;/code&gt; expose job status, start/end times, logical and physical plans,
+  per-stage task information, and metrics.&lt;/li&gt;
+&lt;li&gt;Plans can be rendered as a tree directly from the REST API.&lt;/li&gt;
+&lt;li&gt;Per-executor system and process metrics are reported, and Prometheus metrics integration is available
+  behind a feature flag.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id="a-new-python-interface"&gt;A new Python interface&lt;a class="headerlink" href="#a-new-python-interface" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;A redesigned Python client has replaced &lt;code&gt;BallistaBuilder&lt;/code&gt;. The new entry point is &lt;code&gt;BallistaSessionContext&lt;/code&gt;,
+which mirrors the DataFusion Python &lt;code&gt;SessionContext&lt;/code&gt; API:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-python"&gt;from ballista import BallistaSessionContext
+
+ctx = BallistaSessionContext(
+    "df://localhost:50050",
+    cluster_config={
+        "datafusion.execution.target_partitions": "32",
+    },
+)
+
+ctx.register_parquet("trips", "/mnt/bigdata/trips")
+df = ctx.sql("SELECT vendor_id, COUNT(*) FROM trips GROUP BY vendor_id")
+df.show()
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;A number of fixes since 43.0.0 made this client much more usable in distributed environments: session
+configuration is now propagated from the Python client to the cluster; &lt;code&gt;collect&lt;/code&gt;, &lt;code&gt;show&lt;/code&gt;, and &lt;code&gt;to_pandas&lt;/code&gt;
+go through the cluster instead of falling back to a local execution path; and S3 access works without
+requiring explicit credentials. This work has been done in close collaboration with the
+&lt;a href="https://datafusion.apache.org/python/"&gt;datafusion-python&lt;/a&gt; team, who have been generous with API guidance and review. Jupyter notebook
+integration is documented in the &lt;a href="https://datafusion.apache.org/ballista/user-guide/python/quickstart.html"&gt;Python user guide&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;The release process has also been extended so that future Ballista releases publish Python wheels to
+&lt;a href="https://pypi.org/project/ballista/"&gt;PyPI&lt;/a&gt; as &lt;code&gt;ballista&lt;/code&gt;.&lt;/p&gt;
+&lt;h3 id="spark-compatibility-and-substrait"&gt;Spark compatibility and Substrait&lt;a class="headerlink" href="#spark-compatibility-and-substrait" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Ballista now supports the &lt;code&gt;spark-compat&lt;/code&gt; Cargo feature, which auto-registers the
+[&lt;code&gt;datafusion-spark&lt;/code&gt;] function library in the executor session context. This makes it possible to evaluate
+Spark-compatible SQL semantics on a Ballista cluster.&lt;/p&gt;
+&lt;p&gt;The scheduler also has a Substrait surface: &lt;code&gt;SubstraitSchedulerClient&lt;/code&gt; accepts Substrait logical plans.
+This is an important step toward decoupling Ballista from any one client language.&lt;/p&gt;
+&lt;h2 id="highlights-of-5300"&gt;Highlights of 53.0.0&lt;a class="headerlink" href="#highlights-of-5300" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;53.0.0 is a feature-heavy release, with significant work in observability, the planner, and the executor.&lt;/p&gt;
+&lt;h3 id="terminal-user-interface"&gt;Terminal User Interface&lt;a class="headerlink" href="#terminal-user-interface" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;The Ballista CLI now ships with an integrated Terminal User Interface for monitoring a running cluster.
+The TUI is enabled with &lt;code&gt;ballista-cli --tui&lt;/code&gt;, or by typing &lt;code&gt;\tui&lt;/code&gt; inside the CLI. It provides views for
+executors, jobs, stages, tasks, plan trees, and metrics, all backed by the scheduler's REST API.&lt;/p&gt;
+&lt;p&gt;&lt;img alt="Ballista TUI jobs view" class="img-fluid" src="/blog/images/datafusion-ballista-53.0.0/tui-jobs-table.png" width="100%"/&gt;&lt;/p&gt;
+&lt;p&gt;Plan rendering is available directly from the TUI, with logical, physical, and graph views:&lt;/p&gt;
+&lt;p&gt;&lt;img alt="Ballista TUI logical plan popup" class="img-fluid" src="/blog/images/datafusion-ballista-53.0.0/tui-job-plan-logical-popup.png" width="100%"/&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img alt="Ballista TUI physical plan popup" class="img-fluid" src="/blog/images/datafusion-ballista-53.0.0/tui-job-plan-physical-popup.png" width="100%"/&gt;&lt;/p&gt;
+&lt;p&gt;A web rendering of the TUI is in development.&lt;/p&gt;
+&lt;h3 id="adaptive-query-execution-experimental"&gt;Adaptive Query Execution (Experimental)&lt;a class="headerlink" href="#adaptive-query-execution-experimental" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Ballista now has experimental support for &lt;strong&gt;Adaptive Query Execution&lt;/strong&gt; (AQE). When enabled, the scheduler
+re-runs the DataFusion physical optimizer between query stages, using statistics collected from completed
+stages instead of relying solely on pre-execution estimates.&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;let session_config = SessionConfig::new_with_ballista()
+    .set_bool("ballista.planner.adaptive.enabled", true);
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Two adaptive optimizations are implemented today:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Join reordering&lt;/strong&gt; based on runtime row counts so the smaller side drives the join.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Empty stage elimination&lt;/strong&gt;, where downstream stages are short-circuited if an upstream stage produced
+  zero rows.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;The AQE work in 53.0.0 also added support for the sort-based shuffle writer in adaptive plans, lazy stage
+evaluation, and a &lt;code&gt;CoalescePartitionsRule&lt;/code&gt; that coalesces shuffle partitions based on resolved statistics.&lt;/p&gt;
+&lt;p&gt;AQE is disabled by default and should currently be considered experimental. Tracking work happens on
+&lt;a href="https://github.com/apache/datafusion-ballista/issues/1359"&gt;issue #1359&lt;/a&gt;.&lt;/p&gt;
+&lt;h3 id="explain-analyze"&gt;&lt;code&gt;EXPLAIN ANALYZE&lt;/code&gt;&lt;a class="headerlink" href="#explain-analyze" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;&lt;code&gt;EXPLAIN ANALYZE&lt;/code&gt; now works through the Ballista scheduler, returning the executed physical plan along with
+the per-stage runtime metrics collected during execution. This is the easiest way to inspect what actually
+happened at runtime, including the metrics emitted by &lt;code&gt;ShuffleWriterExec&lt;/code&gt; and &lt;code&gt;ShuffleReaderExec&lt;/code&gt;.&lt;/p&gt;
+&lt;h3 id="join-planning"&gt;Join planning&lt;a class="headerlink" href="#join-planning" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Two changes affect how joins are planned for distributed execution:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Sort-merge join is the default&lt;/strong&gt; for Ballista, which avoids the all-rows-on-one-node bottleneck that
+  hash join can hit at scale.&lt;/li&gt;
+&lt;li&gt;A &lt;strong&gt;broadcast-style hash join&lt;/strong&gt; is selected when the build side is small enough to fit in memory across
+  all partitions. The selection rule has been tightened to avoid swapping inputs in cases where the right
+  side has multiple partitions.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id="shuffle-and-executor-improvements"&gt;Shuffle and executor improvements&lt;a class="headerlink" href="#shuffle-and-executor-improvements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;53.0.0 builds on the shuffle work from earlier releases.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Sort-based shuffle is now the default.&lt;/strong&gt; Configuration knobs for buffer size, memory budget, spill
+  threshold, and coalesce batch size are documented in the &lt;a href="https://datafusion.apache.org/ballista/user-guide/tuning-guide.html"&gt;tuning guide&lt;/a&gt;.&lt;/li&gt;
+&lt;li&gt;The shuffle writer's disk I/O runs off the Tokio worker pool to avoid blocking scheduling.&lt;/li&gt;
+&lt;li&gt;The executor caches Ballista clients to reduce connection setup costs in shuffle-heavy plans.&lt;/li&gt;
+&lt;li&gt;Executors expose system and process metrics, including memory utilization and shuffle counters.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id="rest-api-improvements"&gt;REST API improvements&lt;a class="headerlink" href="#rest-api-improvements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;53.0.0 expands the REST API significantly: jobs now expose start/end times, the running job list works,
+stage running times are calculated correctly, plan tree rendering is available, and a number of edge-case
+panics have been fixed.&lt;/p&gt;
+&lt;h2 id="what-people-are-working-on"&gt;What people are working on&lt;a class="headerlink" href="#what-people-are-working-on" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Active development is happening across a number of fronts. Some of the open work most likely to land in
+upcoming releases:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Adaptive Query Execution&lt;/strong&gt; (&lt;a href="https://github.com/apache/datafusion-ballista/issues/1359"&gt;#1359&lt;/a&gt;) — broadcast join in AQE, partition splitting for skewed shuffles,
+  executor failure handling, and global LIMIT early-stop.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Cluster observability&lt;/strong&gt; (&lt;a href="https://github.com/apache/datafusion-ballista/issues/1426"&gt;#1426&lt;/a&gt;) — exposing more runtime metrics through the REST API and producing
+  per-stage flame graphs.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Web rendering of the TUI&lt;/strong&gt; (&lt;a href="https://github.com/apache/datafusion-ballista/issues/1660"&gt;#1660&lt;/a&gt;) — a browser-based view of the same data the terminal UI shows.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Colocated-join optimizer for hash-bucketed tables&lt;/strong&gt; (&lt;a href="https://github.com/apache/datafusion-ballista/issues/1677"&gt;#1677&lt;/a&gt;) — Pinot-style optimization that avoids
+  shuffles when both sides are pre-bucketed on the join key. A related discussion is on extending
+  &lt;code&gt;BroadcastSmallSideRule&lt;/code&gt; and &lt;code&gt;ColocatedJoinRule&lt;/code&gt; to &lt;code&gt;SortMergeJoinExec&lt;/code&gt; (&lt;a href="https://github.com/apache/datafusion-ballista/issues/1679"&gt;#1679&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Job data cleanup&lt;/strong&gt; (&lt;a href="https://github.com/apache/datafusion-ballista/issues/1316"&gt;#1316&lt;/a&gt;) — unifying cleanup paths and using targeted notifications instead of
+  broadcasting cleanup to every executor.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;External remote shuffle services&lt;/strong&gt; (&lt;a href="https://github.com/apache/datafusion-ballista/issues/1539"&gt;#1539&lt;/a&gt;) — investigating support for Apache Celeborn and Apache
+  Uniffle as a shuffle backend.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Open table formats&lt;/strong&gt; (&lt;a href="https://github.com/apache/datafusion-ballista/issues/1241"&gt;#1241&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-ballista/issues/890"&gt;Iceberg #890&lt;/a&gt;) — discussing a path to first-class support for Iceberg,
+  Delta, and similar formats.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;A separate scaling effort is tracking the gap between Ballista on TPC-H at SF=100 (where it is competitive)
+and SF=1000 (&lt;a href="https://github.com/apache/datafusion-ballista/issues/1596"&gt;#1596&lt;/a&gt;), which is expected to surface bottlenecks in scheduler throughput, shuffle I/O, and
+small-files handling.&lt;/p&gt;
+&lt;h2 id="roadmap"&gt;Roadmap&lt;a class="headerlink" href="#roadmap" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;There is no formal long-term roadmap, but the rough direction continues to be:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Close the gap between DataFusion and Ballista.&lt;/strong&gt; Anything that DataFusion can plan and execute on a
+   single node should plan and execute on a Ballista cluster with the same APIs and the same SQL surface.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Make Ballista boring to operate.&lt;/strong&gt; Predictable resource usage, good observability, sensible defaults,
+   and robust error handling are higher priority than novel features.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Land AQE.&lt;/strong&gt; A working adaptive planner unlocks optimizations that are difficult to express statically
+   and is the foundation for tackling skew and dynamic partition coalescing.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Improve scaling.&lt;/strong&gt; Identify and fix the bottlenecks that prevent Ballista from running large
+   benchmarks like TPC-H at SF=1000.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Contributions in any of these areas are very welcome. Issues labeled &lt;a href="https://github.com/apache/datafusion-ballista/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22"&gt;good first issue&lt;/a&gt; are a good place
+to start.&lt;/p&gt;
+&lt;h2 id="thank-you"&gt;Thank You&lt;a class="headerlink" href="#thank-you" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;This release is the result of work from many contributors over the past 16 months. Thanks especially to
+Marko Milenković, Martin Grigorov, Daniel Tu, Alexander Domenti, Metehan Yildirim, Sajeevan Achuthan,
+Harrison Crosse, Andy Grove, and many others whose contributions are visible in the &lt;a href="https://github.com/apache/datafusion-ballista/blob/main/CHANGELOG.md"&gt;changelog&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Thanks also to the broader DataFusion community whose work Ballista builds on directly.&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Apache DataFusion Comet 0.16.0 Release</title><link href="https://datafusion.apache.org/blog/2026/05/07/datafusion-comet-0.16.0" rel="alternate"/><published>2026-05-07T00:00:00+00:00</published><updated>2026-05-07T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2026-05-07:/blog/2026/05/07/datafusion-comet-0.16.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
