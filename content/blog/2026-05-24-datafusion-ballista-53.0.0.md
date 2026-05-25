@@ -283,7 +283,8 @@ to start.
 
 This release is the result of work from many contributors over the past 16 months. Thanks especially to
 Marko Milenković, Martin Grigorov, Daniel Tu, Alexander Domenti, Mete Genez, Saj, Harrison Crosse, and
-many others whose contributions are visible in the [changelog]. Thanks also to the broader DataFusion
-community whose work Ballista builds on directly.
+many others whose contributions are visible in the [changelog]. 
+
+Thanks also to the broader DataFusion community whose work Ballista builds on directly.
 
 [changelog]: https://github.com/apache/datafusion-ballista/blob/main/CHANGELOG.md
