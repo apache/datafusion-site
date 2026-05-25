@@ -44,9 +44,8 @@ limitations under the License.
 execution engine that enhances &lt;a href="https://datafusion.apache.org"&gt;Apache DataFusion&lt;/a&gt; by enabling parallel execution of workloads across multiple
 nodes.&lt;/p&gt;
 &lt;p&gt;The last Ballista blog post covered &lt;a href="/blog/2025/02/02/datafusion-ballista-43.0.0/"&gt;43.0.0&lt;/a&gt;, released in January 2025. In the year and a bit since, the
-project has quietly shipped a release for every DataFusion release: 44, 45, 46, 47, 48, 49, 50, 51, 52, and
-now 53. This post catches up on what changed across that span, what landed specifically in 53.0.0, and where
-the project is heading.&lt;/p&gt;
+project has quietly shipped a release for every DataFusion release through 53.0.0. This post catches up
+on what changed across that span, what landed specifically in 53.0.0, and where the project is heading.&lt;/p&gt;
 &lt;h2 id="how-ballista-has-changed-since-4300"&gt;How Ballista has changed since 43.0.0&lt;a class="headerlink" href="#how-ballista-has-changed-since-4300" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;The story of 43.0.0 was one of simplification: experimental features were removed, the &lt;code&gt;BallistaContext&lt;/code&gt; was
 deprecated in favor of the standard DataFusion &lt;code&gt;SessionContext&lt;/code&gt;, and the project's release cadence was
@@ -58,8 +57,8 @@ developer's laptop:&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;&lt;strong&gt;S3 object store support&lt;/strong&gt; has been added to both the executor and scheduler binaries, including
   credentials derived from the standard AWS environment, instance metadata, and explicit configuration.&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;Docker images&lt;/strong&gt; for the scheduler and executor are now published on each release, making Docker Compose
-  and Kubernetes deployments straightforward.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;&lt;a href="https://datafusion.apache.org/ballista/user-guide/deployment/docker.html"&gt;Docker images&lt;/a&gt;&lt;/strong&gt; for the scheduler and executor are now published on each release, making Docker
+  Compose and Kubernetes deployments straightforward.&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;Cluster RPC&lt;/strong&gt; can be configured with TLS and custom headers, enabling deployments that need encrypted
   inter-component traffic or pass-through authentication.&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;Push-based task scheduling&lt;/strong&gt; is now the default, replacing pull-staged scheduling. Push scheduling
@@ -83,8 +82,8 @@ developer's laptop:&lt;/p&gt;
 &lt;li&gt;&lt;strong&gt;Shuffle reader cleanup&lt;/strong&gt; removes job-local data once a job completes.&lt;/li&gt;
 &lt;/ul&gt;
 &lt;h3 id="rest-api-and-observability"&gt;REST API and observability&lt;a class="headerlink" href="#rest-api-and-observability" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
-&lt;p&gt;The scheduler's REST API has grown from a small status surface to the primary control plane for inspecting
-running and completed jobs:&lt;/p&gt;
+&lt;p&gt;The scheduler's &lt;a href="https://datafusion.apache.org/ballista/user-guide/scheduler.html#rest-api"&gt;REST API&lt;/a&gt; has grown from a small status surface to the primary control plane for
+inspecting running and completed jobs:&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;The REST API is now enabled by default.&lt;/li&gt;
 &lt;li&gt;&lt;code&gt;/api/jobs&lt;/code&gt; and &lt;code&gt;/api/jobs/&amp;lt;job_id&amp;gt;&lt;/code&gt; expose job status, start/end times, logical and physical plans,
@@ -112,18 +111,17 @@ df.show()
 &lt;p&gt;A number of fixes since 43.0.0 made this client much more usable in distributed environments: session
 configuration is now propagated from the Python client to the cluster; &lt;code&gt;collect&lt;/code&gt;, &lt;code&gt;show&lt;/code&gt;, and &lt;code&gt;to_pandas&lt;/code&gt;
 go through the cluster instead of falling back to a local execution path; and S3 access works without
-requiring explicit credentials. Jupyter notebook integration is documented in the &lt;a href="https://datafusion.apache.org/ballista/user-guide/python/quickstart.html"&gt;Python user guide&lt;/a&gt;.&lt;/p&gt;
-&lt;p&gt;The release process has also been extended so that future Ballista releases will publish Python wheels to
-&lt;a href="https://pypi.org/project/ballista/"&gt;PyPI&lt;/a&gt; as &lt;code&gt;ballista&lt;/code&gt;. Note that the Python bindings included in &lt;strong&gt;53.0.0 still report version 52.0.0&lt;/strong&gt;
-because the version bump landed shortly after the 53.0.0 release candidate was tagged. Wheels matching
-the 53 line will be published with &lt;strong&gt;53.1.0&lt;/strong&gt;, which is expected to follow shortly.&lt;/p&gt;
+requiring explicit credentials. This work has been done in close collaboration with the
+&lt;a href="https://datafusion.apache.org/python/"&gt;datafusion-python&lt;/a&gt; team, who have been generous with API guidance and review. Jupyter notebook
+integration is documented in the &lt;a href="https://datafusion.apache.org/ballista/user-guide/python/quickstart.html"&gt;Python user guide&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;The release process has also been extended so that future Ballista releases publish Python wheels to
+&lt;a href="https://pypi.org/project/ballista/"&gt;PyPI&lt;/a&gt; as &lt;code&gt;ballista&lt;/code&gt;.&lt;/p&gt;
 &lt;h3 id="spark-compatibility-and-substrait"&gt;Spark compatibility and Substrait&lt;a class="headerlink" href="#spark-compatibility-and-substrait" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;Ballista now supports the &lt;code&gt;spark-compat&lt;/code&gt; Cargo feature, which auto-registers the
 [&lt;code&gt;datafusion-spark&lt;/code&gt;] function library in the executor session context. This makes it possible to evaluate
 Spark-compatible SQL semantics on a Ballista cluster.&lt;/p&gt;
-&lt;p&gt;The scheduler also has a Substrait surface: &lt;code&gt;SubstraitSchedulerClient&lt;/code&gt; accepts Substrait logical plans, and
-the deprecated SQL-string submission path has been removed. This is an important step toward decoupling
-Ballista from any one client language.&lt;/p&gt;
+&lt;p&gt;The scheduler also has a Substrait surface: &lt;code&gt;SubstraitSchedulerClient&lt;/code&gt; accepts Substrait logical plans.
+This is an important step toward decoupling Ballista from any one client language.&lt;/p&gt;
 &lt;h2 id="highlights-of-5300"&gt;Highlights of 53.0.0&lt;a class="headerlink" href="#highlights-of-5300" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;53.0.0 is a feature-heavy release, with significant work in observability, the planner, and the executor.&lt;/p&gt;
 &lt;h3 id="terminal-user-interface"&gt;Terminal User Interface&lt;a class="headerlink" href="#terminal-user-interface" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
@@ -131,8 +129,9 @@ Ballista from any one client language.&lt;/p&gt;
 The TUI is enabled with &lt;code&gt;ballista-cli --tui&lt;/code&gt;, or by typing &lt;code&gt;\tui&lt;/code&gt; inside the CLI. It provides views for
 executors, jobs, stages, tasks, plan trees, and metrics, all backed by the scheduler's REST API.&lt;/p&gt;
 &lt;p&gt;&lt;img alt="Ballista TUI jobs view" class="img-fluid" src="/blog/images/datafusion-ballista-53.0.0/tui-jobs-table.png" width="100%"/&gt;&lt;/p&gt;
-&lt;p&gt;Plan rendering, including a graph view, is available directly from the TUI:&lt;/p&gt;
-&lt;p&gt;&lt;img alt="Ballista TUI plan graph popup" class="img-fluid" src="/blog/images/datafusion-ballista-53.0.0/tui-job-plan-graph-popup.png" width="100%"/&gt;&lt;/p&gt;
+&lt;p&gt;Plan rendering is available directly from the TUI, with logical, physical, and graph views:&lt;/p&gt;
+&lt;p&gt;&lt;img alt="Ballista TUI logical plan popup" class="img-fluid" src="/blog/images/datafusion-ballista-53.0.0/tui-job-plan-logical-popup.png" width="100%"/&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img alt="Ballista TUI physical plan popup" class="img-fluid" src="/blog/images/datafusion-ballista-53.0.0/tui-job-plan-physical-popup.png" width="100%"/&gt;&lt;/p&gt;
 &lt;p&gt;A web rendering of the TUI is in development.&lt;/p&gt;
 &lt;h3 id="adaptive-query-execution-experimental"&gt;Adaptive Query Execution (Experimental)&lt;a class="headerlink" href="#adaptive-query-execution-experimental" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;Ballista now has experimental support for &lt;strong&gt;Adaptive Query Execution&lt;/strong&gt; (AQE). When enabled, the scheduler
@@ -215,8 +214,8 @@ small-files handling.&lt;/p&gt;
 to start.&lt;/p&gt;
 &lt;h2 id="thank-you"&gt;Thank You&lt;a class="headerlink" href="#thank-you" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;This release is the result of work from many contributors over the past 16 months. Thanks especially to
-Marko Milenković, Martin Grigorov, Daniel Tu, Alexander Domenti, Mete Genez, Saj, Harrison Crosse, and
-many others whose contributions are visible in the &lt;a href="https://github.com/apache/datafusion-ballista/blob/main/CHANGELOG.md"&gt;changelog&lt;/a&gt;. &lt;/p&gt;
+Marko Milenković, Martin Grigorov, Daniel Tu, Alexander Domenti, Metehan Yildirim, Sajeevan Achuthan,
+Harrison Crosse, Andy Grove, and many others whose contributions are visible in the &lt;a href="https://github.com/apache/datafusion-ballista/blob/main/CHANGELOG.md"&gt;changelog&lt;/a&gt;.&lt;/p&gt;
 &lt;p&gt;Thanks also to the broader DataFusion community whose work Ballista builds on directly.&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Apache DataFusion Comet 0.16.0 Release</title><link href="https://datafusion.apache.org/blog/2026/05/07/datafusion-comet-0.16.0" rel="alternate"/><published>2026-05-07T00:00:00+00:00</published><updated>2026-05-07T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2026-05-07:/blog/2026/05/07/datafusion-comet-0.16.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
