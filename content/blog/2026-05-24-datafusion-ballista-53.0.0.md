@@ -35,9 +35,8 @@ nodes.
 [Apache DataFusion]: https://datafusion.apache.org
 
 The last Ballista blog post covered [43.0.0], released in January 2025. In the year and a bit since, the
-project has quietly shipped a release for every DataFusion release: 44, 45, 46, 47, 48, 49, 50, 51, 52, and
-now 53. This post catches up on what changed across that span, what landed specifically in 53.0.0, and where
-the project is heading.
+project has quietly shipped a release for every DataFusion release through 53.0.0. This post catches up
+on what changed across that span, what landed specifically in 53.0.0, and where the project is heading.
 
 [43.0.0]: /blog/2025/02/02/datafusion-ballista-43.0.0/
 
@@ -55,8 +54,8 @@ developer's laptop:
 
 - **S3 object store support** has been added to both the executor and scheduler binaries, including
   credentials derived from the standard AWS environment, instance metadata, and explicit configuration.
-- **Docker images** for the scheduler and executor are now published on each release, making Docker Compose
-  and Kubernetes deployments straightforward.
+- **[Docker images]** for the scheduler and executor are now published on each release, making Docker
+  Compose and Kubernetes deployments straightforward.
 - **Cluster RPC** can be configured with TLS and custom headers, enabling deployments that need encrypted
   inter-component traffic or pass-through authentication.
 - **Push-based task scheduling** is now the default, replacing pull-staged scheduling. Push scheduling
@@ -65,6 +64,8 @@ developer's laptop:
   under varying network conditions.
 - **Memory bounds for executors** can now be set with `--memory-pool-size`, so executors no longer rely on
   unbounded growth.
+
+[Docker images]: https://datafusion.apache.org/ballista/user-guide/deployment/docker.html
 
 ### Shuffle subsystem
 
@@ -82,8 +83,8 @@ The shuffle subsystem received the largest single rework over this period.
 
 ### REST API and observability
 
-The scheduler's REST API has grown from a small status surface to the primary control plane for inspecting
-running and completed jobs:
+The scheduler's [REST API] has grown from a small status surface to the primary control plane for
+inspecting running and completed jobs:
 
 - The REST API is now enabled by default.
 - `/api/jobs` and `/api/jobs/<job_id>` expose job status, start/end times, logical and physical plans,
@@ -91,6 +92,8 @@ running and completed jobs:
 - Plans can be rendered as a tree directly from the REST API.
 - Per-executor system and process metrics are reported, and Prometheus metrics integration is available
   behind a feature flag.
+
+[REST API]: https://datafusion.apache.org/ballista/user-guide/scheduler.html#rest-api
 
 ### A new Python interface
 
@@ -115,14 +118,16 @@ df.show()
 A number of fixes since 43.0.0 made this client much more usable in distributed environments: session
 configuration is now propagated from the Python client to the cluster; `collect`, `show`, and `to_pandas`
 go through the cluster instead of falling back to a local execution path; and S3 access works without
-requiring explicit credentials. Jupyter notebook integration is documented in the [Python user guide].
+requiring explicit credentials. This work has been done in close collaboration with the
+[datafusion-python] team, who have been generous with API guidance and review. Jupyter notebook
+integration is documented in the [Python user guide].
+
+[datafusion-python]: https://datafusion.apache.org/python/
 
 [Python user guide]: https://datafusion.apache.org/ballista/user-guide/python/quickstart.html
 
-The release process has also been extended so that future Ballista releases will publish Python wheels to
-[PyPI] as `ballista`. Note that the Python bindings included in **53.0.0 still report version 52.0.0**
-because the version bump landed shortly after the 53.0.0 release candidate was tagged. Wheels matching
-the 53 line will be published with **53.1.0**, which is expected to follow shortly.
+The release process has also been extended so that future Ballista releases publish Python wheels to
+[PyPI] as `ballista`.
 
 [PyPI]: https://pypi.org/project/ballista/
 
@@ -132,9 +137,8 @@ Ballista now supports the `spark-compat` Cargo feature, which auto-registers the
 [`datafusion-spark`] function library in the executor session context. This makes it possible to evaluate
 Spark-compatible SQL semantics on a Ballista cluster.
 
-The scheduler also has a Substrait surface: `SubstraitSchedulerClient` accepts Substrait logical plans, and
-the deprecated SQL-string submission path has been removed. This is an important step toward decoupling
-Ballista from any one client language.
+The scheduler also has a Substrait surface: `SubstraitSchedulerClient` accepts Substrait logical plans.
+This is an important step toward decoupling Ballista from any one client language.
 
 [`datafusion-spark`]: https://docs.rs/datafusion-spark/latest/datafusion_spark/
 
@@ -155,13 +159,20 @@ class="img-fluid"
 alt="Ballista TUI jobs view"
 />
 
-Plan rendering, including a graph view, is available directly from the TUI:
+Plan rendering is available directly from the TUI, with logical, physical, and graph views:
 
 <img
-src="/blog/images/datafusion-ballista-53.0.0/tui-job-plan-graph-popup.png"
+src="/blog/images/datafusion-ballista-53.0.0/tui-job-plan-logical-popup.png"
 width="100%"
 class="img-fluid"
-alt="Ballista TUI plan graph popup"
+alt="Ballista TUI logical plan popup"
+/>
+
+<img
+src="/blog/images/datafusion-ballista-53.0.0/tui-job-plan-physical-popup.png"
+width="100%"
+class="img-fluid"
+alt="Ballista TUI physical plan popup"
 />
 
 A web rendering of the TUI is in development.
@@ -282,8 +293,8 @@ to start.
 ## Thank You
 
 This release is the result of work from many contributors over the past 16 months. Thanks especially to
-Marko Milenković, Martin Grigorov, Daniel Tu, Alexander Domenti, Mete Genez, Saj, Harrison Crosse, and
-many others whose contributions are visible in the [changelog]. 
+Marko Milenković, Martin Grigorov, Daniel Tu, Alexander Domenti, Metehan Yildirim, Sajeevan Achuthan,
+Harrison Crosse, Andy Grove, and many others whose contributions are visible in the [changelog].
 
 Thanks also to the broader DataFusion community whose work Ballista builds on directly.
 
