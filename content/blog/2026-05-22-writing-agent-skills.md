@@ -335,12 +335,23 @@ they are a property of *what agents guess when they haven't seen your
 library before*, and the only way to discover it is to put the skill in
 front of a fresh agent and watch.
 
-A useful trick during pass 3: when the agent does get something right
-in a non-obvious way, ask it *why*. If the answer references something
-that is not in your draft skill — a docstring it found, a public docs
-page, a pattern from a similar library — that is a hint that the skill
-is silent on something it should cover. Codify the reasoning, don't
-rely on the agent finding it again next time.
+One habit worth keeping through pass 3: when the agent does get
+something right in a non-obvious way, ask it *why*. If the answer
+references something that is not in your draft skill — a docstring it
+found, a public docs page, a pattern from a similar library — that is
+a hint that the skill is silent on something it should cover. Codify
+the reasoning, don't rely on the agent finding it again next time.
+
+Run the same question in the other direction. When the agent emits a
+*non*-idiomatic pattern, ask where it came from. Generic training-data
+guesses are fixed by the skill alone. But surprisingly often the answer
+is something in your own repo — an `examples/` script written before
+the library adopted the current idiom, a docstring that still
+references a renamed function, a snippet in a README that contradicts
+the API as it shipped. Those answers are a second kind of win: fix the
+upstream source as well as the skill. Otherwise the next agent (or the
+next human contributor) will rediscover the same stale pattern and
+copy it forward, and the skill on its own cannot stop them.
 
 The next two sections describe different things we did after the
 initial draft: a one-time grounding exercise against the TPC-H corpus
