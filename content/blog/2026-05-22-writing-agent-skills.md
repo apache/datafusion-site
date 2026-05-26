@@ -27,8 +27,8 @@ limitations under the License.
 
 [TOC]
 
-If you maintain an open source project, a growing fraction of the people
-using your library are not typing code directly anymore — they are asking an
+If you maintain an open source project, a growing fraction of people
+using your library are not typing code anymore — they are asking an
 agent to write it for them. That agent leans on whatever it picked up during
 training, which is rarely the idiomatic style your project actually wants.
 The result is code that runs but reads like a stranger wrote it, or code
@@ -49,9 +49,9 @@ to almost any library complex enough that an agent will struggle with it.
 Concretely, you will get out of this post:
 
 - A pattern for splitting skills by audience — user-facing vs.
-  contributor-facing — and why the split matters more than it sounds.
+  contributor-facing — and why the split matters.
 - A workflow for keeping skills in sync with a moving API by treating the
-  skill itself as the maintenance tool.
+  skill itself as a maintenance tool.
 - A method for grounding the user-facing skill against a corpus of known
   problems with known answers, run in a way that actually tests the skill
   instead of the agent's memory.
@@ -64,7 +64,7 @@ Concretely, you will get out of this post:
 
 ---
 
-A skill is a Markdown file (conventionally `SKILL.md`) with YAML frontmatter
+A [skill] is a Markdown file (conventionally `SKILL.md`) with YAML frontmatter
 that tells an AI coding assistant when and how to use it. The file lives in
 your repository, and any agent that supports the skill ecosystem
 ([Claude Code], [Cursor], [Codex], [Gemini CLI], [Aider], and many more)
@@ -76,6 +76,7 @@ to generate code. That distinction matters: a good user guide is patient and
 walks the reader through concepts; a good skill is opinionated and tells the
 model the exact pattern to emit.
 
+[skill]: https://agentskills.io
 [Claude Code]: https://claude.com/claude-code
 [Cursor]: https://cursor.com
 [Codex]: https://openai.com/codex/
@@ -108,7 +109,7 @@ table. Mixing the two produces a skill that is too long for both audiences
 and unfocused for either.
 
 The other reason to keep them separate is **load semantics**. Skills are
-loaded into the model's context window. Every kilobyte of skill consumes
+loaded into the model's context window. Unnecessary skill detail consumes
 tokens the user could have spent on their actual code. When you publish a
 skill, you should be deliberate about the audience that pays that cost.
 
@@ -156,6 +157,26 @@ The tool reads the repo, finds the skill at the conventional path, and
 installs only that subtree — no need to clone the whole project just to
 get a Markdown file. If you publish your user-facing skill in this layout,
 your users get the same one-line install for free.
+
+If your project grows beyond a single user skill, the `skills/` directory
+can hold multiple subdirectories, each with its own `SKILL.md` keyed by
+the `name:` slug in its frontmatter. Users can then list what's available
+and selectively install only the surface they need:
+
+```
+npx skills add apache/datafusion-python --list
+npx skills add apache/datafusion-python --skill datafusion_python
+npx skills add apache/datafusion-python --skill datafusion_python --skill datafusion_python_udf
+```
+
+The default — `npx skills add apache/datafusion-python` with no
+`--skill` flag — installs every skill under `skills/`. The `--skill`
+flag lets a user opt into a subset, which matters because every skill
+they load is context-window budget spent before they write a line of
+their own code. A reasonable rule of thumb when deciding whether to
+split: a topic earns its own skill when a meaningful fraction of users
+will skip it entirely (UDFs, FFI, distributed execution). Splitting too
+finely just raises the discovery cost without saving real tokens.
 
 ### Developers Can (and Should) Use the User Skill Too
 
@@ -303,7 +324,7 @@ page, a pattern from a similar library — that is a hint that the skill
 is silent on something it should cover. Codify the reasoning, don't
 rely on the agent finding it again next time.
 
-The next two sections describe two different things we did after the
+The next two sections describe different things we did after the
 initial draft: a one-time grounding exercise against the TPC-H corpus
 to validate the skill end-to-end, and a set of developer-side skills
 that flag user-skill drift whenever the API moves.
@@ -314,8 +335,8 @@ that flag user-skill drift whenever the API moves.
 
 A draft skill needs to be tested against something more demanding than the
 ad-hoc prompts the author used while writing it. We needed a way to confirm
-that the skill, once handed to a fresh agent, actually produced code that
-*ran* and returned *correct answers* on real workloads — not just on the
+that the skill, once handed to a fresh agent, actually produces code that
+*runs* and returns *correct answers* on real workloads — not just on the
 five-line examples the author already had in mind. The plan, laid out in
 [issue #1394], was a one-time end-to-end validation pass against the
 **[TPC-H benchmark suite][tpch]**, with the discoveries folded back into
@@ -461,10 +482,10 @@ time. Once a task has a predictable shape and a checklist that a careful
 person would follow, it is a candidate for a skill — and the act of
 writing the skill forces you to make the checklist explicit.
 
-The three correspond to the three places maintenance drift shows up in a
+The skills correspond to the three places maintenance drift shows up in a
 binding project like ours:
 
-- **`check-upstream`** — *the public API of the wrapped library moved
+- **`check-upstream`** — *the public API of the source library moved
   and we didn't keep up.* Run after every upstream sync to find
   functions, methods, and types that exist in the Rust DataFusion
   library but were never exposed in Python.
