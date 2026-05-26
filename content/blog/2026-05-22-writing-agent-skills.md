@@ -187,6 +187,24 @@ to hold new bindings to. But end users have no reason to load the developer
 skills. Their context window is better spent on the user skill plus their
 own code.
 
+Beyond setting the standard, two more reasons matter. First, when an
+agent writes maintainer-facing code with the user skill loaded, its
+hallucinations become useful signal. If the agent confidently emits
+`foo.create(exists_ok=True)` and no such argument exists, that is not
+only an error to correct — it is evidence that `exists_ok` is what a
+user shaped by every other Python library (`os.makedirs`,
+`pathlib.Path.mkdir`, `CREATE TABLE IF NOT EXISTS`) would expect to
+find. The skill grounds the agent in the real API, so deviations from
+it become a curated list of ergonomic additions worth considering.
+
+Second, maintainers write the docstrings, example scripts, and tests
+that end users learn from. Loading the user skill while drafting any of
+those means the new artifacts land idiomatic on the first pass —
+`filter=` on aggregates, plain column-name strings, `&` / `|` for
+boolean composition. The artifacts then reinforce the same patterns in
+the next round of user-skill edits, since the user guide and existing
+examples are inputs to the inventory pass described below.
+
 ## Building the User-Facing Skill
 
 ---
