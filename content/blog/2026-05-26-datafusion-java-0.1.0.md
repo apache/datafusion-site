@@ -40,7 +40,7 @@ as [Apache Arrow] record batches through the [Arrow C Data Interface].
 This post focuses on what the project is and why it exists. The [changelog] has the full list of
 features that landed in 0.1.0.
 
-[changelog]: https://github.com/apache/datafusion-java/blob/0.1.0/CHANGELOG.md
+[changelog]: https://github.com/apache/datafusion-java/blob/0.1.0/dev/changelog/0.1.0.md
 
 ## Why DataFusion Java
 
