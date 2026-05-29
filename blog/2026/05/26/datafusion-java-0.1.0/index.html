@@ -1,0 +1,312 @@
+<!doctype html>
+<html class="no-js" lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Introducing Apache DataFusion Java 0.1.0 - Apache DataFusion Blog</title>
+<link href="/blog/favicon.ico" rel="icon" type="image/x-icon">
+<link href="/blog/favicon.ico" rel="shortcut icon" type="image/x-icon">
+<link href="/blog/css/bootstrap.min.css" rel="stylesheet">
+<link href="/blog/css/fontawesome.all.min.css" rel="stylesheet">
+<link href="/blog/css/headerlink.css" rel="stylesheet">
+<link href="/blog/highlight/default.min.css" rel="stylesheet">
+<link href="/blog/css/app.css" rel="stylesheet">
+<link href="/blog/css/dark-mode.css" rel="stylesheet">
+<script src="/blog/js/dark-mode.js"></script>
+<script src="/blog/highlight/highlight.js"></script>
+<script>hljs.highlightAll();</script>  </head>
+  <body class="d-flex flex-column h-100">
+  <main class="flex-shrink-0">
+<!-- nav bar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark" aria-label="Fifth navbar example">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/blog/"><img src="/blog/images/logo_original4x.png" style="height: 32px;"/> Apache DataFusion Blog</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarADP" aria-controls="navbarADP" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarADP">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/about.html">About</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/feed.xml">RSS</a>
+                </li>
+            </ul>
+            <button id="dark-mode-toggle" type="button" class="dark-mode-toggle" aria-label="Toggle dark mode" aria-pressed="false" title="Toggle dark mode">
+                <span class="sun-icon" aria-hidden="true">☀</span>
+                <span class="moon-icon" aria-hidden="true">☾</span>
+            </button>
+        </div>
+    </div>
+</nav>    
+<!-- article contents -->
+<div id="contents">
+  <div class="bg-white p-4 p-md-5 rounded">
+    <div class="row justify-content-center">
+      <div class="col-12 col-md-8 main-content">
+        <h1>
+          Introducing Apache DataFusion Java 0.1.0
+        </h1>
+        <p>Posted on: Tue 26 May 2026 by pmc</p>
+
+        <aside class="toc-container d-md-none mb-2">
+          <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#why-datafusion-java">Why DataFusion Java</a></li>
+<li><a href="#a-first-look">A first look</a></li>
+<li><a href="#what-010-includes">What 0.1.0 includes</a><ul>
+<li><a href="#reading-data">Reading data</a></li>
+<li><a href="#querying">Querying</a></li>
+<li><a href="#writing-data">Writing data</a></li>
+<li><a href="#extending-datafusion-from-java">Extending DataFusion from Java</a></li>
+<li><a href="#operational-details">Operational details</a></li>
+</ul>
+</li>
+<li><a href="#what-this-release-is-not">What this release is not</a></li>
+<li><a href="#looking-ahead">Looking ahead</a></li>
+<li><a href="#how-to-get-involved">How to get involved</a></li>
+<li><a href="#thank-you">Thank you</a></li>
+</ul>
+</div>
+        </aside>
+
+        <!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+-->
+
+<p>We are pleased to announce the <a href="https://github.com/apache/datafusion-java/releases/tag/0.1.0">0.1.0</a> release of <a href="https://github.com/apache/datafusion-java">Apache DataFusion Java</a>, the first release
+of the project. DataFusion Java is a thin Java binding over the <a href="https://datafusion.apache.org">Apache DataFusion</a> query engine:
+SQL and DataFrame queries are planned and executed in native Rust, and results return to the JVM
+as <a href="https://arrow.apache.org">Apache Arrow</a> record batches through the <a href="https://arrow.apache.org/docs/format/CDataInterface.html">Arrow C Data Interface</a>.</p>
+<p>This post focuses on what the project is and why it exists. The <a href="https://github.com/apache/datafusion-java/blob/0.1.0/dev/changelog/0.1.0.md">changelog</a> has the full list of
+features that landed in 0.1.0.</p>
+<h2 id="why-datafusion-java">Why DataFusion Java<a class="headerlink" href="#why-datafusion-java" title="Permanent link">¶</a></h2>
+<p>DataFusion is already accessible from Rust, Python, and (via <a href="https://datafusion.apache.org/comet/">Comet</a>) Spark. JVM applications that
+want a fast, embeddable columnar query engine have so far had to either pull in Spark — which is a
+heavy dependency for an embedded use case — or write their own JNI layer around DataFusion. The
+goal of DataFusion Java is to make DataFusion a first-class JVM library: add it to your <code>pom.xml</code>,
+construct a <code>SessionContext</code>, and run queries.</p>
+<p>Typical use cases:</p>
+<ul>
+<li><strong>Embedded analytics</strong> inside JVM services that need to run SQL or DataFrame queries over local
+  files or object storage without standing up a separate query system.</li>
+<li><strong>Tools and frontends</strong> that compile a higher-level surface language to DataFusion logical plans
+  and need a JVM-side executor.</li>
+<li><strong>Spark and Hadoop ecosystem integrations</strong> that already speak Arrow and want native columnar
+  execution from Java or Scala code without going through Spark.</li>
+</ul>
+<p>Because results cross the JNI boundary as Arrow C Data Interface streams, there is no row-by-row
+marshalling or extra copy on the hot path — the JVM reads the same Arrow buffers DataFusion wrote.</p>
+<h2 id="a-first-look">A first look<a class="headerlink" href="#a-first-look" title="Permanent link">¶</a></h2>
+<pre><code class="language-java">import org.apache.arrow.memory.RootAllocator;
+import org.apache.arrow.vector.ipc.ArrowReader;
+import org.apache.datafusion.DataFrame;
+import org.apache.datafusion.SessionContext;
+
+try (var allocator = new RootAllocator();
+     var ctx = new SessionContext()) {
+
+    ctx.registerParquet("orders", "/path/to/orders.parquet");
+
+    try (DataFrame df = ctx.sql(
+            "SELECT o_orderpriority, COUNT(*) AS n " +
+            "FROM orders GROUP BY o_orderpriority");
+         ArrowReader reader = df.collect(allocator)) {
+        while (reader.loadNextBatch()) {
+            var batch = reader.getVectorSchemaRoot();
+            // process batch...
+        }
+    }
+}
+</code></pre>
+<p><code>SessionContext</code> is the entry point — it owns the catalog of registered tables and the query
+planner. <code>SessionContext</code> and <code>DataFrame</code> are <code>AutoCloseable</code>, so <code>try</code>-with-resources releases
+native resources and Arrow buffers automatically.</p>
+<h2 id="what-010-includes">What 0.1.0 includes<a class="headerlink" href="#what-010-includes" title="Permanent link">¶</a></h2>
+<p>The 0.1.0 surface is intentionally small but covers what most embedded analytics use cases need.</p>
+<h3 id="reading-data">Reading data<a class="headerlink" href="#reading-data" title="Permanent link">¶</a></h3>
+<ul>
+<li><strong>Parquet, CSV, JSON, Avro, and Arrow IPC</strong> via <code>registerParquet</code> / <code>readParquet</code> (and the
+  equivalent entry points for the other formats), with format-specific read options.</li>
+<li><strong>Object store backends</strong> registered on <code>SessionContextBuilder</code> so queries can read directly
+  from S3, GCS, or other object stores.</li>
+<li><strong>Java table providers.</strong> <code>SessionContext.registerTable(name, provider)</code> exposes a
+  Java-implemented <code>TableProvider</code>. The framework calls back into the Java side per query to fetch
+  Arrow batches, with data flowing to native code over the Arrow C Data Interface.</li>
+</ul>
+<h3 id="querying">Querying<a class="headerlink" href="#querying" title="Permanent link">¶</a></h3>
+<ul>
+<li><strong>SQL</strong> via <code>ctx.sql(String)</code> and a <strong>DataFrame API</strong> with <code>select</code>, <code>filter</code>, <code>limit</code>,
+  <code>distinct</code>, <code>sort</code>, <code>repartition</code>, <code>join</code> / <code>joinOn</code>, <code>dropColumns</code>, and <code>withColumnRenamed</code>.</li>
+<li><strong>Introspection</strong> methods on <code>DataFrame</code>: <code>schema</code>, <code>explain</code>, <code>cache</code>, <code>describe</code>.</li>
+<li><strong>Streaming execution</strong> via <code>df.executeStream(allocator)</code> for pulling batches incrementally
+  without materializing the full result set in memory.</li>
+<li><strong>Logical plans from <code>datafusion-proto</code></strong> via <code>SessionContext.fromProto(byte[])</code> — useful for
+  cross-tool interop and for tools that compile their own surface language to DataFusion plans.
+  The protobuf Java classes are generated from pinned <code>.proto</code> files at the matching upstream
+  DataFusion tag.</li>
+</ul>
+<h3 id="writing-data">Writing data<a class="headerlink" href="#writing-data" title="Permanent link">¶</a></h3>
+<ul>
+<li><code>DataFrame.writeCsv</code> and <code>DataFrame.writeJson</code> with format-specific options.</li>
+</ul>
+<h3 id="extending-datafusion-from-java">Extending DataFusion from Java<a class="headerlink" href="#extending-datafusion-from-java" title="Permanent link">¶</a></h3>
+<ul>
+<li><strong>Scalar UDFs.</strong> Implement the <code>ScalarFunction</code> interface to add a vectorised, Arrow-native SQL
+  function written in Java. The implementation declares its SQL name, argument fields, return
+  field, and volatility, and supplies a per-batch <code>evaluate</code> body that reads input Arrow vectors
+  and returns a result vector or a broadcast scalar.</li>
+</ul>
+<pre><code class="language-java">public final class AddOne implements ScalarFunction {
+    private static final ArrowType INT32 = new ArrowType.Int(32, true);
+
+    @Override public String name() { return "add_one"; }
+    @Override public List&lt;Field&gt; argFields() { return List.of(Field.nullable("x", INT32)); }
+    @Override public Field returnField() { return Field.nullable("y", INT32); }
+    @Override public Volatility volatility() { return Volatility.IMMUTABLE; }
+
+    @Override
+    public ColumnarValue evaluate(BufferAllocator allocator, ScalarFunctionArgs args) {
+        IntVector in = (IntVector) args.args().get(0).vector();
+        IntVector out = new IntVector("add_one", allocator);
+        out.allocateNew(in.getValueCount());
+        for (int i = 0; i &lt; in.getValueCount(); i++) {
+            if (in.isNull(i)) out.setNull(i);
+            else out.set(i, in.get(i) + 1);
+        }
+        out.setValueCount(in.getValueCount());
+        return ColumnarValue.array(out);
+    }
+}
+
+ctx.registerUdf(new ScalarUdf(new AddOne()));
+</code></pre>
+<h3 id="operational-details">Operational details<a class="headerlink" href="#operational-details" title="Permanent link">¶</a></h3>
+<ul>
+<li><strong>JDK 17 or newer.</strong> Set <code>JAVA_HOME</code> to point at it.</li>
+<li><strong>Bundled native library.</strong> The published JAR contains pre-built native libraries for the
+  supported platforms; <code>NativeLibraryLoader</code> selects and loads the right one at startup. You do
+  not need a Rust toolchain to use the library — only to build it from source.</li>
+<li><strong>Typed exception hierarchy.</strong> DataFusion errors crossing the JNI boundary surface as a typed
+  <code>DataFusionException</code> hierarchy on the Java side rather than opaque runtime exceptions.</li>
+<li><strong>Configurable session.</strong> <code>SessionContextBuilder</code> exposes batch size, target partitions,
+  statistics collection, information schema, memory pool size, spill directory, and the built-in
+  DataFusion cache manager.</li>
+<li><strong>Runtime visibility.</strong> <code>SessionContext.memoryUsage</code> and <code>runtimeStats</code> expose DataFusion's
+  internal allocator and runtime statistics for monitoring and capacity planning.</li>
+</ul>
+<h2 id="what-this-release-is-not">What this release is not<a class="headerlink" href="#what-this-release-is-not" title="Permanent link">¶</a></h2>
+<p>DataFusion Java is at 0.1.0 and the API will change. A few specific limits are worth calling out
+because they shape what you can build today:</p>
+<ul>
+<li><strong>Scalar UDFs only.</strong> Aggregate, window, and table function UDFs are not yet exposed.</li>
+<li><strong>Single-partition Java <code>TableProvider</code>s.</strong> DataFusion sees a Java-implemented table as one
+  partition, and there is no projection or filter pushdown — DataFusion applies both on top of
+  the batches the Java side returns. The interface is intentionally minimal so it can grow these
+  capabilities as default methods without breaking implementations.</li>
+<li><strong><code>SessionContext</code> is not thread-safe.</strong> Use one per thread, or guard access externally.</li>
+</ul>
+<h2 id="looking-ahead">Looking ahead<a class="headerlink" href="#looking-ahead" title="Permanent link">¶</a></h2>
+<p>The rough direction for upcoming releases:</p>
+<ol>
+<li><strong>Round out the extension points.</strong> Aggregate and window UDFs, multi-partition
+   <code>TableProvider</code>s, and projection / filter pushdown into Java table providers.</li>
+<li><strong>Close the gap with DataFusion's Rust API.</strong> Anything that is reasonable to expose to a Java
+   caller should be reachable from <code>SessionContext</code> and <code>DataFrame</code> with idiomatic Java
+   signatures.</li>
+<li><strong>Track DataFusion releases.</strong> The aim is to follow DataFusion's release cadence so the Java
+   binding stays current with new features and fixes in the engine.</li>
+</ol>
+<h2 id="how-to-get-involved">How to get involved<a class="headerlink" href="#how-to-get-involved" title="Permanent link">¶</a></h2>
+<ul>
+<li><strong>Source:</strong> <a href="https://github.com/apache/datafusion-java">https://github.com/apache/datafusion-java</a></li>
+<li><strong>Issues:</strong> <a href="https://github.com/apache/datafusion-java/issues">https://github.com/apache/datafusion-java/issues</a></li>
+<li><strong>Documentation:</strong> see <code>docs/source/</code> in the repository for the user and contributor guides.</li>
+</ul>
+<p>Bug reports, design discussions, and pull requests are all welcome. Issues labelled
+<a href="https://github.com/apache/datafusion-java/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22">good first issue</a> are a good place to start.</p>
+<h2 id="thank-you">Thank you<a class="headerlink" href="#thank-you" title="Permanent link">¶</a></h2>
+<p>Thanks to everyone who contributed to making the first release possible, and to the broader
+DataFusion and Arrow communities whose work this project builds on directly.</p>
+
+<!--
+  Comments Section
+  Loaded only after explicit visitor consent to comply with ASF policy.
+-->
+
+<div>
+  <hr>
+  <h3 id="comments">Comments<a class="headerlink" href="#comments" title="Permanent link">&para;</a></h3>
+
+  <!-- Local loader script -->
+  <script src="/blog/js/giscus-consent.js" defer></script>
+
+  <!-- Consent UI -->
+  <div id="giscus-consent">
+    <p>
+        We use <a href="https://giscus.app/">Giscus</a> for comments, powered by GitHub Discussions.
+        To respect your privacy, Giscus and comments will load only if you click "Show Comments"
+    </p>
+
+    <div class="consent-actions">
+      <button id="giscus-load" type="button">Show Comments</button>
+      <button id="giscus-revoke" type="button" hidden>Hide Comments</button>
+    </div>
+
+    <noscript>JavaScript is required to load comments from Giscus.</noscript>
+  </div>
+
+  <!-- Container where Giscus will render -->
+  <div id="comment-thread"></div>
+</div>      </div>
+      <aside class="toc-container d-none d-md-block col-md-4 col-xl-3 ms-xl-2">
+        <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#why-datafusion-java">Why DataFusion Java</a></li>
+<li><a href="#a-first-look">A first look</a></li>
+<li><a href="#what-010-includes">What 0.1.0 includes</a><ul>
+<li><a href="#reading-data">Reading data</a></li>
+<li><a href="#querying">Querying</a></li>
+<li><a href="#writing-data">Writing data</a></li>
+<li><a href="#extending-datafusion-from-java">Extending DataFusion from Java</a></li>
+<li><a href="#operational-details">Operational details</a></li>
+</ul>
+</li>
+<li><a href="#what-this-release-is-not">What this release is not</a></li>
+<li><a href="#looking-ahead">Looking ahead</a></li>
+<li><a href="#how-to-get-involved">How to get involved</a></li>
+<li><a href="#thank-you">Thank you</a></li>
+</ul>
+</div>
+      </aside>
+    </div>
+  </div>
+</div>    
+    <!-- footer -->
+    <div class="row g-0">
+      <div class="col-12">
+        <p style="font-style: italic; font-size: 0.8rem; text-align: center;">
+          Copyright 2026, <a href="https://www.apache.org/">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a>.<br/>
+          Apache&reg; and the Apache feather logo are trademarks of The Apache Software Foundation.
+        </p>
+      </div>
+    </div>
+    <script src="/blog/js/bootstrap.bundle.min.js"></script>  </main>
+  </body>
+</html>

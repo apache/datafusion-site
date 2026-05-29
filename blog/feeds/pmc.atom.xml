@@ -1,5 +1,198 @@
 <?xml version="1.0" encoding="utf-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - pmc</title><link href="https://datafusion.apache.org/blog/" rel="alternate"/><link href="https://datafusion.apache.org/blog/feeds/pmc.atom.xml" rel="self"/><id>https://datafusion.apache.org/blog/</id><updated>2026-05-24T00:00:00+00:00</updated><entry><title>Apache DataFusion Ballista 53.0.0 Released</title><link href="https://datafusion.apache.org/blog/2026/05/24/datafusion-ballista-53.0.0" rel="alternate"/><published>2026-05-24T00:00:00+00:00</published><updated>2026-05-24T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2026-05-24:/blog/2026/05/24/datafusion-ballista-53.0.0</id><summary type="html">&lt;!--
+<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - pmc</title><link href="https://datafusion.apache.org/blog/" rel="alternate"/><link href="https://datafusion.apache.org/blog/feeds/pmc.atom.xml" rel="self"/><id>https://datafusion.apache.org/blog/</id><updated>2026-05-26T00:00:00+00:00</updated><entry><title>Introducing Apache DataFusion Java 0.1.0</title><link href="https://datafusion.apache.org/blog/2026/05/26/datafusion-java-0.1.0" rel="alternate"/><published>2026-05-26T00:00:00+00:00</published><updated>2026-05-26T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2026-05-26:/blog/2026/05/26/datafusion-java-0.1.0</id><summary type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+
+&lt;p&gt;We are pleased to announce the &lt;a href="https://github.com/apache/datafusion-java/releases/tag/0.1.0"&gt;0.1.0&lt;/a&gt; release of &lt;a href="https://github.com/apache/datafusion-java"&gt;Apache DataFusion Java&lt;/a&gt;, the first release
+of the project. DataFusion Java is a thin Java binding over the &lt;a href="https://datafusion.apache.org"&gt;Apache DataFusion&lt;/a&gt; query engine:
+SQL and DataFrame queries are planned and executed in native Rust, and results return to the JVM …&lt;/p&gt;</summary><content type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+
+&lt;p&gt;We are pleased to announce the &lt;a href="https://github.com/apache/datafusion-java/releases/tag/0.1.0"&gt;0.1.0&lt;/a&gt; release of &lt;a href="https://github.com/apache/datafusion-java"&gt;Apache DataFusion Java&lt;/a&gt;, the first release
+of the project. DataFusion Java is a thin Java binding over the &lt;a href="https://datafusion.apache.org"&gt;Apache DataFusion&lt;/a&gt; query engine:
+SQL and DataFrame queries are planned and executed in native Rust, and results return to the JVM
+as &lt;a href="https://arrow.apache.org"&gt;Apache Arrow&lt;/a&gt; record batches through the &lt;a href="https://arrow.apache.org/docs/format/CDataInterface.html"&gt;Arrow C Data Interface&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;This post focuses on what the project is and why it exists. The &lt;a href="https://github.com/apache/datafusion-java/blob/0.1.0/dev/changelog/0.1.0.md"&gt;changelog&lt;/a&gt; has the full list of
+features that landed in 0.1.0.&lt;/p&gt;
+&lt;h2 id="why-datafusion-java"&gt;Why DataFusion Java&lt;a class="headerlink" href="#why-datafusion-java" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;DataFusion is already accessible from Rust, Python, and (via &lt;a href="https://datafusion.apache.org/comet/"&gt;Comet&lt;/a&gt;) Spark. JVM applications that
+want a fast, embeddable columnar query engine have so far had to either pull in Spark — which is a
+heavy dependency for an embedded use case — or write their own JNI layer around DataFusion. The
+goal of DataFusion Java is to make DataFusion a first-class JVM library: add it to your &lt;code&gt;pom.xml&lt;/code&gt;,
+construct a &lt;code&gt;SessionContext&lt;/code&gt;, and run queries.&lt;/p&gt;
+&lt;p&gt;Typical use cases:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Embedded analytics&lt;/strong&gt; inside JVM services that need to run SQL or DataFrame queries over local
+  files or object storage without standing up a separate query system.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Tools and frontends&lt;/strong&gt; that compile a higher-level surface language to DataFusion logical plans
+  and need a JVM-side executor.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Spark and Hadoop ecosystem integrations&lt;/strong&gt; that already speak Arrow and want native columnar
+  execution from Java or Scala code without going through Spark.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Because results cross the JNI boundary as Arrow C Data Interface streams, there is no row-by-row
+marshalling or extra copy on the hot path — the JVM reads the same Arrow buffers DataFusion wrote.&lt;/p&gt;
+&lt;h2 id="a-first-look"&gt;A first look&lt;a class="headerlink" href="#a-first-look" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;pre&gt;&lt;code class="language-java"&gt;import org.apache.arrow.memory.RootAllocator;
+import org.apache.arrow.vector.ipc.ArrowReader;
+import org.apache.datafusion.DataFrame;
+import org.apache.datafusion.SessionContext;
+
+try (var allocator = new RootAllocator();
+     var ctx = new SessionContext()) {
+
+    ctx.registerParquet("orders", "/path/to/orders.parquet");
+
+    try (DataFrame df = ctx.sql(
+            "SELECT o_orderpriority, COUNT(*) AS n " +
+            "FROM orders GROUP BY o_orderpriority");
+         ArrowReader reader = df.collect(allocator)) {
+        while (reader.loadNextBatch()) {
+            var batch = reader.getVectorSchemaRoot();
+            // process batch...
+        }
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;code&gt;SessionContext&lt;/code&gt; is the entry point — it owns the catalog of registered tables and the query
+planner. &lt;code&gt;SessionContext&lt;/code&gt; and &lt;code&gt;DataFrame&lt;/code&gt; are &lt;code&gt;AutoCloseable&lt;/code&gt;, so &lt;code&gt;try&lt;/code&gt;-with-resources releases
+native resources and Arrow buffers automatically.&lt;/p&gt;
+&lt;h2 id="what-010-includes"&gt;What 0.1.0 includes&lt;a class="headerlink" href="#what-010-includes" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;The 0.1.0 surface is intentionally small but covers what most embedded analytics use cases need.&lt;/p&gt;
+&lt;h3 id="reading-data"&gt;Reading data&lt;a class="headerlink" href="#reading-data" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Parquet, CSV, JSON, Avro, and Arrow IPC&lt;/strong&gt; via &lt;code&gt;registerParquet&lt;/code&gt; / &lt;code&gt;readParquet&lt;/code&gt; (and the
+  equivalent entry points for the other formats), with format-specific read options.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Object store backends&lt;/strong&gt; registered on &lt;code&gt;SessionContextBuilder&lt;/code&gt; so queries can read directly
+  from S3, GCS, or other object stores.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Java table providers.&lt;/strong&gt; &lt;code&gt;SessionContext.registerTable(name, provider)&lt;/code&gt; exposes a
+  Java-implemented &lt;code&gt;TableProvider&lt;/code&gt;. The framework calls back into the Java side per query to fetch
+  Arrow batches, with data flowing to native code over the Arrow C Data Interface.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id="querying"&gt;Querying&lt;a class="headerlink" href="#querying" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;SQL&lt;/strong&gt; via &lt;code&gt;ctx.sql(String)&lt;/code&gt; and a &lt;strong&gt;DataFrame API&lt;/strong&gt; with &lt;code&gt;select&lt;/code&gt;, &lt;code&gt;filter&lt;/code&gt;, &lt;code&gt;limit&lt;/code&gt;,
+  &lt;code&gt;distinct&lt;/code&gt;, &lt;code&gt;sort&lt;/code&gt;, &lt;code&gt;repartition&lt;/code&gt;, &lt;code&gt;join&lt;/code&gt; / &lt;code&gt;joinOn&lt;/code&gt;, &lt;code&gt;dropColumns&lt;/code&gt;, and &lt;code&gt;withColumnRenamed&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Introspection&lt;/strong&gt; methods on &lt;code&gt;DataFrame&lt;/code&gt;: &lt;code&gt;schema&lt;/code&gt;, &lt;code&gt;explain&lt;/code&gt;, &lt;code&gt;cache&lt;/code&gt;, &lt;code&gt;describe&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Streaming execution&lt;/strong&gt; via &lt;code&gt;df.executeStream(allocator)&lt;/code&gt; for pulling batches incrementally
+  without materializing the full result set in memory.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Logical plans from &lt;code&gt;datafusion-proto&lt;/code&gt;&lt;/strong&gt; via &lt;code&gt;SessionContext.fromProto(byte[])&lt;/code&gt; — useful for
+  cross-tool interop and for tools that compile their own surface language to DataFusion plans.
+  The protobuf Java classes are generated from pinned &lt;code&gt;.proto&lt;/code&gt; files at the matching upstream
+  DataFusion tag.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id="writing-data"&gt;Writing data&lt;a class="headerlink" href="#writing-data" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;DataFrame.writeCsv&lt;/code&gt; and &lt;code&gt;DataFrame.writeJson&lt;/code&gt; with format-specific options.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id="extending-datafusion-from-java"&gt;Extending DataFusion from Java&lt;a class="headerlink" href="#extending-datafusion-from-java" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Scalar UDFs.&lt;/strong&gt; Implement the &lt;code&gt;ScalarFunction&lt;/code&gt; interface to add a vectorised, Arrow-native SQL
+  function written in Java. The implementation declares its SQL name, argument fields, return
+  field, and volatility, and supplies a per-batch &lt;code&gt;evaluate&lt;/code&gt; body that reads input Arrow vectors
+  and returns a result vector or a broadcast scalar.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code class="language-java"&gt;public final class AddOne implements ScalarFunction {
+    private static final ArrowType INT32 = new ArrowType.Int(32, true);
+
+    @Override public String name() { return "add_one"; }
+    @Override public List&amp;lt;Field&amp;gt; argFields() { return List.of(Field.nullable("x", INT32)); }
+    @Override public Field returnField() { return Field.nullable("y", INT32); }
+    @Override public Volatility volatility() { return Volatility.IMMUTABLE; }
+
+    @Override
+    public ColumnarValue evaluate(BufferAllocator allocator, ScalarFunctionArgs args) {
+        IntVector in = (IntVector) args.args().get(0).vector();
+        IntVector out = new IntVector("add_one", allocator);
+        out.allocateNew(in.getValueCount());
+        for (int i = 0; i &amp;lt; in.getValueCount(); i++) {
+            if (in.isNull(i)) out.setNull(i);
+            else out.set(i, in.get(i) + 1);
+        }
+        out.setValueCount(in.getValueCount());
+        return ColumnarValue.array(out);
+    }
+}
+
+ctx.registerUdf(new ScalarUdf(new AddOne()));
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id="operational-details"&gt;Operational details&lt;a class="headerlink" href="#operational-details" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;JDK 17 or newer.&lt;/strong&gt; Set &lt;code&gt;JAVA_HOME&lt;/code&gt; to point at it.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Bundled native library.&lt;/strong&gt; The published JAR contains pre-built native libraries for the
+  supported platforms; &lt;code&gt;NativeLibraryLoader&lt;/code&gt; selects and loads the right one at startup. You do
+  not need a Rust toolchain to use the library — only to build it from source.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Typed exception hierarchy.&lt;/strong&gt; DataFusion errors crossing the JNI boundary surface as a typed
+  &lt;code&gt;DataFusionException&lt;/code&gt; hierarchy on the Java side rather than opaque runtime exceptions.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Configurable session.&lt;/strong&gt; &lt;code&gt;SessionContextBuilder&lt;/code&gt; exposes batch size, target partitions,
+  statistics collection, information schema, memory pool size, spill directory, and the built-in
+  DataFusion cache manager.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Runtime visibility.&lt;/strong&gt; &lt;code&gt;SessionContext.memoryUsage&lt;/code&gt; and &lt;code&gt;runtimeStats&lt;/code&gt; expose DataFusion's
+  internal allocator and runtime statistics for monitoring and capacity planning.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id="what-this-release-is-not"&gt;What this release is not&lt;a class="headerlink" href="#what-this-release-is-not" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;DataFusion Java is at 0.1.0 and the API will change. A few specific limits are worth calling out
+because they shape what you can build today:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Scalar UDFs only.&lt;/strong&gt; Aggregate, window, and table function UDFs are not yet exposed.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Single-partition Java &lt;code&gt;TableProvider&lt;/code&gt;s.&lt;/strong&gt; DataFusion sees a Java-implemented table as one
+  partition, and there is no projection or filter pushdown — DataFusion applies both on top of
+  the batches the Java side returns. The interface is intentionally minimal so it can grow these
+  capabilities as default methods without breaking implementations.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;&lt;code&gt;SessionContext&lt;/code&gt; is not thread-safe.&lt;/strong&gt; Use one per thread, or guard access externally.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id="looking-ahead"&gt;Looking ahead&lt;a class="headerlink" href="#looking-ahead" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;The rough direction for upcoming releases:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Round out the extension points.&lt;/strong&gt; Aggregate and window UDFs, multi-partition
+   &lt;code&gt;TableProvider&lt;/code&gt;s, and projection / filter pushdown into Java table providers.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Close the gap with DataFusion's Rust API.&lt;/strong&gt; Anything that is reasonable to expose to a Java
+   caller should be reachable from &lt;code&gt;SessionContext&lt;/code&gt; and &lt;code&gt;DataFrame&lt;/code&gt; with idiomatic Java
+   signatures.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Track DataFusion releases.&lt;/strong&gt; The aim is to follow DataFusion's release cadence so the Java
+   binding stays current with new features and fixes in the engine.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id="how-to-get-involved"&gt;How to get involved&lt;a class="headerlink" href="#how-to-get-involved" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Source:&lt;/strong&gt; &lt;a href="https://github.com/apache/datafusion-java"&gt;https://github.com/apache/datafusion-java&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Issues:&lt;/strong&gt; &lt;a href="https://github.com/apache/datafusion-java/issues"&gt;https://github.com/apache/datafusion-java/issues&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Documentation:&lt;/strong&gt; see &lt;code&gt;docs/source/&lt;/code&gt; in the repository for the user and contributor guides.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Bug reports, design discussions, and pull requests are all welcome. Issues labelled
+&lt;a href="https://github.com/apache/datafusion-java/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22"&gt;good first issue&lt;/a&gt; are a good place to start.&lt;/p&gt;
+&lt;h2 id="thank-you"&gt;Thank you&lt;a class="headerlink" href="#thank-you" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Thanks to everyone who contributed to making the first release possible, and to the broader
+DataFusion and Arrow communities whose work this project builds on directly.&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Apache DataFusion Ballista 53.0.0 Released</title><link href="https://datafusion.apache.org/blog/2026/05/24/datafusion-ballista-53.0.0" rel="alternate"/><published>2026-05-24T00:00:00+00:00</published><updated>2026-05-24T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2026-05-24:/blog/2026/05/24/datafusion-ballista-53.0.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
