@@ -1,7 +1,7 @@
 ---
 layout: post
 title: Writing Agent Skills for an Open Source Project: Lessons from DataFusion Python
-date: 2026-05-22
+date: 2026-05-28
 author: Tim Saucer (rerun.io)
 categories: [tutorial]
 ---
