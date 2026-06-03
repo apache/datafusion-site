@@ -1,0 +1,189 @@
+<!doctype html>
+<html class="no-js" lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>What two months with the Comet community got our Spark workload on Amazon EKS - Apache DataFusion Blog</title>
+<link href="/blog/favicon.ico" rel="icon" type="image/x-icon">
+<link href="/blog/favicon.ico" rel="shortcut icon" type="image/x-icon">
+<link href="/blog/css/bootstrap.min.css" rel="stylesheet">
+<link href="/blog/css/fontawesome.all.min.css" rel="stylesheet">
+<link href="/blog/css/headerlink.css" rel="stylesheet">
+<link href="/blog/highlight/default.min.css" rel="stylesheet">
+<link href="/blog/css/app.css" rel="stylesheet">
+<link href="/blog/css/dark-mode.css" rel="stylesheet">
+<script src="/blog/js/dark-mode.js"></script>
+<script src="/blog/highlight/highlight.js"></script>
+<script>hljs.highlightAll();</script>  </head>
+  <body class="d-flex flex-column h-100">
+  <main class="flex-shrink-0">
+<!-- nav bar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark" aria-label="Fifth navbar example">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/blog/"><img src="/blog/images/logo_original4x.png" style="height: 32px;"/> Apache DataFusion Blog</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarADP" aria-controls="navbarADP" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarADP">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/about.html">About</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/feed.xml">RSS</a>
+                </li>
+            </ul>
+            <button id="dark-mode-toggle" type="button" class="dark-mode-toggle" aria-label="Toggle dark mode" aria-pressed="false" title="Toggle dark mode">
+                <span class="sun-icon" aria-hidden="true">☀</span>
+                <span class="moon-icon" aria-hidden="true">☾</span>
+            </button>
+        </div>
+    </div>
+</nav>    
+<!-- article contents -->
+<div id="contents">
+  <div class="bg-white p-4 p-md-5 rounded">
+    <div class="row justify-content-center">
+      <div class="col-12 col-md-8 main-content">
+        <h1>
+          What two months with the Comet community got our Spark workload on Amazon EKS
+        </h1>
+        <p>Posted on: Wed 03 June 2026 by Manabu McCloskey (AWS), Vara Bonthu (AWS)</p>
+
+        <aside class="toc-container d-md-none mb-2">
+          <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#introduction">Introduction</a></li>
+<li><a href="#setup">Setup</a></li>
+<li><a href="#what-we-ran-into">What we ran into</a><ul>
+<li><a href="#excessive-dns-queries">Excessive DNS queries</a></li>
+<li><a href="#unreliable-s3-region-detection">Unreliable S3 region detection</a></li>
+<li><a href="#high-memory-footprint">High memory footprint</a></li>
+<li><a href="#missing-dpp-support">Missing DPP support</a></li>
+</ul>
+</li>
+<li><a href="#how-we-worked-with-the-comet-community">How we worked with the Comet community</a></li>
+<li><a href="#results">Results</a></li>
+<li><a href="#conclusion">Conclusion</a></li>
+</ul>
+</div>
+        </aside>
+
+        <!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+-->
+
+<h2 id="introduction">Introduction<a class="headerlink" href="#introduction" title="Permanent link">¶</a></h2>
+<p>Apache Spark workloads are some of the most common and cost-intensive jobs running on Kubernetes. Our customers at <a href="https://aws.amazon.com/">AWS</a> are always on the lookout for meaningful speedups, since any speedup translates directly into lower bills. That's what got us interested in Apache DataFusion Comet. The local TPC-DS and TPC-H benchmarks looked very good, and we wanted to see how Comet would hold up on a more realistic setup.</p>
+<p>When we ran a 3TB TPC-DS benchmark on Spark 3.5.8 on <a href="https://aws.amazon.com/pm/eks/">Amazon EKS</a>, Comet was 11% slower than vanilla Spark, and we hit several operational issues along the way that made it hard to keep the cluster running smoothly. We built a reproducible benchmark kit and worked closely with the Comet maintainers to validate fixes as they landed. The same benchmark now runs <strong>32% faster</strong> than vanilla Spark on the same setup. The rest of this post walks through the issues we hit and what changed in Comet to address them.</p>
+<h2 id="setup">Setup<a class="headerlink" href="#setup" title="Permanent link">¶</a></h2>
+<p>We ran TPC-DS at 3TB scale on Spark 3.5.8 on Amazon EKS, comparing vanilla Spark against Apache DataFusion Comet. Each executor pod was sized at 58 GB of RAM. We ran the same benchmark on three Comet versions, 0.14.0, 0.15.0, and 0.16.0, so we could see how the project progressed across releases. The full cluster topology, Spark configurations, and benchmark scripts we used are documented on the <a href="https://awslabs.github.io/data-on-eks/docs/benchmarks/spark-datafusion-comet-benchmark">Data on EKS benchmark page</a>.</p>
+<h2 id="what-we-ran-into">What we ran into<a class="headerlink" href="#what-we-ran-into" title="Permanent link">¶</a></h2>
+<p>We hit four classes of issues running Comet at scale on Amazon EKS. The first three were operational and the fourth was the source of most of the regression. The <a href="https://github.com/awslabs/data-on-eks/blob/05d0590e019d14ed0d058f7c314db74a9b161599/website/docs/benchmarks/spark-datafusion-comet-benchmark.md">Data on EKS benchmark page</a> has full configurations and error traces for each one.</p>
+<h3 id="excessive-dns-queries">Excessive DNS queries<a class="headerlink" href="#excessive-dns-queries" title="Permanent link">¶</a></h3>
+<p>Comet executors were generating up to 5,000 DNS queries per second per pod, roughly 500x what vanilla Spark issued, which pushed us against the Route 53 Resolver per-ENI limit of 1,024 queries per second and triggered intermittent <code>UnknownHostException</code> failures. The root cause was that Comet's native Rust layer was creating a fresh object store instance for every Parquet file read, each with its own HTTP connection pool. The fix in <a href="https://github.com/apache/datafusion-comet/pull/3802">#3802</a> added a process-wide cache for object stores, which collapsed DNS volume back to vanilla-Spark levels.</p>
+<h3 id="unreliable-s3-region-detection">Unreliable S3 region detection<a class="headerlink" href="#unreliable-s3-region-detection" title="Permanent link">¶</a></h3>
+<p>Without an explicitly configured endpoint region, jobs failed intermittently with <code>Generic S3 error: Failed to resolve region</code>. The cause was the same caching gap as DNS: Comet called the S3 <code>HeadBucket</code> API for every Parquet file read to resolve the region, and those calls were getting throttled under concurrent load. The same fix in <a href="https://github.com/apache/datafusion-comet/pull/3802">#3802</a> caches the resolved region per bucket, so <code>HeadBucket</code> runs once per bucket and the <code>endpoint.region</code> workaround is no longer required.</p>
+<h3 id="high-memory-footprint">High memory footprint<a class="headerlink" href="#high-memory-footprint" title="Permanent link">¶</a></h3>
+<p>Comet consistently used about 67% more memory than vanilla Spark and required a 32 GB off-heap pool to run reliably. The root cause was in shuffle memory sizing: for each Spark task, Comet spun up two concurrent native execution contexts (pre-shuffle and shuffle writer), each allocating its own memory pool at the per-task limit. The fix in <a href="https://github.com/apache/datafusion-comet/pull/3924">#3924</a> makes the two contexts share a single pool, bringing Comet's memory footprint much closer to vanilla Spark.</p>
+<h3 id="missing-dpp-support">Missing DPP support<a class="headerlink" href="#missing-dpp-support" title="Permanent link">¶</a></h3>
+<p>The biggest performance hit came from how Comet handled Dynamic Partition Pruning (DPP). DPP is a Spark optimization that prunes fact-table partitions at runtime based on filters from broadcast dimensions. For star-schema workloads like TPC-DS, DPP is often the difference between scanning 1% of a fact table and scanning all of it.</p>
+<p>In Comet 0.14.0, the native Parquet scan didn't support DPP, so any query with a DPP filter would fall back to vanilla Spark for that scan. Falling back was expected, but the fallback path had a planning bug that caused dramatic regressions. The resulting plan ran a Spark scan with a Comet shuffle on top, with the DPP filter effectively dropped, so the Spark scan read every partition. Queries like q25 regressed dramatically as a result.</p>
+<p>The fix in <a href="https://github.com/apache/datafusion-comet/pull/3982">#3982</a> makes shuffle fallback decisions sticky across the two planning passes, removing the regression. Comet 0.16.0 then closes the broader gap by adding native DPP support to the Parquet scan itself, including broadcast exchange reuse so that the dimension table is broadcast only once. The 78 queries that previously fell back went from 30-50% native execution to 80-97% native. The full set of changes is described in the <a href="https://datafusion.apache.org/blog/output/2026/05/07/datafusion-comet-0.16.0/">Comet 0.16.0 release announcement</a> on the DataFusion blog.</p>
+<h2 id="how-we-worked-with-the-comet-community">How we worked with the Comet community<a class="headerlink" href="#how-we-worked-with-the-comet-community" title="Permanent link">¶</a></h2>
+<p>The improvement came out of a feedback loop with the Comet maintainers. We brought something they didn't have ready access to: a 3TB workload running on real Amazon EKS infrastructure, with people who could reproduce issues at scale and validate fixes against production-like conditions. The full set of issues we worked through is tracked in <a href="https://github.com/apache/datafusion-comet/issues/3799">#3799</a>.</p>
+<p>Some of our setup choices made the reports useful early on. We ran TPC-DS sequentially against vanilla Spark and Comet on the same 12-node cluster (r8gd.12xlarge instances), with a Grafana dashboard tracking DNS query rate, executor memory, network bandwidth, and storage throughput. That's how we caught the DNS spike and the elevated memory baseline before they blocked any jobs. We also used AI-assisted analysis of Spark's event logs and driver logs to narrow down which queries and stages were regressing, which made the bug reports concrete enough that maintainers could act on them without a long back-and-forth.</p>
+<p>Each issue we filed bundled those logs together with Comet's <code>explainFallback</code> output, stack traces, and a minimal reproduction. The maintainers had enough to work with from the first message most of the time, which kept the back-and-forth short.</p>
+<p>The other side of the loop was experimental builds. When Comet maintainers pushed a candidate fix to a branch, we would build a Comet image off it and run a subset of TPC-DS against our 3TB workload to validate. Most coordination happened through a shared Slack channel and was tracked through GitHub issues, with both sides often responding within minutes during business hours.</p>
+<p>Three examples give a sense of the cadence. We reported the DNS query volume and S3 region detection issues on March 25, 2026. Comet maintainers had a fix proposed the next day and merged on March 31. We reported the memory footprint issue the same day, and the shared-pool fix landed on April 13.</p>
+<p>The DPP work was the deepest collaboration of the three. While testing experimental builds containing the earlier DPP changes, we hit a separate problem with DPP under AQE that crashed the driver on specific plans. Reproducing it reliably took several iterations, and the fix on the maintainer side took similar care. We reported it on April 9 (<a href="https://github.com/apache/datafusion-comet/issues/3870">#3870</a>) and the fix landed on April 17.</p>
+<p>Two things kept the loop fast. The maintainers knew the Comet and DataFusion codebases well enough to turn around fixes within hours of a clean reproduction. We had a stable test cluster and could quickly deploy unreleased branches into it, so validation was never the bottleneck.</p>
+<p><img alt="TPC-DS 3TB performance vs. vanilla Spark across Comet versions 0.14.0, 0.15.0, and 0.16.0" class="img-fluid" src="/blog/images/comet-eks/version-arc-slope.png" width="80%"/></p>
+<p>Across roughly two months, every issue we surfaced was fixed upstream. The 0.15.0 release picked up the DNS, S3 region, and memory fixes, which moved the same benchmark from 11% slower than vanilla Spark to 11% faster. The 0.16.0 release added the DPP work and pushed it to 32% faster.</p>
+<h2 id="results">Results<a class="headerlink" href="#results" title="Permanent link">¶</a></h2>
+<p>Full per-query results live on the <a href="https://awslabs.github.io/data-on-eks/docs/benchmarks/spark-datafusion-comet-benchmark">Data on EKS benchmark page</a>. On Parquet, the workload as a whole runs 32% faster than vanilla Spark 3.5.8 on the same cluster. Of the TPC-DS queries, 66% improve by 20% or more, with the largest speedup on q86 at 3.47× faster (+71%).</p>
+<p>The DPP fixes drove most of the gains, with the shared memory pool fix improving how reliably Comet runs under tight per-task memory limits.</p>
+<p>We also ran the same benchmark against Iceberg tables, where Comet was 37% faster overall and 90% of queries saw 20% or more improvement.</p>
+<p><img alt="TPCDS 3TB Performance Distribution" class="img-fluid" src="/blog/images/comet-eks/performance-distribution.png" width="80%"/></p>
+<h2 id="conclusion">Conclusion<a class="headerlink" href="#conclusion" title="Permanent link">¶</a></h2>
+<p>The improvement we saw came from staying in close contact with the Comet maintainers over two months of testing, reporting, and validating fixes. Comet 0.16.0 now runs our 3TB TPC-DS workload 32% faster than vanilla Spark on the same EKS cluster.</p>
+<p>If you're running Spark on Kubernetes at scale, Comet is worth evaluating against your own workloads. And if you hit issues like the ones we did, file them upstream. Apache DataFusion and Comet are open source projects that improve fastest when users contribute back, whether to <a href="https://github.com/apache/datafusion-comet">datafusion-comet</a> or <a href="https://github.com/apache/datafusion">datafusion</a>.</p>
+
+<!--
+  Comments Section
+  Loaded only after explicit visitor consent to comply with ASF policy.
+-->
+
+<div>
+  <hr>
+  <h3 id="comments">Comments<a class="headerlink" href="#comments" title="Permanent link">&para;</a></h3>
+
+  <!-- Local loader script -->
+  <script src="/blog/js/giscus-consent.js" defer></script>
+
+  <!-- Consent UI -->
+  <div id="giscus-consent">
+    <p>
+        We use <a href="https://giscus.app/">Giscus</a> for comments, powered by GitHub Discussions.
+        To respect your privacy, Giscus and comments will load only if you click "Show Comments"
+    </p>
+
+    <div class="consent-actions">
+      <button id="giscus-load" type="button">Show Comments</button>
+      <button id="giscus-revoke" type="button" hidden>Hide Comments</button>
+    </div>
+
+    <noscript>JavaScript is required to load comments from Giscus.</noscript>
+  </div>
+
+  <!-- Container where Giscus will render -->
+  <div id="comment-thread"></div>
+</div>      </div>
+      <aside class="toc-container d-none d-md-block col-md-4 col-xl-3 ms-xl-2">
+        <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#introduction">Introduction</a></li>
+<li><a href="#setup">Setup</a></li>
+<li><a href="#what-we-ran-into">What we ran into</a><ul>
+<li><a href="#excessive-dns-queries">Excessive DNS queries</a></li>
+<li><a href="#unreliable-s3-region-detection">Unreliable S3 region detection</a></li>
+<li><a href="#high-memory-footprint">High memory footprint</a></li>
+<li><a href="#missing-dpp-support">Missing DPP support</a></li>
+</ul>
+</li>
+<li><a href="#how-we-worked-with-the-comet-community">How we worked with the Comet community</a></li>
+<li><a href="#results">Results</a></li>
+<li><a href="#conclusion">Conclusion</a></li>
+</ul>
+</div>
+      </aside>
+    </div>
+  </div>
+</div>    
+    <!-- footer -->
+    <div class="row g-0">
+      <div class="col-12">
+        <p style="font-style: italic; font-size: 0.8rem; text-align: center;">
+          Copyright 2026, <a href="https://www.apache.org/">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a>.<br/>
+          Apache&reg; and the Apache feather logo are trademarks of The Apache Software Foundation.
+        </p>
+      </div>
+    </div>
+    <script src="/blog/js/bootstrap.bundle.min.js"></script>  </main>
+  </body>
+</html>
