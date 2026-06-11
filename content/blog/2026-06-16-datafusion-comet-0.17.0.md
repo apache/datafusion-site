@@ -41,11 +41,9 @@ contributors. See the [change log] for more information.
 
 ## Arrow-Native, End to End
 
-Comet's value proposition has always been "keep your Spark data columnar and skip the per-row overhead of
-Spark's row-based engine," but the way we describe it has not always kept pace with how Comet actually works.
-This release leans into a clearer framing: Comet keeps Spark queries **Arrow-native end to end**. Operators,
-expressions, shuffle, and broadcast all stay in Apache Arrow columnar format, avoiding the cost of
-materializing and transitioning row-by-row data.
+Comet keeps Spark queries **Arrow-native end to end**: operators, expressions, shuffle, and broadcast all stay
+in Apache Arrow columnar format, avoiding the per-row overhead that Spark's row-based engine incurs from
+materializing and transitioning data one row at a time.
 
 Within that Arrow-native pipeline, the work of an operator or expression runs in one of two ways:
 
@@ -54,14 +52,10 @@ Within that Arrow-native pipeline, the work of an operator or expression runs in
 - **JVM-implemented**: Scala or Java code that operates directly on Arrow batches, including expressions
   produced by Spark's own code generation.
 
-The implementation language is an internal detail. From the query's perspective the data never leaves Arrow
-columnar format, so there is no per-row materialization cost at the boundary between a Rust-implemented and a
-JVM-implemented step. This distinction matters for 0.17.0 because the JVM-implemented path, driven by Comet's
-codegen dispatcher, is where a large share of this release's new capability lands.
-
-The framing is now reflected in Comet's documentation: the README leads with the Arrow-native value
-proposition, and the older internal scan names (`native_datafusion`, `native_iceberg_compat`) have been
-retired in favor of clearer terminology.
+Because the data never leaves Arrow columnar format, there is no per-row materialization cost at the boundary
+between a Rust-implemented and a JVM-implemented step. 0.17.0 extends both paths, but it builds especially
+heavily on the JVM-implemented one: its codegen dispatcher brings a large set of new expressions, UDF support,
+and exact Spark compatibility into the Arrow-native pipeline, as the following sections describe.
 
 ## JVM Codegen Dispatch
 
