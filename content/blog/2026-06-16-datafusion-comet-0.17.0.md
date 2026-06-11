@@ -51,6 +51,12 @@ JVM-implemented Arrow-native expression: the query stays in the pipeline, and be
 evaluated by Spark's own code, the result is guaranteed to match Spark exactly across every supported Spark
 version. When the dispatcher is disabled, Comet falls back cleanly as before.
 
+It is worth being clear about where the benefit comes from. A dispatched expression runs Spark's own generated
+code, so the expression itself is not faster than it would be in Spark; expect roughly equivalent per-expression
+performance. The win is structural: a single unsupported expression no longer forces an entire query stage out
+of the Comet pipeline. The surrounding operators stay Arrow-native, and the stage as a whole avoids the
+columnar-to-row conversion and row-based Spark execution that a fallback would otherwise impose.
+
 This release puts the dispatcher to work across a wide surface:
 
 - **Scala and Java UDFs, enabled by default.** Eligible Spark `ScalaUDF` expressions are routed through
