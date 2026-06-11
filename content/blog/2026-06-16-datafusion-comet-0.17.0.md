@@ -36,24 +36,6 @@ contributors. See the [change log] for more information.
 
 [change log]: https://github.com/apache/datafusion-comet/blob/main/dev/changelog/0.17.0.md
 
-## Arrow-Native, End to End
-
-Comet keeps Spark queries **Arrow-native end to end**: operators, expressions, shuffle, and broadcast all stay
-in Apache Arrow columnar format, avoiding the per-row overhead that Spark's row-based engine incurs from
-materializing and transitioning data one row at a time.
-
-Within that Arrow-native pipeline, the work of an operator or expression runs in one of two ways:
-
-- **Rust-implemented**: native Rust code, executed through Apache DataFusion. This is what most people picture
-  when they think of Comet.
-- **JVM-implemented**: Scala or Java code that operates directly on Arrow batches, including expressions
-  produced by Spark's own code generation.
-
-Because the data never leaves Arrow columnar format, there is no per-row materialization cost at the boundary
-between a Rust-implemented and a JVM-implemented step. 0.17.0 extends both paths, but it builds especially
-heavily on the JVM-implemented one: its codegen dispatcher brings a large set of new expressions, UDF support,
-and exact Spark compatibility into the Arrow-native pipeline, as the following sections describe.
-
 ## JVM Codegen Dispatch
 
 The headline feature of 0.17.0 is the maturation of Comet's **JVM codegen dispatcher**.
@@ -91,6 +73,26 @@ left at its default of `false`, the expression is routed through the codegen dis
 correctly inside Comet rather than triggering a fallback. `allowIncompatible=true` becomes a pure performance
 knob for users who accept the faster native path's divergence. Expressions such as `from_unixtime`, and the
 `TimestampNTZ` branches of `hour`, `minute`, and `second`, now stay in the pipeline by default.
+
+## Arrow-Native, End to End
+
+The codegen dispatcher works because of a property that runs through all of Comet: queries stay **Arrow-native
+end to end**. Operators, expressions, shuffle, and broadcast all remain in Apache Arrow columnar format,
+avoiding the per-row overhead that Spark's row-based engine incurs from materializing and transitioning data
+one row at a time.
+
+Within that Arrow-native pipeline, the work of an operator or expression runs in one of two ways:
+
+- **Rust-implemented**: native Rust code, executed through Apache DataFusion. This is what most people picture
+  when they think of Comet.
+- **JVM-implemented**: Scala or Java code that operates directly on Arrow batches, including the
+  codegen-dispatched expressions and UDFs described above.
+
+Because the data never leaves Arrow columnar format, there is no per-row materialization cost at the boundary
+between a Rust-implemented and a JVM-implemented step. That is what makes dispatch worthwhile: a dispatched
+expression sits directly in the pipeline alongside Rust-implemented operators, with no columnar-to-row
+transition between them. The expansion of the JVM-implemented path in 0.17.0 widens what Comet can keep
+Arrow-native rather than hand back to Spark.
 
 ## Expanded Expression Coverage
 
