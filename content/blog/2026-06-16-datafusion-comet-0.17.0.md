@@ -38,12 +38,12 @@ contributors. See the [change log] for more information.
 
 ## JVM Codegen Dispatch
 
-The headline feature of 0.17.0 is the maturation of Comet's **JVM codegen dispatcher**.
+The headline feature of 0.17.0 is a new mechanism introduced this cycle: Comet's **JVM codegen dispatcher**.
 
-Comet has long fallen back to Spark whenever an expression had no native Rust implementation, or where the
+Comet has always fallen back to Spark whenever an expression had no native Rust implementation, or where the
 Rust implementation could diverge from Spark on edge cases. A fallback is correct, but it is expensive: the
-surrounding project, exchange, and sort operators drop out of the Comet pipeline, and the data takes a
-columnar-to-row round trip into Spark and back.
+surrounding project, exchange, and sort operators drop out of the Comet pipeline, and a columnar-to-row
+conversion is needed to feed the data into Spark's row-based operators.
 
 The codegen dispatcher offers a third option. Instead of falling back, Comet runs the Spark expression's own
 generated code (`doGenCode`) inside the Comet pipeline, operating directly on Arrow batches. The result is a
@@ -53,9 +53,9 @@ version. When the dispatcher is disabled, Comet falls back cleanly as before.
 
 This release puts the dispatcher to work across a wide surface:
 
-- **Scala and Java UDFs, now enabled by default.** Eligible Spark `ScalaUDF` expressions are routed through
+- **Scala and Java UDFs, enabled by default.** Eligible Spark `ScalaUDF` expressions are routed through
   the dispatcher and executed inside the Comet pipeline, so a project around a UDF no longer forces a
-  fallback and a columnar-to-row round trip. The path has broad type coverage (scalars, arbitrarily nested
+  fallback and a columnar-to-row conversion. The path has broad type coverage (scalars, arbitrarily nested
   complex types, and higher-order functions) and is backed by end-to-end, fuzz, and Iceberg test coverage.
   It can be disabled with `spark.comet.exec.scalaUDF.codegen.enabled=false`.
 - **100% Spark-compatible regular expressions.** Regex expressions now dispatch to Spark's own
