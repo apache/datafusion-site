@@ -31,11 +31,6 @@ limitations under the License.
 
 The Apache DataFusion PMC is pleased to announce version 0.17.0 of the [Comet](https://datafusion.apache.org/comet/) subproject.
 
-Comet is an accelerator for Apache Spark that keeps query execution in Apache Arrow columnar format end to
-end, running operators and expressions as native Rust code (via Apache DataFusion) or as JVM code that
-operates directly on Arrow batches, for improved performance and efficiency without requiring any code
-changes.
-
 This release covers approximately five weeks of development work and is the result of merging XXX PRs from 19
 contributors. See the [change log] for more information.
 
