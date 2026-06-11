@@ -38,7 +38,7 @@ contributors. See the [change log] for more information.
 
 ## JVM Codegen Dispatch
 
-The headline feature of 0.17.0 is a new mechanism introduced this cycle: Comet's **JVM codegen dispatcher**.
+The headline feature of 0.17.0 is a new mechanism introduced in this release: Comet's **JVM codegen dispatcher**.
 
 Comet has always fallen back to Spark whenever an expression had no native Rust implementation, or where the
 Rust implementation could diverge from Spark on edge cases. A fallback is correct, but it is expensive: the
@@ -103,7 +103,7 @@ Arrow-native rather than hand back to Spark.
 ## Expanded Expression Coverage
 
 Partly through the codegen dispatcher and partly through new Rust implementations, Comet's expression coverage
-grew substantially in this cycle. More than 120 Spark expressions have gained support since 0.16.0, spanning
+grew substantially in this release. More than 120 Spark expressions have gained support since 0.16.0, spanning
 nearly every function family:
 
 - **Date and time** (~25): `convert_timezone`, `make_date`, `months_between`, `next_day`,
@@ -163,12 +163,12 @@ easier to attribute.
 
 ## Correctness and Test Coverage
 
-Much of the correctness work this cycle is part of a deliberate push toward an eventual **1.0.0 release**.
+Much of the correctness work in this release is part of a deliberate push toward an eventual **1.0.0 release**.
 Reaching 1.0.0 means being able to state precisely, and stand behind, exactly which Spark expressions Comet
 accelerates and how faithfully it matches Spark on each one. Two efforts in 0.17.0 move directly toward that
 goal.
 
-First, this cycle included a systematic audit of Comet's expression implementations against Apache Spark
+First, this release included a systematic audit of Comet's expression implementations against Apache Spark
 3.4.3, 3.5.8, 4.0.1, and 4.1.1, covering the hash, JSON, collection, map, predicate, bitwise, conditional,
 array, struct, math, and cast expression families, along with cast behavior. Each audit compared Comet's
 behavior to Spark across all four versions and expanded test coverage where gaps were found.
