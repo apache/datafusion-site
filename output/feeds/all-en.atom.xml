@@ -1,5 +1,258 @@
 <?xml version="1.0" encoding="utf-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog</title><link href="https://datafusion.apache.org/blog/" rel="alternate"/><link href="https://datafusion.apache.org/blog/feeds/all-en.atom.xml" rel="self"/><id>https://datafusion.apache.org/blog/</id><updated>2026-06-03T00:00:00+00:00</updated><entry><title>What two months with the Comet community got our Spark workload on Amazon EKS</title><link href="https://datafusion.apache.org/blog/2026/06/03/comet-eks" rel="alternate"/><published>2026-06-03T00:00:00+00:00</published><updated>2026-06-03T00:00:00+00:00</updated><author><name>Manabu McCloskey (AWS), Vara Bonthu (AWS)</name></author><id>tag:datafusion.apache.org,2026-06-03:/blog/2026/06/03/comet-eks</id><summary type="html">&lt;!--
+<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog</title><link href="https://datafusion.apache.org/blog/" rel="alternate"/><link href="https://datafusion.apache.org/blog/feeds/all-en.atom.xml" rel="self"/><id>https://datafusion.apache.org/blog/</id><updated>2026-06-12T00:00:00+00:00</updated><entry><title>Apache DataFusion 54.0.0 Released</title><link href="https://datafusion.apache.org/blog/2026/06/12/datafusion-54.0.0" rel="alternate"/><published>2026-06-12T00:00:00+00:00</published><updated>2026-06-12T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2026-06-12:/blog/2026/06/12/datafusion-54.0.0</id><summary type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+
+&lt;p&gt;We are proud to announce the release of &lt;a href="https://crates.io/crates/datafusion/54.0.0"&gt;DataFusion 54.0.0&lt;/a&gt;. This post highlights
+some of the major improvements since &lt;a href="https://datafusion.apache.org/blog/2026/04/02/datafusion-53.0.0/"&gt;DataFusion 53.0.0&lt;/a&gt;. Notable additions
+include &lt;code&gt;LATERAL&lt;/code&gt; joins, SQL lambda functions, and a new Avro reader, alongside
+significant join, scan, and planning performance improvements. The complete list
+of …&lt;/p&gt;</summary><content type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+
+&lt;p&gt;We are proud to announce the release of &lt;a href="https://crates.io/crates/datafusion/54.0.0"&gt;DataFusion 54.0.0&lt;/a&gt;. This post highlights
+some of the major improvements since &lt;a href="https://datafusion.apache.org/blog/2026/04/02/datafusion-53.0.0/"&gt;DataFusion 53.0.0&lt;/a&gt;. Notable additions
+include &lt;code&gt;LATERAL&lt;/code&gt; joins, SQL lambda functions, and a new Avro reader, alongside
+significant join, scan, and planning performance improvements. The complete list
+of changes is available in the &lt;a href="https://github.com/apache/datafusion/blob/branch-54/dev/changelog/54.0.0.md"&gt;changelog&lt;/a&gt;. This release represents roughly 11
+weeks of development and 740 commits. Thanks to the &lt;a href="https://github.com/apache/datafusion/blob/branch-54/dev/changelog/54.0.0.md#credits"&gt;139 contributors&lt;/a&gt;
+(a new record!) for making it possible.&lt;/p&gt;
+&lt;h2 id="performance-improvements"&gt;Performance Improvements 🚀&lt;a class="headerlink" href="#performance-improvements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;&lt;img alt="Performance over time" class="img-fluid" src="/blog/images/datafusion-54.0.0/performance_over_time_clickbench.png" width="100%"/&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Figure 1&lt;/strong&gt;: Average and median normalized execution times for DataFusion 54.0.0 on ClickBench queries, compared to previous releases.
+Query times are normalized using the ClickBench definition. See the
+&lt;a href="https://alamb.github.io/datafusion-benchmarking/"&gt;DataFusion Benchmarking Page&lt;/a&gt;
+for more details.&lt;/p&gt;
+&lt;p&gt;We continue to make significant performance improvements in DataFusion, as
+explained below. This release prunes more redundant work out of plans and
+makes joins, repartitioning, scans, and many built-in functions faster.&lt;/p&gt;
+&lt;h3 id="execution-operator-improvements"&gt;Execution Operator Improvements&lt;a class="headerlink" href="#execution-operator-improvements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;&lt;strong&gt;Physical Execution of Uncorrelated Scalar Subqueries&lt;/strong&gt;:
+DataFusion previously executed an uncorrelated scalar subquery (one that doesn't
+depend on the outer query) by rewriting it into a join. DataFusion 54 instead
+evaluates it once with a new physical operator. This lets functions use their
+specialized scalar code paths, and allows uncorrelated scalar subqueries in
+&lt;code&gt;ORDER BY&lt;/code&gt;, &lt;code&gt;JOIN ON&lt;/code&gt;, and as arguments to aggregate functions.
+Thanks to &lt;a href="https://github.com/neilconway"&gt;@neilconway&lt;/a&gt; for implementing this feature, with reviews from
+&lt;a href="https://github.com/Dandandan"&gt;@Dandandan&lt;/a&gt;, &lt;a href="https://github.com/alamb"&gt;@alamb&lt;/a&gt;, and &lt;a href="https://github.com/timsaucer"&gt;@timsaucer&lt;/a&gt;. Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/21240"&gt;#21240&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Faster Sort-Merge Joins&lt;/strong&gt;:
+Semi, anti, and mark joins now track matches with a per-row bitset instead of
+materializing &lt;code&gt;(outer, inner)&lt;/code&gt; pairs. Batched deferred filtering makes
+near-unique &lt;code&gt;LEFT&lt;/code&gt; and &lt;code&gt;FULL&lt;/code&gt; joins 20-50x faster. Finally, join-key comparisons
+now use a &lt;code&gt;DynComparator&lt;/code&gt; that resolves the column type once rather than per row,
+making microbenchmarks up to 12% faster and TPC-H ~5% faster overall.
+Thanks to &lt;a href="https://github.com/mbutrovich"&gt;@mbutrovich&lt;/a&gt; for this work, with reviews from &lt;a href="https://github.com/Dandandan"&gt;@Dandandan&lt;/a&gt;,
+&lt;a href="https://github.com/comphead"&gt;@comphead&lt;/a&gt;, and &lt;a href="https://github.com/rluvaton"&gt;@rluvaton&lt;/a&gt;. Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/20806"&gt;#20806&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/21184"&gt;#21184&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/21484"&gt;#21484&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/21517"&gt;#21517&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Faster Repartitioning&lt;/strong&gt;:
+&lt;code&gt;RepartitionExec&lt;/code&gt; now coalesces batches before sending them to distributor
+channels, cutting per-batch overhead for up to 50% faster execution on some
+repartition-heavy queries.
+Thanks to &lt;a href="https://github.com/gabotechs"&gt;@gabotechs&lt;/a&gt; for this work, with reviews from &lt;a href="https://github.com/Dandandan"&gt;@Dandandan&lt;/a&gt; and
+&lt;a href="https://github.com/alamb"&gt;@alamb&lt;/a&gt;. Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/22010"&gt;#22010&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Faster Functions and Hashing&lt;/strong&gt;:
+DataFusion ships hundreds of built-in functions, so speeding them up pays off
+across many workloads. This release optimizes many, including &lt;a href="https://github.com/apache/datafusion/pull/20639"&gt;array_to_string&lt;/a&gt;,
+&lt;a href="https://github.com/apache/datafusion/pull/20620"&gt;array_concat&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/21083"&gt;array_sort&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/21119"&gt;split_part&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/21366"&gt;substr&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/20754"&gt;strpos&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/21442"&gt;left&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/21442"&gt;right&lt;/a&gt;,
+&lt;a href="https://github.com/apache/datafusion/pull/21154"&gt;string_agg&lt;/a&gt;, and &lt;a href="https://github.com/apache/datafusion/pull/21037"&gt;approx_distinct&lt;/a&gt;, plus better &lt;code&gt;NULL&lt;/code&gt; handling across many
+array and datetime functions. The &lt;code&gt;first_value&lt;/code&gt; and &lt;code&gt;last_value&lt;/code&gt; aggregates are
+also substantially faster over &lt;code&gt;Utf8&lt;/code&gt; and &lt;code&gt;Binary&lt;/code&gt; columns thanks to a new
+&lt;code&gt;GroupsAccumulator&lt;/code&gt; (&lt;a href="https://github.com/apache/datafusion/pull/21090"&gt;#21090&lt;/a&gt;). DataFusion 54 also swaps &lt;code&gt;ahash&lt;/code&gt; for &lt;a href="https://github.com/apache/datafusion/pull/20958"&gt;foldhash&lt;/a&gt; in
+&lt;code&gt;datafusion-common&lt;/code&gt;, and optimizes &lt;a href="https://github.com/apache/datafusion/pull/21379"&gt;regexp_replace&lt;/a&gt; by stripping trailing &lt;code&gt;.*&lt;/code&gt;
+from anchored patterns.
+Thanks to the many contributors who drove this work, especially &lt;a href="https://github.com/UBarney"&gt;@UBarney&lt;/a&gt;,
+&lt;a href="https://github.com/neilconway"&gt;@neilconway&lt;/a&gt;, &lt;a href="https://github.com/Dandandan"&gt;@Dandandan&lt;/a&gt;, &lt;a href="https://github.com/zhangxffff"&gt;@zhangxffff&lt;/a&gt;, &lt;a href="https://github.com/lyne7-sc"&gt;@lyne7-sc&lt;/a&gt;, &lt;a href="https://github.com/CuteChuanChuan"&gt;@CuteChuanChuan&lt;/a&gt;,
+&lt;a href="https://github.com/kumarUjjawal"&gt;@kumarUjjawal&lt;/a&gt;, and &lt;a href="https://github.com/coderfender"&gt;@coderfender&lt;/a&gt;.&lt;/p&gt;
+&lt;h3 id="planner-improvements"&gt;Planner Improvements&lt;a class="headerlink" href="#planner-improvements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;&lt;strong&gt;Pruning Functionally Redundant Sort Keys&lt;/strong&gt;:
+Sorting is expensive, so it pays to sort by as few columns as possible.
+DataFusion 54 now drops functionally redundant &lt;code&gt;ORDER BY&lt;/code&gt; keys: when an earlier
+key determines a later one, the later key can't change the ordering, so removing
+it cuts sorting cost without affecting results.
+Thanks to &lt;a href="https://github.com/xiedeyantu"&gt;@xiedeyantu&lt;/a&gt; for implementing this feature, with reviews from
+&lt;a href="https://github.com/alamb"&gt;@alamb&lt;/a&gt; and &lt;a href="https://github.com/neilconway"&gt;@neilconway&lt;/a&gt;. Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/21362"&gt;#21362&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Skip Redundant Parquet Filters&lt;/strong&gt;:
+When statistics prove a filter matches every row in a Parquet row group,
+DataFusion now skips evaluating it — both row filters and page-level pruning —
+for that row group instead of re-checking each row.
+Thanks to &lt;a href="https://github.com/xudong963"&gt;@xudong963&lt;/a&gt; for implementing this, building on a suggestion from
+&lt;a href="https://github.com/crepererum"&gt;@crepererum&lt;/a&gt;. Related issues and PRs: &lt;a href="https://github.com/apache/datafusion/issues/19028"&gt;#19028&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/21637"&gt;#21637&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Statistics-Driven Sort Pushdown and TopK&lt;/strong&gt;:
+Files and Parquet row groups are now ordered using statistics, which can avoid
+sorting entirely and improve dynamic filtering and early stopping for TopK
+(&lt;code&gt;ORDER BY ... LIMIT&lt;/code&gt;) queries. The most promising data is read first, often
+satisfying the &lt;code&gt;LIMIT&lt;/code&gt; before scanning the rest.
+Thanks to &lt;a href="https://github.com/zhuqi-lucas"&gt;@zhuqi-lucas&lt;/a&gt; for driving this work, with reviews from &lt;a href="https://github.com/adriangb"&gt;@adriangb&lt;/a&gt;.
+Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/21182"&gt;#21182&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/21426"&gt;#21426&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/21956"&gt;#21956&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Improved Statistics and Cardinality Estimation&lt;/strong&gt;:
+Good plans depend on good statistics. This release extracts NDV (number of
+distinct values) statistics from Parquet metadata, uses NDV for equality-filter
+selectivity, adds a pluggable &lt;a href="https://docs.rs/datafusion/latest/datafusion/physical_plan/operator_statistics/struct.StatisticsRegistry.html"&gt;StatisticsRegistry&lt;/a&gt; for operator-level statistics
+propagation, and improves cardinality estimation for semi and anti joins.
+Thanks to &lt;a href="https://github.com/asolimando"&gt;@asolimando&lt;/a&gt;, &lt;a href="https://github.com/jonathanc-n"&gt;@jonathanc-n&lt;/a&gt;, and &lt;a href="https://github.com/buraksenn"&gt;@buraksenn&lt;/a&gt; for driving this work.
+Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/19957"&gt;#19957&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/20789"&gt;#20789&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/21077"&gt;#21077&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/21081"&gt;#21081&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/21483"&gt;#21483&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/20904"&gt;#20904&lt;/a&gt;&lt;/p&gt;
+&lt;h3 id="scan-improvements"&gt;Scan Improvements&lt;a class="headerlink" href="#scan-improvements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;&lt;strong&gt;Morsel-Driven Parquet Scans&lt;/strong&gt;:
+Parquet scan parallelism was previously bounded by the slowest scan thread, so
+data skew (large row groups, less-selective filters, or variable object store
+latency) left cores underutilized. DataFusion 54 reworks the Parquet scan around
+a &lt;a href="https://db.in.tum.de/~leis/papers/morsels.pdf"&gt;morsel-driven design&lt;/a&gt;, where idle threads dynamically pull small units of work
+("morsels") instead of each being assigned a fixed partition up front. This
+spreads work more evenly and can be up to ~2x faster for skewed scans such as
+ClickBench.
+Thanks to &lt;a href="https://github.com/Dandandan"&gt;@Dandandan&lt;/a&gt;, &lt;a href="https://github.com/alamb"&gt;@alamb&lt;/a&gt;, &lt;a href="https://github.com/adriangb"&gt;@adriangb&lt;/a&gt;, &lt;a href="https://github.com/xudong963"&gt;@xudong963&lt;/a&gt;, and &lt;a href="https://github.com/zhuqi-lucas"&gt;@zhuqi-lucas&lt;/a&gt;
+for collaborating on this substantial effort. Related issues and PRs: &lt;a href="https://github.com/apache/datafusion/issues/20529"&gt;#20529&lt;/a&gt;,
+&lt;a href="https://github.com/apache/datafusion/pull/21327"&gt;#21327&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/21342"&gt;#21342&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/21351"&gt;#21351&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Struct Field Filter Pushdown and Leaf-Level Projection&lt;/strong&gt;:
+Filters on struct fields (e.g. &lt;code&gt;WHERE s['foo'] &amp;gt; 67&lt;/code&gt;) are now pushed down into the
+Parquet decoder rather than evaluated after a full scan, and both filtering and
+projection read only the struct leaves they actually access,
+significantly improving performance for nested and &lt;code&gt;Variant&lt;/code&gt; data in large
+Parquet files.
+Thanks to &lt;a href="https://github.com/friendlymatthew"&gt;@friendlymatthew&lt;/a&gt; for this work, with reviews from &lt;a href="https://github.com/adriangb"&gt;@adriangb&lt;/a&gt;,
+&lt;a href="https://github.com/cetra3"&gt;@cetra3&lt;/a&gt;, and &lt;a href="https://github.com/AdamGS"&gt;@AdamGS&lt;/a&gt;. Related PRs: &lt;a href="https://github.com/apache/datafusion/pull/20822"&gt;#20822&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/20854"&gt;#20854&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/20925"&gt;#20925&lt;/a&gt;&lt;/p&gt;
+&lt;h2 id="new-features"&gt;New Features ✨&lt;a class="headerlink" href="#new-features" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;h3 id="lateral-joins"&gt;&lt;code&gt;LATERAL&lt;/code&gt; Joins&lt;a class="headerlink" href="#lateral-joins" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Lateral joins have been long requested (&lt;a href="https://github.com/apache/datafusion/issues/10048"&gt;#10048&lt;/a&gt;). DataFusion 54 adds basic
+support for &lt;code&gt;CROSS JOIN LATERAL&lt;/code&gt;, &lt;code&gt;INNER JOIN LATERAL&lt;/code&gt;, and &lt;code&gt;LEFT JOIN LATERAL&lt;/code&gt;
+(&lt;a href="https://github.com/apache/datafusion/pull/21202"&gt;#21202&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/21352"&gt;#21352&lt;/a&gt;). A lateral subquery in the &lt;code&gt;FROM&lt;/code&gt; clause can reference
+columns from preceding tables — handy for expanding a per-row series or
+correlating against a set-returning function. It uses decorrelation, so the
+subquery is evaluated once rather than re-executed per outer row.&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;-- For each row in t1, expand a series 1..t1_int and join the values back
+SELECT t1_id, t1_name, i
+FROM join_t1 t1
+CROSS JOIN LATERAL (
+    SELECT * FROM unnest(generate_series(1, t1_int))
+) AS series(i);
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/neilconway"&gt;@neilconway&lt;/a&gt; for implementing this feature, with reviews from
+&lt;a href="https://github.com/Dandandan"&gt;@Dandandan&lt;/a&gt;, &lt;a href="https://github.com/alamb"&gt;@alamb&lt;/a&gt;, and &lt;a href="https://github.com/crm26"&gt;@crm26&lt;/a&gt;.&lt;/p&gt;
+&lt;h3 id="lambda-functions"&gt;Lambda Functions&lt;a class="headerlink" href="#lambda-functions" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;DataFusion now supports lambda expressions (&lt;code&gt;x -&amp;gt; expr&lt;/code&gt;) with column capture,
+plus new higher-order array UDFs like &lt;a href="https://github.com/apache/datafusion/pull/21679"&gt;array_transform&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/21895"&gt;array_filter&lt;/a&gt;, and
+&lt;a href="https://github.com/apache/datafusion/pull/21903"&gt;array_any_match&lt;/a&gt; (&lt;a href="https://github.com/apache/datafusion/pull/21323"&gt;#21323&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/21679"&gt;#21679&lt;/a&gt;). Lambdas express per-element computation
+directly in SQL:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;-- Apply `x * 10` to every element
+SELECT array_transform([1, 2, 3, 4, 5], x -&amp;gt; x * 10);
+-- [10, 20, 30, 40, 50]
+
+-- Keep only elements where `x &amp;gt; 2`
+SELECT array_filter([1, 2, 3, 4, 5], x -&amp;gt; x &amp;gt; 2);
+-- [3, 4, 5]
+
+-- True if any element satisfies `x &amp;gt; 2`
+SELECT array_any_match([1, 2, 3], x -&amp;gt; x &amp;gt; 2);
+-- true
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Lambdas compose, so you can filter then transform in one expression:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;-- Keep elements &amp;gt; 2, then multiply each survivor by 10
+SELECT array_transform(array_filter([1, 2, 3, 4, 5], x -&amp;gt; x &amp;gt; 2), x -&amp;gt; x * 10);
+-- [30, 40, 50]
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/gstvg"&gt;@gstvg&lt;/a&gt; and &lt;a href="https://github.com/rluvaton"&gt;@rluvaton&lt;/a&gt; for leading this effort (first prototyped in
+&lt;a href="https://github.com/apache/datafusion/pull/18921"&gt;#18921&lt;/a&gt;), &lt;a href="https://github.com/ologlogn"&gt;@ologlogn&lt;/a&gt; and &lt;a href="https://github.com/LiaCastaneda"&gt;@LiaCastaneda&lt;/a&gt; for the &lt;a href="https://github.com/apache/datafusion/pull/21895"&gt;array_filter&lt;/a&gt; and
+&lt;a href="https://github.com/apache/datafusion/pull/21903"&gt;array_any_match&lt;/a&gt; functions, and &lt;a href="https://github.com/benbellick"&gt;@benbellick&lt;/a&gt;, &lt;a href="https://github.com/comphead"&gt;@comphead&lt;/a&gt;, &lt;a href="https://github.com/martin-g"&gt;@martin-g&lt;/a&gt;,
+&lt;a href="https://github.com/pepijnve"&gt;@pepijnve&lt;/a&gt;, and &lt;a href="https://github.com/shehabgamin"&gt;@shehabgamin&lt;/a&gt; for reviews.&lt;/p&gt;
+&lt;h3 id="spilling-nested-loop-joins"&gt;Spilling Nested Loop Joins&lt;a class="headerlink" href="#spilling-nested-loop-joins" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;&lt;code&gt;NestedLoopJoinExec&lt;/code&gt; previously failed with an out-of-memory error when the build
+side exceeded the memory budget. DataFusion 54 adds a memory-limited path that
+transparently spills to disk and completes the query instead (&lt;a href="https://github.com/apache/datafusion/pull/21448"&gt;#21448&lt;/a&gt;), with
+zero overhead when memory is sufficient. It currently covers &lt;code&gt;INNER&lt;/code&gt;, &lt;code&gt;LEFT&lt;/code&gt;,
+&lt;code&gt;LEFT SEMI&lt;/code&gt;, &lt;code&gt;LEFT ANTI&lt;/code&gt;, and &lt;code&gt;LEFT MARK&lt;/code&gt; joins. Thanks to &lt;a href="https://github.com/viirya"&gt;@viirya&lt;/a&gt; for
+implementing this feature, with reviews from &lt;a href="https://github.com/2010YOUY01"&gt;@2010YOUY01&lt;/a&gt;.&lt;/p&gt;
+&lt;h3 id="new-avro-reader"&gt;New Avro Reader&lt;a class="headerlink" href="#new-avro-reader" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;The Avro reader now uses the &lt;code&gt;arrow-avro&lt;/code&gt; crate (&lt;a href="https://github.com/apache/datafusion/pull/17861"&gt;#17861&lt;/a&gt;), replacing internal
+conversion code with a faster, better-maintained implementation shared with the
+Arrow ecosystem (see &lt;a href="https://arrow.apache.org/blog/2025/10/23/introducing-arrow-avro/"&gt;Introducing arrow-avro&lt;/a&gt;). Thanks to &lt;a href="https://github.com/getChan"&gt;@getChan&lt;/a&gt; for this
+work, with reviews from &lt;a href="https://github.com/adriangb"&gt;@adriangb&lt;/a&gt;, &lt;a href="https://github.com/alamb"&gt;@alamb&lt;/a&gt;, and &lt;a href="https://github.com/jecsand838"&gt;@jecsand838&lt;/a&gt;.&lt;/p&gt;
+&lt;h3 id="extension-type-registry"&gt;Extension Type Registry&lt;a class="headerlink" href="#extension-type-registry" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Arrow extension types let users layer their own semantics on top of a physical
+storage type. DataFusion 54 adds a registry for registering their behavior
+(&lt;a href="https://github.com/apache/datafusion/issues/18223"&gt;#18223&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/20312"&gt;#20312&lt;/a&gt;), several more canonical extension types (&lt;a href="https://github.com/apache/datafusion/pull/21291"&gt;#21291&lt;/a&gt;), and the
+ability to cast to an extension type in logical expressions (&lt;a href="https://github.com/apache/datafusion/pull/18136"&gt;#18136&lt;/a&gt;). Thanks to
+&lt;a href="https://github.com/tschwarzinger"&gt;@tschwarzinger&lt;/a&gt; and &lt;a href="https://github.com/paleolimbot"&gt;@paleolimbot&lt;/a&gt; for driving this work, with reviews from
+&lt;a href="https://github.com/adriangb"&gt;@adriangb&lt;/a&gt; and &lt;a href="https://github.com/cetra3"&gt;@cetra3&lt;/a&gt;.&lt;/p&gt;
+&lt;h3 id="content-defined-chunking-for-parquet"&gt;Content-Defined Chunking for Parquet&lt;a class="headerlink" href="#content-defined-chunking-for-parquet" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;DataFusion's Parquet writer can now use content-defined chunking (CDC)
+(&lt;a href="https://github.com/apache/datafusion/pull/21110"&gt;#21110&lt;/a&gt;), which aligns data page boundaries with the data rather than fixed row
+counts. This improves deduplication and incremental storage, since inserting or
+editing a few rows no longer shifts every later page boundary. For background,
+see &lt;a href="https://huggingface.co/blog/parquet-cdc"&gt;Parquet Content-Defined Chunking&lt;/a&gt; and &lt;a href="https://huggingface.co/blog/improve_parquet_dedupe"&gt;Improving Parquet Dedupe on Hugging
+Face Hub&lt;/a&gt;. Thanks to &lt;a href="https://github.com/kszucs"&gt;@kszucs&lt;/a&gt; for this feature, with reviews from &lt;a href="https://github.com/alamb"&gt;@alamb&lt;/a&gt;.&lt;/p&gt;
+&lt;h3 id="new-functions"&gt;New Functions&lt;a class="headerlink" href="#new-functions" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;&lt;strong&gt;SQL and Scalar Functions&lt;/strong&gt;:
+DataFusion 54 adds new scalar functions including &lt;a href="https://github.com/apache/datafusion/pull/21522"&gt;array_compact&lt;/a&gt;,
+&lt;a href="https://github.com/apache/datafusion/pull/21542"&gt;cosine_distance&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/21861"&gt;inner_product&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/22013"&gt;array_normalize&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/21322"&gt;cast_to_type&lt;/a&gt;, and
+&lt;a href="https://github.com/apache/datafusion/pull/21509"&gt;with_metadata&lt;/a&gt;, plus nanosecond &lt;code&gt;date_part&lt;/code&gt; support (&lt;a href="https://github.com/apache/datafusion/pull/20674"&gt;#20674&lt;/a&gt;) and the &lt;code&gt;:&lt;/code&gt; JSON
+access operator (&lt;a href="https://github.com/apache/datafusion/pull/20628"&gt;#20628&lt;/a&gt;). The &lt;a href="https://github.com/apache/datafusion/pull/21542"&gt;cosine_distance&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/21861"&gt;inner_product&lt;/a&gt;, and
+&lt;a href="https://github.com/apache/datafusion/pull/22013"&gt;array_normalize&lt;/a&gt; additions round out DataFusion's vector-search building blocks. Thanks to &lt;a href="https://github.com/comphead"&gt;@comphead&lt;/a&gt;, &lt;a href="https://github.com/crm26"&gt;@crm26&lt;/a&gt;,
+&lt;a href="https://github.com/adriangb"&gt;@adriangb&lt;/a&gt;, &lt;a href="https://github.com/mhilton"&gt;@mhilton&lt;/a&gt;, and &lt;a href="https://github.com/Samyak2"&gt;@Samyak2&lt;/a&gt; for these contributions.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Spark-Compatible Functions&lt;/strong&gt;:
+The &lt;a href="https://docs.rs/datafusion-spark/latest/datafusion_spark/index.html"&gt;datafusion-spark crate&lt;/a&gt; gains many new or improved Spark-compatible
+functions, including &lt;a href="https://github.com/apache/datafusion/pull/21062"&gt;round&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/21933"&gt;floor&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/20593"&gt;ceil&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/20725"&gt;soundex&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/21967"&gt;xxhash64&lt;/a&gt;,
+&lt;a href="https://github.com/apache/datafusion/pull/20685"&gt;array_contains&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/21522"&gt;array_compact&lt;/a&gt;, int/float-to-timestamp casts, and UTF-8
+validation functions.
+Thanks to the contributors who drove this work, especially &lt;a href="https://github.com/comphead"&gt;@comphead&lt;/a&gt;,
+&lt;a href="https://github.com/coderfender"&gt;@coderfender&lt;/a&gt;, &lt;a href="https://github.com/SubhamSinghal"&gt;@SubhamSinghal&lt;/a&gt;, &lt;a href="https://github.com/kazantsev-maksim"&gt;@kazantsev-maksim&lt;/a&gt;, &lt;a href="https://github.com/andygrove"&gt;@andygrove&lt;/a&gt;, &lt;a href="https://github.com/buraksenn"&gt;@buraksenn&lt;/a&gt;,
+&lt;a href="https://github.com/davidlghellin"&gt;@davidlghellin&lt;/a&gt;, &lt;a href="https://github.com/athlcode"&gt;@athlcode&lt;/a&gt;, and &lt;a href="https://github.com/shivbhatia10"&gt;@shivbhatia10&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id="upgrade-guide-and-changelog"&gt;Upgrade Guide and Changelog 📖&lt;a class="headerlink" href="#upgrade-guide-and-changelog" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Upgrading to 54.0.0 should be straightforward for most users, though there are
+some breaking changes. See the &lt;a href="https://datafusion.apache.org/library-user-guide/upgrading.html"&gt;Upgrade Guide&lt;/a&gt; for details and
+migration snippets, and the &lt;a href="https://github.com/apache/datafusion/blob/branch-54/dev/changelog/54.0.0.md"&gt;changelog&lt;/a&gt; for the full list of changes.&lt;/p&gt;
+&lt;h2 id="about-datafusion"&gt;About DataFusion&lt;a class="headerlink" href="#about-datafusion" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;&lt;a href="https://datafusion.apache.org/"&gt;Apache DataFusion&lt;/a&gt; is an extensible query engine, written in &lt;a href="https://www.rust-lang.org/"&gt;Rust&lt;/a&gt;, that uses
+&lt;a href="https://arrow.apache.org"&gt;Apache Arrow&lt;/a&gt; as its in-memory format. DataFusion is used by developers to
+create new, fast, data-centric systems such as databases, dataframe libraries,
+and machine learning and streaming applications. While &lt;a href="https://datafusion.apache.org/user-guide/introduction.html#project-goals"&gt;DataFusion's primary
+design goal&lt;/a&gt; is to accelerate the creation of other data-centric systems, it
+provides a reasonable experience directly out of the box as a &lt;a href="https://datafusion.apache.org/user-guide/dataframe.html"&gt;dataframe
+library&lt;/a&gt;, &lt;a href="https://datafusion.apache.org/python/"&gt;Python library&lt;/a&gt;, and &lt;a href="https://datafusion.apache.org/user-guide/cli/"&gt;command-line SQL tool&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;DataFusion's core thesis is that, as a community, together we can build much
+more advanced technology than any of us as individuals or companies could build
+alone. Without DataFusion, highly performant vectorized query engines would
+remain the domain of a few large companies and world-class research
+institutions. With DataFusion, we can all build on top of a shared foundation
+and focus on what makes our projects unique.&lt;/p&gt;
+&lt;h2 id="how-to-get-involved"&gt;How to Get Involved&lt;a class="headerlink" href="#how-to-get-involved" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;DataFusion is not a project built or driven by a single person, company, or
+foundation. Rather, our community of users and contributors works together to
+build a shared technology that none of us could have built alone.&lt;/p&gt;
+&lt;p&gt;If you are interested in joining us, we would love to have you. You can try out
+DataFusion on some of your own data and projects and let us know how it goes,
+contribute suggestions, documentation, bug reports, or a PR with documentation,
+tests, or code. A list of open issues suitable for beginners is &lt;a href="https://github.com/apache/arrow-datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22"&gt;here&lt;/a&gt;, and you
+can find out how to reach us on the &lt;a href="https://datafusion.apache.org/contributor-guide/communication.html"&gt;communication doc&lt;/a&gt;.&lt;/p&gt;</content><category term="blog"/></entry><entry><title>What two months with the Comet community got our Spark workload on Amazon EKS</title><link href="https://datafusion.apache.org/blog/2026/06/03/comet-eks" rel="alternate"/><published>2026-06-03T00:00:00+00:00</published><updated>2026-06-03T00:00:00+00:00</updated><author><name>Manabu McCloskey (AWS), Vara Bonthu (AWS)</name></author><id>tag:datafusion.apache.org,2026-06-03:/blog/2026/06/03/comet-eks</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
