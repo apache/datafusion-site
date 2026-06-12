@@ -171,9 +171,22 @@ easier to attribute.
 ## Preparing for the 1.0.0 Release
 
 Much of the correctness work in this release is part of a deliberate push toward an eventual **1.0.0 release**.
-Reaching 1.0.0 means being able to state precisely, and stand behind, exactly which Spark expressions Comet
-accelerates and how faithfully it matches Spark on each one. Two efforts in 0.17.0 move directly toward that
-goal.
+Planning for 1.0.0 is being tracked in [issue #4082], where the community is discussing what the milestone
+should mean. The criteria under consideration go well beyond correctness and include:
+
+- Demonstrated cost savings for TPC-H and TPC-DS at SF1000 (1TB) — already met
+- Thorough documentation of compatibility status
+- A review of all configuration options, renaming some for consistency
+- Consistent logging
+- A documented policy for how long each Spark version will be supported
+- A documented process for preventing major performance regressions
+- A documented semantic-versioning policy and what it means for Comet going forward — already agreed
+
+[issue #4082]: https://github.com/apache/datafusion-comet/issues/4082
+
+Correctness sits at the center of that list: reaching 1.0.0 means being able to state precisely, and stand
+behind, exactly which Spark expressions Comet accelerates and how faithfully it matches Spark on each one. Two
+efforts in 0.17.0 move directly toward that goal.
 
 First, the codegen dispatcher raises the correctness floor structurally: for every dispatched expression,
 results are guaranteed to match Spark exactly because Spark's own generated code does the evaluation. This
