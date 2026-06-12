@@ -36,9 +36,10 @@ contributors. See the [change log] for more information.
 
 [change log]: https://github.com/apache/datafusion-comet/blob/main/dev/changelog/0.17.0.md
 
-## JVM Codegen Dispatch
+## Fewer Fallbacks to Spark
 
-The headline feature of 0.17.0 is a new mechanism introduced in this release: Comet's **JVM codegen dispatcher**.
+The headline feature of 0.17.0 is a new mechanism that keeps more of your query running inside Comet instead
+of falling back to Spark: the **JVM codegen dispatcher**.
 
 Comet has always fallen back to Spark whenever an expression had no native Rust implementation, or where the
 Rust implementation could diverge from Spark on edge cases. A fallback is correct, but it is expensive: the
@@ -161,23 +162,28 @@ Additional smaller improvements include bulk-NULL handling in `split` and `subst
 allocation), and a new `interleave_time` shuffle metric with tuned output buffer sizing to make shuffle cost
 easier to attribute.
 
-## Correctness and Test Coverage
+## Preparing for the 1.0.0 Release
 
 Much of the correctness work in this release is part of a deliberate push toward an eventual **1.0.0 release**.
 Reaching 1.0.0 means being able to state precisely, and stand behind, exactly which Spark expressions Comet
 accelerates and how faithfully it matches Spark on each one. Two efforts in 0.17.0 move directly toward that
 goal.
 
-First, this release included a systematic audit of Comet's expression implementations against Apache Spark
-3.4.3, 3.5.8, 4.0.1, and 4.1.1, covering the hash, JSON, collection, map, predicate, bitwise, conditional,
-array, struct, math, and cast expression families, along with cast behavior. Each audit compared Comet's
-behavior to Spark across all four versions and expanded test coverage where gaps were found.
+First, the codegen dispatcher raises the correctness floor structurally: for every dispatched expression,
+results are guaranteed to match Spark exactly because Spark's own generated code does the evaluation. This
+gives a meaningful increase in confidence that Comet matches Spark across the supported version matrix, and it
+sharpens the Spark Expression Support reference into a status page the project can commit to as it approaches
+1.0.0.
 
-Second, the codegen dispatcher raises the correctness floor structurally: for every dispatched expression,
-results are guaranteed to match Spark exactly because Spark's own generated code does the evaluation. Together
-with the audits, this gives a meaningful increase in confidence that Comet matches Spark across the supported
-version matrix, and it sharpens the Spark Expression Support reference into a status page the project can
-commit to as it approaches 1.0.0.
+Second, this release included a systematic audit of Comet's existing expression implementations against Spark,
+detailed below.
+
+### Expression Audit
+
+The audit compared Comet's expression implementations against Apache Spark 3.4.3, 3.5.8, 4.0.1, and 4.1.1,
+covering the hash, JSON, collection, map, predicate, bitwise, conditional, array, struct, math, and cast
+expression families, along with cast behavior. Each audit compared Comet's behavior to Spark across all four
+versions and expanded test coverage where gaps were found.
 
 As always, most cross-version behavior differences were caught because Comet runs the full Apache Spark SQL
 test suite against each supported Spark version as part of CI.
