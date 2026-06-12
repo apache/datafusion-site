@@ -191,8 +191,11 @@ covering the hash, JSON, collection, map, predicate, bitwise, conditional, array
 expression families, along with cast behavior. Each audit compared Comet's behavior to Spark across all four
 versions and expanded test coverage where gaps were found.
 
-As always, most cross-version behavior differences were caught because Comet runs the full Apache Spark SQL
-test suite against each supported Spark version as part of CI.
+This deliberate, edge-case-by-edge-case study surfaced the bulk of the behavior differences fixed in this
+release. By working through each expression's corner cases and writing targeted Comet SQL tests for them, the
+audit caught divergences that broader testing does not reliably exercise. Comet also runs the full Apache
+Spark SQL test suite against each supported Spark version as part of CI, which continues to catch some
+cross-version differences, but the audit's focused approach found considerably more.
 
 ## Compatibility
 
