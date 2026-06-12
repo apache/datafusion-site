@@ -60,11 +60,6 @@ columnar-to-row conversion and row-based Spark execution that a fallback would o
 
 This release puts the dispatcher to work across a wide surface:
 
-- **Scala and Java UDFs, enabled by default.** Eligible Spark `ScalaUDF` expressions are routed through
-  the dispatcher and executed inside the Comet pipeline, so a project around a UDF no longer forces a
-  fallback and a columnar-to-row conversion. The path has broad type coverage (scalars, arbitrarily nested
-  complex types, and higher-order functions) and is backed by end-to-end, fuzz, and Iceberg test coverage.
-  It can be disabled with `spark.comet.exec.scalaUDF.codegen.enabled=false`.
 - **100% Spark-compatible regular expressions.** Regex expressions now dispatch to Spark's own
   implementation, eliminating the long-standing compatibility gaps of a separate native regex engine.
 - **100% Spark-compatible JSON functions.** JSON expression handling follows the same approach, matching
@@ -80,6 +75,17 @@ left at its default of `false`, the expression is routed through the codegen dis
 correctly inside Comet rather than triggering a fallback. `allowIncompatible=true` becomes a pure performance
 knob for users who accept the faster native path's divergence. Expressions such as `from_unixtime`, and the
 `TimestampNTZ` branches of `hour`, `minute`, and `second`, now stay in the pipeline by default.
+
+## User-Defined Functions in Java and Scala
+
+Building on the codegen dispatcher, 0.17.0 adds support for arbitrary user-defined functions written in Java
+and Scala, enabled by default. Eligible Spark `ScalaUDF` expressions are routed through the dispatcher and
+executed inside the Comet pipeline, so a project around a UDF no longer forces a fallback and a
+columnar-to-row conversion.
+
+The path has broad type coverage — scalars, arbitrarily nested complex types, and higher-order functions — and
+is backed by end-to-end, fuzz, and Iceberg test coverage. It can be disabled with
+`spark.comet.exec.scalaUDF.codegen.enabled=false`.
 
 ## Arrow-Native, End to End
 
