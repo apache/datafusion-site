@@ -168,7 +168,8 @@ that path with the **Arrow C Stream Interface**: the JVM exports each per-partit
 imports the schema once and pulls each batch through a single C callback, taking ownership by reference count.
 This removes the per-batch, per-column FFI export and JNI round trips for all JVM-sourced inputs, lets the
 old `CometBatchIterator` and a now-unnecessary deep copy be deleted, and is the input-side counterpart to the
-shuffle-write change above. Together, the two FFI changes improve TPC-DS performance at 1TB by around 9%.
+shuffle-write change above. TPC-DS at 1TB is about 9% faster in 0.17.0 than in 0.16.0, and these two FFI
+changes are the largest contributor to that gain.
 
 ### Lower Per-Batch Overhead in Arrow Vectors
 
