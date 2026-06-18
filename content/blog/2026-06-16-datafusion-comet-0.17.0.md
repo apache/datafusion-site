@@ -75,11 +75,12 @@ Spark behavior, including `StringReplace`, `decode`, and the `from_utc_timestamp
 
 0.17.0 also changes how Comet treats expressions whose native Rust path is known to diverge
 from Spark (marked `Incompatible`). Previously such an expression forced the entire projection back to Spark
-unless the user opted into the divergent native behavior. Now, when `spark.comet.expr.allowIncompatible` is
-left at its default of `false`, the expression is routed through the codegen dispatcher and evaluated
-correctly inside Comet rather than triggering a fallback. `allowIncompatible=true` becomes a pure performance
-knob for users who accept the faster native path's divergence. Expressions such as `from_unixtime`, and the
-`TimestampNTZ` branches of `hour`, `minute`, and `second`, now stay in the pipeline by default.
+unless the user opted into the divergent native behavior with the per-expression
+`spark.comet.expression.<name>.allowIncompatible` flag. By default that flag is unset, and the expression is
+now routed through the codegen dispatcher and evaluated correctly inside Comet rather than triggering a
+fallback. Setting it to `true` becomes a performance knob for users who accept the faster native path's
+divergence. Expressions such as `from_unixtime`, and the `TimestampNTZ` branches of `hour`, `minute`, and
+`second`, now stay in the pipeline by default.
 
 ## User-Defined Functions in Java and Scala
 
