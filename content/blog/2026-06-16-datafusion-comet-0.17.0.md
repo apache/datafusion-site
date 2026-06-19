@@ -73,6 +73,10 @@ Several expressions that have native Rust paths are also routed through the disp
 Spark behavior, including `StringReplace`, `decode`, and the `from_utc_timestamp` / `to_utc_timestamp` /
 `convert_timezone` family, which now honor Spark 4.0 legacy flags.
 
+The codegen dispatcher closes the compatibility gap, but a dispatched expression runs Spark's own generated
+code and is therefore no faster than Spark itself. Providing native Rust implementations of many of these
+expressions remains ongoing work, and is where the additional acceleration will come from in future releases.
+
 0.17.0 also changes how Comet treats expressions whose native Rust path is known to diverge
 from Spark (marked `Incompatible`). Previously such an expression forced the entire projection back to Spark
 unless the user opted into the divergent native behavior with the per-expression
