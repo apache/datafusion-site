@@ -1,7 +1,7 @@
 ---
 layout: post
 title: Apache DataFusion Comet 0.17.0 Release
-date: 2026-06-16
+date: 2026-06-20
 author: pmc
 categories: [subprojects]
 ---
@@ -39,20 +39,19 @@ contributors. See the [change log] for more information.
 The headline feature of 0.17.0 is a new mechanism that keeps more of your query running inside Comet instead
 of falling back to Spark: the **JVM codegen dispatcher**.
 
-Comet has always fallen back to Spark whenever an expression had no native Rust implementation, or where the
-Rust implementation could diverge from Spark on edge cases. A fallback is correct, but it is expensive: the
-surrounding project, exchange, and sort operators drop out of the Comet pipeline, and a columnar-to-row
-conversion is needed to feed the data into Spark's row-based operators.
+Comet has always fallen back to Spark row-based execution whenever an expression had no native Rust implementation, or where the
+Rust implementation could diverge from Spark on edge cases. A fallback is correct, a columnar-to-row
+conversion is needed to feed the data into Spark's row-based operators and this adds overhead when processing billions of rows of data.
 
-The codegen dispatcher offers a third option. Instead of falling back, Comet runs the Spark expression's own
+The codegen dispatcher avoids the fallback to row-based processing by running Spark's own
 generated code (`doGenCode`) inside the Comet pipeline, operating directly on Arrow batches. The result is a
-JVM-implemented Arrow-native expression: the query stays in the pipeline, and because the expression is
+JVM-implemented Arrow-native expression: the data stays in Arrow format, and because the expression is
 evaluated by Spark's own code, the result is guaranteed to match Spark exactly across every supported Spark
 version. When the dispatcher is disabled, Comet falls back cleanly as before.
 
 A dispatched expression is no faster than it would be in Spark, since it runs the same generated code. The
-benefit is structural rather than per-expression: a single unsupported expression no longer forces an entire
-query stage out of the Comet pipeline. The surrounding operators stay Arrow-native, and the
+benefit is that a single unsupported expression no longer forces an entire
+query stage back to row-based execution. The surrounding operators stay Arrow-native, and the
 stage avoids the columnar-to-row conversion and row-based Spark execution that a fallback would otherwise
 impose.
 
@@ -69,22 +68,14 @@ This release puts the dispatcher to work across a wide surface:
 - **Collection and higher-order expressions**, including `array_intersect`, `array_except`, `array_join`,
   `create_map`, and lambda-based higher-order functions such as `filter`.
 
-Several expressions that have native Rust paths are also routed through the dispatcher where it yields exact
-Spark behavior, including `StringReplace`, `decode`, and the `from_utc_timestamp` / `to_utc_timestamp` /
-`convert_timezone` family, which now honor Spark 4.0 legacy flags.
-
-The codegen dispatcher closes the compatibility gap, but a dispatched expression runs Spark's own generated
-code and is therefore no faster than Spark itself. Providing native Rust implementations of many of these
-expressions remains ongoing work, and is where the additional acceleration will come from in future releases.
-
-0.17.0 also changes how Comet treats expressions whose native Rust path is known to diverge
-from Spark (marked `Incompatible`). Previously such an expression forced the entire projection back to Spark
-unless the user opted into the divergent native behavior with the per-expression
-`spark.comet.expression.<name>.allowIncompatible` flag. By default that flag is unset, and the expression is
-now routed through the codegen dispatcher and evaluated correctly inside Comet rather than triggering a
-fallback. Setting it to `true` becomes a performance knob for users who accept the faster native path's
-divergence. Expressions such as `from_unixtime`, and the `TimestampNTZ` branches of `hour`, `minute`, and
-`second`, now stay in the pipeline by default.
+  0.17.0 also changes how Comet treats expressions whose native Rust path is known to diverge
+  from Spark (marked `Incompatible`). Previously such an expression forced the entire projection back to Spark
+  unless the user opted into the divergent native behavior with the per-expression
+  `spark.comet.expression.<name>.allowIncompatible` flag. By default, that flag is unset, and the expression is
+  now routed through the codegen dispatcher and evaluated correctly inside Comet rather than triggering a
+  fallback. Setting it to `true` becomes a performance knob for users who accept the faster native path's
+  divergence. Expressions such as `from_unixtime`, and the `TimestampNTZ` branches of `hour`, `minute`, and
+  `second`, now stay in the pipeline by default.
 
 ## User-Defined Functions in Java and Scala
 
@@ -140,8 +131,8 @@ most function families:
 - **Conditional and null handling** (7): `greatest`, `least`, `nullif`, `ifnull` / `nvl`, `nvl2`, and
   `equal_null`.
 
-For the authoritative, always-current status of every Spark built-in expression, see the
-[Spark Expression Support](https://datafusion.apache.org/comet/user-guide/latest/expressions.html) reference.
+For the full list of supported expressions in this release, see the
+[Spark Expression Support](https://datafusion.apache.org/comet/user-guide/0.17/expressions.html) reference.
 
 Operator coverage grew too: 0.17.0 adds a native **broadcast nested loop join**, so queries with non-equi or
 cross join conditions can now stay in the Comet pipeline rather than falling back to Spark.
@@ -165,7 +156,7 @@ round trip, not from copying its data more efficiently.
 
 ### A Single Arrow Stream on the Input Path
 
-0.17.0 also reworks the other side of the JVM/native boundary — the path that feeds JVM-sourced data *into*
+0.17.0 also reworks the other side of the JVM/native boundary — the path that feeds JVM-sourced data _into_
 native execution. Previously each batch crossed via a bespoke `CometBatchIterator`, with a `hasNext` / `next`
 JNI pair per batch and every column imported through its own Arrow FFI array and schema. This release replaces
 that path with the **Arrow C Stream Interface**: the JVM exports each per-partition iterator once, and native
@@ -197,13 +188,13 @@ Much of the correctness work in this release is part of an ongoing push toward a
 Planning for 1.0.0 is being tracked in [issue #4082], where the community is discussing what the milestone
 should mean. The criteria under consideration go well beyond correctness and include:
 
-- Demonstrated cost savings for TPC-H and TPC-DS at SF1000 (1TB) — already met
+- Demonstrated cost savings for TPC-H and TPC-DS at SF1000 (1TB)
 - Thorough documentation of compatibility status
 - A review of all configuration options, renaming some for consistency
 - Consistent logging
 - A documented policy for how long each Spark version will be supported
 - A documented process for preventing major performance regressions
-- A documented semantic-versioning policy and what it means for Comet going forward — already agreed
+- A documented semantic-versioning policy and what it means for Comet going forward
 
 [issue #4082]: https://github.com/apache/datafusion-comet/issues/4082
 
