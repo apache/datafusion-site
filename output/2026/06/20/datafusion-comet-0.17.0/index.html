@@ -1,0 +1,344 @@
+<!doctype html>
+<html class="no-js" lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apache DataFusion Comet 0.17.0 Release - Apache DataFusion Blog</title>
+<link href="/blog/favicon.ico" rel="icon" type="image/x-icon">
+<link href="/blog/favicon.ico" rel="shortcut icon" type="image/x-icon">
+<link href="/blog/css/bootstrap.min.css" rel="stylesheet">
+<link href="/blog/css/fontawesome.all.min.css" rel="stylesheet">
+<link href="/blog/css/headerlink.css" rel="stylesheet">
+<link href="/blog/highlight/default.min.css" rel="stylesheet">
+<link href="/blog/css/app.css" rel="stylesheet">
+<link href="/blog/css/dark-mode.css" rel="stylesheet">
+<script src="/blog/js/dark-mode.js"></script>
+<script src="/blog/highlight/highlight.js"></script>
+<script>hljs.highlightAll();</script>  </head>
+  <body class="d-flex flex-column h-100">
+  <main class="flex-shrink-0">
+<!-- nav bar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark" aria-label="Fifth navbar example">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/blog/"><img src="/blog/images/logo_original4x.png" style="height: 32px;"/> Apache DataFusion Blog</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarADP" aria-controls="navbarADP" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarADP">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/about.html">About</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/feed.xml">RSS</a>
+                </li>
+            </ul>
+            <button id="dark-mode-toggle" type="button" class="dark-mode-toggle" aria-label="Toggle dark mode" aria-pressed="false" title="Toggle dark mode">
+                <span class="sun-icon" aria-hidden="true">☀</span>
+                <span class="moon-icon" aria-hidden="true">☾</span>
+            </button>
+        </div>
+    </div>
+</nav>    
+<!-- article contents -->
+<div id="contents">
+  <div class="bg-white p-4 p-md-5 rounded">
+    <div class="row justify-content-center">
+      <div class="col-12 col-md-8 main-content">
+        <h1>
+          Apache DataFusion Comet 0.17.0 Release
+        </h1>
+        <p>Posted on: Sat 20 June 2026 by pmc</p>
+
+        <aside class="toc-container d-md-none mb-2">
+          <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#fewer-fallbacks-to-spark">Fewer Fallbacks to Spark</a></li>
+<li><a href="#user-defined-functions-in-java-and-scala">User-Defined Functions in Java and Scala</a></li>
+<li><a href="#arrow-native-end-to-end">Arrow-Native, End to End</a></li>
+<li><a href="#expanded-expression-coverage">Expanded Expression Coverage</a></li>
+<li><a href="#performance">Performance</a><ul>
+<li><a href="#removing-an-ffi-round-trip-from-native-shuffle">Removing an FFI Round Trip from Native Shuffle</a></li>
+<li><a href="#a-single-arrow-stream-on-the-input-path">A Single Arrow Stream on the Input Path</a></li>
+<li><a href="#lower-per-batch-overhead-in-arrow-vectors">Lower Per-Batch Overhead in Arrow Vectors</a></li>
+<li><a href="#faster-statistical-aggregates">Faster Statistical Aggregates</a></li>
+</ul>
+</li>
+<li><a href="#preparing-for-the-100-release">Preparing for the 1.0.0 Release</a><ul>
+<li><a href="#expression-audit">Expression Audit</a></li>
+</ul>
+</li>
+<li><a href="#compatibility">Compatibility</a></li>
+<li><a href="#get-started-with-comet-0170">Get Started with Comet 0.17.0</a></li>
+</ul>
+</div>
+        </aside>
+
+        <!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+-->
+
+<p>The Apache DataFusion PMC is pleased to announce version 0.17.0 of the <a href="https://datafusion.apache.org/comet/">Comet</a> subproject.</p>
+<p>This release covers approximately five weeks of development work and is the result of merging 192 PRs from 19
+contributors. See the <a href="https://github.com/apache/datafusion-comet/blob/main/dev/changelog/0.17.0.md">change log</a> for more information.</p>
+<h2 id="fewer-fallbacks-to-spark">Fewer Fallbacks to Spark<a class="headerlink" href="#fewer-fallbacks-to-spark" title="Permanent link">¶</a></h2>
+<p>The headline feature of 0.17.0 is a new mechanism that keeps more of your query running inside Comet instead
+of falling back to Spark: the <strong>JVM codegen dispatcher</strong>.</p>
+<p>Comet has always fallen back to Spark row-based execution whenever an expression had no native Rust implementation, or where the
+Rust implementation could diverge from Spark on edge cases. A fallback is correct, but a columnar-to-row
+conversion is needed to feed the data into Spark's row-based operators, which adds overhead when processing billions of rows of data.</p>
+<p>The codegen dispatcher avoids the fallback to row-based processing by running Spark's own
+generated code (<code>doGenCode</code>) inside the Comet pipeline, operating directly on Arrow batches. The result is a
+JVM-implemented Arrow-native expression: the data stays in Arrow format, and because the expression is
+evaluated by Spark's own code, the result is guaranteed to match Spark exactly across every supported Spark
+version. When the dispatcher is disabled, Comet falls back as before.</p>
+<p>A dispatched expression is no faster than it would be in Spark, since it runs the same generated code. The
+benefit is that a single unsupported expression no longer forces an entire
+query stage back to row-based execution. The surrounding operators stay Arrow-native, and the
+stage avoids the columnar-to-row conversion and row-based Spark execution that a fallback would otherwise
+impose.</p>
+<p>This release puts the dispatcher to work across a wide surface:</p>
+<ul>
+<li><strong>100% Spark-compatible regular expressions.</strong> Regex expressions now dispatch to Spark's own
+  implementation, eliminating the long-standing compatibility gaps of a separate native regex engine.</li>
+<li><strong>100% Spark-compatible JSON functions.</strong> JSON expression handling follows the same approach, matching
+  Spark's behavior precisely.</li>
+<li><strong>More scalar and structured-text functions</strong>, including a batch of math and string functions, AES
+  encryption and decryption (<code>aes_encrypt</code> / <code>aes_decrypt</code> / <code>try_aes_decrypt</code>), <code>Upper</code> / <code>Lower</code> /
+  <code>InitCap</code>, <code>GetTimestamp</code>, <code>mask</code>, <code>try_to_number</code>, and an expanded set of date, time, and
+  timezone expressions.</li>
+<li><strong>Collection and higher-order expressions</strong>, including <code>array_intersect</code>, <code>array_except</code>, <code>array_join</code>,
+  <code>create_map</code>, and lambda-based higher-order functions such as <code>filter</code>.</li>
+</ul>
+<p>0.17.0 also changes how Comet treats expressions whose native Rust path is known to diverge
+  from Spark (marked <code>Incompatible</code>). Previously such an expression forced the entire projection back to Spark
+  unless the user opted into the divergent native behavior with the per-expression
+  <code>spark.comet.expression.&lt;name&gt;.allowIncompatible</code> flag. By default, that flag is unset, and the expression is
+  now routed through the codegen dispatcher and evaluated correctly inside Comet rather than triggering a
+  fallback. Setting it to <code>true</code> becomes a performance knob for users who accept the faster native path's
+  divergence. Expressions such as <code>from_unixtime</code>, and the <code>TimestampNTZ</code> branches of <code>hour</code>, <code>minute</code>, and
+  <code>second</code>, now stay in the pipeline by default.</p>
+<h2 id="user-defined-functions-in-java-and-scala">User-Defined Functions in Java and Scala<a class="headerlink" href="#user-defined-functions-in-java-and-scala" title="Permanent link">¶</a></h2>
+<p>Building on the codegen dispatcher, 0.17.0 adds support for arbitrary user-defined functions written in Java
+and Scala, enabled by default. Eligible Spark <code>ScalaUDF</code> expressions are routed through the dispatcher and
+executed inside the Comet pipeline, so a project around a UDF no longer forces a fallback and a
+columnar-to-row conversion.</p>
+<p>The path has broad type coverage — scalars, arbitrarily nested complex types, and higher-order functions — and
+is backed by end-to-end, fuzz, and Iceberg test coverage. It can be disabled with
+<code>spark.comet.exec.scalaUDF.codegen.enabled=false</code>.</p>
+<h2 id="arrow-native-end-to-end">Arrow-Native, End to End<a class="headerlink" href="#arrow-native-end-to-end" title="Permanent link">¶</a></h2>
+<p>The codegen dispatcher works because of a property that runs through all of Comet: queries stay <strong>Arrow-native
+end to end</strong>. Operators, expressions, shuffle, and broadcast all remain in Apache Arrow columnar format,
+avoiding the per-row overhead that Spark's row-based engine incurs from materializing and transitioning data
+one row at a time.</p>
+<p>Within that Arrow-native pipeline, the work of an operator or expression runs in one of two ways:</p>
+<ul>
+<li><strong>Rust-implemented</strong>: native Rust code, executed through Apache DataFusion. This is what most people picture
+  when they think of Comet.</li>
+<li><strong>JVM-implemented</strong>: Scala or Java code that operates directly on Arrow batches, including the
+  codegen-dispatched expressions and UDFs described above.</li>
+</ul>
+<p>Because the data never leaves Arrow columnar format, there is no per-row materialization cost at the boundary
+between a Rust-implemented and a JVM-implemented step. A dispatched expression sits in the pipeline alongside
+Rust-implemented operators with no columnar-to-row transition between them. Expanding the JVM-implemented path
+in 0.17.0 lets Comet keep more work Arrow-native instead of handing it back to Spark.</p>
+<h2 id="expanded-expression-coverage">Expanded Expression Coverage<a class="headerlink" href="#expanded-expression-coverage" title="Permanent link">¶</a></h2>
+<p>Partly through the codegen dispatcher and partly through new Rust implementations, Comet's expression coverage
+grew substantially in this release. More than 120 Spark expressions have gained support since 0.16.0, across
+most function families:</p>
+<ul>
+<li><strong>Date and time</strong> (~25): <code>convert_timezone</code>, <code>make_date</code>, <code>months_between</code>, <code>next_day</code>,
+  <code>from_utc_timestamp</code> / <code>to_utc_timestamp</code>, <code>date_from_unix_date</code>, the <code>timestamp_*</code> and <code>unix_*</code> second /
+  milli / micro conversions, and the current date/time/timezone functions.</li>
+<li><strong>Math</strong> (~24): <code>acosh</code>, <code>asinh</code>, <code>atanh</code>, <code>cbrt</code>, <code>csc</code>, <code>sec</code>, <code>hypot</code>, <code>log1p</code>, <code>bin</code>, <code>conv</code>,
+  <code>factorial</code>, <code>pmod</code>, <code>width_bucket</code>, <code>rint</code>, and more.</li>
+<li><strong>String</strong> (~16): <code>elt</code>, <code>find_in_set</code>, <code>format_number</code>, <code>format_string</code>, <code>levenshtein</code>, <code>locate</code>,
+  <code>overlay</code>, <code>soundex</code>, <code>split</code>, <code>substring_index</code>, <code>unbase64</code>, <code>to_char</code>, and <code>to_number</code>.</li>
+<li><strong>XPath</strong> (9): the full <code>xpath</code>, <code>xpath_boolean</code>, <code>xpath_double</code>, <code>xpath_int</code>, <code>xpath_long</code>, <code>xpath_string</code>
+  family.</li>
+<li><strong>JSON, CSV, and XML</strong> (9): <code>from_csv</code>, <code>to_csv</code>, <code>schema_of_csv</code>, <code>schema_of_json</code>, <code>json_object_keys</code>,
+  <code>json_array_length</code>, <code>from_xml</code>, <code>to_xml</code>, and <code>schema_of_xml</code>.</li>
+<li><strong>Array and map</strong> (11): <code>array_position</code>, <code>array_size</code>, <code>arrays_zip</code>, <code>slice</code>, <code>sort_array</code>, <code>sequence</code>,
+  <code>map_concat</code>, <code>map_contains_key</code>, and <code>map_from_entries</code>.</li>
+<li><strong>Aggregate and window</strong> (7): <code>any_value</code>, <code>count_if</code>, the <code>regr_*</code> regression aggregates, plus <code>lag</code> and
+  <code>lead</code>.</li>
+<li><strong>Conditional and null handling</strong> (7): <code>greatest</code>, <code>least</code>, <code>nullif</code>, <code>ifnull</code> / <code>nvl</code>, <code>nvl2</code>, and
+  <code>equal_null</code>.</li>
+</ul>
+<p>For the full list of supported expressions in this release, see the
+<a href="https://datafusion.apache.org/comet/user-guide/0.17/expressions.html">Spark Expression Support</a> reference.</p>
+<p>Operator coverage grew too: 0.17.0 adds a native <strong>broadcast nested loop join</strong>, so queries with non-equi or
+cross join conditions can now stay in the Comet pipeline rather than falling back to Spark.</p>
+<h2 id="performance">Performance<a class="headerlink" href="#performance" title="Permanent link">¶</a></h2>
+<h3 id="removing-an-ffi-round-trip-from-native-shuffle">Removing an FFI Round Trip from Native Shuffle<a class="headerlink" href="#removing-an-ffi-round-trip-from-native-shuffle" title="Permanent link">¶</a></h3>
+<p>The most significant performance change in 0.17.0 targets the shuffle write path. When a native subtree feeds
+a Comet shuffle, Comet previously ran two separate native iterators per partition: one for the upstream
+subtree, and a second rooted at a synthetic <code>Scan("ShuffleWriterInput") -&gt; ShuffleWriter</code> that consumed the
+batches back. The JVM never actually read this data, so the native-to-JVM-and-back hop was pure overhead.</p>
+<p>Although the Arrow C Data Interface is zero-copy, this particular round trip was not. The synthetic scan left
+its batches marked as not FFI-safe, so on import every batch was deep-copied into freshly allocated buffers.
+0.17.0 collapses the two iterators into a single native plan rooted at the shuffle writer, with the upstream
+subtree as a direct child. That removes the Arrow FFI export and import, the per-batch deep copy, and one
+<code>createPlan</code> / <code>releasePlan</code> pair per partition, while preserving all of the existing per-partition setup
+(broadcast alignment, subqueries, encryption) and input metrics reporting. The gain comes from removing the
+round trip, not from copying its data more efficiently.</p>
+<h3 id="a-single-arrow-stream-on-the-input-path">A Single Arrow Stream on the Input Path<a class="headerlink" href="#a-single-arrow-stream-on-the-input-path" title="Permanent link">¶</a></h3>
+<p>0.17.0 also reworks the other side of the JVM/native boundary — the path that feeds JVM-sourced data <em>into</em>
+native execution. Previously each batch crossed via a bespoke <code>CometBatchIterator</code>, with a <code>hasNext</code> / <code>next</code>
+JNI pair per batch and every column imported through its own Arrow FFI array and schema. This release replaces
+that path with the <strong>Arrow C Stream Interface</strong>: the JVM exports each per-partition iterator once, and native
+imports the schema once and pulls each batch through a single C callback, taking ownership by reference count.
+This removes the per-batch, per-column FFI export and JNI round trips for all JVM-sourced inputs, lets the
+old <code>CometBatchIterator</code> and a now-unnecessary deep copy be deleted, and is the input-side counterpart to the
+shuffle-write change above. TPC-DS at 1TB is about 9% faster in 0.17.0 than in 0.16.0, and these two FFI
+changes are the largest contributor to that gain.</p>
+<h3 id="lower-per-batch-overhead-in-arrow-vectors">Lower Per-Batch Overhead in Arrow Vectors<a class="headerlink" href="#lower-per-batch-overhead-in-arrow-vectors" title="Permanent link">¶</a></h3>
+<p>Two changes reduce repeated work when reading Arrow columns across the JNI boundary. Comet now caches the
+validity buffer address on <code>CometDecodedVector</code> and the offset buffer address for variable-width vectors on
+<code>CometPlainVector</code>, so these addresses are resolved once per vector rather than on every access.</p>
+<h3 id="faster-statistical-aggregates">Faster Statistical Aggregates<a class="headerlink" href="#faster-statistical-aggregates" title="Permanent link">¶</a></h3>
+<p>The variance, standard deviation, covariance, and correlation aggregates now use DataFusion's
+<code>GroupsAccumulator</code> interface, which is substantially more efficient for grouped aggregation than the
+row-accumulator path they used previously.</p>
+<p>Additional smaller improvements include bulk-NULL handling in <code>split</code> and <code>substring</code> (skipping a per-row
+allocation), and a new <code>interleave_time</code> shuffle metric with tuned output buffer sizing to make shuffle cost
+easier to attribute.</p>
+<h2 id="preparing-for-the-100-release">Preparing for the 1.0.0 Release<a class="headerlink" href="#preparing-for-the-100-release" title="Permanent link">¶</a></h2>
+<p>Much of the correctness work in this release is part of an ongoing push toward a <strong>1.0.0 release</strong>.
+Planning for 1.0.0 is being tracked in <a href="https://github.com/apache/datafusion-comet/issues/4082">issue #4082</a>, where the community is discussing what the milestone
+should mean. The criteria under consideration go well beyond correctness and include:</p>
+<ul>
+<li>Demonstrated cost savings for TPC-H and TPC-DS at SF1000 (1TB)</li>
+<li>Thorough documentation of compatibility status</li>
+<li>A review of all configuration options, renaming some for consistency</li>
+<li>Consistent logging</li>
+<li>A documented policy for how long each Spark version will be supported</li>
+<li>A documented process for preventing major performance regressions</li>
+<li>A documented semantic-versioning policy and what it means for Comet going forward</li>
+</ul>
+<p>Correctness is central to that list: reaching 1.0.0 means being able to state precisely which Spark
+expressions Comet accelerates, and how faithfully it matches Spark on each one. Two efforts in 0.17.0 move
+toward that goal.</p>
+<p>First, the codegen dispatcher guarantees an exact match for every dispatched expression, since Spark's own
+generated code does the evaluation. That raises our confidence that Comet matches Spark across the supported
+versions, and it makes the Spark Expression Support reference something the project can stand behind as it
+approaches 1.0.0.</p>
+<p>Second, this release included a systematic audit of Comet's existing expression implementations against Spark,
+detailed below.</p>
+<h3 id="expression-audit">Expression Audit<a class="headerlink" href="#expression-audit" title="Permanent link">¶</a></h3>
+<p>The audit compared Comet's expression implementations against Apache Spark 3.4.3, 3.5.8, 4.0.1, and 4.1.1,
+covering the hash, JSON, collection, map, predicate, bitwise, conditional, array, struct, math, and cast
+expression families, along with cast behavior. Each audit compared Comet's behavior to Spark across all four
+versions and expanded test coverage where gaps were found.</p>
+<p>This edge-case-by-edge-case comparison surfaced most of the behavior differences fixed in this
+release. By working through each expression's corner cases and writing targeted Comet SQL tests for them, the
+audit caught divergences that broader testing does not reliably exercise. Comet also runs the full Apache
+Spark SQL test suite against each supported Spark version as part of CI, which continues to catch some
+cross-version differences, but the audit's focused approach found considerably more.</p>
+<h2 id="compatibility">Compatibility<a class="headerlink" href="#compatibility" title="Permanent link">¶</a></h2>
+<p>Supported platforms include:</p>
+<ul>
+<li><strong>Spark 3.4.3</strong> with Java 11/17 and Scala 2.12/2.13</li>
+<li><strong>Spark 3.5.8</strong> with Java 11/17 and Scala 2.12/2.13</li>
+<li><strong>Spark 4.0.2</strong> with Java 17 and Scala 2.13</li>
+<li><strong>Spark 4.1.2</strong> with Java 17 and Scala 2.13</li>
+</ul>
+<p>See the <a href="https://datafusion.apache.org/comet/user-guide/latest/compatibility/spark-versions.html">Spark Version Compatibility</a> page for known limitations specific to each version.</p>
+<p>This release builds on <strong>DataFusion 53.1</strong> and <strong>Arrow 58.3</strong>.</p>
+<h2 id="get-started-with-comet-0170">Get Started with Comet 0.17.0<a class="headerlink" href="#get-started-with-comet-0170" title="Permanent link">¶</a></h2>
+<p>Ready to try it out? Follow the <a href="https://datafusion.apache.org/comet/user-guide/0.17/installation.html">Comet 0.17.0 Installation Guide</a>
+to get up and running, then point Comet at your existing Spark workloads, including Scala and Java UDFs and
+Spark 4 with ANSI mode enabled, and see the speedup for yourself.</p>
+
+<!--
+  Comments Section
+  Loaded only after explicit visitor consent to comply with ASF policy.
+-->
+
+<div>
+  <hr>
+  <h3 id="comments">Comments<a class="headerlink" href="#comments" title="Permanent link">&para;</a></h3>
+
+  <!-- Local loader script -->
+  <script src="/blog/js/giscus-consent.js" defer></script>
+
+  <!-- Consent UI -->
+  <div id="giscus-consent">
+    <p>
+        We use <a href="https://giscus.app/">Giscus</a> for comments, powered by GitHub Discussions.
+        To respect your privacy, Giscus and comments will load only if you click "Show Comments"
+    </p>
+
+    <div class="consent-actions">
+      <button id="giscus-load" type="button">Show Comments</button>
+      <button id="giscus-revoke" type="button" hidden>Hide Comments</button>
+    </div>
+
+    <noscript>JavaScript is required to load comments from Giscus.</noscript>
+  </div>
+
+  <!-- Container where Giscus will render -->
+  <div id="comment-thread"></div>
+</div>      </div>
+      <aside class="toc-container d-none d-md-block col-md-4 col-xl-3 ms-xl-2">
+        <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#fewer-fallbacks-to-spark">Fewer Fallbacks to Spark</a></li>
+<li><a href="#user-defined-functions-in-java-and-scala">User-Defined Functions in Java and Scala</a></li>
+<li><a href="#arrow-native-end-to-end">Arrow-Native, End to End</a></li>
+<li><a href="#expanded-expression-coverage">Expanded Expression Coverage</a></li>
+<li><a href="#performance">Performance</a><ul>
+<li><a href="#removing-an-ffi-round-trip-from-native-shuffle">Removing an FFI Round Trip from Native Shuffle</a></li>
+<li><a href="#a-single-arrow-stream-on-the-input-path">A Single Arrow Stream on the Input Path</a></li>
+<li><a href="#lower-per-batch-overhead-in-arrow-vectors">Lower Per-Batch Overhead in Arrow Vectors</a></li>
+<li><a href="#faster-statistical-aggregates">Faster Statistical Aggregates</a></li>
+</ul>
+</li>
+<li><a href="#preparing-for-the-100-release">Preparing for the 1.0.0 Release</a><ul>
+<li><a href="#expression-audit">Expression Audit</a></li>
+</ul>
+</li>
+<li><a href="#compatibility">Compatibility</a></li>
+<li><a href="#get-started-with-comet-0170">Get Started with Comet 0.17.0</a></li>
+</ul>
+</div>
+      </aside>
+    </div>
+  </div>
+</div>    
+    <!-- footer -->
+    <div class="row g-0">
+      <div class="col-12">
+        <p style="font-style: italic; font-size: 0.8rem; text-align: center;">
+          Copyright 2026, <a href="https://www.apache.org/">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a>.<br/>
+          Apache&reg; and the Apache logo are trademarks of The Apache Software Foundation.
+        </p>
+        <p style="font-size: 0.8rem; text-align: center;">
+          <a href="https://www.apache.org/">Foundation</a> |
+          <a href="https://www.apache.org/events/current-event.html">Events</a> |
+          <a href="https://www.apache.org/licenses/">License</a> |
+          <a href="https://www.apache.org/security/">Security</a> |
+          <a href="https://www.apache.org/foundation/sponsorship.html">Sponsorship</a> |
+          <a href="https://www.apache.org/foundation/thanks.html">Thanks</a> |
+          <a href="https://privacy.apache.org/policies/privacy-policy-public.html">Privacy</a>
+        </p>
+      </div>
+    </div>
+    <script src="/blog/js/bootstrap.bundle.min.js"></script>  </main>
+  </body>
+</html>

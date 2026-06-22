@@ -1,5 +1,217 @@
 <?xml version="1.0" encoding="utf-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - pmc</title><link href="https://datafusion.apache.org/blog/" rel="alternate"/><link href="https://datafusion.apache.org/blog/feeds/pmc.atom.xml" rel="self"/><id>https://datafusion.apache.org/blog/</id><updated>2026-06-12T00:00:00+00:00</updated><entry><title>Apache DataFusion 54.0.0 Released</title><link href="https://datafusion.apache.org/blog/2026/06/12/datafusion-54.0.0" rel="alternate"/><published>2026-06-12T00:00:00+00:00</published><updated>2026-06-12T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2026-06-12:/blog/2026/06/12/datafusion-54.0.0</id><summary type="html">&lt;!--
+<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - pmc</title><link href="https://datafusion.apache.org/blog/" rel="alternate"/><link href="https://datafusion.apache.org/blog/feeds/pmc.atom.xml" rel="self"/><id>https://datafusion.apache.org/blog/</id><updated>2026-06-20T00:00:00+00:00</updated><entry><title>Apache DataFusion Comet 0.17.0 Release</title><link href="https://datafusion.apache.org/blog/2026/06/20/datafusion-comet-0.17.0" rel="alternate"/><published>2026-06-20T00:00:00+00:00</published><updated>2026-06-20T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2026-06-20:/blog/2026/06/20/datafusion-comet-0.17.0</id><summary type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+
+&lt;p&gt;The Apache DataFusion PMC is pleased to announce version 0.17.0 of the &lt;a href="https://datafusion.apache.org/comet/"&gt;Comet&lt;/a&gt; subproject.&lt;/p&gt;
+&lt;p&gt;This release covers approximately five weeks of development work and is the result of merging 192 PRs from 19
+contributors. See the &lt;a href="https://github.com/apache/datafusion-comet/blob/main/dev/changelog/0.17.0.md"&gt;change log&lt;/a&gt; for more information.&lt;/p&gt;
+&lt;h2 id="fewer-fallbacks-to-spark"&gt;Fewer Fallbacks to Spark&lt;a class="headerlink" href="#fewer-fallbacks-to-spark" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;The headline feature …&lt;/p&gt;</summary><content type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+
+&lt;p&gt;The Apache DataFusion PMC is pleased to announce version 0.17.0 of the &lt;a href="https://datafusion.apache.org/comet/"&gt;Comet&lt;/a&gt; subproject.&lt;/p&gt;
+&lt;p&gt;This release covers approximately five weeks of development work and is the result of merging 192 PRs from 19
+contributors. See the &lt;a href="https://github.com/apache/datafusion-comet/blob/main/dev/changelog/0.17.0.md"&gt;change log&lt;/a&gt; for more information.&lt;/p&gt;
+&lt;h2 id="fewer-fallbacks-to-spark"&gt;Fewer Fallbacks to Spark&lt;a class="headerlink" href="#fewer-fallbacks-to-spark" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;The headline feature of 0.17.0 is a new mechanism that keeps more of your query running inside Comet instead
+of falling back to Spark: the &lt;strong&gt;JVM codegen dispatcher&lt;/strong&gt;.&lt;/p&gt;
+&lt;p&gt;Comet has always fallen back to Spark row-based execution whenever an expression had no native Rust implementation, or where the
+Rust implementation could diverge from Spark on edge cases. A fallback is correct, but a columnar-to-row
+conversion is needed to feed the data into Spark's row-based operators, which adds overhead when processing billions of rows of data.&lt;/p&gt;
+&lt;p&gt;The codegen dispatcher avoids the fallback to row-based processing by running Spark's own
+generated code (&lt;code&gt;doGenCode&lt;/code&gt;) inside the Comet pipeline, operating directly on Arrow batches. The result is a
+JVM-implemented Arrow-native expression: the data stays in Arrow format, and because the expression is
+evaluated by Spark's own code, the result is guaranteed to match Spark exactly across every supported Spark
+version. When the dispatcher is disabled, Comet falls back as before.&lt;/p&gt;
+&lt;p&gt;A dispatched expression is no faster than it would be in Spark, since it runs the same generated code. The
+benefit is that a single unsupported expression no longer forces an entire
+query stage back to row-based execution. The surrounding operators stay Arrow-native, and the
+stage avoids the columnar-to-row conversion and row-based Spark execution that a fallback would otherwise
+impose.&lt;/p&gt;
+&lt;p&gt;This release puts the dispatcher to work across a wide surface:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;100% Spark-compatible regular expressions.&lt;/strong&gt; Regex expressions now dispatch to Spark's own
+  implementation, eliminating the long-standing compatibility gaps of a separate native regex engine.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;100% Spark-compatible JSON functions.&lt;/strong&gt; JSON expression handling follows the same approach, matching
+  Spark's behavior precisely.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;More scalar and structured-text functions&lt;/strong&gt;, including a batch of math and string functions, AES
+  encryption and decryption (&lt;code&gt;aes_encrypt&lt;/code&gt; / &lt;code&gt;aes_decrypt&lt;/code&gt; / &lt;code&gt;try_aes_decrypt&lt;/code&gt;), &lt;code&gt;Upper&lt;/code&gt; / &lt;code&gt;Lower&lt;/code&gt; /
+  &lt;code&gt;InitCap&lt;/code&gt;, &lt;code&gt;GetTimestamp&lt;/code&gt;, &lt;code&gt;mask&lt;/code&gt;, &lt;code&gt;try_to_number&lt;/code&gt;, and an expanded set of date, time, and
+  timezone expressions.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Collection and higher-order expressions&lt;/strong&gt;, including &lt;code&gt;array_intersect&lt;/code&gt;, &lt;code&gt;array_except&lt;/code&gt;, &lt;code&gt;array_join&lt;/code&gt;,
+  &lt;code&gt;create_map&lt;/code&gt;, and lambda-based higher-order functions such as &lt;code&gt;filter&lt;/code&gt;.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;0.17.0 also changes how Comet treats expressions whose native Rust path is known to diverge
+  from Spark (marked &lt;code&gt;Incompatible&lt;/code&gt;). Previously such an expression forced the entire projection back to Spark
+  unless the user opted into the divergent native behavior with the per-expression
+  &lt;code&gt;spark.comet.expression.&amp;lt;name&amp;gt;.allowIncompatible&lt;/code&gt; flag. By default, that flag is unset, and the expression is
+  now routed through the codegen dispatcher and evaluated correctly inside Comet rather than triggering a
+  fallback. Setting it to &lt;code&gt;true&lt;/code&gt; becomes a performance knob for users who accept the faster native path's
+  divergence. Expressions such as &lt;code&gt;from_unixtime&lt;/code&gt;, and the &lt;code&gt;TimestampNTZ&lt;/code&gt; branches of &lt;code&gt;hour&lt;/code&gt;, &lt;code&gt;minute&lt;/code&gt;, and
+  &lt;code&gt;second&lt;/code&gt;, now stay in the pipeline by default.&lt;/p&gt;
+&lt;h2 id="user-defined-functions-in-java-and-scala"&gt;User-Defined Functions in Java and Scala&lt;a class="headerlink" href="#user-defined-functions-in-java-and-scala" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Building on the codegen dispatcher, 0.17.0 adds support for arbitrary user-defined functions written in Java
+and Scala, enabled by default. Eligible Spark &lt;code&gt;ScalaUDF&lt;/code&gt; expressions are routed through the dispatcher and
+executed inside the Comet pipeline, so a project around a UDF no longer forces a fallback and a
+columnar-to-row conversion.&lt;/p&gt;
+&lt;p&gt;The path has broad type coverage — scalars, arbitrarily nested complex types, and higher-order functions — and
+is backed by end-to-end, fuzz, and Iceberg test coverage. It can be disabled with
+&lt;code&gt;spark.comet.exec.scalaUDF.codegen.enabled=false&lt;/code&gt;.&lt;/p&gt;
+&lt;h2 id="arrow-native-end-to-end"&gt;Arrow-Native, End to End&lt;a class="headerlink" href="#arrow-native-end-to-end" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;The codegen dispatcher works because of a property that runs through all of Comet: queries stay &lt;strong&gt;Arrow-native
+end to end&lt;/strong&gt;. Operators, expressions, shuffle, and broadcast all remain in Apache Arrow columnar format,
+avoiding the per-row overhead that Spark's row-based engine incurs from materializing and transitioning data
+one row at a time.&lt;/p&gt;
+&lt;p&gt;Within that Arrow-native pipeline, the work of an operator or expression runs in one of two ways:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Rust-implemented&lt;/strong&gt;: native Rust code, executed through Apache DataFusion. This is what most people picture
+  when they think of Comet.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;JVM-implemented&lt;/strong&gt;: Scala or Java code that operates directly on Arrow batches, including the
+  codegen-dispatched expressions and UDFs described above.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Because the data never leaves Arrow columnar format, there is no per-row materialization cost at the boundary
+between a Rust-implemented and a JVM-implemented step. A dispatched expression sits in the pipeline alongside
+Rust-implemented operators with no columnar-to-row transition between them. Expanding the JVM-implemented path
+in 0.17.0 lets Comet keep more work Arrow-native instead of handing it back to Spark.&lt;/p&gt;
+&lt;h2 id="expanded-expression-coverage"&gt;Expanded Expression Coverage&lt;a class="headerlink" href="#expanded-expression-coverage" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Partly through the codegen dispatcher and partly through new Rust implementations, Comet's expression coverage
+grew substantially in this release. More than 120 Spark expressions have gained support since 0.16.0, across
+most function families:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Date and time&lt;/strong&gt; (~25): &lt;code&gt;convert_timezone&lt;/code&gt;, &lt;code&gt;make_date&lt;/code&gt;, &lt;code&gt;months_between&lt;/code&gt;, &lt;code&gt;next_day&lt;/code&gt;,
+  &lt;code&gt;from_utc_timestamp&lt;/code&gt; / &lt;code&gt;to_utc_timestamp&lt;/code&gt;, &lt;code&gt;date_from_unix_date&lt;/code&gt;, the &lt;code&gt;timestamp_*&lt;/code&gt; and &lt;code&gt;unix_*&lt;/code&gt; second /
+  milli / micro conversions, and the current date/time/timezone functions.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Math&lt;/strong&gt; (~24): &lt;code&gt;acosh&lt;/code&gt;, &lt;code&gt;asinh&lt;/code&gt;, &lt;code&gt;atanh&lt;/code&gt;, &lt;code&gt;cbrt&lt;/code&gt;, &lt;code&gt;csc&lt;/code&gt;, &lt;code&gt;sec&lt;/code&gt;, &lt;code&gt;hypot&lt;/code&gt;, &lt;code&gt;log1p&lt;/code&gt;, &lt;code&gt;bin&lt;/code&gt;, &lt;code&gt;conv&lt;/code&gt;,
+  &lt;code&gt;factorial&lt;/code&gt;, &lt;code&gt;pmod&lt;/code&gt;, &lt;code&gt;width_bucket&lt;/code&gt;, &lt;code&gt;rint&lt;/code&gt;, and more.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;String&lt;/strong&gt; (~16): &lt;code&gt;elt&lt;/code&gt;, &lt;code&gt;find_in_set&lt;/code&gt;, &lt;code&gt;format_number&lt;/code&gt;, &lt;code&gt;format_string&lt;/code&gt;, &lt;code&gt;levenshtein&lt;/code&gt;, &lt;code&gt;locate&lt;/code&gt;,
+  &lt;code&gt;overlay&lt;/code&gt;, &lt;code&gt;soundex&lt;/code&gt;, &lt;code&gt;split&lt;/code&gt;, &lt;code&gt;substring_index&lt;/code&gt;, &lt;code&gt;unbase64&lt;/code&gt;, &lt;code&gt;to_char&lt;/code&gt;, and &lt;code&gt;to_number&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;XPath&lt;/strong&gt; (9): the full &lt;code&gt;xpath&lt;/code&gt;, &lt;code&gt;xpath_boolean&lt;/code&gt;, &lt;code&gt;xpath_double&lt;/code&gt;, &lt;code&gt;xpath_int&lt;/code&gt;, &lt;code&gt;xpath_long&lt;/code&gt;, &lt;code&gt;xpath_string&lt;/code&gt;
+  family.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;JSON, CSV, and XML&lt;/strong&gt; (9): &lt;code&gt;from_csv&lt;/code&gt;, &lt;code&gt;to_csv&lt;/code&gt;, &lt;code&gt;schema_of_csv&lt;/code&gt;, &lt;code&gt;schema_of_json&lt;/code&gt;, &lt;code&gt;json_object_keys&lt;/code&gt;,
+  &lt;code&gt;json_array_length&lt;/code&gt;, &lt;code&gt;from_xml&lt;/code&gt;, &lt;code&gt;to_xml&lt;/code&gt;, and &lt;code&gt;schema_of_xml&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Array and map&lt;/strong&gt; (11): &lt;code&gt;array_position&lt;/code&gt;, &lt;code&gt;array_size&lt;/code&gt;, &lt;code&gt;arrays_zip&lt;/code&gt;, &lt;code&gt;slice&lt;/code&gt;, &lt;code&gt;sort_array&lt;/code&gt;, &lt;code&gt;sequence&lt;/code&gt;,
+  &lt;code&gt;map_concat&lt;/code&gt;, &lt;code&gt;map_contains_key&lt;/code&gt;, and &lt;code&gt;map_from_entries&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Aggregate and window&lt;/strong&gt; (7): &lt;code&gt;any_value&lt;/code&gt;, &lt;code&gt;count_if&lt;/code&gt;, the &lt;code&gt;regr_*&lt;/code&gt; regression aggregates, plus &lt;code&gt;lag&lt;/code&gt; and
+  &lt;code&gt;lead&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Conditional and null handling&lt;/strong&gt; (7): &lt;code&gt;greatest&lt;/code&gt;, &lt;code&gt;least&lt;/code&gt;, &lt;code&gt;nullif&lt;/code&gt;, &lt;code&gt;ifnull&lt;/code&gt; / &lt;code&gt;nvl&lt;/code&gt;, &lt;code&gt;nvl2&lt;/code&gt;, and
+  &lt;code&gt;equal_null&lt;/code&gt;.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;For the full list of supported expressions in this release, see the
+&lt;a href="https://datafusion.apache.org/comet/user-guide/0.17/expressions.html"&gt;Spark Expression Support&lt;/a&gt; reference.&lt;/p&gt;
+&lt;p&gt;Operator coverage grew too: 0.17.0 adds a native &lt;strong&gt;broadcast nested loop join&lt;/strong&gt;, so queries with non-equi or
+cross join conditions can now stay in the Comet pipeline rather than falling back to Spark.&lt;/p&gt;
+&lt;h2 id="performance"&gt;Performance&lt;a class="headerlink" href="#performance" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;h3 id="removing-an-ffi-round-trip-from-native-shuffle"&gt;Removing an FFI Round Trip from Native Shuffle&lt;a class="headerlink" href="#removing-an-ffi-round-trip-from-native-shuffle" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;The most significant performance change in 0.17.0 targets the shuffle write path. When a native subtree feeds
+a Comet shuffle, Comet previously ran two separate native iterators per partition: one for the upstream
+subtree, and a second rooted at a synthetic &lt;code&gt;Scan("ShuffleWriterInput") -&amp;gt; ShuffleWriter&lt;/code&gt; that consumed the
+batches back. The JVM never actually read this data, so the native-to-JVM-and-back hop was pure overhead.&lt;/p&gt;
+&lt;p&gt;Although the Arrow C Data Interface is zero-copy, this particular round trip was not. The synthetic scan left
+its batches marked as not FFI-safe, so on import every batch was deep-copied into freshly allocated buffers.
+0.17.0 collapses the two iterators into a single native plan rooted at the shuffle writer, with the upstream
+subtree as a direct child. That removes the Arrow FFI export and import, the per-batch deep copy, and one
+&lt;code&gt;createPlan&lt;/code&gt; / &lt;code&gt;releasePlan&lt;/code&gt; pair per partition, while preserving all of the existing per-partition setup
+(broadcast alignment, subqueries, encryption) and input metrics reporting. The gain comes from removing the
+round trip, not from copying its data more efficiently.&lt;/p&gt;
+&lt;h3 id="a-single-arrow-stream-on-the-input-path"&gt;A Single Arrow Stream on the Input Path&lt;a class="headerlink" href="#a-single-arrow-stream-on-the-input-path" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;0.17.0 also reworks the other side of the JVM/native boundary — the path that feeds JVM-sourced data &lt;em&gt;into&lt;/em&gt;
+native execution. Previously each batch crossed via a bespoke &lt;code&gt;CometBatchIterator&lt;/code&gt;, with a &lt;code&gt;hasNext&lt;/code&gt; / &lt;code&gt;next&lt;/code&gt;
+JNI pair per batch and every column imported through its own Arrow FFI array and schema. This release replaces
+that path with the &lt;strong&gt;Arrow C Stream Interface&lt;/strong&gt;: the JVM exports each per-partition iterator once, and native
+imports the schema once and pulls each batch through a single C callback, taking ownership by reference count.
+This removes the per-batch, per-column FFI export and JNI round trips for all JVM-sourced inputs, lets the
+old &lt;code&gt;CometBatchIterator&lt;/code&gt; and a now-unnecessary deep copy be deleted, and is the input-side counterpart to the
+shuffle-write change above. TPC-DS at 1TB is about 9% faster in 0.17.0 than in 0.16.0, and these two FFI
+changes are the largest contributor to that gain.&lt;/p&gt;
+&lt;h3 id="lower-per-batch-overhead-in-arrow-vectors"&gt;Lower Per-Batch Overhead in Arrow Vectors&lt;a class="headerlink" href="#lower-per-batch-overhead-in-arrow-vectors" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Two changes reduce repeated work when reading Arrow columns across the JNI boundary. Comet now caches the
+validity buffer address on &lt;code&gt;CometDecodedVector&lt;/code&gt; and the offset buffer address for variable-width vectors on
+&lt;code&gt;CometPlainVector&lt;/code&gt;, so these addresses are resolved once per vector rather than on every access.&lt;/p&gt;
+&lt;h3 id="faster-statistical-aggregates"&gt;Faster Statistical Aggregates&lt;a class="headerlink" href="#faster-statistical-aggregates" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;The variance, standard deviation, covariance, and correlation aggregates now use DataFusion's
+&lt;code&gt;GroupsAccumulator&lt;/code&gt; interface, which is substantially more efficient for grouped aggregation than the
+row-accumulator path they used previously.&lt;/p&gt;
+&lt;p&gt;Additional smaller improvements include bulk-NULL handling in &lt;code&gt;split&lt;/code&gt; and &lt;code&gt;substring&lt;/code&gt; (skipping a per-row
+allocation), and a new &lt;code&gt;interleave_time&lt;/code&gt; shuffle metric with tuned output buffer sizing to make shuffle cost
+easier to attribute.&lt;/p&gt;
+&lt;h2 id="preparing-for-the-100-release"&gt;Preparing for the 1.0.0 Release&lt;a class="headerlink" href="#preparing-for-the-100-release" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Much of the correctness work in this release is part of an ongoing push toward a &lt;strong&gt;1.0.0 release&lt;/strong&gt;.
+Planning for 1.0.0 is being tracked in &lt;a href="https://github.com/apache/datafusion-comet/issues/4082"&gt;issue #4082&lt;/a&gt;, where the community is discussing what the milestone
+should mean. The criteria under consideration go well beyond correctness and include:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Demonstrated cost savings for TPC-H and TPC-DS at SF1000 (1TB)&lt;/li&gt;
+&lt;li&gt;Thorough documentation of compatibility status&lt;/li&gt;
+&lt;li&gt;A review of all configuration options, renaming some for consistency&lt;/li&gt;
+&lt;li&gt;Consistent logging&lt;/li&gt;
+&lt;li&gt;A documented policy for how long each Spark version will be supported&lt;/li&gt;
+&lt;li&gt;A documented process for preventing major performance regressions&lt;/li&gt;
+&lt;li&gt;A documented semantic-versioning policy and what it means for Comet going forward&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Correctness is central to that list: reaching 1.0.0 means being able to state precisely which Spark
+expressions Comet accelerates, and how faithfully it matches Spark on each one. Two efforts in 0.17.0 move
+toward that goal.&lt;/p&gt;
+&lt;p&gt;First, the codegen dispatcher guarantees an exact match for every dispatched expression, since Spark's own
+generated code does the evaluation. That raises our confidence that Comet matches Spark across the supported
+versions, and it makes the Spark Expression Support reference something the project can stand behind as it
+approaches 1.0.0.&lt;/p&gt;
+&lt;p&gt;Second, this release included a systematic audit of Comet's existing expression implementations against Spark,
+detailed below.&lt;/p&gt;
+&lt;h3 id="expression-audit"&gt;Expression Audit&lt;a class="headerlink" href="#expression-audit" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;The audit compared Comet's expression implementations against Apache Spark 3.4.3, 3.5.8, 4.0.1, and 4.1.1,
+covering the hash, JSON, collection, map, predicate, bitwise, conditional, array, struct, math, and cast
+expression families, along with cast behavior. Each audit compared Comet's behavior to Spark across all four
+versions and expanded test coverage where gaps were found.&lt;/p&gt;
+&lt;p&gt;This edge-case-by-edge-case comparison surfaced most of the behavior differences fixed in this
+release. By working through each expression's corner cases and writing targeted Comet SQL tests for them, the
+audit caught divergences that broader testing does not reliably exercise. Comet also runs the full Apache
+Spark SQL test suite against each supported Spark version as part of CI, which continues to catch some
+cross-version differences, but the audit's focused approach found considerably more.&lt;/p&gt;
+&lt;h2 id="compatibility"&gt;Compatibility&lt;a class="headerlink" href="#compatibility" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Supported platforms include:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Spark 3.4.3&lt;/strong&gt; with Java 11/17 and Scala 2.12/2.13&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Spark 3.5.8&lt;/strong&gt; with Java 11/17 and Scala 2.12/2.13&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Spark 4.0.2&lt;/strong&gt; with Java 17 and Scala 2.13&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Spark 4.1.2&lt;/strong&gt; with Java 17 and Scala 2.13&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;See the &lt;a href="https://datafusion.apache.org/comet/user-guide/latest/compatibility/spark-versions.html"&gt;Spark Version Compatibility&lt;/a&gt; page for known limitations specific to each version.&lt;/p&gt;
+&lt;p&gt;This release builds on &lt;strong&gt;DataFusion 53.1&lt;/strong&gt; and &lt;strong&gt;Arrow 58.3&lt;/strong&gt;.&lt;/p&gt;
+&lt;h2 id="get-started-with-comet-0170"&gt;Get Started with Comet 0.17.0&lt;a class="headerlink" href="#get-started-with-comet-0170" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Ready to try it out? Follow the &lt;a href="https://datafusion.apache.org/comet/user-guide/0.17/installation.html"&gt;Comet 0.17.0 Installation Guide&lt;/a&gt;
+to get up and running, then point Comet at your existing Spark workloads, including Scala and Java UDFs and
+Spark 4 with ANSI mode enabled, and see the speedup for yourself.&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Apache DataFusion 54.0.0 Released</title><link href="https://datafusion.apache.org/blog/2026/06/12/datafusion-54.0.0" rel="alternate"/><published>2026-06-12T00:00:00+00:00</published><updated>2026-06-12T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2026-06-12:/blog/2026/06/12/datafusion-54.0.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
