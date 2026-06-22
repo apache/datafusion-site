@@ -47,7 +47,7 @@ The codegen dispatcher avoids the fallback to row-based processing by running Sp
 generated code (`doGenCode`) inside the Comet pipeline, operating directly on Arrow batches. The result is a
 JVM-implemented Arrow-native expression: the data stays in Arrow format, and because the expression is
 evaluated by Spark's own code, the result is guaranteed to match Spark exactly across every supported Spark
-version. When the dispatcher is disabled, Comet falls back cleanly as before.
+version. When the dispatcher is disabled, Comet falls back as before.
 
 A dispatched expression is no faster than it would be in Spark, since it runs the same generated code. The
 benefit is that a single unsupported expression no longer forces an entire
