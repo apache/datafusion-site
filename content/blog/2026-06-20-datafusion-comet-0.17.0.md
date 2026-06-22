@@ -40,8 +40,8 @@ The headline feature of 0.17.0 is a new mechanism that keeps more of your query 
 of falling back to Spark: the **JVM codegen dispatcher**.
 
 Comet has always fallen back to Spark row-based execution whenever an expression had no native Rust implementation, or where the
-Rust implementation could diverge from Spark on edge cases. A fallback is correct, a columnar-to-row
-conversion is needed to feed the data into Spark's row-based operators and this adds overhead when processing billions of rows of data.
+Rust implementation could diverge from Spark on edge cases. A fallback is correct, but a columnar-to-row
+conversion is needed to feed the data into Spark's row-based operators, which adds overhead when processing billions of rows of data.
 
 The codegen dispatcher avoids the fallback to row-based processing by running Spark's own
 generated code (`doGenCode`) inside the Comet pipeline, operating directly on Arrow batches. The result is a
