@@ -27,7 +27,7 @@ limitations under the License.
 
 [TOC]
 
-*[Qi Zhu](https://github.com/zhuqi-lucas), [Massive](https://www.massive.com/); [Andrew Lamb](https://github.com/alamb), [InfluxData](https://www.influxdata.com/)*
+*[Qi Zhu](https://github.com/zhuqi-lucas) ([Massive](https://www.massive.com/)); [Andrew Lamb](https://github.com/alamb) ([InfluxData](https://www.influxdata.com/))*
 
 **[Apache DataFusion] automatically takes advantage of sortedness in the
 data — even when the data is only *partially* sorted, and even when
@@ -51,29 +51,31 @@ Many real datasets are at least partly sorted when stored:
   data is prohibitively expensive for many workloads.
 
 But that "pre-existing sortedness" is only useful if the query engine can
-**notice** it and **use** it. Two common failure modes:
+**notice** it and **use** it. There are two common reasons they often cannot:
 
-1. The engine doesn't know about the ordering — the writer didn't set
+1. The engine doesn't know about the ordering — e.g. the writer didn't set
    Parquet [`sorting_columns`](https://github.com/apache/parquet-format/blob/8a5e04bdecf100e8e981daacfa117e8b5aadacb9/src/main/thrift/parquet.thrift#L1044),
    or the system wasn't informed about the ordering with a mechanism such as
    DataFusion's [`WITH ORDER`](https://datafusion.apache.org/user-guide/sql/ddl.html#create-external-table) clause.
-2. The engine knows each individual file is internally sorted, but the
-   file *listing* is in a different order (in DataFusion terms, the
+2. The engine knows there are multiple individual sorted files, but does not
+   know the order to scan the files to maintain a global order (in DataFusion terms, the
    `ListingTable`'s file list order does not match the per-file ordering),
    so global sortedness can't be proven at plan time.
 
 In both cases, an `ORDER BY` or `ORDER BY ... LIMIT N` query pays the
-cost of a full sort — a pipeline-blocking operator that
-must buffer every input row before emitting anything, dominating both
+cost of a full sort, which is a pipeline-blocking operator that
+buffers every input row before emitting anything, dominating both
 latency and peak memory on large scans.
 
 Min/max statistics used for *predicate* pushdown are well-known and
-widely implemented across databases. Using them to *reason about sort
-order* — deleting redundant sorts and biasing scan order toward the
-most-promising data — is less common. This post is about how DataFusion
-does the latter.
+widely implemented across databases (see [Parquet Pruning in DataFusion:
+Read Only What Matters][parquet-pruning-blog] for more details). Using
+them to *reason about sort order* — deleting redundant sorts and biasing
+scan order toward the most-promising data — is less common. This post is
+about how DataFusion does the latter.
 
 [Apache Iceberg]: https://iceberg.apache.org/
+[parquet-pruning-blog]: https://datafusion.apache.org/blog/2025/03/20/parquet-pruning
 
 ## What DataFusion could already do — and what was missing
 
