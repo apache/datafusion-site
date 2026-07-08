@@ -29,7 +29,7 @@ limitations under the License.
 
 *Qi Zhu, [Massive](https://www.massive.com/)*
 
-**[Apache DataFusion]  automatically takes advantage of sortedness in the
+**[Apache DataFusion] automatically takes advantage of sortedness in the
 data — even when the data is only *partially* sorted, and even when
 DataFusion has not been told about the ordering ahead of time.** This post
 explains why that matters and walks through how DataFusion achieves it,
@@ -47,18 +47,20 @@ Many real datasets are at least partly sorted when stored:
 - Event logs are sharded and sorted by event id.
 - Partitioned tables have a natural ordering by partition key.
 - Modern data lakes based on [Apache Iceberg] and similar formats
-  often store data in the order  **it was written**, and resorting the
+  often store data in the order **it was written**, and resorting the
   data is prohibitively expensive for many workloads.
 
 But that "pre-existing sortedness" is only useful if the query engine can
 **notice** it and **use** it. Two common failure modes:
 
 1. The engine doesn't know about the ordering — the writer didn't set
-   Parquet `sorting_columns`, and the table definition doesn't include a
-   [`WITH ORDER`](https://datafusion.apache.org/user-guide/sql/ddl.html#create-external-table) clause.
-2. The engine knows the *per-file* ordering, but the file *listing* on
-   disk is in a different order, so global sortedness can't be proven at
-   plan time.
+   Parquet [`sorting_columns`](https://github.com/apache/parquet-format/blob/8a5e04bdecf100e8e981daacfa117e8b5aadacb9/src/main/thrift/parquet.thrift#L1044),
+   or the system wasn't informed about the ordering with a mechanism such as
+   DataFusion's [`WITH ORDER`](https://datafusion.apache.org/user-guide/sql/ddl.html#create-external-table) clause.
+2. The engine knows each individual file is internally sorted, but the
+   file *listing* is in a different order (in DataFusion terms, the
+   `ListingTable`'s file list order does not match the per-file ordering),
+   so global sortedness can't be proven at plan time.
 
 In both cases, an `ORDER BY` or `ORDER BY ... LIMIT N` query pays the
 cost of a full sort — a pipeline-blocking operator that
@@ -97,14 +99,15 @@ Three complementary techniques close each gap:
 
 1. **Statistics-based sort elimination** (`Exact` path). Extend the
    optimizer to prove ordering from min/max statistics after
-   reordering the file list, then delete the `SortExec` entirely.
-2. **Runtime scan reorder** (`Inexact` path). Keep the `SortExec`, but
-   bias  the order files are scanned so the *most-promising* data is read first —
-   `TopK`'s [dynamic filter][dyn-filters-blog] tightens quickly and
-   downstream data is pruned by statistics before it's read.
+   reordering the file list, then delete the sort entirely.
+2. **Runtime scan reorder** (`Inexact` path). Keep the sort, but
+   bias the order files are scanned so the *most-promising* data is read first —
+   dynamic predicate pruning (see the [dynamic filters blog post][dyn-filters-blog])
+   tightens quickly and downstream data is pruned by statistics before it's read.
 3. **Runtime row-group dynamic pruning** ([#22450]). Inside the
-   parquet decoder loop, re-check the live `TopK` threshold at every
-   row-group boundary and physically remove pruned row groups before
+   parquet decoder loop, re-check dynamic predicate pruning at every
+   row-group boundary if it has gotten more precise due to additional
+   runtime information, and physically remove pruned row groups before
    any bytes are fetched.
 
 Together these compose into a **three-layer pruning stack**
@@ -154,15 +157,12 @@ SELECT ts, symbol, amount FROM trades ORDER BY ts DESC LIMIT 10;
 - With **`Exact`** ordering, DataFusion drops the sort entirely and
   stops reading after emitting 10 rows.
 - With **`Inexact`** ordering, the `SortExec` stays but scans start
-  from the most-promising data, so the `TopK` threshold tightens fast
+  from the most-promising data, so the `TopK` threshold is more likely to tighten fast
   and the rest is pruned by statistics.
 
 The optimizer rule that upgrades a scan from `Unsupported` to
 `Exact`/`Inexact` — and that removes the resulting redundant
-`SortExec` — is [`PushdownSort`](https://github.com/apache/datafusion/blob/main/datafusion/physical-optimizer/src/pushdown_sort.rs). `PushdownSort`
-runs late, after `EnsureRequirements` has finalised the plan shape.
-It walks each `SortExec`, asks the child leaf via `try_pushdown_sort`
-which flavour the source can produce, and rewrites accordingly.
+`SortExec` — is [`PushdownSort`](https://github.com/apache/datafusion/blob/main/datafusion/physical-optimizer/src/pushdown_sort.rs).
 
 ## The `Exact` Path · Sort Elimination via Statistics
 
@@ -175,7 +175,7 @@ ordering + matching on-disk file list). It can now also recognize
 sortedness when the **file list is in the wrong order** on disk, by using
 the min/max row group statistics stored in the Parquet file (relevant PRs:
 [apache/datafusion#19064][#19064] (rule scaffolding), and
-[apache/datafusion#21182][#21182] (stats-based file reorder))
+[apache/datafusion#21182][#21182] (stats-based file reorder)).
 
 [#19064]: https://github.com/apache/datafusion/pull/19064
 [#21182]: https://github.com/apache/datafusion/pull/21182
@@ -202,12 +202,7 @@ underlying data is already sorted.
 to upgrade to `Exact`); the right case has overlaps (upgrade skipped,
 falls through to the `Inexact` path).*
 
-Two conservative bail-outs: (a) sort keys must be plain columns
-(`ORDER BY date_trunc('hour', ts)` doesn't qualify — no per-file min/max
-for the function output), and (b) sort columns must be null-free, so
-`NULLS FIRST`/`NULLS LAST` semantics are preserved across file
-boundaries. The overlap case falls through to the `Inexact` path
-covered later.
+The overlap case falls through to the `Inexact` path covered later.
 
 ### `BufferExec` · a subtle multi-partition side effect
 
@@ -219,16 +214,10 @@ on any partition stalls the whole plan.*
 Removing the `SortExec` looked like a pure win, but the first
 multi-partition benchmarks showed something counter-intuitive: **some
 queries got slower**. The root cause is that the removed `SortExec`
-was doing two jobs — sorting *and* implicitly buffering. Each
-per-partition `SortExec` runs as its own task, greedily draining its
-source in the background; the top-of-plan `SortPreservingMergeExec`
-picks from those large in-memory buffers and never blocks on I/O in
-any single partition.
-
-Once the `SortExec` is deleted, the merge sits directly on the raw
-parquet streams. It's a lazy consumer — a k-way merge must see the
-head row from every input before deciding which to emit. A stall in
-*any one* partition now stalls the entire merge.
+was doing two jobs — sorting *and* implicitly buffering. The fix was
+to introduce explicit buffering in certain plans, see
+[apache/datafusion#21426](https://github.com/apache/datafusion/pull/21426)
+for details, as shown in the following figure.
 
 <img src="/blog/images/sort-pushdown/buffer-exec.svg" alt="BufferExec replaces the deleted SortExec with a bounded streaming buffer per partition" width="100%" class="img-fluid" /><br/>
 *Figure: `BufferExec` is inserted where the `SortExec` used to live —
@@ -245,11 +234,15 @@ OOMing.
 
 ### Benchmark: `sort_pushdown` suite
 
+To evaluate the effectiveness of eliminating sorts using statistics, we ran
+DataFusion's [`sort_pushdown`](https://github.com/apache/datafusion/tree/main/benchmarks/queries/sort_pushdown)
+benchmark suite.
+
 <img src="/blog/images/sort-pushdown/benchmark.svg" alt="Sort pushdown benchmark: 2x-49x speedup across four queries" width="100%" class="img-fluid" /><br/>
 *Figure: `sort_pushdown` results (`--partitions 1`, release build). ASC
 queries with the file list reversed against sort-key ranges.*
 
-Numbers below are the [`sort_pushdown`](https://github.com/apache/datafusion/tree/main/benchmarks/queries/sort_pushdown) suite,
+Numbers below are the `sort_pushdown` suite,
 `--partitions 1`, versus `main`:
 
 | Query                                       | Before  | After   | Speedup  |
@@ -268,36 +261,19 @@ Numbers below are the [`sort_pushdown`](https://github.com/apache/datafusion/tre
 
 ## The `Inexact` Path · Runtime Reorder for `TopK` and `DESC`
 
-Stats-based sort elimination handles the `Exact` upgrade — strong
-correctness, sort elimination — but only when the table has a
+Stats-based sort elimination handles the case when the table has a
 declared `output_ordering` *and* the files are provably
-non-overlapping after sorting by min. Three classes of queries
-fall outside that window:
-
-* **Unsorted data** — no `WITH ORDER`, no parquet `sorting_columns`.
-  The `Exact` upgrade cannot fire because there is no ordering
-  claim to upgrade.
-* **Overlapping ranges** — files written by different ingestion
-  jobs share time windows. The `Exact` upgrade keeps the `SortExec`
-  because the global ordering can't be proven, even though the
-  files often do contain large stretches of in-order data.
-* **`ORDER BY ... DESC` on ASC-sorted data** — flipping iteration
-  at the row-group level emits "RGs descending × rows ascending",
-  close to the requested order but not strictly DESC, so the
-  `SortExec` has to stay for correctness.
-
-For all three, a full external `SortExec` is overkill. The parquet
-metadata is right there, and reading the *most-promising* data
-first lets `TopK`'s dynamic filter threshold tighten quickly so the
-rest gets pruned. Runtime reorder wires that up by generalising
-the `Inexact` path the rule introduced.
-
-### When Inexact fires
+non-overlapping after sorting by min. However when these cases
+do not apply, a full sort is still overkill. The parquet metadata
+is right there, and reading the *most-promising* data first lets
+`TopK`'s dynamic filter threshold tighten quickly so the rest gets
+pruned. Runtime reorder wires that up by generalising the `Inexact`
+path the rule introduced.
 
 <img src="/blog/images/sort-pushdown/pr21956-decision.svg" alt="try_pushdown_sort decision tree: Exact, Inexact, or Unsupported" width="100%" class="img-fluid" /><br/>
-*Figure: for each `SortExec`, the leaf source returns `Exact` (drop
-the sort), `Inexact` (bias the scan and keep the sort), or
-`Unsupported`.*
+*Figure: for each `SortExec` that `PushdownSort` tries to push down
+into the scan, the data source returns `Exact` (drop the sort),
+`Inexact` (bias the scan and keep the sort), or `Unsupported`.*
 
 The Inexact verdict fires when either of two independent signals is
 true:
@@ -314,26 +290,30 @@ true:
 
 ### How the scan reorders data
 
+If `PushdownSort` determines `Inexact` applies to the data source, and
+the source supports `Inexact`, further optimizations are possible. For
+example, the parquet opener applies runtime reordering as follows:
+
 <img src="/blog/images/sort-pushdown/pr21956-runtime-pipeline.svg" alt="Runtime reorder pipeline: file reorder, RG reorder, then optional reverse" width="100%" class="img-fluid" /><br/>
 *Figure: the parquet opener applies file-level reorder → row-group-level
 reorder → optional iteration reverse.*
 
 The parquet opener applies up to three composable steps at query start:
 
-1. **File-level reorder** — across a shared work-stealing queue, the
-   file list is sorted by `min(col)`, so the most-promising file is
-   picked first across all partitions.
+1. **File-level reorder** — the file list is sorted by `min(col)`,
+   so the most-promising file is picked first across all partitions.
 2. **Row-group-level reorder** — once a file is opened, its row groups
    are sorted by `min(col)`.
 3. **Iteration reverse** — flip row-group iteration order for `DESC`
-   requests (and for the reverse-satisfies-the-request cases above).
+   requests.
 
-### File-level early stop already works
+### File-level early stop
 
-<img src="/blog/images/sort-pushdown/desc_walk_file.png" alt="Tier 1 file-level reorder with early stop via file_pruner" width="100%" class="img-fluid" /><br/>
-*Figure: after file reorder, low-value files at the tail of the queue
-are cut by the file-level pruner before they are ever opened — no
-metadata I/O.*
+<img src="/blog/images/sort-pushdown/desc_walk_file.png" alt="File-level reorder with early stop via file_pruner" width="100%" class="img-fluid" /><br/>
+*Figure: after file reorder, low-value files (`file_d` and `file_c`,
+where "low-value" means the sort key values are smaller for ASC queries)
+at the tail of the queue are cut by the file-level pruner before they
+are ever opened — no metadata I/O.*
 
 Once files are ordered "most-promising first", `TopK`'s heap fills
 quickly and its dynamic filter threshold tightens. Low-value files at
@@ -341,56 +321,32 @@ the tail of the queue are then checked against the live threshold
 by the [`FilePruner`](https://github.com/apache/datafusion/blob/main/datafusion/pruning/src/file_pruner.rs) before they are ever opened —
 never loading their footer, page index, or any data.
 
-### Row-group-level: the gap [#22450] fills
+### Row Group Filter early stop
 
-<img src="/blog/images/sort-pushdown/desc_walk_rg.png" alt="Tier 2 RG-level reorder — filter column still read for every RG pre-#22450" width="100%" class="img-fluid" /><br/>
+<img src="/blog/images/sort-pushdown/desc_walk_rg.png" alt="Row-group level reorder — filter column still read for every row group before Row Group Filter early stop" width="100%" class="img-fluid" /><br/>
 *Figure: inside a file, the first row group tightens the threshold —
 subsequent row groups have their projection columns short-circuited,
 but the filter column still has to be read to discover that no rows
 qualify.*
 
-Inside a file, the story is almost identical — but with one gap.
-After the first row group fills the heap, subsequent row groups
-whose values can't beat the threshold evaluate to an empty
-`RowSelection`, and arrow-rs's reader short-circuits: no projection
-columns fetched, no decompress, no decode.
+Reordering row groups so the ones most likely to contain the minimum
+value are read first makes the existing `TopK` dynamic filters +
+[filter pushdown](https://datafusion.apache.org/blog/2025/03/21/parquet-pushdown/)
+optimization more effective, and they can often rule out entire row
+groups after evaluating just the filter columns, avoiding fetching any
+projection columns. This optimization was added in
+[apache/datafusion#22450][#22450].
 
-However, **the filter column still gets read for every row group**,
-because the dynamic filter has to be evaluated row-by-row to
-*discover* that no rows survive. On a large file with many row
-groups, that's a meaningful tax — most of which is redundant, since
-metadata alone could have proven the row group unwinnable. Closing
-that gap is what [#22450] does.
+## Runtime Row-Group Dynamic Pruning
 
-## #22450 · Runtime Row-Group Dynamic Pruning
-
-The merge that just landed — [apache/datafusion#22450][#22450] —
-re-checks the dynamic filter **at every row-group boundary** inside
-an open file, converts the live threshold into a fresh
-`PruningPredicate`, and physically removes any row group whose
+DataFusion now also re-checks the dynamic filter **at every row-group
+boundary** inside an open file (only when the dynamic filter has been
+updated since the initial check), converts the live threshold into a
+fresh `PruningPredicate`, and physically removes any row group whose
 min/max can't possibly beat the threshold. The pruned row groups are
 **never decoded, not even on the filter column**.
 
-### Architecture · who drives the IO + decode loop
-
-<img src="/blog/images/sort-pushdown/arch_one_glance.png" alt="Three eras of who drives the parquet IO + decode loop" width="100%" class="img-fluid"/>
-
-The interesting backstory is that **DataFusion didn't actually own
-this loop until recently**. Three eras:
-
-* **Pre-[#20839]**: arrow-rs owned the I/O + decode loop as a black
-  box; DataFusion only called `.next()` and served byte ranges. The
-  row-group list was frozen at construction, so once the loop started,
-  no mid-stream decisions were possible.
-* **[#20839]**: the push-based parquet decoder moved the loop into
-  DataFusion. The capability to insert a decision mid-loop now
-  existed — but the loop went from `drain` straight to `drive`, with
-  no decision point.
-* **[#22450]**: adds the missing decision point. At every row-group
-  boundary, the loop pauses to ask the runtime pruner whether the
-  remaining row groups are still worth reading.
-
-### The loop, and the decision point [#22450] adds
+### The loop and decision point
 
 <img src="/blog/images/sort-pushdown/transition_anatomy.png" alt="transition() loop: drain, decide, drive — Step 2 is the #22450 addition" width="100%" class="img-fluid" /><br/>
 *Figure: the decoder loop has three steps. Step 2 (DECIDE) is what
@@ -411,19 +367,20 @@ The pruner is designed so the expensive work only fires when it can
 possibly help: a cheap epoch check tells it whether the dynamic filter
 has actually changed since last time, and only then does it rebuild
 the pruning predicate. The predicate is then applied to remaining
-row groups' min/max statistics — pure metadata comparison, no I/O.
-Errors always fall back to "keep the row group" — a flaky pruner
-never drops live data.
+row groups' min/max statistics, using only metadata, no I/O.
 
-### Cascading prune · how the heap eats row groups
+### Example of pruning row groups using TopK dynamic predicates
+
+This section walks through an example of how the techniques described in
+this blog work together to prune row groups. The savings compound because
+the threshold moves in **steps**, not smoothly.
 
 <img src="/blog/images/sort-pushdown/rg_cascade.png" alt="Cascading prune: one row group fills the heap, threshold snaps, all subsequent row groups are pruned in a single pass" width="100%" class="img-fluid" /><br/>
 *Figure: for `ORDER BY x DESC LIMIT 10`, opening the first row group
 (values [90..100)) is enough to fill the heap; at the next boundary,
 every remaining row group with `max < 90` is pruned in one pass.*
 
-The savings compound because the threshold moves in **steps**, not
-smoothly. For `ORDER BY x DESC LIMIT 10` on a 10-row-group file
+For `ORDER BY x DESC LIMIT 10` on a 10-row-group file
 where reorder puts high-value row groups first:
 
 1. RG 9 (values `[90..100)`) opens. One row group is enough to fill
@@ -441,26 +398,21 @@ remaining row group at the next boundary.
 
 ## Three-Layer Pruning · file + RG + row, stacked
 
+The sort-based optimizations described above work by taking advantage
+of a multi-layer pruning strategy: file-level, row-group-level, and
+row-level, all driven by the **same** `TopK` dynamic filter. The three
+layers stack — no layer subsumes another.
+
 <img src="/blog/images/sort-pushdown/pruning_stack.png" alt="Three-layer pruning: file-level, RG-level, row-level, all driven by the same TopK dynamic filter" width="100%" class="img-fluid"/>
 
-A common question at this point: "if [#22450] prunes whole row
-groups, does that replace the `RowFilter` row-level prune that the
-`Inexact` path was already using?" **No** — the three layers stack,
-and they're driven by the **same** `TopK` dynamic filter. (The
-"Tier 1 / Tier 2" framing earlier maps to "Layer 0 / Layer A"
-below — same partition, different lens. Layer B is what runs on
-each row group after Layer A keeps it.)
-
-* **Layer 0 · file-level** (`file_pruner` + `EarlyStoppingStream`).
+* **Layer 1 · file-level** (`file_pruner` + `EarlyStoppingStream`).
   Cuts dead files before they're opened. The only layer that skips
-  parquet metadata I/O entirely. Already shipped before [#22450] —
-  this is Tier 1.
-* **Layer A · row-group-level** ([#22450]). Cuts dead row groups
+  parquet metadata I/O entirely.
+* **Layer 2 · row-group-level** ([#22450]). Cuts dead row groups
   inside open files at every row-group boundary. Bytes never
-  fetched, filter column never decoded. **This is the layer that
-  fills the Tier 2 gap** ("× no early stop yet" pre-[#22450]).
-* **Layer B · row-level** (`RowFilter`). For row groups that
-  survive Layer A, the filter is still evaluated row-by-row to
+  fetched, filter column never decoded.
+* **Layer 3 · row-level** (`RowFilter`). For row groups that
+  survive Layer 2, the filter is still evaluated row-by-row to
   build a `RowSelection`. Rows that fail the predicate get their
   *projection* columns short-circuited via arrow-rs's
   `selects_any()`, but the *filter* column is necessarily read.
@@ -468,107 +420,60 @@ each row group after Layer A keeps it.)
   but also the finest granularity.
 
 The same dynamic filter drives all three. A single insertion into
-the `TopK` heap becomes a new threshold that Layer B applies
-per-row immediately (in the currently-open row group), and Layer A
-re-applies to remaining row groups at the next boundary. No layer
-subsumes another — Layer A prunes on metadata alone (never touching
-the filter column), while Layer B is finer-grained but has to read
-the filter column to decide.
+the `TopK` heap becomes a new threshold that Layer 3 applies
+per-row immediately (in the currently-open row group), and Layer 2
+re-applies to remaining row groups at the next boundary. Layer 2
+prunes on metadata alone (never touching the filter column), while
+Layer 3 is finer-grained but has to read the filter column to decide.
 
 ### Benchmark · `topk_tpch` (TPC-H SF1, `LIMIT 100`)
 
+The [`topk_tpch`](https://github.com/apache/datafusion/blob/main/benchmarks/src/sort_tpch.rs)
+benchmark runs 11 TPC-H SF1 queries, all of the shape
+`ORDER BY ... LIMIT 100`. The data is stored in parquet, sorted by
+`l_orderkey` (lineitem's physical sort key — a `BIGINT` with ~1.5M
+distinct values per SF1), so per-RG `min/max` ranges are cleanly disjoint.
+We compare DataFusion 54 with the sort optimizations described in this blog
+disabled versus enabled.
+
 <img src="/blog/images/sort-pushdown/topk_tpch_bench.png" alt="topk_tpch benchmark results: 5 of 11 queries 3-4× faster, 0 regressions, total -44%" width="100%" class="img-fluid"/>
 
-The [`topk_tpch`](https://github.com/apache/datafusion/blob/main/benchmarks/src/sort_tpch.rs) benchmark runs 11 TPC-H SF1 queries, all of the
-shape `ORDER BY ... LIMIT 100`, comparing `main` against the same
-branch with [#22450] enabled. Headline numbers:
+Headline numbers:
 
 | Metric                              | Value                              |
 | ----------------------------------- | ---------------------------------- |
 | Total wall-clock (sum of 11 queries) | 248.8 ms → 139.1 ms (**−44%**)    |
-| Queries with ≥2× speedup vs main    | **5 of 11** (Q2, Q4, Q8, Q9, Q10) |
-| Queries with regression vs main     | **0**                              |
+| Queries with ≥2× speedup            | **5 of 11** (Q2, Q4, Q8, Q9, Q10) |
+| Queries with regression             | **0**                              |
 | Best single-query speedup           | **~4×**                            |
 
 The five queries with significant speedups all use `l_orderkey`
-as the **leading** sort key — lineitem's physical sort key, a
-`BIGINT` with ~1.5M distinct values per SF1, so per-RG `min/max`
-ranges are cleanly disjoint and `Layer A` can cascade-prune
+as the **leading** sort key, so `Layer 2` can cascade-prune
 aggressively. The non-winners (Q1, Q3, Q5, Q6, Q7, Q11) lead with
 `l_linenumber` (cardinality 7), `l_comment`, or `l_shipmode` —
 columns whose per-RG ranges overlap heavily because they're not the
 physical sort order. (Q5–Q7 still *include* `l_orderkey`, but only
 as a third-key tie-breaker — the leading key is what controls RG-level
 disjointness.) A tighter threshold doesn't translate into clean
-RG-level boundaries to prune at, so `Layer B` (row-level) still does
+RG-level boundaries to prune at, so `Layer 3` (row-level) still does
 its share of the work.
 
-The takeaway isn't "5 out of 11", it's "**zero regressions and
-no-op when the data doesn't help, 3–4× when it does**". The sweet
-spot — sort key aligned with the physical layout — is the common
-case for time-series, partitioned tables, and ingestion-ordered
-event logs.
+Several common time-series workloads are accelerated 3–4× with zero
+regressions and no-op when the data doesn't help. The sweet spot —
+sort key aligned with the physical layout — is the common case for
+time-series, partitioned tables, and ingestion-ordered event logs.
 
 ## Future Directions
 
-Two complementary directions are open. The first needs an upstream
-arrow-rs primitive; the second is pure DataFusion plumbing on top
-of [#22450]:
-
-### A · Page-level `Exact` reverse · arrow-rs [#9937]
-
-<img src="/blog/images/sort-pushdown/reverse-scan.svg" alt="Row-group reverse (128 MB peak) vs page-level reverse (1 MB peak)" width="100%" class="img-fluid"/>
-
-[#9937]: https://github.com/apache/arrow-rs/pull/9937
-
-Today's `DESC` query support lives in the `Inexact` path: the
-row-group reverse emits "RGs descending × rows ascending", which is
-close to DESC but not strictly so. `SortExec` stays.
-
-A page-level reverse primitive in arrow-rs would let the reader
-walk the parquet offset index in reverse — decoding each page
-forward, reversing its `RecordBatch`, and emitting before moving to
-the previous page. Peak buffer drops from ~128 MB (one
-row group) to ~1 MB (one page); per-page decode stays forward (RLE,
-dictionary, delta, and bit-packed encodings are all forward-only
-by construction — page *traversal* is what gets reversed). Once
-each batch already comes out in DESC order, `PushdownSort` can
-finally return `Exact` for `DESC`, the `SortExec` is removed
-outright, and `LIMIT N` becomes a static fetch.
-
-In flight upstream as [arrow-rs#9937]. The killer use case is
-**filtered reverse `TopK`** — e.g. `WHERE user_id = 42 ORDER BY ts
-DESC LIMIT 10`. You can't pre-compute a `RowSelection::with_limit`
-because matching rows are sparse; the only correct strategy is to
-stream pages backward, filter, and stop when 10 matches accumulate.
-Row-group reverse stops at ~128 MB granularity; page reverse stops
-at ~1 MB.
-
-[arrow-rs#9937]: https://github.com/apache/arrow-rs/pull/9937
-
-### B · Page-level dynamic prune at the row-group boundary
-
-<img src="/blog/images/sort-pushdown/future_page_level.png" alt="Page-level dynamic prune: extends #22450 to skip individual pages, not just whole row groups" width="100%" class="img-fluid"/>
-
-[#22450] prunes whole row groups at row-group boundaries. The
-finer-grained extension prunes whole **pages** within a surviving
-row group. The signal is the same dynamic filter, just re-applied
-at page granularity — for any page whose `max(col)` is already
-below the threshold, the filter column's bytes for that page can be
-skipped along with the projection columns.
-
-Today's page-level pruning runs once at file open using the static
-query predicate. Future B extends [#22450]'s "refresh at RG
-boundary" pattern to also rebuild the page-level filter with the
-live threshold, so upcoming row groups get tighter page selections
-mid-scan. Same arrow-rs API [#22450] already uses — no new
-primitive needed. Tracked in [apache/datafusion#23216].
-
-[apache/datafusion#23216]: https://github.com/apache/datafusion/issues/23216
-
-Conceptually this is the same idea as [#22450] stepped down one
-level: every level of the parquet hierarchy gets to chip off its
-share of the residue from the level above.
+Two complementary directions are open: page-level `Exact` reverse
+support (needs an upstream arrow-rs primitive, tracked in
+[arrow-rs#9937](https://github.com/apache/arrow-rs/pull/9937)) so that
+`DESC` queries can drop the sort entirely, and page-level dynamic
+prune at the row-group boundary (pure DataFusion plumbing on top of
+[#22450], tracked in
+[apache/datafusion#23216](https://github.com/apache/datafusion/issues/23216))
+which extends the same "refresh at RG boundary" pattern one level
+down the parquet hierarchy.
 
 ## Acknowledgements
 
@@ -578,6 +483,9 @@ iterations. The DataFusion community's willingness to engage deeply
 with optimizer changes — including the ones that touch foundational
 invariants like who-drives-the-decode-loop — is what made this work
 possible.
+
+Thanks also to [Massive](https://www.massive.com/) for sponsoring this
+work.
 
 [@alamb]: https://github.com/alamb
 [@adriangb]: https://github.com/adriangb
@@ -622,3 +530,10 @@ Concretely useful issues for new contributors:
 [more-impls-issue]: https://github.com/apache/datafusion/issues/19394
 
 Benchmark suites: [sort_pushdown](https://github.com/apache/datafusion/tree/main/benchmarks/queries/sort_pushdown), [topk_tpch](https://github.com/apache/datafusion/blob/main/benchmarks/src/sort_tpch.rs).
+
+## Get Involved
+
+- **Try it out**: Run your `ORDER BY` / `ORDER BY ... LIMIT N` queries on your own data and share what you see.
+- **Work on a [good first issue](https://github.com/apache/datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)**, or pick up one of the [follow-ups](https://github.com/apache/datafusion/issues/23036) listed in the umbrella issue.
+- **File issues or join the conversation**: [GitHub](https://github.com/apache/datafusion/) for bugs and feature requests, [Slack or Discord](https://datafusion.apache.org/contributor-guide/communication.html) for discussion.
+- Learn more by visiting the [DataFusion](https://datafusion.apache.org/index.html) project page.
