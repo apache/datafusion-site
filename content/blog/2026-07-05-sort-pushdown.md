@@ -29,7 +29,7 @@ limitations under the License.
 
 *Qi Zhu, [Massive](https://www.massive.com/)*
 
-**[Apache DataFusion] now automatically takes advantage of sortedness in the
+**[Apache DataFusion]  automatically takes advantage of sortedness in the
 data — even when the data is only *partially* sorted, and even when
 DataFusion has not been told about the ordering ahead of time.** This post
 explains why that matters and walks through how DataFusion achieves it,
