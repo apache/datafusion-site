@@ -39,14 +39,10 @@ sort pushdown, runtime scan reordering, and row-group pruning driven by
 
 ## Why sort pushdown matters
 
-Many real datasets are at least partly sorted when stored:
-
-- Time-series files are written in ingestion-time order.
-- Event logs are sharded and sorted by event id.
-- Partitioned tables have a natural ordering by partition key.
-- Modern data lakes based on [Apache Iceberg] and similar formats
-  often store data in the order **it was written**, and resorting the
-  data is prohibitively expensive for many workloads.
+Many real datasets are at least partly sorted when stored: time-series files by
+ingestion time, event logs by event id, partitioned tables by partition key, and
+modern data lakes based on [Apache Iceberg] and similar formats by write order.
+Resorting the data is prohibitively expensive for many workloads.
 
 Sortedness only helps if the query engine can detect and use it. Two common
 cases make that hard:
@@ -58,10 +54,9 @@ cases make that hard:
 2. Files are individually sorted, but the scan order is not globally sorted, so
    the engine cannot prove global ordering at plan time.
 
-In both cases, an `ORDER BY` or `ORDER BY ... LIMIT N` query pays the
-cost of a full sort, which is a pipeline-blocking operator that
-buffers every input row before emitting anything, dominating both
-latency and peak memory on large scans.
+In both cases, `ORDER BY` or `ORDER BY ... LIMIT N` pays for a blocking full
+sort, which buffers every row and dominates latency and peak memory on large
+scans.
 
 Min/max statistics used for *predicate* pushdown are well-known and
 widely implemented across databases, as covered in [@XiangpengHao]'s
@@ -173,22 +168,15 @@ layers:
   This layer has the highest residual cost (the filter column),
   but also the finest granularity.
 
-The same dynamic filter drives all three. A single insertion into the `TopK`
-heap becomes a new threshold that Layer 3 applies per-row immediately, while
-Layer 2 re-applies it to remaining row groups at the next boundary. Layer 2
-uses metadata only; Layer 3 is finer-grained but must read the filter column.
-
 ## The `Exact` Path · Sort Elimination via Statistics
 
 <img src="/blog/images/sort-pushdown/phase1-file-reorder.svg" alt="File reorder: rearranging files within a partition by min/max statistics so the file list is in range order" width="100%" class="img-fluid" /><br/>
 *Figure: file reorder by per-file `min/max` puts the file list in range
 order without touching file contents.*
 
-DataFusion could already recognize the *exact* sortedness case (declared
-ordering + matching on-disk file list). It can now also recognize
-sortedness when the **file list is in the wrong order** on disk, by using
-the min/max row group statistics stored in the Parquet file (relevant PRs:
-[apache/datafusion#19064][#19064] (rule scaffolding), and
+DataFusion already handled declared ordering with matching file order. It now
+also uses Parquet min/max statistics to reorder files and prove global ordering
+(relevant PRs: [apache/datafusion#19064][#19064] (rule scaffolding), and
 [apache/datafusion#21182][#21182] (stats-based file reorder)).
 
 [#19064]: https://github.com/apache/datafusion/pull/19064
@@ -241,8 +229,8 @@ driver role without sorting.
 
 ### Benchmark: `sort_pushdown` suite
 
-To evaluate the effectiveness of eliminating sorts using statistics, we ran
-DataFusion's [`sort_pushdown`](https://github.com/apache/datafusion/tree/main/benchmarks/queries/sort_pushdown)
+We measured statistics-based sort elimination with DataFusion's
+[`sort_pushdown`](https://github.com/apache/datafusion/tree/main/benchmarks/queries/sort_pushdown)
 benchmark suite.
 
 <img src="/blog/images/sort-pushdown/benchmark.svg" alt="Sort pushdown benchmark: 2x-49x speedup across four queries" width="100%" class="img-fluid" /><br/>
@@ -278,18 +266,12 @@ data first, helping the `TopK` dynamic filter prune the rest earlier.
 into the scan, the data source returns `Exact` (drop the sort),
 `Inexact` (bias the scan and keep the sort), or `Unsupported`.*
 
-The `Inexact` verdict fires when either of two independent signals is
-true:
-
-- **Stats-based reorder available**: the leading sort key is a plain
-  column in the file schema, so the scan can sort files and row
-  groups by `min(col)` from Parquet statistics.
-- **Reverse satisfies the request**: the source's declared ordering,
-  when reversed, satisfies what the query asks for. This uses
-  DataFusion's [equivalence-properties][ordering-analysis] reasoning
-  and covers function monotonicity (`ts DESC` declared, `date_trunc('day', ts) ASC`
-  requested), constants inferred from filters, and multi-column
-  composite orderings.
+The `Inexact` verdict fires when stats-based reorder is available (the leading
+sort key is a plain file column) or when the reverse of the source's declared
+ordering satisfies the request. The latter uses DataFusion's
+[equivalence-properties][ordering-analysis] reasoning, including monotonic
+functions<sup id="fn1">[1](#footnote1)</sup>, constants inferred from filters,
+and multi-column orderings.
 
 ### How the scan reorders data
 
@@ -317,11 +299,10 @@ where "low-value" means the sort key values are smaller for ASC queries)
 at the tail of the queue are cut by the file-level pruner before they
 are ever opened — no metadata I/O.*
 
-Once files are ordered "most-promising first", `TopK`'s heap fills
-quickly and its dynamic filter threshold tightens. Low-value files at
-the tail of the queue are then checked against the live threshold
-by the [`FilePruner`](https://github.com/apache/datafusion/blob/main/datafusion/pruning/src/file_pruner.rs) before they are ever opened —
-never loading their footer, page index, or any data.
+Once files are ordered "most-promising first", `TopK`'s heap fills quickly and
+its dynamic filter threshold tightens. The [`FilePruner`](https://github.com/apache/datafusion/blob/main/datafusion/pruning/src/file_pruner.rs)
+then cuts low-value files before opening them — no footer, page index, or data
+I/O.
 
 ### Row-group filter early stop
 
@@ -365,11 +346,10 @@ row group, only drain and drive run — no decision point.
 moderately expensive "rebuild the predicate if so" step, and a cheap
 "apply the predicate to remaining row groups" step.*
 
-The pruner is designed so the expensive work only fires when it can
-possibly help: a cheap epoch check tells it whether the dynamic filter
-has actually changed since last time, and only then does it rebuild
-the pruning predicate. The predicate is then applied to remaining
-row groups' min/max statistics, using only metadata, no I/O.
+The pruner does expensive work only when it can help: a cheap epoch check
+detects dynamic-filter changes, and only then rebuilds the pruning predicate.
+The predicate is then applied to remaining row groups' min/max statistics using
+metadata only.
 
 ### Example of pruning row groups using TopK dynamic predicates
 
@@ -450,6 +430,10 @@ possible.
 
 Thanks also to [Massive](https://www.massive.com/) for sponsoring this
 work.
+
+<a id="footnote1"></a><sup>[1](#fn1)</sup> For example, if the source declares
+`ts DESC`, reversing that ordering gives `ts ASC`, which can satisfy
+`date_trunc('day', ts) ASC`.
 
 [@alamb]: https://github.com/alamb
 [@adriangb]: https://github.com/adriangb
