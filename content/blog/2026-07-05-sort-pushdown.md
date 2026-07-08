@@ -30,9 +30,9 @@ limitations under the License.
 *[Qi Zhu](https://github.com/zhuqi-lucas) ([Massive](https://www.massive.com/)); [Andrew Lamb](https://github.com/alamb) ([InfluxData](https://www.influxdata.com/))*
 
 **[Apache DataFusion] uses sortedness automatically — even when data is only
-partially sorted or no ordering was declared.** This post explains how plan-time
-sort pushdown, runtime scan reordering, and row-group pruning driven by
-[dynamic filters][dyn-filters-blog] make that possible.
+partially sorted or when no ordering was declared.** This post explains how
+plan-time sort pushdown, runtime scan reordering, and row-group pruning driven
+by [dynamic filters][dyn-filters-blog] make that possible.
 
 [Apache DataFusion]: https://datafusion.apache.org/
 [dyn-filters-blog]: https://datafusion.apache.org/blog/2025/09/10/dynamic-filters/
@@ -41,8 +41,8 @@ sort pushdown, runtime scan reordering, and row-group pruning driven by
 
 Many real datasets are at least partly sorted when stored: time-series files by
 ingestion time, event logs by event id, partitioned tables by partition key, and
-modern data lakes based on [Apache Iceberg] and similar formats by write order.
-Resorting the data is prohibitively expensive for many workloads.
+modern data lakes based on [Apache Iceberg] and similar formats in write order.
+Resorting data is prohibitively expensive for many workloads.
 
 Sortedness only helps if the query engine can detect and use it. Two common
 cases make that hard:
@@ -116,8 +116,8 @@ The rest of this post walks through each technique in turn.
 <img src="/blog/images/sort-pushdown/plan-diff.svg" alt="EXPLAIN before / after: SortExec eliminated once ordering is Exact" width="100%" class="img-fluid"/>
 
 The [`PushdownSort`](https://github.com/apache/datafusion/blob/main/datafusion/physical-optimizer/src/pushdown_sort.rs)
-optimizer rule classifies each scan below a sort as either
-`Unsupported`, `Exact`, or `Inexact`, and records this information on DataFusion's
+optimizer rule classifies each scan below a sort as one of `Unsupported`,
+`Exact`, or `Inexact`, and records this information on DataFusion's
 [`FileScanConfig`](https://docs.rs/datafusion-datasource/latest/datafusion_datasource/file_scan_config/struct.FileScanConfig.html):
 
 - **`Unsupported`** — the optimizer cannot determine the ordering, so no sort is removed.
@@ -144,8 +144,8 @@ SELECT ts, symbol, amount FROM trades ORDER BY ts DESC LIMIT 10;
 - With **`Exact`** ordering, DataFusion drops the sort entirely and
   stops reading after emitting 10 rows.
 - With **`Inexact`** ordering, the `SortExec` stays but scans start
-  from the most-promising data, so the `TopK` threshold is more likely to tighten fast
-  and the rest is pruned by statistics.
+  from the most-promising data, so the `TopK` threshold is more likely to
+  tighten quickly and the rest is pruned by statistics.
 
 ## Three-Layer Pruning · file + RG + row, stacked
 
