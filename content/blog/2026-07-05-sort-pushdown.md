@@ -99,7 +99,7 @@ Three complementary techniques close each gap:
    optimizer to prove ordering from min/max statistics after
    reordering the file list, then delete the `SortExec` entirely.
 2. **Runtime scan reorder** (`Inexact` path). Keep the `SortExec`, but
-   bias scan order so the *most-promising* data is read first —
+   bias  the order files are scanned so the *most-promising* data is read first —
    `TopK`'s [dynamic filter][dyn-filters-blog] tightens quickly and
    downstream data is pruned by statistics before it's read.
 3. **Runtime row-group dynamic pruning** ([#22450]). Inside the
