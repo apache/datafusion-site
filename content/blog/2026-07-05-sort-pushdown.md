@@ -76,7 +76,7 @@ about how DataFusion does the latter.
 
 ## Exact vs Inexact Ordering
 
-DataFusion has long skipped sorts in the **exact** case as covered in
+DataFusion has long skipped sorts in the **exact** case, as covered in
 [@akurmustafa's earlier post on ordering analysis][ordering-analysis]:
 if the table declares an ordering (via `WITH ORDER` or Parquet
 `sorting_columns`) and the file listing matches it, `EnsureRequirements`
@@ -121,11 +121,11 @@ The rest of this post walks through each technique in turn.
 <img src="/blog/images/sort-pushdown/plan-diff.svg" alt="EXPLAIN before / after: SortExec eliminated once ordering is Exact" width="100%" class="img-fluid"/>
 
 The [`PushdownSort`](https://github.com/apache/datafusion/blob/main/datafusion/physical-optimizer/src/pushdown_sort.rs)
-optimizer rule classifies each scan below a Sort as either:
-`Unsupported`, `Exact`, or `Inexact`,  and records this information on DataFusion's 
+optimizer rule classifies each scan below a sort as either
+`Unsupported`, `Exact`, or `Inexact`, and records this information on DataFusion's
 [`FileScanConfig`](https://docs.rs/datafusion-datasource/latest/datafusion_datasource/file_scan_config/struct.FileScanConfig.html):
 
-- **`Unsupported`** — the optimizer cannot determine the ordering, so no Sort is removed.
+- **`Unsupported`** — the optimizer cannot determine the ordering, so no sort is removed.
 - **`Exact`** — the optimizer is *certain* the output is in this order,
   and removes redundant [`SortExec`](https://docs.rs/datafusion-physical-plan/latest/datafusion_physical_plan/sorts/sort/struct.SortExec.html) operators entirely.
   `LIMIT N` becomes a static fetch on the source (the reader stops the
@@ -227,7 +227,7 @@ on any partition stalls the whole plan.*
 
 Removing `SortExec` was not always faster in multi-partition plans: the deleted
 sort had also acted as an implicit buffer. The fix was explicit buffering in
-some plans, see
+some plans; see
 [apache/datafusion#21426](https://github.com/apache/datafusion/pull/21426)
 for details, as shown in the following figure.
 
@@ -237,7 +237,7 @@ same greedy per-partition prefill, but no blocking sort.*
 
 The fix is [`BufferExec`](https://github.com/apache/datafusion/blob/main/datafusion/physical-plan/src/buffer.rs):
 a bounded per-partition prefill buffer that restores the greedy parallel I/O
-driver role without sorting. 
+driver role without sorting.
 
 ### Benchmark: `sort_pushdown` suite
 
@@ -269,16 +269,16 @@ Numbers below are the `sort_pushdown` suite,
 ## The `Inexact` Path · Runtime Reorder for `TopK` and `DESC`
 
 Stats-based sort elimination applies only when ordering is declared and file
-ranges are non-overlapping after the min-based file reorder. Otherwise, DataFusion keeps
-the sort but uses Parquet metadata to read the most-promising data first,
-helping the `TopK` dynamic filter prune the rest earlier.
+ranges are non-overlapping after the min-based file reorder. Otherwise,
+DataFusion keeps the sort but uses Parquet metadata to read the most-promising
+data first, helping the `TopK` dynamic filter prune the rest earlier.
 
 <img src="/blog/images/sort-pushdown/pr21956-decision.svg" alt="try_pushdown_sort decision tree: Exact, Inexact, or Unsupported" width="100%" class="img-fluid" /><br/>
 *Figure: for each `SortExec` that `PushdownSort` tries to push down
 into the scan, the data source returns `Exact` (drop the sort),
 `Inexact` (bias the scan and keep the sort), or `Unsupported`.*
 
-The Inexact verdict fires when either of two independent signals is
+The `Inexact` verdict fires when either of two independent signals is
 true:
 
 - **Stats-based reorder available**: the leading sort key is a plain
@@ -323,9 +323,9 @@ the tail of the queue are then checked against the live threshold
 by the [`FilePruner`](https://github.com/apache/datafusion/blob/main/datafusion/pruning/src/file_pruner.rs) before they are ever opened —
 never loading their footer, page index, or any data.
 
-### Row Group Filter early stop
+### Row-group filter early stop
 
-<img src="/blog/images/sort-pushdown/desc_walk_rg.png" alt="Row-group level reorder — filter column still read for every row group before Row Group Filter early stop" width="100%" class="img-fluid" /><br/>
+<img src="/blog/images/sort-pushdown/desc_walk_rg.png" alt="Row-group-level reorder — filter column still read for every row group before row-group filter early stop" width="100%" class="img-fluid" /><br/>
 *Figure: inside a file, the first row group tightens the threshold —
 subsequent row groups have their projection columns short-circuited,
 but the filter column still has to be read to discover that no rows
@@ -374,7 +374,7 @@ row groups' min/max statistics, using only metadata, no I/O.
 ### Example of pruning row groups using TopK dynamic predicates
 
 This section walks through an example of how the techniques described in
-this blog work together to prune row groups. 
+this blog work together to prune row groups.
 
 <img src="/blog/images/sort-pushdown/rg_cascade.png" alt="Cascading prune: one row group fills the heap, threshold snaps, all subsequent row groups are pruned in a single pass" width="100%" class="img-fluid" /><br/>
 *Figure: for `ORDER BY x DESC LIMIT 10`, opening the first row group
@@ -389,10 +389,10 @@ where reorder puts high-value row groups first:
 2. At the next row-group boundary, the pruner sees that all of RG 8
    through RG 0 have `max < 90` and drops them in one pass.
 3. Bytes for those nine row groups were **never fetched** — not
-   projection columns, not the filter column. Full I/O + decompress +
-   decode all skipped.
+   projection columns, not the filter column. Full I/O, decompression,
+   and decoding are all skipped.
 
-This is the unconditional value of [#22450]: when reorder lines up
+This is the unconditional value of [#22450]: when reordering lines up
 disjoint per-RG ranges (the common case for time-series or
 partition-key sorts), a single row group can cascade-eliminate every
 remaining row group at the next boundary.
@@ -419,11 +419,11 @@ Headline numbers:
 | Best single-query speedup           | **~4×**                            |
 
 The five fast queries all use `l_orderkey` as the **leading** sort key, so
-`Layer 2` can cascade-prune aggressively. The other queries lead with low-cardinality
-or unsorted columns (`l_linenumber`, `l_comment`, `l_shipmode`), whose per-RG
-ranges overlap heavily. Even when `l_orderkey` appears later as a tie-breaker,
-the leading key controls RG-level disjointness, so `Layer 3` (row-level) is still
-partially effective.
+`Layer 2` can cascade-prune aggressively. The other queries lead with
+low-cardinality or unsorted columns (`l_linenumber`, `l_comment`,
+`l_shipmode`), whose per-RG ranges overlap heavily. Even when `l_orderkey`
+appears later as a tie-breaker, the leading key controls RG-level disjointness,
+so `Layer 3` (row-level) is still partially effective.
 
 Several common time-series workloads are accelerated 3–4× with zero
 regressions, and the optimization becomes a no-op when the data doesn't
@@ -463,11 +463,7 @@ Umbrella issue tracking the entire effort:
 
 * **[EPIC] Sort Pushdown · skip sorts and skip IO for ORDER BY / TopK queries: [apache/datafusion#23036](https://github.com/apache/datafusion/issues/23036)** — phase-by-phase status of all the PRs and follow-ups.
 
-Prior post this work builds on:
-
-* [Dynamic Filters: Passing Information Between Operators During Execution for 25x Faster Queries][dyn-filters-blog] — the dynamic filter primitive `TopK` uses.
-
-Landed PRs that make up the merged work:
+Major PRs:
 
 * `MinMaxStatistics` foundation: [apache/datafusion#9593](https://github.com/apache/datafusion/pull/9593)
 * `PushdownSort` rule + row-group reverse: [apache/datafusion#19064](https://github.com/apache/datafusion/pull/19064)
@@ -486,12 +482,6 @@ In flight / open:
 * Page-level dynamic prune at RG boundary (Future B): [apache/datafusion#23216](https://github.com/apache/datafusion/issues/23216)
 * Per-RG `fully_matched` RowFilter skip on top of [#22450] (blocked on arrow-rs#10158): [apache/datafusion#23067](https://github.com/apache/datafusion/issues/23067)
 * Multi-column / function-wrapped stats reorder follow-ups: [apache/datafusion#22198](https://github.com/apache/datafusion/issues/22198)
-
-Concretely useful issues for new contributors:
-
-* [Add more `ExecutionPlan` impls to support sort pushdown][more-impls-issue].
-
-[more-impls-issue]: https://github.com/apache/datafusion/issues/19394
 
 Benchmark suites: [sort_pushdown](https://github.com/apache/datafusion/tree/main/benchmarks/queries/sort_pushdown), [topk_tpch](https://github.com/apache/datafusion/blob/main/benchmarks/src/sort_tpch.rs).
 
