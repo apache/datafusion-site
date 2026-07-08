@@ -134,9 +134,12 @@ The rest of this post walks through each technique in turn.
 
 <img src="/blog/images/sort-pushdown/plan-diff.svg" alt="EXPLAIN before / after: SortExec eliminated once ordering is Exact" width="100%" class="img-fluid"/>
 
-DataFusion's [`FileScanConfig`](https://docs.rs/datafusion-datasource/latest/datafusion_datasource/file_scan_config/struct.FileScanConfig.html) carries an ordering claim for
-each scan's output, which is one of:
+The [`PushdownSort`](https://github.com/apache/datafusion/blob/main/datafusion/physical-optimizer/src/pushdown_sort.rs)
+optimizer rule classifies each scan below a Sort as either:
+`Unsupported`, `Exact`, or `Inexact`,  and records this information on DataFusion's 
+[`FileScanConfig`](https://docs.rs/datafusion-datasource/latest/datafusion_datasource/file_scan_config/struct.FileScanConfig.html):
 
+- **`Unsupported`** — the optimizer cannot determine the ordering, so no Sort is removed.
 - **`Exact`** — the optimizer is *certain* the output is in this order,
   and removes redundant [`SortExec`](https://docs.rs/datafusion-physical-plan/latest/datafusion_physical_plan/sorts/sort/struct.SortExec.html) operators entirely.
   `LIMIT N` becomes a static fetch on the source (the reader stops the
@@ -162,10 +165,6 @@ SELECT ts, symbol, amount FROM trades ORDER BY ts DESC LIMIT 10;
 - With **`Inexact`** ordering, the `SortExec` stays but scans start
   from the most-promising data, so the `TopK` threshold is more likely to tighten fast
   and the rest is pruned by statistics.
-
-The optimizer rule that upgrades a scan from `Unsupported` to
-`Exact`/`Inexact` — and that removes the resulting redundant
-`SortExec` — is [`PushdownSort`](https://github.com/apache/datafusion/blob/main/datafusion/physical-optimizer/src/pushdown_sort.rs).
 
 ## Three-Layer Pruning · file + RG + row, stacked
 
