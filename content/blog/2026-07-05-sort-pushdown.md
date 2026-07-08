@@ -41,7 +41,7 @@ and mid-scan row-group pruning driven by [dynamic filters][dyn-filters-blog].
 
 ## Why sort pushdown matters
 
-Many real datasets are at least partly sorted on disk:
+Many real datasets are at least partly sorted when stored:
 
 - Time-series files are written in ingestion-time order.
 - Event logs are sharded and sorted by event id.
