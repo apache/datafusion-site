@@ -2,7 +2,7 @@
 layout: post
 title: Sort Pushdown in DataFusion: Skip Sorts, Skip Decode, Skip I/O
 date: 2026-07-05
-author: Qi Zhu
+author: Qi Zhu and Andrew Lamb
 categories: [performance]
 ---
 
@@ -27,7 +27,7 @@ limitations under the License.
 
 [TOC]
 
-*Qi Zhu, [Massive](https://www.massive.com/)*
+*[Qi Zhu](https://github.com/zhuqi-lucas), [Massive](https://www.massive.com/); [Andrew Lamb](https://github.com/alamb), [InfluxData](https://www.influxdata.com/)*
 
 **[Apache DataFusion] automatically takes advantage of sortedness in the
 data — even when the data is only *partially* sorted, and even when
