@@ -47,8 +47,8 @@ Many real datasets are at least partly sorted when stored:
 - Event logs are sharded and sorted by event id.
 - Partitioned tables have a natural ordering by partition key.
 - Modern data lakes based on [Apache Iceberg] and similar formats
-  often have to work with data **as it was written** — resorting the
-  whole table isn't an option.
+  often store data in the order  **it was written**, and resorting the
+  data is prohibitively expensive for many workloads.
 
 But that "pre-existing sortedness" is only useful if the query engine can
 **notice** it and **use** it. Two common failure modes:
