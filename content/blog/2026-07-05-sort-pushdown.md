@@ -93,33 +93,33 @@ This post is about **everything else** — the messier real-world cases
 where sortedness exists but is  **inexact** or not provable up front:
 
 - Files listed in the "wrong" order on disk (each file is internally
-  sorted, but the listing doesn't match).
-- Declared ordering with **overlapping** ranges across files.
+  sorted, but the files are not globally ordered doesn).
+- Ordering is known, but the sort key ranges **overlap** across files.
 - **No** declared ordering at all.
 - `ORDER BY ... DESC` on ASC-sorted data.
 
-Three complementary techniques close each gap:
+Three complementary techniques close each gap and are described in more detail
+in the rest of this post:
 
 1. **Statistics-based sort elimination** (`Exact` path). Extend the
    optimizer to prove ordering from min/max statistics after
    reordering the file list, then delete the sort entirely.
-2. **Runtime scan reorder** (`Inexact` path). Keep the sort, but
-   bias the order files are scanned so the *most-promising* data is read first —
-   dynamic predicate pruning (see the [dynamic filters blog post][dyn-filters-blog])
-   tightens quickly and downstream data is pruned by statistics before it's read.
-3. **Runtime row-group dynamic pruning** ([#22450]). Inside the
-   Parquet decoder loop, re-check dynamic predicate pruning at every
-   row-group boundary if it has gotten more precise due to additional
-   runtime information, and physically remove pruned row groups before
+2. **Runtime scan reorder** (`Inexact` path). Can not eliminate the sort, but
+   biases file scan order so the *most-promising* data is read first and
+   the Top-K dynamic pruning (see the [dynamic filters blog post][dyn-filters-blog])
+   can efficiently prune more data before it's read.
+3. **Runtime row-group dynamic pruning**. Inside the
+   Parquet decoder, re-check dynamic predicate pruning at every
+   row-group boundary to pruned row groups before
    any bytes are fetched.
 
-Together these compose into a **three-layer pruning stack**
+Together these form a **three-layer pruning stack**
 (file-level, row-group-level, row-level), all driven by the same
 `TopK` dynamic filter. Headline results:
 
 - **Sort elimination**: 2×–49× faster on ASC-LIMIT queries where the
   file list was in the wrong disk order.
-- **Runtime row-group pruning ([#22450])**: 5 of 11 `topk_tpch`
+- **Runtime row-group pruning**: 5 of 11 of our benchmark
   queries run 3–4× faster with zero regressions; total runtime drops
   −44%.
 
