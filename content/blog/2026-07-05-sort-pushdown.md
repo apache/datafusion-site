@@ -68,16 +68,17 @@ buffers every input row before emitting anything, dominating both
 latency and peak memory on large scans.
 
 Min/max statistics used for *predicate* pushdown are well-known and
-widely implemented across databases (see [Parquet Pruning in DataFusion:
-Read Only What Matters][parquet-pruning-blog] for more details). Using
-them to *reason about sort order* — deleting redundant sorts and biasing
-scan order toward the most-promising data — is less common. This post is
+widely implemented across databases, as covered in [@XiangpengHao]'s
+earlier post on [Parquet pruning][parquet-pruning-blog]. Using them to
+*reason about sort order* — deleting redundant sorts and biasing scan
+order toward the most-promising data — is less common. This post is
 about how DataFusion does the latter.
 
 [Apache Iceberg]: https://iceberg.apache.org/
+[@XiangpengHao]: https://github.com/XiangpengHao
 [parquet-pruning-blog]: https://datafusion.apache.org/blog/2025/03/20/parquet-pruning
 
-## What DataFusion could already do — and what was missing
+## Exact vs Inexact Ordering
 
 DataFusion has always been able to skip the sort in the **exact** case,
 using the machinery covered in [@akurmustafa's earlier post on
@@ -89,7 +90,7 @@ existing `EnsureRequirements` rule sees that the scan's
 `SortExec`** entirely.
 
 This post is about **everything else** — the messier real-world cases
-where sortedness exists but isn't provable up front:
+where sortedness exists but is  **inexact** or not provable up front:
 
 - Files listed in the "wrong" order on disk (each file internally
   sorted, but the listing doesn't match).
@@ -107,7 +108,7 @@ Three complementary techniques close each gap:
    dynamic predicate pruning (see the [dynamic filters blog post][dyn-filters-blog])
    tightens quickly and downstream data is pruned by statistics before it's read.
 3. **Runtime row-group dynamic pruning** ([#22450]). Inside the
-   parquet decoder loop, re-check dynamic predicate pruning at every
+   Parquet decoder loop, re-check dynamic predicate pruning at every
    row-group boundary if it has gotten more precise due to additional
    runtime information, and physically remove pruned row groups before
    any bytes are fetched.
@@ -178,7 +179,7 @@ dynamic filter. The three layers stack; no layer subsumes another.
 
 * **Layer 1 · file-level** (`file_pruner` + `EarlyStoppingStream`).
   Cuts dead files before they're opened. The only layer that skips
-  parquet metadata I/O entirely.
+  Parquet metadata I/O entirely.
 * **Layer 2 · row-group-level** ([#22450]). Cuts dead row groups
   inside open files at every row-group boundary. Bytes never
   fetched, filter column never decoded.
@@ -299,11 +300,11 @@ Numbers below are the `sort_pushdown` suite,
 
 Stats-based sort elimination handles the case when the table has a
 declared `output_ordering` *and* the files are provably
-non-overlapping after sorting by min. However when these cases
-do not apply, a full sort is still overkill. The parquet metadata
+non-overlapping after sorting by min. However, when these cases
+do not apply, a full sort is still overkill. The Parquet metadata
 is right there, and reading the *most-promising* data first lets
 `TopK`'s dynamic filter threshold tighten quickly so the rest gets
-pruned. Runtime reorder wires that up by generalising the `Inexact`
+pruned. Runtime reorder wires that up by generalizing the `Inexact`
 path the rule introduced.
 
 <img src="/blog/images/sort-pushdown/pr21956-decision.svg" alt="try_pushdown_sort decision tree: Exact, Inexact, or Unsupported" width="100%" class="img-fluid" /><br/>
@@ -326,15 +327,15 @@ true:
 
 ### How the scan reorders data
 
-If `PushdownSort` determines `Inexact` applies to the data source, and
+If `PushdownSort` determines `Inexact` applies to the data source and
 the source supports `Inexact`, further optimizations are possible. For
-example, the parquet opener applies runtime reordering as follows:
+example, the Parquet opener applies runtime reordering as follows:
 
 <img src="/blog/images/sort-pushdown/pr21956-runtime-pipeline.svg" alt="Runtime reorder pipeline: file reorder, RG reorder, then optional reverse" width="100%" class="img-fluid" /><br/>
-*Figure: the parquet opener applies file-level reorder → row-group-level
+*Figure: the Parquet opener applies file-level reorder → row-group-level
 reorder → optional iteration reverse.*
 
-The parquet opener applies up to three composable steps at query start:
+The Parquet opener applies up to three composable steps at query start:
 
 1. **File-level reorder** — the file list is sorted by `min(col)`,
    so the most-promising file is picked first across all partitions.
@@ -436,7 +437,7 @@ remaining row group at the next boundary.
 
 The [`topk_tpch`](https://github.com/apache/datafusion/blob/main/benchmarks/src/sort_tpch.rs)
 benchmark runs 11 TPC-H SF1 queries, all of the shape
-`ORDER BY ... LIMIT 100`. The data is stored in parquet, sorted by
+`ORDER BY ... LIMIT 100`. The data is stored in Parquet, sorted by
 `l_orderkey` (lineitem's physical sort key — a `BIGINT` with ~1.5M
 distinct values per SF1), so per-RG `min/max` ranges are cleanly disjoint.
 We compare DataFusion 54 with the sort optimizations described in this blog
@@ -465,7 +466,8 @@ RG-level boundaries to prune at, so `Layer 3` (row-level) still does
 its share of the work.
 
 Several common time-series workloads are accelerated 3–4× with zero
-regressions and no-op when the data doesn't help. The sweet spot —
+regressions, and the optimization becomes a no-op when the data doesn't
+help. The sweet spot —
 sort key aligned with the physical layout — is the common case for
 time-series, partitioned tables, and ingestion-ordered event logs.
 
@@ -479,7 +481,7 @@ prune at the row-group boundary (pure DataFusion plumbing on top of
 [#22450], tracked in
 [apache/datafusion#23216](https://github.com/apache/datafusion/issues/23216))
 which extends the same "refresh at RG boundary" pattern one level
-down the parquet hierarchy.
+down the Parquet hierarchy.
 
 ## Acknowledgements
 
@@ -516,7 +518,7 @@ Landed PRs that make up the merged work:
 * Reverse-output redesign: [apache/datafusion#19446](https://github.com/apache/datafusion/pull/19446), [apache/datafusion#19557](https://github.com/apache/datafusion/pull/19557)
 * Sort elimination via statistics: [apache/datafusion#21182](https://github.com/apache/datafusion/pull/21182)
 * `BufferExec` capacity for sort elimination: [apache/datafusion#21426](https://github.com/apache/datafusion/pull/21426)
-* Push-based parquet decoder (DataFusion owns the loop): [apache/datafusion#20839](https://github.com/apache/datafusion/pull/20839)
+* Push-based Parquet decoder (DataFusion owns the loop): [apache/datafusion#20839](https://github.com/apache/datafusion/pull/20839)
 * Morsel-style work scheduling: [apache/datafusion#21351](https://github.com/apache/datafusion/pull/21351)
 * Runtime reorder for `TopK` convergence: [apache/datafusion#21956](https://github.com/apache/datafusion/pull/21956)
 * **Runtime row-group dynamic pruning ([#22450])** — the centerpiece of this post.
