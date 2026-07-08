@@ -67,7 +67,7 @@ latency and peak memory on large scans.
 
 Min/max statistics used for *predicate* pushdown are well-known and
 widely implemented across databases. Using them to *reason about sort
-order* — deleting redundant sorts, biasing scan order toward the
+order* — deleting redundant sorts and biasing scan order toward the
 most-promising data — is less common. This post is about how DataFusion
 does the latter.
 
