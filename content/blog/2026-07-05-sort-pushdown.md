@@ -37,7 +37,7 @@ by [dynamic filters][dyn-filters-blog] make that possible.
 [Apache DataFusion]: https://datafusion.apache.org/
 [dyn-filters-blog]: https://datafusion.apache.org/blog/2025/09/10/dynamic-filters/
 
-## Why sort pushdown matters
+## Why Sort Pushdown Matters
 
 Many real datasets are at least partly sorted when stored: time-series files by
 ingestion time, event logs by event id, partitioned tables by partition key, and
@@ -69,7 +69,7 @@ about how DataFusion does the latter.
 [@XiangpengHao]: https://github.com/XiangpengHao
 [parquet-pruning-blog]: https://datafusion.apache.org/blog/2025/03/20/parquet-pruning
 
-## Exact vs Inexact Ordering
+## Exact vs. Inexact Ordering
 
 DataFusion has long skipped sorts in the **exact** case, as covered in
 [@akurmustafa's earlier post on ordering analysis][ordering-analysis]:
@@ -147,7 +147,7 @@ SELECT ts, symbol, amount FROM trades ORDER BY ts DESC LIMIT 10;
   from the most-promising data, so the `TopK` threshold is more likely to
   tighten quickly and the rest is pruned by statistics.
 
-## Three-Layer Pruning · file + RG + row, stacked
+## Three-Layer Pruning: File, Row Group, and Row
 
 All three techniques use the same `TopK` dynamic filter across three pruning
 layers:
@@ -168,7 +168,7 @@ layers:
   This layer has the highest residual cost (the filter column),
   but also the finest granularity.
 
-## The `Exact` Path · Sort Elimination via Statistics
+## The Exact Path: Sort Elimination via Statistics
 
 <img src="/blog/images/sort-pushdown/phase1-file-reorder.svg" alt="File reorder: rearranging files within a partition by min/max statistics so the file list is in range order" width="100%" class="img-fluid" /><br/>
 *Figure: file reorder by per-file `min/max` puts the file list in range
@@ -206,7 +206,7 @@ falls through to the `Inexact` path).*
 
 The overlap case falls through to the `Inexact` path covered later.
 
-### `BufferExec` · a subtle multi-partition side effect
+### BufferExec: Buffering Without Sorting
 
 <img src="/blog/images/sort-pushdown/buffer-exec-stall.svg" alt="SPM stalls when SortExec is removed in multi-partition plans" width="100%" class="img-fluid" /><br/>
 *Figure: removing the per-partition `SortExec` leaves the top-of-plan
@@ -227,7 +227,7 @@ The fix is [`BufferExec`](https://github.com/apache/datafusion/blob/main/datafus
 a bounded per-partition prefill buffer that restores the greedy parallel I/O
 driver role without sorting.
 
-### Benchmark: `sort_pushdown` suite
+### Benchmark: sort_pushdown
 
 We measured statistics-based sort elimination with DataFusion's
 [`sort_pushdown`](https://github.com/apache/datafusion/tree/main/benchmarks/queries/sort_pushdown)
@@ -254,7 +254,7 @@ Numbers below are the `sort_pushdown` suite,
   the reader stops after N rows. A 342 ms full-file scan collapses
   into a 7 ms K-row read.
 
-## The `Inexact` Path · Runtime Reorder for `TopK` and `DESC`
+## The Inexact Path: Runtime Reorder for TopK and DESC
 
 Stats-based sort elimination applies only when ordering is declared and file
 ranges are non-overlapping after the min-based file reorder. Otherwise,
@@ -273,7 +273,7 @@ ordering satisfies the request. The latter uses DataFusion's
 functions<sup id="fn1">[1](#footnote1)</sup>, constants inferred from filters,
 and multi-column orderings.
 
-### How the scan reorders data
+### Scan Reordering
 
 If `PushdownSort` determines `Inexact` applies and the source supports it, the
 Parquet opener applies runtime reordering as follows:
@@ -291,7 +291,7 @@ The Parquet opener applies up to three composable steps at query start:
 3. **Iteration reverse** — flip row-group iteration order for `DESC`
    requests.
 
-### File-level early stop
+### File-Level Early Stop
 
 <img src="/blog/images/sort-pushdown/desc_walk_file.png" alt="File-level reorder with early stop via file_pruner" width="100%" class="img-fluid" /><br/>
 *Figure: after file reorder, low-value files (`file_d` and `file_c`,
@@ -304,7 +304,7 @@ its dynamic filter threshold tightens. The [`FilePruner`](https://github.com/apa
 then cuts low-value files before opening them — no footer, page index, or data
 I/O.
 
-### Row-group filter early stop
+### Row-Group Filter Early Stop
 
 <img src="/blog/images/sort-pushdown/desc_walk_rg.png" alt="Row-group-level reorder — filter column still read for every row group before row-group filter early stop" width="100%" class="img-fluid" /><br/>
 *Figure: inside a file, the first row group tightens the threshold —
@@ -329,7 +329,7 @@ fresh `PruningPredicate`, and physically removes any row group whose
 min/max can't possibly beat the threshold. The pruned row groups are
 **never decoded, not even on the filter column**.
 
-### The loop and decision point
+### Decoder Loop and Decision Point
 
 <img src="/blog/images/sort-pushdown/transition_anatomy.png" alt="transition() loop: drain, decide, drive — Step 2 is the #22450 addition" width="100%" class="img-fluid" /><br/>
 *Figure: the decoder loop has three steps. Step 2 (DECIDE) is what
@@ -351,7 +351,7 @@ detects dynamic-filter changes, and only then rebuilds the pruning predicate.
 The predicate is then applied to remaining row groups' min/max statistics using
 metadata only.
 
-### Example of pruning row groups using TopK dynamic predicates
+### TopK Row-Group Pruning Example
 
 This section walks through an example of how the techniques described in
 this blog work together to prune row groups.
@@ -377,7 +377,7 @@ disjoint per-RG ranges (the common case for time-series or
 partition-key sorts), a single row group can cascade-eliminate every
 remaining row group at the next boundary.
 
-## Benchmark · `topk_tpch` (TPC-H SF1, `LIMIT 100`)
+## Benchmark: topk_tpch
 
 The [`topk_tpch`](https://github.com/apache/datafusion/blob/main/benchmarks/src/sort_tpch.rs)
 benchmark runs 11 TPC-H SF1 queries, all of the shape
