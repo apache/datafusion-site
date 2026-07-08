@@ -164,6 +164,40 @@ The optimizer rule that upgrades a scan from `Unsupported` to
 `Exact`/`Inexact` — and that removes the resulting redundant
 `SortExec` — is [`PushdownSort`](https://github.com/apache/datafusion/blob/main/datafusion/physical-optimizer/src/pushdown_sort.rs).
 
+## Three-Layer Pruning · file + RG + row, stacked
+
+Before diving into each technique, it's worth naming the overall
+strategy: the three techniques described below all work by taking
+advantage of a **multi-layer pruning stack** — file-level,
+row-group-level, and row-level — driven by the **same** `TopK`
+dynamic filter. The three layers stack; no layer subsumes another.
+
+<img src="/blog/images/sort-pushdown/pruning_stack.png" alt="Three-layer pruning: file-level, RG-level, row-level, all driven by the same TopK dynamic filter" width="100%" class="img-fluid"/>
+
+* **Layer 1 · file-level** (`file_pruner` + `EarlyStoppingStream`).
+  Cuts dead files before they're opened. The only layer that skips
+  parquet metadata I/O entirely.
+* **Layer 2 · row-group-level** ([#22450]). Cuts dead row groups
+  inside open files at every row-group boundary. Bytes never
+  fetched, filter column never decoded.
+* **Layer 3 · row-level** (`RowFilter`). For row groups that
+  survive Layer 2, the filter is still evaluated row-by-row to
+  build a `RowSelection`. Rows that fail the predicate get their
+  *projection* columns short-circuited via arrow-rs's
+  `selects_any()`, but the *filter* column is necessarily read.
+  This layer has the highest residual cost (the filter column),
+  but also the finest granularity.
+
+The same dynamic filter drives all three. A single insertion into
+the `TopK` heap becomes a new threshold that Layer 3 applies
+per-row immediately (in the currently-open row group), and Layer 2
+re-applies to remaining row groups at the next boundary. Layer 2
+prunes on metadata alone (never touching the filter column), while
+Layer 3 is finer-grained but has to read the filter column to decide.
+
+The rest of the post walks through the two paths (`Exact` and
+`Inexact`) plus the runtime row-group pruning behind Layer 2.
+
 ## The `Exact` Path · Sort Elimination via Statistics
 
 <img src="/blog/images/sort-pushdown/phase1-file-reorder.svg" alt="File reorder: rearranging files within a partition by min/max statistics so the file list is in range order" width="100%" class="img-fluid" /><br/>
@@ -396,37 +430,7 @@ disjoint per-RG ranges (the common case for time-series or
 partition-key sorts), a single row group can cascade-eliminate every
 remaining row group at the next boundary.
 
-## Three-Layer Pruning · file + RG + row, stacked
-
-The sort-based optimizations described above work by taking advantage
-of a multi-layer pruning strategy: file-level, row-group-level, and
-row-level, all driven by the **same** `TopK` dynamic filter. The three
-layers stack — no layer subsumes another.
-
-<img src="/blog/images/sort-pushdown/pruning_stack.png" alt="Three-layer pruning: file-level, RG-level, row-level, all driven by the same TopK dynamic filter" width="100%" class="img-fluid"/>
-
-* **Layer 1 · file-level** (`file_pruner` + `EarlyStoppingStream`).
-  Cuts dead files before they're opened. The only layer that skips
-  parquet metadata I/O entirely.
-* **Layer 2 · row-group-level** ([#22450]). Cuts dead row groups
-  inside open files at every row-group boundary. Bytes never
-  fetched, filter column never decoded.
-* **Layer 3 · row-level** (`RowFilter`). For row groups that
-  survive Layer 2, the filter is still evaluated row-by-row to
-  build a `RowSelection`. Rows that fail the predicate get their
-  *projection* columns short-circuited via arrow-rs's
-  `selects_any()`, but the *filter* column is necessarily read.
-  This layer has the highest residual cost (the filter column),
-  but also the finest granularity.
-
-The same dynamic filter drives all three. A single insertion into
-the `TopK` heap becomes a new threshold that Layer 3 applies
-per-row immediately (in the currently-open row group), and Layer 2
-re-applies to remaining row groups at the next boundary. Layer 2
-prunes on metadata alone (never touching the filter column), while
-Layer 3 is finer-grained but has to read the filter column to decide.
-
-### Benchmark · `topk_tpch` (TPC-H SF1, `LIMIT 100`)
+## Benchmark · `topk_tpch` (TPC-H SF1, `LIMIT 100`)
 
 The [`topk_tpch`](https://github.com/apache/datafusion/blob/main/benchmarks/src/sort_tpch.rs)
 benchmark runs 11 TPC-H SF1 queries, all of the shape
