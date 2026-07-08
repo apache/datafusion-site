@@ -348,20 +348,11 @@ min/max can't possibly beat the threshold. The pruned row groups are
 
 ### The loop and decision point
 
-<img src="/blog/images/sort-pushdown/transition_anatomy.png" alt="transition() loop: drain, decide, drive — Step 2 is the #22450 addition" width="100%" class="img-fluid" /><br/>
-*Figure: the decoder loop has three steps. Step 2 (DECIDE) is what
-[#22450] adds — it only fires at row-group boundaries.*
-
-The loop body reads: **drain** the current row group's batches until
-it's exhausted; **decide** at the boundary whether any of the
+The decoder loop reads: **drain** the current row group's batches until
+it's exhausted; **decide** at the row-group boundary whether any of the
 remaining row groups can be dropped based on the live threshold; then
 **drive** the decoder into the next row group and repeat. Inside a
 row group, only drain and drive run — no decision point.
-
-<img src="/blog/images/sort-pushdown/pruner_loop.png" alt="RowGroupPruner: watch (cheap), rebuild (expensive, only if changed), prune (cheap)" width="100%" class="img-fluid" /><br/>
-*Figure: the pruner has a cheap "check if the filter changed" step, a
-moderately expensive "rebuild the predicate if so" step, and a cheap
-"apply the predicate to remaining row groups" step.*
 
 The pruner is designed so the expensive work only fires when it can
 possibly help: a cheap epoch check tells it whether the dynamic filter
