@@ -92,7 +92,7 @@ existing `EnsureRequirements` rule sees that the scan's
 This post is about **everything else** — the messier real-world cases
 where sortedness exists but is  **inexact** or not provable up front:
 
-- Files listed in the "wrong" order on disk (each file internally
+- Files listed in the "wrong" order on disk (each file is internally
   sorted, but the listing doesn't match).
 - Declared ordering with **overlapping** ranges across files.
 - **No** declared ordering at all.
