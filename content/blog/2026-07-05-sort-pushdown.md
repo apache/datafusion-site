@@ -61,8 +61,8 @@ But that "pre-existing sortedness" is only useful if the query engine can
    plan time.
 
 In both cases, an `ORDER BY` or `ORDER BY ... LIMIT N` query pays the
-cost of a full external `SortExec` — a pipeline-blocking operator that
-must see every input row before emitting anything, dominating both
+cost of a full sort — a pipeline-blocking operator that
+must buffer every input row before emitting anything, dominating both
 latency and peak memory on large scans.
 
 Min/max statistics used for *predicate* pushdown are well-known and
