@@ -171,12 +171,11 @@ which flavour the source can produce, and rewrites accordingly.
 order without touching file contents.*
 
 DataFusion could already recognize the *exact* sortedness case (declared
-ordering + matching on-disk file list). The new capability is recognizing
-sortedness when the **file list is in the wrong order** on disk, using
-the min/max statistics that the Parquet writer already stored per row
-group. Implemented across two PRs on `PushdownSort`:
+ordering + matching on-disk file list). It can now also recognize
+sortedness when the **file list is in the wrong order** on disk, by using
+the min/max row group statistics stored in the Parquet file (relevant PRs:
 [apache/datafusion#19064][#19064] (rule scaffolding), and
-[apache/datafusion#21182][#21182] (stats-based file reorder).
+[apache/datafusion#21182][#21182] (stats-based file reorder))
 
 [#19064]: https://github.com/apache/datafusion/pull/19064
 [#21182]: https://github.com/apache/datafusion/pull/21182
