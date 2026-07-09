@@ -372,10 +372,10 @@ where reorder puts high-value row groups first:
    projection columns, not the filter column. Full I/O, decompression,
    and decoding are all skipped.
 
-This is the unconditional value of [#22450]: when reordering lines up
-disjoint per-RG ranges (the common case for time-series or
-partition-key sorts), a single row group can cascade-eliminate every
-remaining row group at the next boundary.
+This is what runtime row-group dynamic pruning fundamentally provides:
+when reordering lines up disjoint per-RG ranges (the common case for
+time-series or partition-key sorts), a single row group can
+cascade-eliminate every remaining row group at the next boundary.
 
 ## Benchmark: topk_tpch
 
@@ -463,7 +463,7 @@ In flight / open:
 
 * Page-level reverse (arrow-rs): [apache/arrow-rs#9937](https://github.com/apache/arrow-rs/pull/9937), discussion in [apache/arrow-rs#9934](https://github.com/apache/arrow-rs/issues/9934)
 * `peek_next_row_group` API for per-RG `fully_matched` RowFilter skip (arrow-rs): [apache/arrow-rs#10158](https://github.com/apache/arrow-rs/pull/10158)
-* Page-level dynamic prune at RG boundary (Future B): [apache/datafusion#23216](https://github.com/apache/datafusion/issues/23216)
+* Page-level dynamic prune at RG boundary: [apache/datafusion#23216](https://github.com/apache/datafusion/issues/23216)
 * Per-RG `fully_matched` RowFilter skip on top of [#22450] (blocked on arrow-rs#10158): [apache/datafusion#23067](https://github.com/apache/datafusion/issues/23067)
 * Multi-column / function-wrapped stats reorder follow-ups: [apache/datafusion#22198](https://github.com/apache/datafusion/issues/22198)
 
