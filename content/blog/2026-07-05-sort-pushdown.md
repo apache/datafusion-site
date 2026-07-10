@@ -195,21 +195,12 @@ upgrading to `Exact` only when the ranges don't overlap. Left: non-overlapping
 ranges are safe to upgrade to `Exact` and the sort is removed; right:
 overlapping ranges keep the sort and fall through to the `Inexact` path described next.*
 
-The overlap case falls through to the `Inexact` path covered later.
-
-
-### Benchmark: sort_pushdown
-
 We measured statistics-based sort elimination with DataFusion's
-[`sort_pushdown`](https://github.com/apache/datafusion/tree/main/benchmarks/queries/sort_pushdown)
-benchmark suite.
+[`sort_pushdown`](https://github.com/apache/datafusion/tree/main/benchmarks/queries/sort_pushdown) benchmark suite
+forcing execution to a single core using `--partitions 1`. 
 
 <img src="/blog/images/sort-pushdown/benchmark.svg" alt="Sort pushdown benchmark: 2x-49x speedup across four queries" width="100%" class="img-fluid" /><br/>
-*Figure: `sort_pushdown` results (`--partitions 1`, release build). ASC
-queries with the file list reversed against sort-key ranges.*
-
-Numbers below are the `sort_pushdown` suite,
-`--partitions 1`, versus `main`:
+*Figure: `sort_pushdown` results. Note `ASC` queries with the file list reversed against sort-key ranges.*
 
 | Query                                       | Before  | After   | Speedup  |
 | ------------------------------------------- | -------:| -------:| -------: |
@@ -218,12 +209,10 @@ Numbers below are the `sort_pushdown` suite,
 | Q3 — `SELECT * ORDER BY key`                | 700 ms  | 313 ms  | **2.2×** |
 | Q4 — `SELECT * ORDER BY key LIMIT 100`      | 342 ms  |   7 ms  | **49×**  |
 
-- **Full-scan queries (Q1, Q3)** save the cost of the sort itself
-  (~½ end-to-end latency for in-memory sorts).
-- **`LIMIT` queries (Q2, Q4)** benefit dramatically because deleting
-  the `SortExec` turns `LIMIT N` into a **static fetch** on the source —
-  the reader stops after N rows. A 342 ms full-file scan collapses
-  into a 7 ms K-row read.
+While DataFusion can avoid sorting for four queries, the benefit is most dramatic for `LIMIT` queries: 
+
+- **Full-scan queries (Q1, Q3)** result in a ~2 speedup as the scan is now a single-pass streaming read.
+- **`LIMIT` queries (Q2, Q4)** result in 27x-49x speedup because `LIMIT N` turns into a streaming read with early stopping.
 
 ## The Inexact Path: Runtime Reorder for TopK and DESC
 
