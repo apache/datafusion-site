@@ -105,7 +105,7 @@ These techniques are implemented in DataFusion and together result in:
 - **Runtime row-group pruning**: 5 of 11 benchmark queries run 3–4×
   faster with zero regressions; total runtime drops −44%.
 
-The rest of this post walks through each technique in turn.
+The rest of this post walks through each technique in detail.
 
 [#22450]: https://github.com/apache/datafusion/pull/22450
 [#20839]: https://github.com/apache/datafusion/pull/20839
@@ -117,19 +117,17 @@ The rest of this post walks through each technique in turn.
 <img src="/blog/images/sort-pushdown/plan-diff.svg" alt="EXPLAIN before / after: SortExec eliminated once ordering is Exact" width="100%" class="img-fluid"/>
 
 The [`PushdownSort`](https://github.com/apache/datafusion/blob/main/datafusion/physical-optimizer/src/pushdown_sort.rs)
-optimizer rule classifies each scan below a sort as one of `Unsupported`,
+optimizer rule classifies each scan below a sort as either `Unsupported`,
 `Exact`, or `Inexact`, and records this information on DataFusion's
 [`FileScanConfig`](https://docs.rs/datafusion-datasource/latest/datafusion_datasource/file_scan_config/struct.FileScanConfig.html):
 
 - **`Unsupported`** — the optimizer cannot determine the ordering, so no sort is removed.
 - **`Exact`** — the optimizer is *certain* the output is in this order,
   and removes redundant [`SortExec`](https://docs.rs/datafusion-physical-plan/latest/datafusion_physical_plan/sorts/sort/struct.SortExec.html) operators entirely.
-  `LIMIT N` becomes a static fetch on the source (the reader stops the
-  moment N rows are emitted).
 - **`Inexact`** — the optimizer believes the output is probably ordered
   but cannot prove it. Downstream operators like
   [`SortPreservingMergeExec`](https://docs.rs/datafusion-physical-plan/latest/datafusion_physical_plan/sorts/sort_preserving_merge/struct.SortPreservingMergeExec.html) can still benefit, but the
-  explicit `SortExec` stays for correctness. In this case `TopK`'s
+  explicit sort must remain. In this case `TopK`'s
   [dynamic filter][dyn-filters-blog] tightens as the heap fills, and
   data whose min/max cannot beat the threshold is pruned before it is
   fully read.
@@ -146,32 +144,21 @@ SELECT ts, symbol, amount FROM trades ORDER BY ts DESC LIMIT 10;
   stops reading after emitting 10 rows.
 - With **`Inexact`** ordering, the `SortExec` stays but scans start
   from the most-promising data, so the `TopK` threshold is more likely to
-  tighten quickly and the rest is pruned by statistics.
+  tighten quickly and prune the rest with statistics.
 
-## Three-Layer Pruning: File, Row Group, and Row
-
-All three techniques use the same `TopK` dynamic filter across three pruning
-layers:
 
 <img src="/blog/images/sort-pushdown/pruning_stack.svg" alt="Three-layer pruning: file-level, row-group-level, row-level, all driven by the same TopK dynamic filter" width="100%" class="img-fluid" /><br/>
-*Figure: three independent pruning layers, all driven by the same `TopK`
-dynamic filter. Each adds its own savings at a different granularity — file
-(whole file), row group (integer-RG), and row (per-row) — and none replaces
-another.*
+*Figure three pruning layers, all driven by the same `TopK` dynamic filter.*
 
 * **Layer 1 · file-level** (`file_pruner` + `EarlyStoppingStream`).
-  Cuts dead files before they're opened. The only layer that skips
-  Parquet metadata I/O entirely.
-* **Layer 2 · row-group-level** ([#22450]). Cuts dead row groups
+  Skips files completely before they're opened -- no Parquet data or  metadata I/O is performed.
+* **Layer 2 · row-group-level** ([#22450]). Skips dead row groups
   inside open files at every row-group boundary. Bytes never
   fetched, filter column never decoded.
 * **Layer 3 · row-level** (`RowFilter`). For row groups that
-  survive Layer 2, the filter is still evaluated row-by-row to
-  build a `RowSelection`. Rows that fail the predicate get their
-  *projection* columns short-circuited via arrow-rs's
-  `selects_any()`, but the *filter* column is necessarily read.
-  This layer has the highest residual cost (the filter column),
-  but also the finest granularity.
+  survive Layer 2, the filter is evaluated row-by-row on
+  the predicate columns. If the all rows are filtered
+  remaining columns are never read or decoded. 
 
 ## The Exact Path: Sort Elimination via Statistics
 
