@@ -37,22 +37,24 @@ by [dynamic filters][dyn-filters-blog] make that possible.
 [Apache DataFusion]: https://datafusion.apache.org/
 [dyn-filters-blog]: https://datafusion.apache.org/blog/2025/09/10/dynamic-filters/
 
-## Why Sort Pushdown Matters
+## Are Real Datasets Sorted?
 
-Many real datasets are at least partly sorted when stored: time-series files by
+Resorting data is prohibitively expensive for many workloads so fully sorting is often
+not practical.
+
+However, many real datasets are at least partly sorted when stored: time-series files by
 ingestion time, event logs by event id, partitioned tables by partition key, and
-modern data lakes based on [Apache Iceberg] and similar formats in write order.
-Resorting data is prohibitively expensive for many workloads.
+data lakes based on [Apache Iceberg] and similar formats in write order.
 
 Sortedness only helps if the query engine can detect and use it. Two common
 cases make that hard:
 
-1. The ordering is undeclared: the writer did not set Parquet
+1. The ordering is undeclared in the file. For example, the writer did not set Parquet
    [`sorting_columns`](https://github.com/apache/parquet-format/blob/8a5e04bdecf100e8e981daacfa117e8b5aadacb9/src/main/thrift/parquet.thrift#L1044),
    or the table was not created with DataFusion's
    [`WITH ORDER`](https://datafusion.apache.org/user-guide/sql/ddl.html#create-external-table) clause.
-2. Files are individually sorted, but the scan order is not globally sorted, so
-   the engine cannot prove global ordering at plan time.
+2. Files are individually sorted, but the engine is canning multiple files
+   and does not know a global ordering at plan time.
 
 In both cases, `ORDER BY` or `ORDER BY ... LIMIT N` pays for a blocking full
 sort, which buffers every row and dominates latency and peak memory on large
@@ -152,7 +154,11 @@ SELECT ts, symbol, amount FROM trades ORDER BY ts DESC LIMIT 10;
 All three techniques use the same `TopK` dynamic filter across three pruning
 layers:
 
-<img src="/blog/images/sort-pushdown/pruning_stack.png" alt="Three-layer pruning: file-level, RG-level, row-level, all driven by the same TopK dynamic filter" width="100%" class="img-fluid"/>
+<img src="/blog/images/sort-pushdown/pruning_stack.svg" alt="Three-layer pruning: file-level, row-group-level, row-level, all driven by the same TopK dynamic filter" width="100%" class="img-fluid" /><br/>
+*Figure: three independent pruning layers, all driven by the same `TopK`
+dynamic filter. Each adds its own savings at a different granularity — file
+(whole file), row group (integer-RG), and row (per-row) — and none replaces
+another.*
 
 * **Layer 1 · file-level** (`file_pruner` + `EarlyStoppingStream`).
   Cuts dead files before they're opened. The only layer that skips

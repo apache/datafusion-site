@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 530">
+  <style>
+    text { font-family: 'Segoe UI', Arial, sans-serif; }
+    .title   { font-size: 18px; font-weight: 700; fill: #2c3e7a; }
+    .subtitle{ font-size: 12px; font-style: italic; fill: #666; }
+    .hdr     { font-size: 13px; font-weight: 700; }
+    .sub     { font-size: 11px; font-style: italic; }
+    .code    { font-size: 11px; font-family: 'Courier New', monospace; fill: #333; }
+    .edge    { font-size: 11px; font-style: italic; font-weight: 700; }
+    .spine   { font-size: 11px; font-style: italic; font-weight: 700; }
+    .arrow   { fill: none; stroke: #555; stroke-width: 1.5; marker-end: url(#arr); }
+  </style>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#555"/>
+    </marker>
+  </defs>
+
+  <text class="title"    x="500" y="28" text-anchor="middle">Three-layer pruning &#183; file + row group + row</text>
+  <text class="subtitle" x="500" y="48" text-anchor="middle">Three independent layers, each driven by the same TopK dynamic filter, at different granularities</text>
+
+  <!-- TopK heap threshold -->
+  <rect x="555" y="66" width="300" height="46" rx="6" fill="#eaf2ff" stroke="#5b8def" stroke-width="1.5"/>
+  <text class="hdr" x="705" y="87"  text-anchor="middle" fill="#1f4fa3">TopK heap threshold</text>
+  <text class="sub" x="705" y="104" text-anchor="middle" fill="#1f4fa3">pushes DynamicFilter to all three layers</text>
+  <line class="arrow" x1="705" y1="112" x2="705" y2="149"/>
+
+  <!-- ===== Layer 1: file-level (purple) ===== -->
+  <rect x="470" y="150" width="470" height="58" rx="6" fill="#ede7f6" stroke="#7e57c2" stroke-width="1.5"/>
+  <text class="hdr" x="705" y="174" text-anchor="middle" fill="#4527a0">Layer 1 &#183; file-level dynamic prune</text>
+  <text class="sub" x="705" y="192" text-anchor="middle" fill="#4527a0">file_pruner + EarlyStoppingStream</text>
+
+  <!-- branch: dead file -->
+  <text class="edge" x="405" y="172" text-anchor="middle" fill="#2e7d32">skipped file</text>
+  <line class="arrow" x1="470" y1="179" x2="343" y2="179"/>
+  <rect x="40" y="150" width="300" height="58" rx="6" fill="#e8f5e9" stroke="#2e7d32" stroke-width="1.5"/>
+  <text class="hdr"  x="190" y="171" text-anchor="middle" fill="#1b5e20">Skipped File &#10003; done</text>
+  <text class="code" x="58"  y="188">&#10007; no metadata load</text>
+  <text class="code" x="58"  y="202">&#10007; no row-group decode</text>
+
+  <!-- spine: surviving file -->
+  <text class="spine" x="715" y="234" text-anchor="start" fill="#4527a0">surviving file</text>
+  <line class="arrow" x1="705" y1="208" x2="705" y2="249"/>
+
+  <!-- ===== Layer 2: row-group-level (red) ===== -->
+  <rect x="470" y="250" width="470" height="58" rx="6" fill="#fdecea" stroke="#e05a4f" stroke-width="1.5"/>
+  <text class="hdr" x="705" y="274" text-anchor="middle" fill="#b03a2e">Layer 2 &#183; row-group prune (#22450)</text>
+  <text class="sub" x="705" y="292" text-anchor="middle" fill="#b03a2e">every row-group boundary</text>
+
+  <!-- branch: pruned RG -->
+  <text class="edge" x="405" y="272" text-anchor="middle" fill="#2e7d32">pruned RG</text>
+  <line class="arrow" x1="470" y1="279" x2="343" y2="279"/>
+  <rect x="40" y="250" width="300" height="58" rx="6" fill="#e8f5e9" stroke="#2e7d32" stroke-width="1.5"/>
+  <text class="hdr"  x="190" y="271" text-anchor="middle" fill="#1b5e20">Pruned RG &#10003; done</text>
+  <text class="code" x="58"  y="288">&#10007; no byte fetch</text>
+  <text class="code" x="58"  y="302">&#10007; no decode &#183; &#10007; no RowFilter eval</text>
+
+  <!-- spine: surviving RG -->
+  <text class="spine" x="715" y="334" text-anchor="start" fill="#b03a2e">surviving RG</text>
+  <line class="arrow" x1="705" y1="308" x2="705" y2="349"/>
+
+  <!-- ===== Layer 3: row-level (orange) ===== -->
+  <rect x="470" y="350" width="470" height="58" rx="6" fill="#fff3e0" stroke="#ef9a3d" stroke-width="1.5"/>
+  <text class="hdr" x="705" y="374" text-anchor="middle" fill="#b9770e">Layer 3 &#183; row-level RowFilter</text>
+  <text class="sub" x="705" y="392" text-anchor="middle" fill="#b9770e">per-row &#183; decode sort col + eval</text>
+
+  <!-- branch: reject row -->
+  <text class="edge" x="405" y="372" text-anchor="middle" fill="#2e7d32">reject row</text>
+  <line class="arrow" x1="470" y1="379" x2="343" y2="379"/>
+  <rect x="40" y="350" width="300" height="76" rx="6" fill="#e8f5e9" stroke="#2e7d32" stroke-width="1.5"/>
+  <text class="hdr"  x="190" y="371" text-anchor="middle" fill="#1b5e20">Reject row &#10003; partial savings</text>
+  <text class="code" x="58"  y="388">&#10007; skip other projection cols</text>
+  <text class="code" x="58"  y="402">&#10007; skip their column IO</text>
+  <text class="sub"  x="58"  y="418" fill="#1b5e20">(sort col was decoded to evaluate)</text>
+
+  <!-- spine: pass row -->
+  <text class="spine" x="715" y="434" text-anchor="start" fill="#b9770e">pass row</text>
+  <line class="arrow" x1="705" y1="408" x2="705" y2="449"/>
+
+  <!-- ===== Pass row: full work (gray) ===== -->
+  <rect x="555" y="450" width="300" height="58" rx="6" fill="#eeeeee" stroke="#9e9e9e" stroke-width="1.5"/>
+  <text class="hdr"  x="705" y="471" text-anchor="middle" fill="#555">Pass row &#183; full work</text>
+  <text class="code" x="575" y="488">&#10003; decode every projection col</text>
+  <text class="code" x="575" y="502">&#10003; materialize batch upward</text>
+</svg>
