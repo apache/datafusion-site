@@ -186,7 +186,8 @@ files one after another and produce the correct result.
    every adjacent pair? If yes, the sorted file list produces a globally
    sorted stream.
 3. **Upgrade the source's ordering claim to `Exact`** and remove the
-   surrounding `Sort`.
+   surrounding `Sort`. Note this requires some additional performance as 
+   described in [appendix on buffering without sorting](#appendix-buffering-without-sorting). 
 
 <img src="/blog/images/sort-pushdown/phase2-stats-overlap.svg" alt="Detecting non-overlapping ranges via min/max statistics" width="100%" class="img-fluid" /><br/>
 *Figure: `PushdownSort` sorts files by `min` and checks adjacency,
@@ -196,26 +197,6 @@ overlapping ranges keep the sort and fall through to the `Inexact` path describe
 
 The overlap case falls through to the `Inexact` path covered later.
 
-### BufferExec: Buffering Without Sorting
-
-<img src="/blog/images/sort-pushdown/buffer-exec-stall.svg" alt="SPM stalls when SortExec is removed in multi-partition plans" width="100%" class="img-fluid" /><br/>
-*Figure: removing the per-partition `SortExec` leaves the top-of-plan
-merge (`SortPreservingMergeExec`) directly consuming raw I/O; a stall
-on any partition stalls the whole plan.*
-
-Removing `SortExec` was not always faster in multi-partition plans: the deleted
-sort had also acted as an implicit buffer. The fix was explicit buffering in
-some plans; see
-[apache/datafusion#21426](https://github.com/apache/datafusion/pull/21426)
-for details, as shown in the following figure.
-
-<img src="/blog/images/sort-pushdown/buffer-exec.svg" alt="BufferExec replaces the deleted SortExec with a bounded streaming buffer per partition" width="100%" class="img-fluid" /><br/>
-*Figure: `BufferExec` is inserted where the `SortExec` used to live —
-same greedy per-partition prefill, but no blocking sort.*
-
-The fix is [`BufferExec`](https://github.com/apache/datafusion/blob/main/datafusion/physical-plan/src/buffer.rs):
-a bounded per-partition prefill buffer that restores the greedy parallel I/O
-driver role without sorting.
 
 ### Benchmark: sort_pushdown
 
@@ -465,3 +446,24 @@ Benchmark suites: [sort_pushdown](https://github.com/apache/datafusion/tree/main
 - **Work on a [good first issue](https://github.com/apache/datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)**, or pick up one of the [follow-ups](https://github.com/apache/datafusion/issues/23036) listed in the umbrella issue.
 - **File issues or join the conversation**: [GitHub](https://github.com/apache/datafusion/) for bugs and feature requests, [Slack or Discord](https://datafusion.apache.org/contributor-guide/communication.html) for discussion.
 - Learn more by visiting the [DataFusion](https://datafusion.apache.org/index.html) project page.
+
+### Appendix: Buffering Without Sorting
+
+<img src="/blog/images/sort-pushdown/buffer-exec-stall.svg" alt="SPM stalls when SortExec is removed in multi-partition plans" width="100%" class="img-fluid" /><br/>
+*Figure: removing the per-partition `SortExec` leaves the top-of-plan
+merge (`SortPreservingMergeExec`) directly consuming raw I/O; a stall
+on any partition stalls the whole plan.*
+
+Removing `SortExec` was not always faster in multi-partition plans: the deleted
+sort had also acted as an implicit buffer. The fix was explicit buffering in
+some plans; see
+[apache/datafusion#21426](https://github.com/apache/datafusion/pull/21426)
+for details, as shown in the following figure.
+
+<img src="/blog/images/sort-pushdown/buffer-exec.svg" alt="BufferExec replaces the deleted SortExec with a bounded streaming buffer per partition" width="100%" class="img-fluid" /><br/>
+*Figure: `BufferExec` is inserted where the `SortExec` used to live —
+same greedy per-partition prefill, but no blocking sort.*
+
+The fix is [`BufferExec`](https://github.com/apache/datafusion/blob/main/datafusion/physical-plan/src/buffer.rs):
+a bounded per-partition prefill buffer that restores the greedy parallel I/O
+driver role without sorting.
