@@ -186,12 +186,13 @@ files one after another and produce the correct result.
    every adjacent pair? If yes, the sorted file list produces a globally
    sorted stream.
 3. **Upgrade the source's ordering claim to `Exact`** and remove the
-   surrounding `SortExec`.
+   surrounding `Sort`.
 
 <img src="/blog/images/sort-pushdown/phase2-stats-overlap.svg" alt="Detecting non-overlapping ranges via min/max statistics" width="100%" class="img-fluid" /><br/>
-*Figure: after reorder, the left case has non-overlapping ranges (safe
-to upgrade to `Exact`); the right case has overlaps (upgrade skipped,
-falls through to the `Inexact` path).*
+*Figure: `PushdownSort` sorts files by `min` and checks adjacency,
+upgrading to `Exact` only when the ranges don't overlap. Left: non-overlapping
+ranges are safe to upgrade to `Exact` and the sort is removed; right:
+overlapping ranges keep the sort and fall through to the `Inexact` path described next.*
 
 The overlap case falls through to the `Inexact` path covered later.
 
