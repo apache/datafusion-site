@@ -62,22 +62,23 @@ scans.
 
 Min/max statistics used for *predicate* pushdown are well-known and
 widely implemented across databases, as covered in [@XiangpengHao]'s
-earlier post on [Parquet pruning][parquet-pruning-blog]. Using them to
+earlier post on [Parquet pruning][parquet-pruning-blog]
+and the [Pruning in Snowflake: Working Smarter, Not Harder] paper.
+Using them to
 *reason about sort order* — deleting redundant sorts and biasing scan
-order toward the most-promising data — is less common. This post is
-about how DataFusion does the latter.
+order toward the most-promising data — is less common and what this blog is about.
 
 [Apache Iceberg]: https://iceberg.apache.org/
 [@XiangpengHao]: https://github.com/XiangpengHao
 [parquet-pruning-blog]: https://datafusion.apache.org/blog/2025/03/20/parquet-pruning
+[Pruning in Snowflake: Working Smarter, Not Harder]: https://dl.acm.org/doi/10.1145/3722212.3724447
 
 ## Exact vs. Inexact Ordering
 
-DataFusion has long skipped sorts in the **exact** case, as covered in
+DataFusion has long skipped sorts when it knows the data is **exactly** sorted, as covered in
 [@akurmustafa's earlier post on ordering analysis][ordering-analysis]:
 if the table declares an ordering (via `WITH ORDER` or Parquet
-`sorting_columns`) and the file listing matches it, `EnsureRequirements`
-removes the redundant `SortExec`.
+`sorting_columns`) and the file listing matches it, the redundant sort is removed. 
 
 This post is about **everything else** — the messier real-world cases
 where sortedness exists but is **inexact** or not provable up front:
@@ -88,18 +89,16 @@ where sortedness exists but is **inexact** or not provable up front:
 - **No** declared ordering at all.
 - `ORDER BY ... DESC` on ASC-sorted data.
 
-This post covers three techniques:
+This post covers three novel techniques:
 
-1. **Statistics-based sort elimination** (`Exact`): reorder files by min/max
-   statistics, prove global ordering, and delete the sort.
-2. **Runtime scan reorder** (`Inexact`): keep the sort, but read promising data
-   first so TopK dynamic pruning converges earlier.
-3. **Runtime row-group dynamic pruning**: re-check dynamic predicates at
-   row-group boundaries and skip pruned groups before fetching bytes.
+1. **Statistics-based sort elimination** (`Exact`): Avoids sorts entirely by reorder files by min/max
+   statistics to prove a global ordering.
+2. **Runtime scan reorder** (`Inexact`): reorders the scan to read the most promising data
+   first so TopK dynamic pruning converges earlier.  
+3. **Runtime row-group dynamic pruning**: re-checks dynamic predicates at
+   row-group boundaries and skips pruned groups before fetching bytes.
 
-Together these form a **three-layer pruning stack**
-(file-level, row-group-level, row-level), all driven by the same
-`TopK` dynamic filter. Headline results:
+These techniques are implemented in DataFusion and together result in:
 
 - **Sort elimination**: 2×–49× faster on ASC-LIMIT queries where the
   file list was in the wrong disk order.
