@@ -1,6 +1,6 @@
 ---
 layout: post
-title: Sort Pushdown in DataFusion: Skip Sorts, Skip Decode, Skip I/O
+title: Optimizing for Almost Sorted Data: Sort Pushdown in Apache DataFusion
 date: 2026-07-05
 author: Qi Zhu and Andrew Lamb
 categories: [performance]
