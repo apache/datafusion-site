@@ -166,26 +166,23 @@ SELECT ts, symbol, amount FROM trades ORDER BY ts DESC LIMIT 10;
 *Figure: file reorder by per-file `min/max` puts the file list in range
 order without touching file contents.*
 
-DataFusion already handled declared ordering with matching file order. It now
-also uses Parquet min/max statistics to reorder files and prove global ordering
-(relevant PRs: [apache/datafusion#19064][#19064] (rule scaffolding), and
-[apache/datafusion#21182][#21182] (stats-based file reorder)).
+DataFusion can also eliminate sorts when  it can use  Parquet min/max statistics to reorder files and prove global ordering
+(relevant PRs: [apache/datafusion#19064][#19064], and
+[apache/datafusion#21182][#21182]).
 
 [#19064]: https://github.com/apache/datafusion/pull/19064
 [#21182]: https://github.com/apache/datafusion/pull/21182
 
-For example, consider three files `a.parquet`, `b.parquet`,
-`c.parquet`. Each is internally sorted by `ts` and declares
-`WITH ORDER (ts ASC)`, but they were written by different jobs and end
-up listed alphabetically on disk (which does *not* match sort order).
-The old machinery has no way to prove global sortedness, so an
-`ORDER BY ts` query pays for a full external sort even though the
-underlying data is already sorted.
+For example, consider three files `a.parquet`, `b.parquet`, `c.parquet`. Each is
+internally sorted by `ts` and the time ranges do not overlap, but were written
+by different jobs. Unless it is careful, a query engine will be forced to use a full
+external sort for a query with `ORDER BY ts`, even when it could simply read the
+files one after another and produce the correct result.
 
 `PushdownSort` fixes this in three steps at the file-scan node:
 
 1. **Sort the file list by per-file `min`** on the sort column.
-2. **Check adjacency**: does `file[i].max ≤ file[i+1].min` hold for
+2. **Check overlap**: does `file[i].max ≤ file[i+1].min` hold for
    every adjacent pair? If yes, the sorted file list produces a globally
    sorted stream.
 3. **Upgrade the source's ordering claim to `Exact`** and remove the
