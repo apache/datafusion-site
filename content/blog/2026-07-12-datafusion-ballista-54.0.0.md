@@ -30,7 +30,7 @@ We are pleased to announce version [54.0.0] of [Apache DataFusion Ballista]. Bal
 execution engine that enhances [Apache DataFusion] by enabling parallel execution of workloads across multiple
 nodes.
 
-[54.0.0]: https://github.com/apache/datafusion-ballista/blob/main/docs/source/changelog/54.0.0.md
+[54.0.0]: https://github.com/apache/datafusion-ballista/blob/54.0.0/docs/source/changelog/54.0.0.md
 [Apache DataFusion Ballista]: https://datafusion.apache.org/ballista/
 [Apache DataFusion]: https://datafusion.apache.org
 
@@ -51,7 +51,35 @@ upgraded. As with every release, Ballista's version number tracks the DataFusion
 A versioned [upgrade guide] is now published for 54.0.0, documenting the changes needed to move from the
 previous release.
 
-[upgrade guide]: https://datafusion.apache.org/ballista/user-guide/upgrade.html
+[upgrade guide]: https://datafusion.apache.org/ballista/upgrading/54.0.0.html
+
+## Python client on PyPI
+
+This is the first Ballista release to publish pre-built wheels to [PyPI], so the Python client can now be
+installed without a Rust toolchain or a build from source:
+
+```bash
+pip install ballista==54.0.0
+```
+
+Wheels are available for macOS (Apple Silicon) and Linux (x86-64 and ARM64, glibc 2.39+), and the client
+requires Python 3.10 or newer. It connects to a Ballista scheduler and exposes a DataFusion-style DataFrame
+and SQL API:
+
+```python
+from ballista import BallistaSessionContext
+
+ctx = BallistaSessionContext("df://localhost:50050")
+df = ctx.sql("select * from t limit 5")
+df.show()
+```
+
+Optional Jupyter integration — SQL magics, HTML table rendering, and execution-plan visualization — is
+available via `pip install "ballista[jupyter]"`. The Python client remains pre-alpha; see the [PyPI page] for
+current limitations.
+
+[PyPI]: https://pypi.org/project/ballista/
+[PyPI page]: https://pypi.org/project/ballista/54.0.0/
 
 ## Adaptive Query Execution
 
@@ -206,4 +234,4 @@ details are in the [changelog].
 
 Thanks also to the broader DataFusion community whose work Ballista builds on directly.
 
-[changelog]: https://github.com/apache/datafusion-ballista/blob/main/docs/source/changelog/54.0.0.md
+[changelog]: https://github.com/apache/datafusion-ballista/blob/54.0.0/docs/source/changelog/54.0.0.md
