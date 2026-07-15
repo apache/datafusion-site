@@ -36,8 +36,7 @@ nodes.
 
 This release consists of 171 commits from 11 contributors. It follows [53.0.0], and continues the same
 themes: making Ballista predictable to operate, pushing forward on Adaptive Query Execution, and closing the
-gap between a single-node DataFusion query and the same query running on a cluster. This post covers the
-highlights.
+gap between a single-node DataFusion query and the same query running on a cluster.
 
 [53.0.0]: /blog/2026/05/24/datafusion-ballista-53.0.0/
 
@@ -74,24 +73,24 @@ df = ctx.sql("select * from t limit 5")
 df.show()
 ```
 
-Optional Jupyter integration — SQL magics, HTML table rendering, and execution-plan visualization — is
-available via `pip install "ballista[jupyter]"`. The Python client remains pre-alpha; see the [PyPI page] for
-current limitations.
+An optional Jupyter integration is available via `pip install "ballista[jupyter]"`, adding SQL magics, HTML
+table rendering, and execution-plan visualization. The Python client remains pre-alpha; see the [PyPI page]
+for current limitations.
 
 [PyPI]: https://pypi.org/project/ballista/
 [PyPI page]: https://pypi.org/project/ballista/54.0.0/
 
 ## Adaptive Query Execution
 
-Adaptive Query Execution (AQE) — introduced experimentally in 53.0.0, where the scheduler re-runs the
-DataFusion physical optimizer between stages using statistics from completed stages — saw substantial work in
-this release.
+Adaptive Query Execution (AQE) was introduced experimentally in 53.0.0, with the scheduler re-running the
+DataFusion physical optimizer between stages using statistics from completed stages. This release built on it
+substantially.
 
 - **Broadcast join in AQE.** The join decision is now delayed until runtime statistics are available, and a
   broadcast join can be chosen adaptively when the build side turns out to be small enough. Empty-join
   handling was also added, short-circuiting joins where an input stage produced no rows.
-- **Correctness on remote object stores.** Adaptive planning previously failed against remote object stores
-  with a "No suitable object store found" error; this is now fixed.
+- **Remote object store support.** Adaptive planning previously failed against remote object stores with a
+  "No suitable object store found" error, and now works with them.
 - **Session state improvements.** Session state creation for the AQE planner was reworked, and several
   DataFusion physical rules that were not idempotent were backported so that repeated optimization between
   stages behaves correctly.
@@ -111,14 +110,13 @@ Alongside the adaptive path, the static (pre-execution) planner learned to broad
 - Small build sides are now broadcast via non-zero `CollectLeft` thresholds rather than always shuffling.
 - The static planner can broadcast the small build side of a `SortMergeJoinExec`.
 
-These avoid unnecessary shuffles when one side of a join is small, which is one of the most common sources of
-wasted work in distributed joins.
+Both avoid unnecessary shuffles when one side of a join is small.
 
 ## Web rendering of the TUI
 
-The Terminal User Interface that shipped in 53.0.0 now has a browser-based counterpart. The same views —
-executors, jobs, stages, tasks, plans, and metrics, all backed by the scheduler's REST API — can now be
-rendered as a web application. This release also brought a number of refinements to the UI:
+The Terminal User Interface that shipped in 53.0.0 now has a browser-based counterpart. It offers the same
+views, all backed by the scheduler's REST API: executors, jobs, stages, tasks, plans, and metrics. This
+release also brought a number of refinements to the UI:
 
 - **Theming support**, including higher-contrast foreground colors for the dark theme.
 - A **shimmer animation** for `Queued` and `Running` jobs.
@@ -130,14 +128,13 @@ A nightly build of the Web TUI is deployed to nightlies.apache.org.
 ## Submitting a pre-built physical plan
 
 The scheduler can now accept a pre-built physical plan directly via a new `submit_physical_plan` path. The
-existing `submit_job` entry point is unchanged and non-breaking. This makes it possible for a client to plan
-a query with DataFusion and hand the finished physical plan to the cluster for distributed execution, rather
-than always submitting a logical plan for the scheduler to plan — another step toward decoupling Ballista
-from any single client.
+existing `submit_job` entry point is unchanged and non-breaking. A client can plan a query with DataFusion
+and hand the finished physical plan to the cluster to execute, instead of submitting a logical plan for the
+scheduler to plan. This is another step toward decoupling Ballista from any single client.
 
 ## Shuffle and executor improvements
 
-The shuffle subsystem and executor runtime continued to get attention:
+Several changes landed in the shuffle subsystem and executor runtime:
 
 - **Intermediate shuffle files are deleted on job success**, so completed jobs no longer leave shuffle data
   behind on disk.
@@ -163,7 +160,7 @@ cancellation cleaner and less wasteful of cluster resources.
 
 ## Benchmarking and correctness
 
-A lot of work in this release went into making Ballista's benchmarking and testing more rigorous:
+Benchmarking and testing became more rigorous in several ways:
 
 - TPC-H benchmarks can now be run against **S3-compatible object storage**.
 - A **TPC-H distributed plan-stability test suite** was added, with documented golden files and a
@@ -176,12 +173,11 @@ A lot of work in this release went into making Ballista's benchmarking and testi
 - **macOS Python wheel segfault.** mimalloc is now excluded from the Python wheel, fixing a segmentation
   fault on macOS.
 - **Client session config overrides** (`datafusion.*`) are now honored during scheduler planning.
-- The AQE remote-object-store failure and an empty-projection serde ambiguity bug were both fixed.
+- An empty-projection serde ambiguity bug was fixed.
 
 ## What people are working on
 
-Active development continues across several fronts. Some of the open work most likely to land in upcoming
-releases:
+Some of the open work most likely to land in upcoming releases:
 
 - **Adaptive Query Execution** ([#1359]) — partition splitting for skewed shuffles, executor failure
   handling, and global LIMIT early-stop.
