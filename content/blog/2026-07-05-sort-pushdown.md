@@ -206,32 +206,38 @@ While DataFusion can avoid sorting for all four queries, the benefit is most dra
 - **Full-scan queries (Q1, Q3)** result in a ~2 speedup as the scan is now a single-pass streaming read.
 - **`LIMIT` queries (Q2, Q4)** result in 27x-49x speedup because `LIMIT N` turns into a streaming read with early stopping.
 
-## The Inexact Path: Runtime Reorder for TopK and DESC
+## The Inexact Path: SScan Reordering makes Dynamic Filters More Effective
 
 It is not possible to eliminate the sort when ordering when the files have
-overlapping sort key ranges. However, it is still possible to optimize these
-queries by using Parquet metadata to read the most-promising data first,
-improving the chances the `TopK` dynamic filter will prune the rest earlier.
+overlapping sort key ranges. However, it is still possible to use sorted or
+partly sorted data to optimize queries by ordering the read so the data that is
+most likely to improve the `TopK` dynamic filter will be seen first and prune
+the rest of the data. This is especially important for `LIMIT` queries, where
+the `TopK` dynamic filter can be used to prune files, row groups, and rows that
+cannot possibly contribute to the final result.
 
-The `Inexact` verdict fires when stats-based reorder is available (the leading
-sort key is a plain file column) or when the reverse of the source's declared
-ordering satisfies the request. The latter uses DataFusion's
-[equivalence-properties][ordering-analysis] reasoning, including monotonic
+This `Inexact` path can be used when Parquet min/max statistics are available
+and the the sort expression is supported by DataFusion's
+[equivalence-properties][ordering-analysis], including plain columns, monotonic
 functions<sup id="fn1">[1](#footnote1)</sup>, constants inferred from filters,
-and multi-column orderings.
+and multi-column orderings. The same dynamic filter is used to drive three layers of pruning:
 
 <img src="/blog/images/sort-pushdown/pruning_stack.svg" alt="Three-layer pruning: file-level, row-group-level, row-level, all driven by the same TopK dynamic filter" width="100%" class="img-fluid" /><br/>
-*Figure: three pruning layers, all driven by the same `TopK` dynamic filter.*
+*Figure: Three pruning layers within the Parquet reader, all driven by the same `TopK` dynamic filter.*
 
-* **Layer 1 · file-level** (`file_pruner` + `EarlyStoppingStream`).
+* **Layer 1 · file-level** ([`file_pruner`] + [`EarlyStoppingStream`]).
   Skips files completely before they're opened -- no Parquet data or  metadata I/O is performed.
 * **Layer 2 · row-group-level** ([#22450]). Skips dead row groups
   inside open files at every row-group boundary. Bytes never
   fetched, filter column never decoded.
-* **Layer 3 · row-level** (`RowFilter`). For row groups that
+* **Layer 3 · row-level** ([`RowFilter`]). For row groups that
   survive Layer 2, the filter is evaluated row-by-row on
   the predicate columns. If the all rows are filtered
   remaining columns are never read or decoded. 
+
+[`file_pruner`]: https://docs.rs/datafusion-pruning/latest/datafusion_pruning/struct.FilePruner.html
+[`EarlyStoppingStream`]: https://github.com/apache/datafusion/blob/e104138b4d45d3acfb76223cd968385f6764477b/datafusion/datasource-parquet/src/opener/early_stop.rs
+[`RowFilter`]: https://docs.rs/parquet/latest/parquet/arrow/arrow_reader/struct.RowFilter.html
 
 ### Scan Reordering
 
