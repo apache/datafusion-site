@@ -282,15 +282,15 @@ prunes any that cannot contribute to the final result. See the
 their maximum values and then read sequentially. The first row group is enough to fill the heap, so the threshold jumps into its range (≥ 90). At the next row-group boundary,
 every remaining row group with `max < 90` is pruned in one pass.*
 
-Dynamic row group pruning is especially effective for `LIMIT` queries. For example, consider a file with 10 row groups, each containing rows with values
+For example, consider a file with 10 row groups, each containing rows with values
 `[0..10)`, `[10..20)`, ..., `[90..100)` and a query with `ORDER BY x DESC LIMIT 10`. 
 
 1. The row groups are first reordered by their maximum values, so the highest-value  row group is read first.
 2. Row Group 9 (values `[90..100)`) is opened and read, filling
-   the heap with at least 10 values (the minimum heap value is 90). The `TopK` dynamic filter threshold is updated to 90.
+   the heap with at least 10 values (the minimum heap value is `90`). The `TopK` dynamic filter threshold is updated to `90`.
 3. At the next row-group boundary, the pruner the dynamic filter has been updated, 
    and re-evaluates the filter on all remaining row groups. Since Row Group 8
-   through Row Group 0 have `max < 90` the are all pruned out and skipped in a single pass. 
+   through Row Group 0 have `max < 90` they are all pruned out and skipped in a single pass. 
 4. The scan ends early, having read only one row group instead of all 10.
 
 Note that for the Row Groups that were skipped, no data is fetched nor decoded.
@@ -314,17 +314,16 @@ qualify.*
 
 ## Benchmark: topk_tpch
 
-The [`topk_tpch`](https://github.com/apache/datafusion/blob/main/benchmarks/src/sort_tpch.rs)
-benchmark runs 11 TPC-H SF1 queries, all of the shape
-`ORDER BY ... LIMIT 100`. The data is stored in Parquet, sorted by
-`l_orderkey` (lineitem's physical sort key — a `BIGINT` with ~1.5M
-distinct values per SF1), so per-RG `min/max` ranges are cleanly disjoint.
-We compare DataFusion 54 with the sort optimizations described in this blog
-disabled versus enabled.
+For this work, we defined a new  [`topk_tpch`](https://github.com/apache/datafusion/blob/main/benchmarks/src/sort_tpch.rs)
+benchmark that runs 11 queries over the TPC-C SF1 data. Each query has 
+`ORDER BY ... LIMIT 100`. The data is stored in Parquet files, sorted by
+`l_orderkey`. For the largest table, `lineitem`, this is a `BIGINT` with ~1.5M
+distinct values, so per Row Group `min/max` ranges are cleanly disjoint.
+We compare DataFusion 54 with the sort optimizations enabled (the default) and disabled.
 
-<img src="/blog/images/sort-pushdown/topk_tpch_bench.png" alt="topk_tpch benchmark results: 5 of 11 queries 3-4× faster, 0 regressions, total -44%" width="100%" class="img-fluid"/>
+<img src="/blog/images/sort-pushdown/topk_tpch_bench.svg" alt="topk_tpch benchmark results: 5 of 11 queries 3-4× faster, 0 regressions, total -44%" width="100%" class="img-fluid"/>
 
-Headline numbers:
+Results Summary:
 
 | Metric                              | Value                              |
 | ----------------------------------- | ---------------------------------- |
@@ -333,37 +332,43 @@ Headline numbers:
 | Queries with regression             | **0**                              |
 | Best single-query speedup           | **~4×**                            |
 
-The five fast queries all use `l_orderkey` as the **leading** sort key, so
-`Layer 2` can cascade-prune aggressively. The other queries lead with
+The five queries which improved use `l_orderkey` as the **first** sort key column, so
+`Layer 2` (row group pruning) can cascade-prune aggressively. The other queries have multi-column
+sorts with
 low-cardinality or unsorted columns (`l_linenumber`, `l_comment`,
-`l_shipmode`), whose per-RG ranges overlap heavily. Even when `l_orderkey`
+`l_shipmode`), whose per-Row Group ranges overlap heavily. Even when `l_orderkey`
 appears later as a tie-breaker, the leading key controls RG-level disjointness,
 so `Layer 3` (row-level) is still partially effective.
 
-Several common time-series workloads are accelerated 3–4× with zero
-regressions, and the optimization becomes a no-op when the data doesn't
-help. The sweet spot —
-sort key aligned with the physical layout — is the common case for
-time-series, partitioned tables, and ingestion-ordered event logs.
+## Conclusion
 
-## Future Directions
+Use cases where the query sort key (e.g. `ORDER BY time DESC LIMIT 10`) is
+aligned with the physical layout (e.g. the data is ordered by `time`) are common
+in time-series, partitioned tables, and ingestion-ordered event logs. In
+DataFusion 54, we implemented several novel optimizations, speeding up several
+work loads by a factor of 3-4 without slowing down queries for which they don't
+apply. We hope you enjoy using them and welcome your feedback.
 
-Two follow-ups are open. Page-level `Exact` reverse support needs an upstream
-arrow-rs primitive ([arrow-rs#9937](https://github.com/apache/arrow-rs/pull/9937))
-and would let `DESC` queries drop the sort. Page-level dynamic pruning at
+
+## Future Work
+
+Two follow-ups are open:  Page-level `Exact` reverse would let `DESC` queries drop the sort
+but needs lower level support in the Parquet reader ([arrow-rs#9937](https://github.com/apache/arrow-rs/pull/9937))
+for reading pages in reverse order.
+We are also considering implementing Page-level dynamic pruning at
 row-group boundaries ([apache/datafusion#23216](https://github.com/apache/datafusion/issues/23216))
-extends the same refresh-at-boundary pattern one level deeper in Parquet.
+using the same pattern one level deeper in Parquet.
 
 ## Acknowledgements
 
-Thank you to [@adriangb], [@alamb], [@xudong963], [@2010YOUY01], and
+Thank you to [@adriangb], [@xudong963], [@2010YOUY01], and
 [@Dandandan] for reviewing the design and the patches across many
 iterations. The DataFusion community's willingness to engage deeply
 with optimizer changes — including the ones that touch foundational
-invariants like who-drives-the-decode-loop — is what made this work
+invariants like the Parquet inner decode loop — is what made this work
 possible.
 
-Thanks also to [Massive](https://www.massive.com/) for sponsoring this
+Thanks also to [Massive](https://www.massive.com/) and [InfluxData](https://www.influxdata.com/) for sponsoring this
 work.
 
 <a id="footnote1"></a><sup>[1](#fn1)</sup> For example, if the source declares
