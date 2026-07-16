@@ -206,7 +206,7 @@ While DataFusion can avoid sorting for all four queries, the benefit is most dra
 - **Full-scan queries (Q1, Q3)** result in a ~2 speedup as the scan is now a single-pass streaming read.
 - **`LIMIT` queries (Q2, Q4)** result in 27x-49x speedup because `LIMIT N` turns into a streaming read with early stopping.
 
-## The Inexact Path: SScan Reordering makes Dynamic Filters More Effective
+## The Inexact Path: Scan Reordering makes Dynamic Filters More Effective
 
 It is not possible to eliminate the sort when ordering when the files have
 overlapping sort key ranges. However, it is still possible to use sorted or
@@ -225,75 +225,51 @@ and multi-column orderings. The same dynamic filter is used to drive three layer
 <img src="/blog/images/sort-pushdown/pruning_stack.svg" alt="Three-layer pruning: file-level, row-group-level, row-level, all driven by the same TopK dynamic filter" width="100%" class="img-fluid" /><br/>
 *Figure: Three pruning layers within the Parquet reader, all driven by the same `TopK` dynamic filter.*
 
-* **Layer 1 · file-level** ([`file_pruner`] + [`EarlyStoppingStream`]).
+* **Layer 1 · file-level** ([file_pruner] + [EarlyStoppingStream]).
   Skips files completely before they're opened -- no Parquet data or  metadata I/O is performed.
-* **Layer 2 · row-group-level** ([#22450]). Skips dead row groups
-  inside open files at every row-group boundary. Bytes never
-  fetched, filter column never decoded.
-* **Layer 3 · row-level** ([`RowFilter`]). For row groups that
-  survive Layer 2, the filter is evaluated row-by-row on
-  the predicate columns. If the all rows are filtered
-  remaining columns are never read or decoded. 
+* **Layer 2 · row-group-level** ([#22450]). Skips row groups completely
+  at each row-group boundary. No data pages are fetched or decoded. 
+* **Layer 3 · row-level** ([RowFilter]). Skips decoding remaining *columns* 
+  in a row group if the filter expression is false for all previous rows.  
 
-[`file_pruner`]: https://docs.rs/datafusion-pruning/latest/datafusion_pruning/struct.FilePruner.html
-[`EarlyStoppingStream`]: https://github.com/apache/datafusion/blob/e104138b4d45d3acfb76223cd968385f6764477b/datafusion/datasource-parquet/src/opener/early_stop.rs
-[`RowFilter`]: https://docs.rs/parquet/latest/parquet/arrow/arrow_reader/struct.RowFilter.html
+[file_pruner]: https://docs.rs/datafusion-pruning/latest/datafusion_pruning/struct.FilePruner.html
+[EarlyStoppingStream]: https://github.com/apache/datafusion/blob/e104138b4d45d3acfb76223cd968385f6764477b/datafusion/datasource-parquet/src/opener/early_stop.rs
+[RowFilter]: https://docs.rs/parquet/latest/parquet/arrow/arrow_reader/struct.RowFilter.html
 
-### Scan Reordering
-
-If `PushdownSort` determines `Inexact` applies and the source supports it, the
-Parquet opener applies runtime reordering as follows:
+Once `PushdownSort` determines `Inexact` applies, the Parquet opener reorders
+the scan before and during execution using three techniques:
 
 <img src="/blog/images/sort-pushdown/pr21956-runtime-pipeline.svg" alt="Runtime reorder pipeline: file reorder, RG reorder, then optional reverse" width="100%" class="img-fluid" /><br/>
-*Figure: the Parquet opener applies file-level reorder → row-group-level
-reorder → optional iteration reverse.*
 
-The Parquet opener applies up to three composable steps at query start:
+*Figure: the Parquet opener applies file-level reorder → row-group-level  reorder → optional iteration reverse.*
 
 1. **File-level reorder** — the file list is sorted by `min(col)`,
    so the most-promising file is picked first across all partitions.
 2. **Row-group-level reorder** — once a file is opened, its row groups
    are sorted by `min(col)`.
-3. **Iteration reverse** — flip row-group iteration order for `DESC`
-   requests.
+3. **Iteration reverse** — for queries which want the data in `DESC` 
+   order, the file and row group order is reversed.
 
-### File-Level Early Stop
+**File Level Pruning**: once files are ordered "most-promising first", the
+*`TopK`'s heap fills quickly and its dynamic filter threshold tightens. The
+*[FilePruner] then cuts low-value files before opening them, as shown in the
+*following example.
+
+[FilePruner]: https://github.com/apache/datafusion/blob/e104138b4d45d3acfb76223cd968385f6764477b/datafusion/pruning/src/file_pruner.rs
 
 <img src="/blog/images/sort-pushdown/desc_walk_file.png" alt="File-level reorder with early stop via file_pruner" width="100%" class="img-fluid" /><br/>
-*Figure: after file reorder, low-value files (`file_d` and `file_c`,
-where "low-value" means the sort key values are smaller for ASC queries)
-at the tail of the queue are cut by the file-level pruner before they
+
+*Figure: after reordering files by their sort key, low-value files (`file_d` and `file_c`,
+where "low-value" means the sort key values are smaller for `ASC` queries)
+at the end of the queue are pruned by the file-level pruner before they
 are ever opened — no metadata I/O.*
 
-Once files are ordered "most-promising first", `TopK`'s heap fills quickly and
-its dynamic filter threshold tightens. The [`FilePruner`](https://github.com/apache/datafusion/blob/main/datafusion/pruning/src/file_pruner.rs)
-then cuts low-value files before opening them — no footer, page index, or data
-I/O.
-
-### Row-Group Filter Early Stop
-
-<img src="/blog/images/sort-pushdown/desc_walk_rg.png" alt="Row-group-level reorder — filter column still read for every row group before row-group filter early stop" width="100%" class="img-fluid" /><br/>
-*Figure: inside a file, the first row group tightens the threshold —
-subsequent row groups have their projection columns short-circuited,
-but the filter column still has to be read to discover that no rows
-qualify.*
-
-Reordering row groups so the ones most likely to contain the minimum
-value are read first makes the existing `TopK` dynamic filters +
-[filter pushdown](https://datafusion.apache.org/blog/2025/03/21/parquet-pushdown/)
-optimization more effective, and they can often rule out entire row
-groups after evaluating just the filter columns, avoiding fetching any
-projection columns. This optimization was added in
-[apache/datafusion#22450][#22450].
-
-## Runtime Row-Group Dynamic Pruning
-
-DataFusion now also re-checks the dynamic filter **at every row-group
-boundary** inside an open file (only when the dynamic filter has been
-updated since the initial check), converts the live threshold into a
-fresh `PruningPredicate`, and physically removes any row group whose
-min/max can't possibly beat the threshold. The pruned row groups are
-**never decoded, not even on the filter column**.
+**Row Group Level Pruning**: When a file is first opened, DataFusion prunes 
+Row Groups based on predicates and statistics and then determines
+the order to scan the row groups as explained above. During the scan, when DataFusion
+is about to read the next row group, if the `TopK` dynamic filter threshold 
+has changed DataFusion re-checks
+the remaining row groups against the new threshold.
 
 ### Decoder Loop and Decision Point
 
@@ -342,6 +318,24 @@ This is what runtime row-group dynamic pruning fundamentally provides:
 when reordering lines up disjoint per-RG ranges (the common case for
 time-series or partition-key sorts), a single row group can
 cascade-eliminate every remaining row group at the next boundary.
+
+
+**Row-Group Level Early Stopping**: Once a file is opened, its row groups are reordered by `min(col)` so the
+ones most likely to contain the minimum
+value are read first. This makes the existing `TopK` dynamic filters +
+[filter pushdown](https://datafusion.apache.org/blog/2025/03/21/parquet-pushdown/)
+optimization more effective. Even if the row group can not be pruned entirely based on statistics, 
+and the filters can often rule out all rows
+after evaluating just the filter columns, avoiding fetching any
+projection columns. This optimization was added in
+[apache/datafusion#22450][#22450].
+
+<img src="/blog/images/sort-pushdown/desc_walk_rg.png" alt="Row-group-level reorder — filter column still read for every row group before row-group filter early stop" width="100%" class="img-fluid" /><br/>
+*Figure: inside a file, the first row group tightens the threshold —
+subsequent row groups have their projection columns short-circuited,
+but the filter column still has to be read to discover that no rows
+qualify.*
+
 
 ## Benchmark: topk_tpch
 

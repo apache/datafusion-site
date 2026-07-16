@@ -1,11 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 620">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 42 1180 578">
   <style>
     text { font-family: 'Segoe UI', Arial, sans-serif; }
     .title { font-size: 22px; font-weight: 800; fill: #222; }
     .source-title { font-size: 17px; font-weight: 800; fill: #34495e; }
     .source-flag-name { font-size: 14px; fill: #1d1d1f; font-family: 'Courier New', monospace; font-weight: 700; }
     .source-flag-val { font-size: 13px; fill: #555; font-family: 'Courier New', monospace; }
-    .step-circle { font-size: 22px; font-weight: 800; fill: #fff; }
+    .step-circle { font-size: 22px; font-weight: 800; }
     .step-title { font-size: 19px; font-weight: 800; fill: #fff; }
     .step-scope { font-size: 13px; font-weight: 700; fill: #fff; opacity: 0.85; }
     .step-body { font-size: 15px; fill: #fff; }
@@ -21,31 +21,20 @@
     </marker>
   </defs>
 
-  <text class="title" x="590" y="36" text-anchor="middle">Two flags drive a three-step runtime pipeline</text>
-
   <!-- ============ Source state ============ -->
-  <rect x="90" y="60" width="1000" height="100" rx="10" fill="#f6f7fa" stroke="#34495e" stroke-width="2"/>
-  <text class="source-title" x="590" y="90" text-anchor="middle">ParquetSource carries the inexact-pushdown decision</text>
-
-  <text class="source-flag-name" x="160" y="124">sort_order_for_reorder</text>
-  <text class="source-flag-val" x="370" y="124">= Some([req_col ASC | DESC])</text>
-
-  <text class="source-flag-name" x="160" y="148">reverse_row_groups</text>
-  <text class="source-flag-val" x="370" y="148">= bool</text>
-
-  <text class="source-flag-val" x="820" y="124" text-anchor="end" font-style="italic" font-family="Segoe UI">set by</text>
-  <text class="source-flag-name" x="830" y="124">try_pushdown_sort</text>
-  <text class="source-flag-val" x="1020" y="124" font-style="italic" font-family="Segoe UI">read by opener</text>
+  <rect x="90" y="60" width="1000" height="60" rx="10" fill="#f6f7fa" stroke="#34495e" stroke-width="2"/>
+  <text class="source-title" x="590" y="88" text-anchor="middle">ParquetSource carries the inexact-pushdown decision</text>
+  <text class="source-flag-val" x="590" y="108" text-anchor="middle" font-style="italic" font-family="Segoe UI" fill="#777">set by try_pushdown_sort, read by the opener below</text>
 
   <!-- arrow to step 1 -->
-  <line class="arr" x1="590" y1="164" x2="590" y2="190"/>
+  <line class="arr" x1="590" y1="124" x2="590" y2="190"/>
 
   <!-- ============ Step 1: File-level reorder ============ -->
   <rect x="90" y="195" width="1000" height="85" rx="10" fill="#5b8def"/>
   <circle cx="135" cy="237" r="22" fill="#fff"/>
   <text class="step-circle" x="135" y="245" text-anchor="middle" fill="#5b8def">1</text>
   <text class="step-title" x="180" y="220">File-level reorder</text>
-  <text class="step-scope" x="180" y="240">across the whole scan · shared morsel queue</text>
+  <text class="step-scope" x="180" y="240">across the whole scan</text>
   <text class="step-body" x="180" y="263">Reorder files by <tspan font-family="Courier New" font-weight="700">min(col)</tspan> so the most-promising file opens first</text>
 
   <!-- arrow with label -->
@@ -58,7 +47,7 @@
   <text class="step-circle" x="135" y="360" text-anchor="middle" fill="#27ae60">2</text>
   <text class="step-title" x="180" y="335">Row-group-level reorder</text>
   <text class="step-scope" x="180" y="355">per opened file</text>
-  <text class="step-body" x="180" y="378">Sort RGs ASC by <tspan font-family="Courier New" font-weight="700">min(col)</tspan> from the parquet column statistics</text>
+  <text class="step-body" x="180" y="378">Sort row groups ASC by <tspan font-family="Courier New" font-weight="700">min(col)</tspan> from the parquet column statistics</text>
 
   <!-- arrow with label -->
   <line class="arr" x1="590" y1="399" x2="590" y2="420"/>
@@ -70,7 +59,7 @@
   <text class="step-circle" x="135" y="475" text-anchor="middle" fill="#e67e22">3</text>
   <text class="step-title" x="180" y="450">Reverse iteration</text>
   <text class="step-scope" x="180" y="470">DESC requests only</text>
-  <text class="step-body" x="180" y="493">Iterate RG list in reverse → <tspan font-family="Courier New" font-weight="700">"RGs DESC × rows ASC"</tspan></text>
+  <text class="step-body" x="180" y="493">Iterate row-group list in reverse → <tspan font-family="Courier New" font-weight="700">"row groups DESC × rows ASC"</tspan></text>
 
   <!-- arrow to decoder -->
   <line class="arr" x1="590" y1="514" x2="590" y2="535"/>
@@ -78,5 +67,5 @@
   <!-- ============ Final: decoder ============ -->
   <rect x="90" y="540" width="1000" height="70" rx="10" fill="#34495e"/>
   <text class="footer-title" x="590" y="570" text-anchor="middle">Decoder reads row groups in this order</text>
-  <text class="footer-sub" x="590" y="594" text-anchor="middle">approximate ordering — SortExec / TopK above the source still enforces final ordering</text>
+  <text class="footer-sub" x="590" y="594" text-anchor="middle">approximate ordering — the Sort / TopK above the source still enforces final ordering</text>
 </svg>
