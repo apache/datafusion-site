@@ -113,7 +113,6 @@ The rest of this post walks through each technique in detail.
 
 ## How DataFusion Tracks Ordering
 
-<img src="/blog/images/sort-pushdown/plan-diff.svg" alt="EXPLAIN before / after: SortExec eliminated once ordering is Exact" width="100%" class="img-fluid"/>
 
 The [`PushdownSort`](https://github.com/apache/datafusion/blob/main/datafusion/physical-optimizer/src/pushdown_sort.rs)
 optimizer rule classifies each scan below a sort as either `Unsupported`,
@@ -152,13 +151,14 @@ SELECT ts, symbol, amount FROM trades ORDER BY ts DESC LIMIT 10;
 
 ## The Exact Path: Sort Elimination via Statistics
 
-<img src="/blog/images/sort-pushdown/phase1-file-reorder.svg" alt="File reorder: rearranging files within a partition by min/max statistics so the file list is in range order" width="100%" class="img-fluid" /><br/>
-*Figure: file reorder by per-file `min/max` puts the file list in range
-order without touching file contents.*
-
 DataFusion can also eliminate sorts when  it can use  Parquet min/max statistics to reorder files and prove global ordering
 (relevant PRs: [apache/datafusion#19064][#19064], and
-[apache/datafusion#21182][#21182]).
+[apache/datafusion#21182][#21182]) as shown below.
+
+<img src="/blog/images/sort-pushdown/plan-diff.svg" alt="EXPLAIN before / after: SortExec eliminated once ordering is Exact" width="100%" class="img-fluid"/>
+*Figure: EXPLAIN output before and after `PushdownSort` eliminates the sort. The `SortExec` is removed and the scan's ordering claim is upgraded to `Exact`.*
+
+
 
 [#19064]: https://github.com/apache/datafusion/pull/19064
 [#21182]: https://github.com/apache/datafusion/pull/21182
@@ -178,6 +178,11 @@ files one after another and produce the correct result.
 3. **Upgrade the source's ordering claim to `Exact`** and remove the
    surrounding `Sort`. Note this requires some additional performance optimizations
    described in [appendix on buffering without sorting](#appendix-buffering-without-sorting). 
+
+<img src="/blog/images/sort-pushdown/phase1-file-reorder.svg" alt="File reorder: rearranging files within a partition by min/max statistics so the file list is in range order" width="100%" class="img-fluid" /><br/>
+*Figure: file reorder by per-file `min/max` puts the file list in range
+order without touching file contents.*
+
 
 <img src="/blog/images/sort-pushdown/phase2-stats-overlap.svg" alt="Detecting non-overlapping ranges via min/max statistics" width="100%" class="img-fluid" /><br/>
 *Figure: `PushdownSort` sorts files by `min` and checks adjacency,
@@ -210,14 +215,13 @@ While DataFusion can avoid sorting for all four queries, the benefit is most dra
 
 It is not possible to eliminate the sort when ordering when the files have
 overlapping sort key ranges. However, it is still possible to use sorted or
-partly sorted data to optimize queries by ordering the read so the data that is
-most likely to improve the `TopK` dynamic filter will be seen first and prune
-the rest of the data. This is especially important for `LIMIT` queries, where
-the `TopK` dynamic filter can be used to prune files, row groups, and rows that
-cannot possibly contribute to the final result.
+partly sorted data to optimize `LIMIT` queries. By reordering ordering the read,
+data that is most likely to improve the `TopK` dynamic filter is seen first and
+the filter is more effective at pruning files, row groups, and rows that cannot
+possibly contribute to the final result.
 
-This `Inexact` path can be used when Parquet min/max statistics are available
-and the the sort expression is supported by DataFusion's
+This `Inexact` path is used when Parquet min/max statistics are available
+and the sort expression is supported by DataFusion's
 [equivalence-properties][ordering-analysis], including plain columns, monotonic
 functions<sup id="fn1">[1](#footnote1)</sup>, constants inferred from filters,
 and multi-column orderings. The same dynamic filter is used to drive three layers of pruning:
@@ -289,13 +293,10 @@ Dynamic row group pruning is especially effective for `LIMIT` queries. For examp
    through Row Group 0 have `max < 90` the are all pruned out and skipped in a single pass. 
 4. The scan ends early, having read only one row group instead of all 10.
 
-Note that for the Row Groups that were skipped, no data is fetched nor is any
-decoding performed. The `TopK` dynamic filter is evaluated against the
-
+Note that for the Row Groups that were skipped, no data is fetched nor decoded.
 This example shows the core benefit provided by runtime row-group dynamic
 pruning: reading a single row group can cascade-eliminate every remaining row
 group.
-
 
 **Row-Group Level Early Stopping**: Even if the row group can not be pruned entirely based on statistics, 
 the dynamic filters can often still rule out all rows
@@ -303,7 +304,8 @@ after evaluating just the filter columns, avoiding fetching any
 projection columns. This optimization was added in
 [apache/datafusion#22450][#22450].
 
-<img src="/blog/images/sort-pushdown/desc_walk_rg.png" alt="Row-group-level reorder — filter column still read for every row group before row-group filter early stop" width="100%" class="img-fluid" /><br/>
+<img src="/blog/images/sort-pushdown/desc_walk_rg.svg" alt="Row-group-level reorder — filter column still read for every row group before row-group filter early stop" width="100%" class="img-fluid" /><br/>
+
 *Figure: inside a file, the first row group tightens the threshold —
 subsequent row groups have their projection columns short-circuited,
 but the filter column still has to be read to discover that no rows
