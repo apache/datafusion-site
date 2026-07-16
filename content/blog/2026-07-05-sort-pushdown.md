@@ -229,12 +229,11 @@ and multi-column orderings. The same dynamic filter is used to drive three layer
 <img src="/blog/images/sort-pushdown/pruning_stack.svg" alt="Three-layer pruning: file-level, row-group-level, row-level, all driven by the same TopK dynamic filter" width="100%" class="img-fluid" /><br/>
 *Figure: Three pruning layers within the Parquet reader, all driven by the same `TopK` dynamic filter.*
 
-* **Layer 1 · file-level** ([file_pruner] + [EarlyStoppingStream]).
-  Skips files completely before they're opened -- no Parquet data or  metadata I/O is performed.
-* **Layer 2 · row-group-level** ([#22450]). Skips row groups completely
-  at each row-group boundary. No data pages are fetched or decoded. 
-* **Layer 3 · row-level** ([RowFilter]). Skips decoding remaining *columns* 
-  in a row group if the filter expression is false for all previous rows.  
+* **Layer 1 · file-level** ([file_pruner] + [EarlyStoppingStream]) — skips whole files before they are opened.
+* **Layer 2 · row-group-level** ([#22450]) — skips whole row groups at each boundary, before any pages are fetched.
+* **Layer 3 · row-level** ([RowFilter]) — skips decoding the remaining columns in a surviving row group.
+
+Each layer is described in detail below.
 
 [file_pruner]: https://docs.rs/datafusion-pruning/latest/datafusion_pruning/struct.FilePruner.html
 [EarlyStoppingStream]: https://github.com/apache/datafusion/blob/e104138b4d45d3acfb76223cd968385f6764477b/datafusion/datasource-parquet/src/opener/early_stop.rs
@@ -278,9 +277,7 @@ prunes any that cannot contribute to the final result. See the
 
 
 <img src="/blog/images/sort-pushdown/rg_cascade.svg" alt="Cascading prune: one row group fills the heap, threshold snaps, all subsequent row groups are pruned in a single pass" width="100%" class="img-fluid" /><br/>
-*Figure: Given a query with `ORDER BY x DESC LIMIT 10`, the row groups are first ordered by 
-their maximum values and then read sequentially. The first row group is enough to fill the heap, so the threshold jumps into its range (≥ 90). At the next row-group boundary,
-every remaining row group with `max < 90` is pruned in one pass.*
+*Figure: for `ORDER BY x DESC LIMIT 10`, reading just the first row group can prune all the rest in a single pass (walkthrough below).*
 
 For example, consider a file with 10 row groups, each containing rows with values
 `[0..10)`, `[10..20)`, ..., `[90..100)` and a query with `ORDER BY x DESC LIMIT 10`. 
@@ -298,11 +295,11 @@ This example shows the core benefit provided by runtime row-group dynamic
 pruning: reading a single row group can cascade-eliminate every remaining row
 group.
 
-**Row-Group Level Early Stopping**: Even if the row group can not be pruned entirely based on statistics, 
-the dynamic filters can often still rule out all rows
-after evaluating just the filter columns, avoiding fetching any
-projection columns. This optimization was added in
-[apache/datafusion#22450][#22450].
+**Row-Group Level Early Stopping**: Even if the row group can not be pruned with statistics, 
+dynamic filters can often rule out all rows
+after evaluating just the filter columns. This optimization avoids fetching any
+projection columns (added in
+[apache/datafusion#22450][#22450])
 
 <img src="/blog/images/sort-pushdown/desc_walk_rg.svg" alt="Row-group-level reorder — filter column still read for every row group before row-group filter early stop" width="100%" class="img-fluid" /><br/>
 
