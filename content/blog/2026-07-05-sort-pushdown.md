@@ -89,14 +89,13 @@ where sortedness exists but is **inexact** or not provable up front:
 - **No** declared ordering at all.
 - `ORDER BY ... DESC` on ASC-sorted data.
 
-This post covers three novel techniques:
+This post covers two novel techniques:
 
-1. **Statistics-based sort elimination** (`Exact`): Avoids sorts entirely by reorder files by min/max
-   statistics to prove a global ordering.
-2. **Runtime scan reorder** (`Inexact`): reorders the scan to read the most promising data
-   first so TopK dynamic pruning converges earlier.  
-3. **Runtime row-group dynamic pruning**: re-checks dynamic predicates at
-   row-group boundaries and skips pruned groups before fetching bytes.
+1. **Statistics-based sort elimination** (`Exact`): avoids sorts entirely by
+   reordering files by min/max statistics to prove a global ordering.
+2. **Runtime reorder and dynamic pruning** (`Inexact`): reorders the scan to read
+   the most-promising data first, then re-checks the `TopK` dynamic filter at file
+   and row-group boundaries, skipping pruned data before fetching bytes.
 
 These techniques are implemented in DataFusion and together result in:
 
@@ -132,6 +131,11 @@ optimizer rule classifies each scan below a sort as either `Unsupported`,
   data whose min/max cannot beat the threshold is pruned before it is
   fully read.
 
+<img src="/blog/images/sort-pushdown/pr21956-decision.svg" alt="try_pushdown_sort decision tree: Exact, Inexact, or Unsupported" width="100%" class="img-fluid" /><br/>
+*Figure: the `PushdownSort` rule asks each scan whether it can satisfy the
+required ordering, returning `Exact` (drop the sort), `Inexact` (bias the scan
+and keep the sort), or `Unsupported` (the sort stays).*
+
 For example, given a query that returns the 10 most recent trades:
 
 ```sql
@@ -145,20 +149,6 @@ SELECT ts, symbol, amount FROM trades ORDER BY ts DESC LIMIT 10;
 - With **`Inexact`** ordering, the `SortExec` stays but scans start
   from the most-promising data, so the `TopK` threshold is more likely to
   tighten quickly and prune the rest with statistics.
-
-
-<img src="/blog/images/sort-pushdown/pruning_stack.svg" alt="Three-layer pruning: file-level, row-group-level, row-level, all driven by the same TopK dynamic filter" width="100%" class="img-fluid" /><br/>
-*Figure three pruning layers, all driven by the same `TopK` dynamic filter.*
-
-* **Layer 1 · file-level** (`file_pruner` + `EarlyStoppingStream`).
-  Skips files completely before they're opened -- no Parquet data or  metadata I/O is performed.
-* **Layer 2 · row-group-level** ([#22450]). Skips dead row groups
-  inside open files at every row-group boundary. Bytes never
-  fetched, filter column never decoded.
-* **Layer 3 · row-level** (`RowFilter`). For row groups that
-  survive Layer 2, the filter is evaluated row-by-row on
-  the predicate columns. If the all rows are filtered
-  remaining columns are never read or decoded. 
 
 ## The Exact Path: Sort Elimination via Statistics
 
@@ -218,15 +208,10 @@ While DataFusion can avoid sorting for all four queries, the benefit is most dra
 
 ## The Inexact Path: Runtime Reorder for TopK and DESC
 
-Stats-based sort elimination applies only when ordering is declared and file
-ranges are non-overlapping after the min-based file reorder. Otherwise,
-DataFusion keeps the sort but uses Parquet metadata to read the most-promising
-data first, helping the `TopK` dynamic filter prune the rest earlier.
-
-<img src="/blog/images/sort-pushdown/pr21956-decision.svg" alt="try_pushdown_sort decision tree: Exact, Inexact, or Unsupported" width="100%" class="img-fluid" /><br/>
-*Figure: for each `SortExec` that `PushdownSort` tries to push down
-into the scan, the data source returns `Exact` (drop the sort),
-`Inexact` (bias the scan and keep the sort), or `Unsupported`.*
+It is not possible to eliminate the sort when ordering when the files have
+overlapping sort key ranges. However, it is still possible to optimize these
+queries by using Parquet metadata to read the most-promising data first,
+improving the chances the `TopK` dynamic filter will prune the rest earlier.
 
 The `Inexact` verdict fires when stats-based reorder is available (the leading
 sort key is a plain file column) or when the reverse of the source's declared
@@ -234,6 +219,19 @@ ordering satisfies the request. The latter uses DataFusion's
 [equivalence-properties][ordering-analysis] reasoning, including monotonic
 functions<sup id="fn1">[1](#footnote1)</sup>, constants inferred from filters,
 and multi-column orderings.
+
+<img src="/blog/images/sort-pushdown/pruning_stack.svg" alt="Three-layer pruning: file-level, row-group-level, row-level, all driven by the same TopK dynamic filter" width="100%" class="img-fluid" /><br/>
+*Figure: three pruning layers, all driven by the same `TopK` dynamic filter.*
+
+* **Layer 1 · file-level** (`file_pruner` + `EarlyStoppingStream`).
+  Skips files completely before they're opened -- no Parquet data or  metadata I/O is performed.
+* **Layer 2 · row-group-level** ([#22450]). Skips dead row groups
+  inside open files at every row-group boundary. Bytes never
+  fetched, filter column never decoded.
+* **Layer 3 · row-level** (`RowFilter`). For row groups that
+  survive Layer 2, the filter is evaluated row-by-row on
+  the predicate columns. If the all rows are filtered
+  remaining columns are never read or decoded. 
 
 ### Scan Reordering
 
