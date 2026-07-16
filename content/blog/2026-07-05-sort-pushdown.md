@@ -257,7 +257,7 @@ the scan before and during execution using three techniques:
 
 [FilePruner]: https://github.com/apache/datafusion/blob/e104138b4d45d3acfb76223cd968385f6764477b/datafusion/pruning/src/file_pruner.rs
 
-<img src="/blog/images/sort-pushdown/desc_walk_file.png" alt="File-level reorder with early stop via file_pruner" width="100%" class="img-fluid" /><br/>
+<img src="/blog/images/sort-pushdown/desc_walk_file.svg" alt="File-level reorder with early stop via file_pruner" width="100%" class="img-fluid" /><br/>
 
 *Figure: after reordering files by their sort key, low-value files (`file_d` and `file_c`,
 where "low-value" means the sort key values are smaller for `ASC` queries)
@@ -266,10 +266,10 @@ are ever opened — no metadata I/O.*
 
 **Row Group Level Pruning**: When a file is first opened, DataFusion prunes 
 Row Groups based on predicates and statistics and then determines
-the order to scan the row groups as explained above. During the scan, when DataFusion
-is about to read the next row group, if the `TopK` dynamic filter threshold 
-has changed DataFusion re-checks
-the remaining row groups against the new threshold.
+the order to scan the row groups. During the scan, immediately before DataFusion
+reads the next row group, it checks if the `TopK` dynamic filter has changed. If so, 
+after [#22450] it checks the remaining row groups against the new threshold and prunes any that cannot contribute to the final result. 
+This is technique is especially effective for `LIMIT` queries.
 
 ### Decoder Loop and Decision Point
 

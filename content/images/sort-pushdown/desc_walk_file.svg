@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1010 445">
+  <style>
+    text { font-family: 'Segoe UI', Arial, sans-serif; }
+    .title      { font-size: 18px; font-weight: 700; fill: #2c3e7a; }
+    .section    { font-size: 13px; font-weight: 700; }
+    .group      { font-size: 11px; font-style: italic; fill: #888; }
+    .fname      { font-size: 13px; font-weight: 700; }
+    .range      { font-size: 11px; font-family: 'Courier New', monospace; }
+    .banner     { font-size: 14px; font-weight: 700; fill: #1b5e20; }
+    .banner-sub { font-size: 12px; font-style: italic; fill: #2e7d32; }
+    .annot      { font-size: 13px; font-weight: 700; fill: #333; }
+    .annot-sub  { font-size: 12px; font-style: italic; fill: #666; }
+    .reorder    { font-size: 12px; font-style: italic; fill: #555; }
+    .arrow      { fill: none; stroke: #555; stroke-width: 2; marker-end: url(#arr); }
+  </style>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#555"/>
+    </marker>
+  </defs>
+
+  <text class="title" x="505" y="32" text-anchor="middle">Layer 1 &#183; file-level reorder (per partition)</text>
+
+  <!-- top banner: early stop available -->
+  <rect x="250" y="50" width="510" height="40" rx="8" fill="#e8f5e9" stroke="#27ae60" stroke-width="1.5"/>
+  <text class="banner" x="505" y="75" text-anchor="middle" font-size="13">&#10003; EARLY STOP available &#183; file_pruner + EarlyStoppingStream</text>
+
+  <!-- ============ BEFORE ============ -->
+  <text class="section" x="40" y="125" fill="#666">BEFORE</text>
+
+  <text class="group" x="70" y="150">group 0</text>
+  <rect x="65"  y="158" width="135" height="50" rx="6" fill="#e8eefc" stroke="#5b8def" stroke-width="1.5"/>
+  <text class="fname" x="132" y="182" text-anchor="middle" fill="#1f4fa3">file_d</text>
+  <text class="range" x="132" y="200" text-anchor="middle" fill="#5b8def">[10..20)</text>
+  <rect x="215" y="158" width="135" height="50" rx="6" fill="#e8eefc" stroke="#5b8def" stroke-width="1.5"/>
+  <text class="fname" x="282" y="182" text-anchor="middle" fill="#1f4fa3">file_b</text>
+  <text class="range" x="282" y="200" text-anchor="middle" fill="#5b8def">[50..60)</text>
+
+  <text class="group" x="425" y="150">group 1</text>
+  <rect x="420" y="158" width="135" height="50" rx="6" fill="#e8eefc" stroke="#5b8def" stroke-width="1.5"/>
+  <text class="fname" x="487" y="182" text-anchor="middle" fill="#1f4fa3">file_c</text>
+  <text class="range" x="487" y="200" text-anchor="middle" fill="#5b8def">[0..10)</text>
+  <rect x="570" y="158" width="135" height="50" rx="6" fill="#e8eefc" stroke="#5b8def" stroke-width="1.5"/>
+  <text class="fname" x="637" y="182" text-anchor="middle" fill="#1f4fa3">file_a</text>
+  <text class="range" x="637" y="200" text-anchor="middle" fill="#5b8def">[30..40)</text>
+
+  <!-- reorder arrow -->
+  <line class="arrow" x1="770" y1="165" x2="770" y2="290"/>
+  <text class="reorder" x="790" y="215">reorder files by</text>
+  <text class="reorder" x="790" y="232">min/max statistics</text>
+
+  <!-- ============ AFTER ============ -->
+  <text class="section" x="40" y="280" fill="#1b5e20">AFTER</text>
+
+  <text class="group" x="70" y="305">group 0</text>
+  <rect x="65"  y="313" width="135" height="50" rx="6" fill="#e8f5e9" stroke="#27ae60" stroke-width="1.5"/>
+  <text class="fname" x="132" y="337" text-anchor="middle" fill="#1b5e20">file_b</text>
+  <text class="range" x="132" y="355" text-anchor="middle" fill="#2e7d32">[50..60)</text>
+  <rect x="215" y="313" width="135" height="50" rx="6" fill="#f4f4f4" stroke="#dddddd" stroke-width="1.5"/>
+  <text class="fname" x="282" y="337" text-anchor="middle" fill="#bcbcbc">file_d</text>
+  <text class="range" x="282" y="355" text-anchor="middle" fill="#c8c8c8">[10..20)</text>
+
+  <text class="group" x="425" y="305">group 1</text>
+  <rect x="420" y="313" width="135" height="50" rx="6" fill="#e8f5e9" stroke="#27ae60" stroke-width="1.5"/>
+  <text class="fname" x="487" y="337" text-anchor="middle" fill="#1b5e20">file_a</text>
+  <text class="range" x="487" y="355" text-anchor="middle" fill="#2e7d32">[30..40)</text>
+  <rect x="570" y="313" width="135" height="50" rx="6" fill="#f4f4f4" stroke="#dddddd" stroke-width="1.5"/>
+  <text class="fname" x="637" y="337" text-anchor="middle" fill="#bcbcbc">file_c</text>
+  <text class="range" x="637" y="355" text-anchor="middle" fill="#c8c8c8">[0..10)</text>
+
+  <!-- after annotations -->
+  <text class="annot"     x="745" y="325">high-value files come first</text>
+  <text class="annot-sub" x="745" y="345">&#8594; TopK heap fills fast</text>
+  <text class="annot-sub" x="745" y="362">&#8594; threshold tightens</text>
+
+  <!-- bottom banner: never loaded -->
+  <rect x="40" y="385" width="925" height="50" rx="8" fill="#e8f5e9" stroke="#27ae60" stroke-width="1.5"/>
+  <text class="banner"     x="502" y="408" text-anchor="middle">&#10003; low-value files (dimmed) are NEVER LOADED</text>
+  <text class="banner-sub" x="502" y="426" text-anchor="middle">file_pruner + EarlyStoppingStream skip their metadata and scan entirely</text>
+</svg>
