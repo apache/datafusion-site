@@ -240,7 +240,7 @@ Each layer is described in detail below.
 [RowFilter]: https://docs.rs/parquet/latest/parquet/arrow/arrow_reader/struct.RowFilter.html
 
 Once `PushdownSort` determines `Inexact` applies, the Parquet opener reorders
-the scan before and during execution using three techniques:
+the scan before and during execution using three steps:
 
 <img src="/blog/images/sort-pushdown/pr21956-runtime-pipeline.svg" alt="Runtime reorder pipeline: file reorder, RG reorder, then optional reverse" width="100%" class="img-fluid" /><br/>
 
@@ -253,7 +253,7 @@ the scan before and during execution using three techniques:
 3. **Iteration reverse** — for queries which want the data in `DESC` 
    order, the file and row group order is reversed.
 
-**File Level Pruning**: once files are ordered "most-promising first", the
+**File-Level Pruning**: once files are ordered "most-promising first", the
 *`TopK`'s heap fills quickly and its dynamic filter threshold tightens. The
 *[FilePruner] then cuts low-value files before opening them, as shown in the
 *following example.
@@ -262,13 +262,13 @@ the scan before and during execution using three techniques:
 
 <img src="/blog/images/sort-pushdown/desc_walk_file.svg" alt="File-level reorder with early stop via file_pruner" width="100%" class="img-fluid" /><br/>
 
-*Figure: after reordering files by their sort key, low-value files (`file_d` and `file_c`,
-where "low-value" means the sort key values are smaller for `ASC` queries)
-at the end of the queue are pruned by the file-level pruner before they
+*Figure: after reordering files by their sort key, the low-value files (`file_d` and `file_c`,
+whose sort-key values are smallest and therefore least promising for this `DESC LIMIT` query)
+end up at the tail of the queue and are pruned by the file-level pruner before they
 are ever opened — no metadata I/O.*
 
-**Row Group Level Pruning**: When a file is first opened, DataFusion prunes 
-Row Groups based on predicates and statistics and then determines
+**Row-Group-Level Pruning**: When a file is first opened, DataFusion prunes
+row groups based on predicates and statistics and then determines
 the order to scan the row groups. During the scan, immediately before DataFusion
 reads the next row group, it checks if the `TopK` dynamic filter has changed. If so, 
 after [#22450] it checks the remaining row groups against the new threshold and 
@@ -283,19 +283,19 @@ For example, consider a file with 10 row groups, each containing rows with value
 `[0..10)`, `[10..20)`, ..., `[90..100)` and a query with `ORDER BY x DESC LIMIT 10`. 
 
 1. The row groups are first reordered by their maximum values, so the highest-value  row group is read first.
-2. Row Group 9 (values `[90..100)`) is opened and read, filling
+2. Row group 9 (values `[90..100)`) is opened and read, filling
    the heap with at least 10 values (the minimum heap value is `90`). The `TopK` dynamic filter threshold is updated to `90`.
 3. At the next row-group boundary, the pruner the dynamic filter has been updated, 
-   and re-evaluates the filter on all remaining row groups. Since Row Group 8
-   through Row Group 0 have `max < 90` they are all pruned out and skipped in a single pass. 
+   and re-evaluates the filter on all remaining row groups. Since row group 8
+   through row group 0 have `max < 90` they are all pruned out and skipped in a single pass. 
 4. The scan ends early, having read only one row group instead of all 10.
 
-Note that for the Row Groups that were skipped, no data is fetched nor decoded.
+Note that for the row groups that were skipped, no data is fetched nor decoded.
 This example shows the core benefit provided by runtime row-group dynamic
 pruning: reading a single row group can cascade-eliminate every remaining row
 group.
 
-**Row-Group Level Early Stopping**: Even if the row group can not be pruned with statistics, 
+**Row-Level Early Stopping**: Even if the row group can not be pruned with statistics, 
 dynamic filters can often rule out all rows
 after evaluating just the filter columns. This optimization avoids fetching any
 projection columns (added in
