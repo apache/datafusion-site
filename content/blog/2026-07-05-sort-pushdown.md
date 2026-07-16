@@ -111,7 +111,7 @@ The rest of this post walks through each technique in detail.
 [Apache Parquet]: https://parquet.apache.org/
 [ordering-analysis]: https://datafusion.apache.org/blog/2025/03/11/ordering-analysis/
 
-## How DataFusion Tracks Ordering
+## Tracking Ordering
 
 
 The [`PushdownSort`](https://github.com/apache/datafusion/blob/main/datafusion/physical-optimizer/src/pushdown_sort.rs)
@@ -149,7 +149,7 @@ SELECT ts, symbol, amount FROM trades ORDER BY ts DESC LIMIT 10;
   from the most-promising data, so the `TopK` threshold is more likely to
   tighten quickly and prune the rest with statistics.
 
-## The Exact Path: Sort Elimination via Statistics
+## Exact: Sort Elimination via Statistics
 
 DataFusion can also eliminate sorts when  it can use  Parquet min/max statistics to reorder files and prove global ordering
 (relevant PRs: [apache/datafusion#19064][#19064], and
@@ -211,7 +211,7 @@ While DataFusion can avoid sorting for all four queries, the benefit is most dra
 - **Full-scan queries (Q1, Q3)** result in a ~2 speedup as the scan is now a single-pass streaming read.
 - **`LIMIT` queries (Q2, Q4)** result in 27x-49x speedup because `LIMIT N` turns into a streaming read with early stopping.
 
-## The Inexact Path: Scan Reordering makes Dynamic Filters More Effective
+## Inexact: Scan Reordering makes Dynamic Filters More Effective
 
 It is not possible to eliminate the sort when ordering when the files have
 overlapping sort key ranges. However, it is still possible to use sorted or
@@ -323,8 +323,6 @@ We compare DataFusion 54 with the sort optimizations enabled (the default) and d
 
 <img src="/blog/images/sort-pushdown/topk_tpch_bench.svg" alt="topk_tpch benchmark results: 5 of 11 queries 3-4× faster, 0 regressions, total -44%" width="100%" class="img-fluid"/>
 
-Results Summary:
-
 | Metric                              | Value                              |
 | ----------------------------------- | ---------------------------------- |
 | Total wall-clock (sum of 11 queries) | 248.8 ms → 139.1 ms (**−44%**)    |
@@ -340,7 +338,7 @@ low-cardinality or unsorted columns (`l_linenumber`, `l_comment`,
 appears later as a tie-breaker, the leading key controls RG-level disjointness,
 so `Layer 3` (row-level) is still partially effective.
 
-## Conclusion
+## Conclusion and Future Work
 
 Use cases where the query sort key (e.g. `ORDER BY time DESC LIMIT 10`) is
 aligned with the physical layout (e.g. the data is ordered by `time`) are common
@@ -348,9 +346,6 @@ in time-series, partitioned tables, and ingestion-ordered event logs. In
 DataFusion 54, we implemented several novel optimizations, speeding up several
 work loads by a factor of 3-4 without slowing down queries for which they don't
 apply. We hope you enjoy using them and welcome your feedback.
-
-
-## Future Work
 
 Two follow-ups are open:  Page-level `Exact` reverse would let `DESC` queries drop the sort
 but needs lower level support in the Parquet reader ([arrow-rs#9937](https://github.com/apache/arrow-rs/pull/9937))
@@ -381,6 +376,13 @@ work.
 [@2010YOUY01]: https://github.com/2010YOUY01
 [@Dandandan]: https://github.com/Dandandan
 
+## Get Involved
+
+- **Try it out**: Run your `ORDER BY` / `ORDER BY ... LIMIT N` queries on your own data and share what you see.
+- **Work on a [good first issue](https://github.com/apache/datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)**, or pick up one of the [follow-ups](https://github.com/apache/datafusion/issues/23036) listed in the umbrella issue.
+- **File issues or join the conversation**: [GitHub](https://github.com/apache/datafusion/) for bugs and feature requests, [Slack or Discord](https://datafusion.apache.org/contributor-guide/communication.html) for discussion.
+- Learn more by visiting the [DataFusion](https://datafusion.apache.org/index.html) project page.
+
 ## References
 
 Umbrella issue tracking the entire effort:
@@ -409,14 +411,8 @@ In flight / open:
 
 Benchmark suites: [sort_pushdown](https://github.com/apache/datafusion/tree/main/benchmarks/queries/sort_pushdown), [topk_tpch](https://github.com/apache/datafusion/blob/main/benchmarks/src/sort_tpch.rs).
 
-## Get Involved
 
-- **Try it out**: Run your `ORDER BY` / `ORDER BY ... LIMIT N` queries on your own data and share what you see.
-- **Work on a [good first issue](https://github.com/apache/datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)**, or pick up one of the [follow-ups](https://github.com/apache/datafusion/issues/23036) listed in the umbrella issue.
-- **File issues or join the conversation**: [GitHub](https://github.com/apache/datafusion/) for bugs and feature requests, [Slack or Discord](https://datafusion.apache.org/contributor-guide/communication.html) for discussion.
-- Learn more by visiting the [DataFusion](https://datafusion.apache.org/index.html) project page.
-
-### Appendix: Buffering Without Sorting
+## Appendix: Buffering Without Sorting
 
 <img src="/blog/images/sort-pushdown/buffer-exec-stall.svg" alt="SPM stalls when SortExec is removed in multi-partition plans" width="100%" class="img-fluid" /><br/>
 *Figure: removing the per-partition `SortExec` leaves the top-of-plan
@@ -439,7 +435,7 @@ driver role without sorting.
 
 
 
-### Appendix: Decoder Loop and Decision Point
+## Appendix: Decoder Loop and Decision Point
 
 <img src="/blog/images/sort-pushdown/transition_anatomy.png" alt="transition() loop: drain, decide, drive — Step 2 is the #22450 addition" width="100%" class="img-fluid" /><br/>
 *Figure: the decoder loop has three steps. Step 2 (DECIDE) is what
