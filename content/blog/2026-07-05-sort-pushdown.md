@@ -268,64 +268,37 @@ are ever opened — no metadata I/O.*
 Row Groups based on predicates and statistics and then determines
 the order to scan the row groups. During the scan, immediately before DataFusion
 reads the next row group, it checks if the `TopK` dynamic filter has changed. If so, 
-after [#22450] it checks the remaining row groups against the new threshold and prunes any that cannot contribute to the final result. 
-This is technique is especially effective for `LIMIT` queries.
+after [#22450] it checks the remaining row groups against the new threshold and 
+prunes any that cannot contribute to the final result. See the 
+[Appendix: Decoder Loop and Decision Point](#appendix-decoder-loop-and-decision-point) for more details on how this works.
 
-### Decoder Loop and Decision Point
 
-<img src="/blog/images/sort-pushdown/transition_anatomy.png" alt="transition() loop: drain, decide, drive — Step 2 is the #22450 addition" width="100%" class="img-fluid" /><br/>
-*Figure: the decoder loop has three steps. Step 2 (DECIDE) is what
-[#22450] adds — it only fires at row-group boundaries.*
-
-The loop body reads: **drain** the current row group's batches until
-it's exhausted; **decide** at the boundary whether any of the
-remaining row groups can be dropped based on the live threshold; then
-**drive** the decoder into the next row group and repeat. Inside a
-row group, only drain and drive run — no decision point.
-
-<img src="/blog/images/sort-pushdown/pruner_loop.png" alt="RowGroupPruner: watch (cheap), rebuild (expensive, only if changed), prune (cheap)" width="100%" class="img-fluid" /><br/>
-*Figure: the pruner has a cheap "check if the filter changed" step, a
-moderately expensive "rebuild the predicate if so" step, and a cheap
-"apply the predicate to remaining row groups" step.*
-
-The pruner does expensive work only when it can help: a cheap epoch check
-detects dynamic-filter changes, and only then rebuilds the pruning predicate.
-The predicate is then applied to remaining row groups' min/max statistics using
-metadata only.
-
-### TopK Row-Group Pruning Example
-
-This section walks through an example of how the techniques described in
-this blog work together to prune row groups.
-
-<img src="/blog/images/sort-pushdown/rg_cascade.png" alt="Cascading prune: one row group fills the heap, threshold snaps, all subsequent row groups are pruned in a single pass" width="100%" class="img-fluid" /><br/>
-*Figure: for `ORDER BY x DESC LIMIT 10`, opening the first row group
-(values [90..100)) is enough to fill the heap; at the next boundary,
+<img src="/blog/images/sort-pushdown/rg_cascade.svg" alt="Cascading prune: one row group fills the heap, threshold snaps, all subsequent row groups are pruned in a single pass" width="100%" class="img-fluid" /><br/>
+*Figure: Given a query with `ORDER BY x DESC LIMIT 10`, the row groups are first ordered by 
+their maximum values and then read sequentially. The first row group is enough to fill the heap, so the threshold jumps into its range (≥ 90). At the next row-group boundary,
 every remaining row group with `max < 90` is pruned in one pass.*
 
-For `ORDER BY x DESC LIMIT 10` on a 10-row-group file
-where reorder puts high-value row groups first:
+Dynamic row group pruning is especially effective for `LIMIT` queries. For example, consider a file with 10 row groups, each containing rows with values
+`[0..10)`, `[10..20)`, ..., `[90..100)` and a query with `ORDER BY x DESC LIMIT 10`. 
 
-1. RG 9 (values `[90..100)`) opens. One row group is enough to fill
-   the heap of size 10 — the threshold jumps into RG 9's range (≥ 90).
-2. At the next row-group boundary, the pruner sees that all of RG 8
-   through RG 0 have `max < 90` and drops them in one pass.
-3. Bytes for those nine row groups were **never fetched** — not
-   projection columns, not the filter column. Full I/O, decompression,
-   and decoding are all skipped.
+1. The row groups are first reordered by their maximum values, so the highest-value  row group is read first.
+2. Row Group 9 (values `[90..100)`) is opened and read, filling
+   the heap with at least 10 values (the minimum heap value is 90). The `TopK` dynamic filter threshold is updated to 90.
+3. At the next row-group boundary, the pruner the dynamic filter has been updated, 
+   and re-evaluates the filter on all remaining row groups. Since Row Group 8
+   through Row Group 0 have `max < 90` the are all pruned out and skipped in a single pass. 
+4. The scan ends early, having read only one row group instead of all 10.
 
-This is what runtime row-group dynamic pruning fundamentally provides:
-when reordering lines up disjoint per-RG ranges (the common case for
-time-series or partition-key sorts), a single row group can
-cascade-eliminate every remaining row group at the next boundary.
+Note that for the Row Groups that were skipped, no data is fetched nor is any
+decoding performed. The `TopK` dynamic filter is evaluated against the
+
+This example shows the core benefit provided by runtime row-group dynamic
+pruning: reading a single row group can cascade-eliminate every remaining row
+group.
 
 
-**Row-Group Level Early Stopping**: Once a file is opened, its row groups are reordered by `min(col)` so the
-ones most likely to contain the minimum
-value are read first. This makes the existing `TopK` dynamic filters +
-[filter pushdown](https://datafusion.apache.org/blog/2025/03/21/parquet-pushdown/)
-optimization more effective. Even if the row group can not be pruned entirely based on statistics, 
-and the filters can often rule out all rows
+**Row-Group Level Early Stopping**: Even if the row group can not be pruned entirely based on statistics, 
+the dynamic filters can often still rule out all rows
 after evaluating just the filter columns, avoiding fetching any
 projection columns. This optimization was added in
 [apache/datafusion#22450][#22450].
@@ -456,3 +429,28 @@ same greedy per-partition prefill, but no blocking sort.*
 The fix is [`BufferExec`](https://github.com/apache/datafusion/blob/main/datafusion/physical-plan/src/buffer.rs):
 a bounded per-partition prefill buffer that restores the greedy parallel I/O
 driver role without sorting.
+
+
+
+### Appendix: Decoder Loop and Decision Point
+
+<img src="/blog/images/sort-pushdown/transition_anatomy.png" alt="transition() loop: drain, decide, drive — Step 2 is the #22450 addition" width="100%" class="img-fluid" /><br/>
+*Figure: the decoder loop has three steps. Step 2 (DECIDE) is what
+[#22450] adds — it only fires at row-group boundaries.*
+
+The loop body reads: **drain** the current row group's batches until
+it's exhausted; **decide** at the boundary whether any of the
+remaining row groups can be dropped based on the live threshold; then
+**drive** the decoder into the next row group and repeat. Inside a
+row group, only drain and drive run — no decision point.
+
+<img src="/blog/images/sort-pushdown/pruner_loop.png" alt="RowGroupPruner: watch (cheap), rebuild (expensive, only if changed), prune (cheap)" width="100%" class="img-fluid" /><br/>
+*Figure: the pruner has a cheap "check if the filter changed" step, a
+moderately expensive "rebuild the predicate if so" step, and a cheap
+"apply the predicate to remaining row groups" step.*
+
+The pruner does expensive work only when it can help: a cheap epoch check
+detects dynamic-filter changes, and only then rebuilds the pruning predicate.
+The predicate is then applied to remaining row groups' min/max statistics using
+metadata only.
+
