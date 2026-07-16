@@ -186,7 +186,7 @@ files one after another and produce the correct result.
    every adjacent pair? If yes, the sorted file list produces a globally
    sorted stream.
 3. **Upgrade the source's ordering claim to `Exact`** and remove the
-   surrounding `Sort`. Note this requires some additional performance as 
+   surrounding `Sort`. Note this requires some additional performance optimizations
    described in [appendix on buffering without sorting](#appendix-buffering-without-sorting). 
 
 <img src="/blog/images/sort-pushdown/phase2-stats-overlap.svg" alt="Detecting non-overlapping ranges via min/max statistics" width="100%" class="img-fluid" /><br/>
@@ -197,10 +197,10 @@ overlapping ranges keep the sort and fall through to the `Inexact` path describe
 
 We measured statistics-based sort elimination with DataFusion's
 [`sort_pushdown`](https://github.com/apache/datafusion/tree/main/benchmarks/queries/sort_pushdown) benchmark suite
-forcing execution to a single core using `--partitions 1`. 
+forcing execution to a single core using `--partitions 1`. The results are 
+as follows: 
 
 <img src="/blog/images/sort-pushdown/benchmark.svg" alt="Sort pushdown benchmark: 2x-49x speedup across four queries" width="100%" class="img-fluid" /><br/>
-*Figure: `sort_pushdown` results. Note `ASC` queries with the file list reversed against sort-key ranges.*
 
 | Query                                       | Before  | After   | Speedup  |
 | ------------------------------------------- | -------:| -------:| -------: |
@@ -209,7 +209,9 @@ forcing execution to a single core using `--partitions 1`.
 | Q3 — `SELECT * ORDER BY key`                | 700 ms  | 313 ms  | **2.2×** |
 | Q4 — `SELECT * ORDER BY key LIMIT 100`      | 342 ms  |   7 ms  | **49×**  |
 
-While DataFusion can avoid sorting for four queries, the benefit is most dramatic for `LIMIT` queries: 
+*Figure: `sort_pushdown` results. Note `ASC` queries with the file list reversed against sort-key ranges.*
+
+While DataFusion can avoid sorting for all four queries, the benefit is most dramatic for `LIMIT` queries: 
 
 - **Full-scan queries (Q1, Q3)** result in a ~2 speedup as the scan is now a single-pass streaming read.
 - **`LIMIT` queries (Q2, Q4)** result in 27x-49x speedup because `LIMIT N` turns into a streaming read with early stopping.
