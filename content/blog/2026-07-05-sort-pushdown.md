@@ -53,10 +53,10 @@ cases make that hard:
    [`sorting_columns`](https://github.com/apache/parquet-format/blob/8a5e04bdecf100e8e981daacfa117e8b5aadacb9/src/main/thrift/parquet.thrift#L1044),
    or the table was not created with DataFusion's
    [`WITH ORDER`](https://datafusion.apache.org/user-guide/sql/ddl.html#create-external-table) clause.
-2. Files are individually sorted, but the engine is canning multiple files
+2. Files are individually sorted, but the engine is scanning multiple files
    and does not know a global ordering at plan time.
 
-In both cases, `ORDER BY` or `ORDER BY ... LIMIT N` pays for a blocking full
+In both cases, `ORDER BY` or `ORDER BY ... LIMIT N` pays for a potentially blocking full
 sort, which buffers every row and dominates latency and peak memory on large
 scans.
 
@@ -211,11 +211,11 @@ While DataFusion can avoid sorting for all four queries, the benefit is most dra
 - **Full-scan queries (Q1, Q3)** result in a ~2 speedup as the scan is now a single-pass streaming read.
 - **`LIMIT` queries (Q2, Q4)** result in 27x-49x speedup because `LIMIT N` turns into a streaming read with early stopping.
 
-## Inexact: Scan Reordering makes Dynamic Filters More Effective
+## Inexact: Scan Reordering Makes Dynamic Filters More Effective
 
-It is not possible to eliminate the sort when ordering when the files have
+It is not possible to eliminate the sort when the files have
 overlapping sort key ranges. However, it is still possible to use sorted or
-partly sorted data to optimize `LIMIT` queries. By reordering ordering the read,
+partly sorted data to optimize `LIMIT` queries. By reordering the read,
 data that is most likely to improve the `TopK` dynamic filter is seen first and
 the filter is more effective at pruning files, row groups, and rows that cannot
 possibly contribute to the final result.
@@ -227,7 +227,7 @@ functions<sup id="fn1">[1](#footnote1)</sup>, constants inferred from filters,
 and multi-column orderings. The same dynamic filter is used to drive three layers of pruning:
 
 <img src="/blog/images/sort-pushdown/pruning_stack.svg" alt="Three-layer pruning: file-level, row-group-level, row-level, all driven by the same TopK dynamic filter" width="100%" class="img-fluid" /><br/>
-*Figure: Three pruning layers within the Parquet reader, all driven by the same `TopK` dynamic filter.*
+*Figure: three pruning layers within the Parquet reader, all driven by the same `TopK` dynamic filter.*
 
 * **Layer 1 · file-level** ([file_pruner] + [EarlyStoppingStream]) — skips whole files before they are opened.
 * **Layer 2 · row-group-level** ([#22450]) — skips whole row groups at each boundary, before any pages are fetched.
@@ -244,7 +244,7 @@ the scan before and during execution using three steps:
 
 <img src="/blog/images/sort-pushdown/pr21956-runtime-pipeline.svg" alt="Runtime reorder pipeline: file reorder, RG reorder, then optional reverse" width="100%" class="img-fluid" /><br/>
 
-*Figure: the Parquet opener applies file-level reorder → row-group-level  reorder → optional iteration reverse.*
+*Figure: the Parquet opener applies file-level reorder → row-group-level reorder → optional iteration reverse.*
 
 1. **File-level reorder** — the file list is sorted by `min(col)`,
    so the most-promising file is picked first across all partitions.
@@ -254,9 +254,9 @@ the scan before and during execution using three steps:
    order, the file and row group order is reversed.
 
 **File-Level Pruning**: once files are ordered "most-promising first", the
-*`TopK`'s heap fills quickly and its dynamic filter threshold tightens. The
-*[FilePruner] then cuts low-value files before opening them, as shown in the
-*following example.
+`TopK`'s heap fills quickly and its dynamic filter threshold tightens. The
+[FilePruner] then cuts low-value files before opening them, as shown in the
+following example.
 
 [FilePruner]: https://github.com/apache/datafusion/blob/e104138b4d45d3acfb76223cd968385f6764477b/datafusion/pruning/src/file_pruner.rs
 
@@ -282,24 +282,24 @@ prunes any that cannot contribute to the final result. See the
 For example, consider a file with 10 row groups, each containing rows with values
 `[0..10)`, `[10..20)`, ..., `[90..100)` and a query with `ORDER BY x DESC LIMIT 10`. 
 
-1. The row groups are first reordered by their maximum values, so the highest-value  row group is read first.
+1. The row groups are first reordered by their maximum values, so the highest-value row group is read first.
 2. Row group 9 (values `[90..100)`) is opened and read, filling
    the heap with at least 10 values (the minimum heap value is `90`). The `TopK` dynamic filter threshold is updated to `90`.
-3. At the next row-group boundary, the pruner the dynamic filter has been updated, 
+3. At the next row-group boundary, the pruner sees the dynamic filter has been updated
    and re-evaluates the filter on all remaining row groups. Since row group 8
    through row group 0 have `max < 90` they are all pruned out and skipped in a single pass. 
 4. The scan ends early, having read only one row group instead of all 10.
 
-Note that for the row groups that were skipped, no data is fetched nor decoded.
+Note that for the row groups that were skipped, no data is fetched or decoded.
 This example shows the core benefit provided by runtime row-group dynamic
 pruning: reading a single row group can cascade-eliminate every remaining row
 group.
 
-**Row-Level Early Stopping**: Even if the row group can not be pruned with statistics, 
+**Row-Level Early Stopping**: Even if the row group cannot be pruned with statistics, 
 dynamic filters can often rule out all rows
 after evaluating just the filter columns. This optimization avoids fetching any
 projection columns (added in
-[apache/datafusion#22450][#22450])
+[apache/datafusion#22450][#22450]).
 
 <img src="/blog/images/sort-pushdown/desc_walk_rg.svg" alt="Row-group-level reorder — filter column still read for every row group before row-group filter early stop" width="100%" class="img-fluid" /><br/>
 
