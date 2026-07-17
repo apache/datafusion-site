@@ -364,6 +364,10 @@ We compare DataFusion 54 with the sort optimizations enabled (the default) and d
 | Queries with regression             | **0**                              |
 | Best single-query speedup           | **~4×**                            |
 
+*Per-query raw numbers are available in the [#22450 benchmark run][topk-tpch-raw].*
+
+[topk-tpch-raw]: https://github.com/apache/datafusion/pull/22450#issuecomment-4765161078
+
 The five queries which improved use `l_orderkey` as the **first** sort key column, so
 `Layer 2` (row group pruning) can cascade-prune aggressively. The other queries have multi-column
 sorts with
