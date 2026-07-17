@@ -243,9 +243,9 @@ and multi-column orderings. The same dynamic filter is used to drive three layer
 <img src="/blog/images/sort-pushdown/pruning_stack.svg" alt="Three-layer pruning: file-level, row-group-level, row-level, all driven by the same TopK dynamic filter" width="100%" class="img-fluid" /><br/>
 *Figure: The Parquet reader applies three pruning layers, all driven by the same `TopK` dynamic filter.*
 
-* **Layer 1 · file-level** ([file_pruner] + [EarlyStoppingStream]) — skips whole files before they are opened.
-* **Layer 2 · row-group-level** ([#22450]) — skips whole row groups at each boundary, before any pages are fetched.
-* **Layer 3 · row-level** ([RowFilter]) — skips decoding the remaining columns in a surviving row group.
+* **File-level pruning** ([file_pruner] + [EarlyStoppingStream]) — skips whole files before they are opened.
+* **Row-group-level pruning** ([#22450]) — skips whole row groups at each boundary, before any pages are fetched.
+* **Row-level filtering** ([RowFilter]) — skips decoding the remaining columns in a surviving row group.
 
 [file_pruner]: https://docs.rs/datafusion-pruning/latest/datafusion_pruning/struct.FilePruner.html
 [EarlyStoppingStream]: https://github.com/apache/datafusion/blob/e104138b4d45d3acfb76223cd968385f6764477b/datafusion/datasource-parquet/src/opener/early_stop.rs
@@ -323,13 +323,13 @@ qualify.*
 
 ## Benchmark: sort_tpch
 
-For this work, we ran DataFusion's
+To test the overall benefit of this work, we used DataFusion's
 [`sort_tpch`](https://github.com/apache/datafusion/blob/main/benchmarks/src/sort_tpch.rs)
-benchmark that runs 11 queries over the TPC-H SF1 data, each with
+benchmark that runs 11 queries over the TPC-H SF1 dataset, each with
 `ORDER BY ... LIMIT 100`. The data is stored in Parquet files, sorted by
-`l_orderkey`. For the largest table, `lineitem`, this is a `BIGINT` with ~1.5M
+`l_orderkey`. For the largest table, `lineitem`, `l_orderkey` is a `BIGINT` with ~1.5M
 distinct values, so per-row-group `min/max` ranges are cleanly disjoint.
-We compare DataFusion 54 with the sort optimizations enabled (the default) and disabled.
+We compare DataFusion with the sort optimizations enabled (the default) and disabled.
 
 <img src="/blog/images/sort-pushdown/topk_tpch_bench.svg" alt="sort_tpch benchmark results: 5 of 11 queries ≥2× faster (up to ~4×), 0 regressions, total -44%" width="100%" class="img-fluid"/>
 
@@ -345,12 +345,12 @@ We compare DataFusion 54 with the sort optimizations enabled (the default) and d
 [topk-tpch-raw]: https://github.com/apache/datafusion/pull/22450#issuecomment-4765161078
 
 The five queries that improved use `l_orderkey` as the **first** sort key column, so
-`Layer 2` (row group pruning) can cascade-prune aggressively. The other queries have multi-column
+row-group-level pruning can cascade-prune aggressively. The other queries have multi-column
 sorts with
 low-cardinality or unsorted columns (`l_linenumber`, `l_comment`,
 `l_shipmode`), whose per-row-group ranges overlap heavily. Even when `l_orderkey`
-appears later as a tie-breaker, the leading key controls RG-level disjointness,
-so `Layer 3` (row-level) is still partially effective.
+appears later as a tie-breaker, the leading key controls row-group-level disjointness,
+so row-level filtering is still partially effective.
 
 
 ## Conclusion and Future Work
@@ -374,11 +374,11 @@ using the same pattern one level deeper in Parquet.
 Thank you to [@adriangb], [@xudong963], [@2010YOUY01], and
 [@Dandandan] for reviewing the design and the patches across many
 iterations. The DataFusion community's willingness to engage deeply
-with optimizer changes — including the ones that touch foundational
-invariants like the Parquet inner decode loop — is what made this work
+with optimizer changes, including ones that touch foundational
+code like the Parquet inner decode loop, is what made this work
 possible.
 
-Thanks also to [Massive](https://www.massive.com/) and [InfluxData](https://www.influxdata.com/) for sponsoring this
+We also thank [Massive](https://www.massive.com/) and [InfluxData](https://www.influxdata.com/) for sponsoring this
 work.
 
 <a id="footnote1"></a><sup>[1](#fn1)</sup> For example, if the source declares
@@ -411,9 +411,9 @@ dependencies — whereas we derive them from per-file min/max *statistics*.
 Concatenating disjoint key ranges rather than merging them is Graefe's
 *virtual concatenation* ([ACM Computing Surveys 2006][graefe2006]) — an idea
 rooted further back in range-partitioned parallel sort
-([Graefe, ACM Computing Surveys 1993][graefe1993]) and mirrored in
-LSM "trivial move" compaction ([RocksDB][rocksdb-trivial]). For
-*declared* partition bounds, the same "concatenate, don't merge" optimization
+([Graefe, ACM Computing Surveys 1993][graefe1993]). It also appears as 
+"trivial move" compaction in LSM trees ([RocksDB][rocksdb-trivial]). For
+*declared* partition bounds, the "concatenate, don't merge" optimization
 appears in [TimescaleDB's OrderedAppend][timescale-append] and
 [PostgreSQL's ordered partition scans][pg-append].
 
