@@ -60,13 +60,13 @@ scan and sometimes a blocking full sort, which buffers every row and can
 dominate latency and peak memory on large scans.
 
 Using min/max statistics for *predicate* pushdown is well-known and widely
-implemented across databases, as covered in [@XiangpengHao]'s 
+implemented across databases, as covered in [@XiangpengHao]'s
 post on [Parquet pruning][parquet-pruning-blog]. Using the same
 statistics to *reason about sort order* and to prune `ORDER BY ... LIMIT`
-(top-k) queries is also increasingly common, for example in the 
-[Pruning in Snowflake: Working Smarter, Not Harder] paper (see [Related Work](#related-work) for more). 
-This post describes more of 
-these techniques for a general audience, including the less-common case of *discovering* a
+(top-k) queries is also increasingly common, for example in the
+[Pruning in Snowflake: Working Smarter, Not Harder] paper (see [Related Work](#related-work) for more).
+This post describes several such techniques for a general audience,
+including the less-common case of *discovering* a
 global sort order from per-file statistics,
 deleting redundant sorts, and biasing scan order toward the
 most-promising data.
@@ -81,7 +81,7 @@ most-promising data.
 DataFusion has long skipped sorts when it knows the data is **exactly** sorted, as covered in
 [@akurmustafa's earlier post][ordering-analysis]:
 if the table declares an ordering (via `WITH ORDER` or Parquet
-`sorting_columns`) and the file listing matches it, the redundant sort is removed. 
+`sorting_columns`) and the file listing matches it, the redundant sort is removed.
 
 This post is about the messier real-world cases
 where sortedness exists but is *inexact* or not provable up front:
@@ -97,7 +97,7 @@ This post describes two primary techniques:
 1. **Statistics-based sort elimination** (`Exact`): avoids sorts entirely by
    reordering files by min/max statistics to create a global ordering. This
    extends DataFusion's existing statistics-based file-group ordering
-   ([#9593]) and is similar to prior work for concatenating disjoint ranges.
+   ([#9593]) and is similar to prior work on concatenating disjoint ranges.
 2. **Runtime reorder and dynamic pruning** (`Inexact`): reorders the scan to read
    the most-promising data first, then re-checks the `TopK` dynamic filter at file
    and row-group boundaries.
@@ -119,8 +119,8 @@ The rest of this post walks through each technique in detail.
 
 
 The [`PushdownSort`](https://github.com/apache/datafusion/blob/main/datafusion/physical-optimizer/src/pushdown_sort.rs)
-optimizer rule classifies each scan below a sort as either `Unsupported`,
-`Exact`, or `Inexact`, and records this information on DataFusion's
+optimizer rule classifies each scan below a sort as either `Exact`,
+`Inexact`, or `Unsupported`, and records this information on DataFusion's
 [`FileScanConfig`](https://docs.rs/datafusion-datasource/latest/datafusion_datasource/file_scan_config/struct.FileScanConfig.html):
 
 - **`Exact`** — the optimizer is *certain* of the output order,
@@ -151,8 +151,7 @@ SELECT ts, symbol, amount FROM trades ORDER BY ts DESC LIMIT 10;
 ## Exact: Sort Elimination via Statistics
 
 DataFusion can eliminate sorts entirely when it can use Parquet min/max statistics to reorder files and prove a global ordering
-(relevant PRs: [#19064], and
-[#21182]) as shown below.
+(relevant PRs: [#19064] and [#21182]) as shown below.
 
 <img src="/blog/images/sort-pushdown/plan-diff.svg" alt="EXPLAIN before / after: SortExec eliminated once ordering is Exact" width="100%" class="img-fluid"/>
 *Figure: EXPLAIN output before and after `PushdownSort` eliminates the sort. The `SortExec` is removed and the scan's ordering claim is upgraded to `Exact`.*
@@ -163,16 +162,16 @@ DataFusion can eliminate sorts entirely when it can use Parquet min/max statisti
 [#21182]: https://github.com/apache/datafusion/pull/21182
 
 For example, consider three files `a.parquet`, `b.parquet`, `c.parquet`. Each is
-internally sorted by `ts` and the time ranges do not overlap, but were written
-by different jobs. Without this optimization, a query engine will be forced to use a full
-sort for  `ORDER BY ts` queries, even when it could simply read the
+internally sorted by `ts` and the time ranges do not overlap, but the files were
+written by different jobs. Without this optimization, a query engine is forced to
+use a full sort for `ORDER BY ts` queries, even though it could simply read the
 files one after another and produce the correct result.
 
-The `Exact` path requires each file be
-*individually* sorted on the key and DataFusion knows this from declared
-ordering (`WITH ORDER` or Parquet `sorting_columns`). 
-Concatenating files in min/max range order only yields
-a globally sorted stream if each file is individually sorted. When no per-file ordering is declared, the
+The `Exact` path requires each file to be
+*individually* sorted on the key, and DataFusion knows this from the declared
+ordering (`WITH ORDER` or Parquet `sorting_columns`).
+Concatenating the files in min/max range order yields a globally sorted stream
+only when that per-file precondition holds. When no per-file ordering is declared, the
 `Inexact` path (described next) applies instead.
 
 `PushdownSort` fixes this in three steps at the file-scan node:
@@ -182,11 +181,11 @@ a globally sorted stream if each file is individually sorted. When no per-file o
    every adjacent pair? If yes, the sorted file list produces a globally
    sorted stream.
 3. **Upgrade the source's ordering claim to `Exact`** and remove the
-   surrounding `Sort`. Note this requires some additional performance optimizations
-   described in [appendix on buffering without sorting](#appendix-buffering-without-sorting). 
+   surrounding `Sort`. Note that this requires some additional performance optimizations
+   described in [appendix on buffering without sorting](#appendix-buffering-without-sorting).
 
-This is an instance of what Graefe calls *virtual concatenation* and is similar to
-LSM "trivial move" compactions (see [Related Work](#related-work)). It is less common
+This is an instance of what Graefe calls *virtual concatenation*, and is similar to
+LSM "trivial move" compaction (see [Related Work](#related-work)). It is less common
 to discover the disjoint ranges from per-file
 min/max statistics rather than from a declared partitioning scheme.
 
@@ -194,7 +193,7 @@ min/max statistics rather than from a declared partitioning scheme.
 [graefe1993]: https://dl.acm.org/doi/10.1145/152610.152611
 
 <img src="/blog/images/sort-pushdown/phase1-file-reorder.svg" alt="File reorder: rearranging files within a partition by min/max statistics so the file list is in range order" width="100%" class="img-fluid" /><br/>
-*Figure: Reordering by per-file `min/max` puts the file list in range order.*
+*Figure: reordering by per-file `min/max` puts the file list in range order.*
 
 
 <img src="/blog/images/sort-pushdown/phase2-stats-overlap.svg" alt="Detecting non-overlapping ranges via min/max statistics" width="100%" class="img-fluid" /><br/>
@@ -203,9 +202,9 @@ upgrading to `Exact` only when the ranges don't overlap. Left: non-overlapping
 ranges are safe to upgrade to `Exact` and the sort is removed; right:
 overlapping ranges keep the sort and fall through to the `Inexact` path described next.*
 
-We measured the single core performance of statistics-based sort elimination with DataFusion's
+We measured the single-core performance of statistics-based sort elimination with DataFusion's
 [`sort_pushdown`](https://github.com/apache/datafusion/tree/main/benchmarks/queries/sort_pushdown) benchmark suite
-by setting `--partitions 1`. The results are as follows: 
+by setting `--partitions 1`. The results are as follows:
 
 <img src="/blog/images/sort-pushdown/benchmark.svg" alt="Sort pushdown benchmark: 2×–49× speedup across four queries" width="100%" class="img-fluid" /><br/>
 
@@ -220,7 +219,8 @@ by setting `--partitions 1`. The results are as follows:
 file list on disk is in the reverse of sort-key order; a naive engine sorts even
 though the files are already individually sorted.*
 
-While DataFusion can avoid sorting for all four queries, the benefit is most dramatic for `LIMIT` queries: 
+While DataFusion can avoid sorting for all four queries, the benefit is most
+dramatic for `LIMIT` queries:
 
 - **Full-scan queries (Q1, Q3)** result in a ~2× speedup as the scan is now a single-pass streaming read.
 - **`LIMIT` queries (Q2, Q4)** result in a 27×–49× speedup because `LIMIT N` turns into a streaming read with early stopping.
@@ -241,7 +241,7 @@ functions<sup id="fn1">[1](#footnote1)</sup>, constants inferred from filters,
 and multi-column orderings. The same dynamic filter is used to drive three layers of pruning:
 
 <img src="/blog/images/sort-pushdown/pruning_stack.svg" alt="Three-layer pruning: file-level, row-group-level, row-level, all driven by the same TopK dynamic filter" width="100%" class="img-fluid" /><br/>
-*Figure: The Parquet reader applies three pruning layers, all driven by the same `TopK` dynamic filter.*
+*Figure: the Parquet reader applies three pruning layers, all driven by the same `TopK` dynamic filter.*
 
 * **File-level pruning** ([file_pruner] + [EarlyStoppingStream]) — skips whole files before they are opened.
 * **Row-group-level pruning** ([#22450]) — skips whole row groups at each boundary, before any pages are fetched.
@@ -256,14 +256,13 @@ the scan before and during execution using three steps:
 
 <img src="/blog/images/sort-pushdown/pr21956-runtime-pipeline.svg" alt="Runtime reorder pipeline: file reorder, RG reorder, then optional reverse" width="100%" class="img-fluid" /><br/>
 
-*Figure: the Parquet opener applies file-level reordering, row-group-level reordering, an optional iteration reverse.*
+*Figure: the Parquet opener applies file-level reordering, row-group-level reordering, and an optional iteration reverse.*
 
 1. **File-level reordering** — the file list is sorted by `min(col)`,
    so the most-promising file is picked first across all partitions.
 2. **Row-group-level reordering** — once a file is opened, its row groups
    are sorted by `min(col)`.
-3. **Iteration reverse** — for queries that have  `DESC` 
-   order, the file and row group order is reversed.
+3. **Iteration reverse** — for `DESC` queries, the file and row-group order is reversed.
 
 **File-Level Pruning**: once files are ordered "most-promising first", the
 `TopK`'s heap fills quickly and its dynamic filter threshold tightens. The
@@ -280,11 +279,11 @@ end up at the tail of the read queue and are pruned by the file-level pruner bef
 are ever opened.*
 
 **Row-Group-Level Pruning**: When a file is first opened, DataFusion prunes
-row groups based on predicates and statistics and then determines
+row groups based on predicates and statistics, and then determines
 the order to scan the row groups. During the scan, immediately before DataFusion
-reads the next row group, it checks if the `TopK` dynamic filter has changed. If so, 
- it checks the remaining row groups against the new threshold and 
-prunes any that cannot contribute to the final result (added in [#22450]). See the 
+reads the next row group, it checks whether the `TopK` dynamic filter has changed. If so,
+it re-evaluates the remaining row groups against the new threshold and
+prunes any that cannot contribute to the final result (added in [#22450]). See the
 [Appendix: Decoder Loop and Decision Point](#appendix-decoder-loop-and-decision-point) for more details.
 
 
@@ -292,14 +291,14 @@ prunes any that cannot contribute to the final result (added in [#22450]). See t
 *Figure: for `ORDER BY x DESC LIMIT 10`, after reading the first row group, DataFusion prunes the rest of the row groups in a single pass (walkthrough below).*
 
 For the example shown above, the file has 10 row groups, each containing rows with values
-`[0..10)`, `[10..20)`, ..., `[90..100)` and a query with `ORDER BY x DESC LIMIT 10`. 
+`[0..10)`, `[10..20)`, ..., `[90..100)` and the query is `ORDER BY x DESC LIMIT 10`. 
 
 1. The row groups are first reordered by their maximum values, so the highest-value row group is read first.
 2. Row group 9 (values `[90..100)`) is opened and read, filling
    the heap with 10 values (the minimum heap value is `90`). The `TopK` dynamic filter threshold is updated to `90`.
 3. At the next row-group boundary, the pruner sees the dynamic filter has been updated
    and re-evaluates the filter on all remaining row groups. Since row group 8
-   through row group 0 have `max < 90` they are all pruned out and skipped in a single pass. 
+   through row group 0 have `max < 90`, they are all pruned and skipped in a single pass.
 4. The scan ends early, having read only one row group instead of all 10.
 
 Note that for the row groups that were skipped, no data is fetched or decoded.
@@ -329,7 +328,7 @@ benchmark that runs 11 queries over the TPC-H SF1 dataset, each with
 `ORDER BY ... LIMIT 100`. The data is stored in Parquet files, sorted by
 `l_orderkey`. For the largest table, `lineitem`, `l_orderkey` is a `BIGINT` with ~1.5M
 distinct values, so per-row-group `min/max` ranges are cleanly disjoint.
-We compare DataFusion with the sort optimizations enabled (the default) and disabled.
+We compared DataFusion with the sort optimizations enabled (the default) and disabled.
 
 <img src="/blog/images/sort-pushdown/topk_tpch_bench.svg" alt="sort_tpch benchmark results: 5 of 11 queries ≥2× faster (up to ~4×), 0 regressions, total -44%" width="100%" class="img-fluid"/>
 
@@ -358,14 +357,14 @@ so row-level filtering is still partially effective.
 Use cases where the query sort key (e.g. `ORDER BY time DESC LIMIT 10`) is
 aligned with the physical layout (e.g. the data is ordered by `time`) are common
 in time-series, partitioned tables, and ingestion-ordered event logs. Over the
-last few DataFusion releases we implemented several optimizations that make
+last few DataFusion releases, we implemented several optimizations that make
 these workloads up to ~4× faster without slowing down queries for which they
 don't apply. We hope you enjoy using them and welcome your feedback.
 
-Two follow-ups are open: Page-level `Exact` reverse would let `DESC` queries drop the sort
-but needs lower level support in the Parquet reader ([arrow-rs#9937](https://github.com/apache/arrow-rs/pull/9937))
+Two follow-ups are open: page-level `Exact` reverse would let `DESC` queries drop the sort
+but needs lower-level support in the Parquet reader ([arrow-rs#9937](https://github.com/apache/arrow-rs/pull/9937))
 for reading pages in reverse order.
-We are also considering implementing Page-level dynamic pruning at
+We are also considering implementing page-level dynamic pruning at
 row-group boundaries ([#23216](https://github.com/apache/datafusion/issues/23216))
 using the same pattern one level deeper in Parquet.
 
@@ -411,7 +410,7 @@ dependencies — whereas we derive them from per-file min/max *statistics*.
 Concatenating disjoint key ranges rather than merging them is Graefe's
 *virtual concatenation* ([ACM Computing Surveys 2006][graefe2006]) — an idea
 rooted further back in range-partitioned parallel sort
-([Graefe, ACM Computing Surveys 1993][graefe1993]). It also appears as 
+([Graefe, ACM Computing Surveys 1993][graefe1993]). It also appears as
 "trivial move" compaction in LSM trees ([RocksDB][rocksdb-trivial]). For
 *declared* partition bounds, the "concatenate, don't merge" optimization
 appears in [TimescaleDB's OrderedAppend][timescale-append] and
