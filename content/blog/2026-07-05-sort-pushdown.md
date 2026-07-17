@@ -142,7 +142,7 @@ optimizer rule classifies each scan below a sort as either `Unsupported`,
   data whose min/max cannot beat the threshold is pruned before it is
   fully read.
 
-<img src="/blog/images/sort-pushdown/pr21956-decision.svg" alt="try_pushdown_sort decision tree: Exact, Inexact, or Unsupported" width="100%" class="img-fluid" /><br/>
+<img src="/blog/images/sort-pushdown/pr21956-decision.svg" alt="PushdownSort decision tree: Exact, Inexact, or Unsupported" width="100%" class="img-fluid" /><br/>
 *Figure: the `PushdownSort` rule asks each scan whether it can satisfy the
 required ordering, returning `Exact` (drop the sort), `Inexact` (bias the scan
 and keep the sort), or `Unsupported` (the sort stays).*
@@ -331,11 +331,11 @@ This example shows the core benefit provided by runtime row-group dynamic
 pruning: reading a single row group can cascade-eliminate every remaining row
 group.
 
-**Row-Level Early Stopping**: Even if the row group cannot be pruned with statistics, 
-dynamic filters can often rule out all rows
-after evaluating just the filter columns. This optimization avoids fetching any
-projection columns (added in
-[apache/datafusion#22450][#22450]).
+**Row-Level Early Stopping**: Even if the row group cannot be pruned with statistics,
+the tightened dynamic filter often rules out all rows after evaluating just the
+filter columns. When it does, arrow-rs's `RowFilter` skips fetching the projection
+columns for that row group entirely. [#22450][#22450] makes this fire more often
+by keeping the threshold up-to-date at every row-group boundary.
 
 <img src="/blog/images/sort-pushdown/desc_walk_rg.svg" alt="Row-group-level reorder — filter column still read for every row group before row-group filter early stop" width="100%" class="img-fluid" /><br/>
 
@@ -377,10 +377,10 @@ so `Layer 3` (row-level) is still partially effective.
 
 Use cases where the query sort key (e.g. `ORDER BY time DESC LIMIT 10`) is
 aligned with the physical layout (e.g. the data is ordered by `time`) are common
-in time-series, partitioned tables, and ingestion-ordered event logs. In
-DataFusion 54, we implemented several optimizations, speeding up the target
-workloads by up to ~4× without slowing down queries for which they don't
-apply. We hope you enjoy using them and welcome your feedback.
+in time-series, partitioned tables, and ingestion-ordered event logs. Over the
+last few DataFusion releases we implemented several optimizations that speed
+these workloads up by up to ~4× without slowing down queries for which they
+don't apply. We hope you enjoy using them and welcome your feedback.
 
 Two follow-ups are open: Page-level `Exact` reverse would let `DESC` queries drop the sort
 but needs lower level support in the Parquet reader ([arrow-rs#9937](https://github.com/apache/arrow-rs/pull/9937))
