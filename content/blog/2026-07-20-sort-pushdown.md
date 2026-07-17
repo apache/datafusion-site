@@ -168,12 +168,11 @@ by different jobs. Without this optimization, a query engine will be forced to u
 sort for  `ORDER BY ts` queries, even when it could simply read the
 files one after another and produce the correct result.
 
-The `Exact` path has one important precondition: each file must be
-*individually* sorted on the key. DataFusion knows this from the declared
-ordering (`WITH ORDER` or Parquet `sorting_columns`); statistics alone
-cannot establish within-file order. The min/max reasoning below proves
-only that concatenating the already-sorted files *in range order* yields
-a globally sorted stream. When no per-file ordering is declared, the
+The `Exact` path requires each file be
+*individually* sorted on the key and DataFusion knows this from declared
+ordering (`WITH ORDER` or Parquet `sorting_columns`). 
+Concatenating files in min/max range order only yields
+a globally sorted stream if each file is individually sorted. When no per-file ordering is declared, the
 `Inexact` path (described next) applies instead.
 
 `PushdownSort` fixes this in three steps at the file-scan node:
@@ -181,28 +180,21 @@ a globally sorted stream. When no per-file ordering is declared, the
 1. **Sort the file list by per-file `min`** on the sort column.
 2. **Check overlap**: does `file[i].max ≤ file[i+1].min` hold for
    every adjacent pair? If yes, the sorted file list produces a globally
-   sorted stream. (Equal values at a boundary, `file[i].max == file[i+1].min`,
-   are safe for `ORDER BY key`.)
+   sorted stream.
 3. **Upgrade the source's ordering claim to `Exact`** and remove the
    surrounding `Sort`. Note this requires some additional performance optimizations
    described in [appendix on buffering without sorting](#appendix-buffering-without-sorting). 
 
-This is an instance of what Graefe calls *virtual concatenation*: "two
-runs with disjoint key ranges … can together … serve as a single input"
-([Graefe, ACM Computing Surveys 2006][graefe2006]). The idea is
-well-established — it is stated there in a *survey* (i.e. already common
-by 2006), is rooted further back in range-partitioned parallel sort
-([Graefe, ACM Computing Surveys 1993][graefe1993]), and is mirrored in
-LSM "trivial move" compaction ([RocksDB][rocksdb-trivial]). What is less common, and
-the focus here, is *discovering* the disjoint ranges from per-file
+This is an instance of what Graefe calls *virtual concatenation* and is similar to
+LSM "trivial move" compactions (see [Related Work](#related-work)). It is less common
+to discover the disjoint ranges from per-file
 min/max statistics rather than from a declared partitioning scheme.
 
 [graefe2006]: https://dl.acm.org/doi/10.1145/1132960.1132964
 [graefe1993]: https://dl.acm.org/doi/10.1145/152610.152611
 
 <img src="/blog/images/sort-pushdown/phase1-file-reorder.svg" alt="File reorder: rearranging files within a partition by min/max statistics so the file list is in range order" width="100%" class="img-fluid" /><br/>
-*Figure: file reorder by per-file `min/max` puts the file list in range
-order without touching file contents.*
+*Figure: Reordering by per-file `min/max` puts the file list in range order.*
 
 
 <img src="/blog/images/sort-pushdown/phase2-stats-overlap.svg" alt="Detecting non-overlapping ranges via min/max statistics" width="100%" class="img-fluid" /><br/>
@@ -211,10 +203,9 @@ upgrading to `Exact` only when the ranges don't overlap. Left: non-overlapping
 ranges are safe to upgrade to `Exact` and the sort is removed; right:
 overlapping ranges keep the sort and fall through to the `Inexact` path described next.*
 
-We measured statistics-based sort elimination with DataFusion's
+We measured the single core performance of statistics-based sort elimination with DataFusion's
 [`sort_pushdown`](https://github.com/apache/datafusion/tree/main/benchmarks/queries/sort_pushdown) benchmark suite
-forcing execution to a single core using `--partitions 1`. The results are 
-as follows: 
+by setting `--partitions 1`. The results are as follows: 
 
 <img src="/blog/images/sort-pushdown/benchmark.svg" alt="Sort pushdown benchmark: 2×–49× speedup across four queries" width="100%" class="img-fluid" /><br/>
 
@@ -225,8 +216,8 @@ as follows:
 | Q3 — `SELECT * ORDER BY key`                | 700 ms  | 313 ms  | **2.2×** |
 | Q4 — `SELECT * ORDER BY key LIMIT 100`      | 342 ms  |   7 ms  | **49×**  |
 
-*Figure: `sort_pushdown` results. All four are `ASC` `ORDER BY` queries where the
-file list on disk is in the reverse of sort-key order, so a naive engine sorts even
+*Figure: `sort_pushdown` results. All four queries are `ASC` `ORDER BY` where the
+file list on disk is in the reverse of sort-key order; a naive engine sorts even
 though the files are already individually sorted.*
 
 While DataFusion can avoid sorting for all four queries, the benefit is most dramatic for `LIMIT` queries: 
@@ -420,8 +411,10 @@ eliminate redundant sorts goes back to "interesting orders" in System R
 derive orderings from *schema* — declared keys, indexes, and functional
 dependencies — whereas we derive them from per-file min/max *statistics*.
 Concatenating disjoint key ranges rather than merging them is Graefe's
-*virtual concatenation* ([ACM Computing Surveys 2006][graefe2006]), and is
-mirrored in LSM "trivial move" compaction ([RocksDB][rocksdb-trivial]). For
+*virtual concatenation* ([ACM Computing Surveys 2006][graefe2006]) — an idea
+rooted further back in range-partitioned parallel sort
+([Graefe, ACM Computing Surveys 1993][graefe1993]) and mirrored in
+LSM "trivial move" compaction ([RocksDB][rocksdb-trivial]). For
 *declared* partition bounds, the same "concatenate, don't merge" optimization
 appears in [TimescaleDB's OrderedAppend][timescale-append] and
 [PostgreSQL's ordered partition scans][pg-append].
