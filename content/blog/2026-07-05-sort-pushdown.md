@@ -490,13 +490,13 @@ Major PRs:
 * Morsel-style work scheduling: [apache/datafusion#21351](https://github.com/apache/datafusion/pull/21351)
 * Runtime reorder for `TopK` convergence: [apache/datafusion#21956](https://github.com/apache/datafusion/pull/21956)
 * **Runtime row-group dynamic pruning ([#22450])** — the centerpiece of this post.
+* `peek_next_row_group` API (arrow-rs): [apache/arrow-rs#10158](https://github.com/apache/arrow-rs/pull/10158) — enables per-RG `fully_matched` RowFilter skip.
 
 In flight / open:
 
 * Page-level reverse (arrow-rs): [apache/arrow-rs#9937](https://github.com/apache/arrow-rs/pull/9937), discussion in [apache/arrow-rs#9934](https://github.com/apache/arrow-rs/issues/9934)
-* `peek_next_row_group` API for per-RG `fully_matched` RowFilter skip (arrow-rs): [apache/arrow-rs#10158](https://github.com/apache/arrow-rs/pull/10158)
+* Per-RG `fully_matched` RowFilter skip on top of [#22450] (uses arrow-rs#10158): [apache/datafusion#23067](https://github.com/apache/datafusion/issues/23067)
 * Page-level dynamic prune at RG boundary: [apache/datafusion#23216](https://github.com/apache/datafusion/issues/23216)
-* Per-RG `fully_matched` RowFilter skip on top of [#22450] (blocked on arrow-rs#10158): [apache/datafusion#23067](https://github.com/apache/datafusion/issues/23067)
 * Multi-column / function-wrapped stats reorder follow-ups: [apache/datafusion#22198](https://github.com/apache/datafusion/issues/22198)
 
 Benchmark suites: [sort_pushdown](https://github.com/apache/datafusion/tree/main/benchmarks/queries/sort_pushdown), [sort_tpch](https://github.com/apache/datafusion/blob/main/benchmarks/src/sort_tpch.rs).
