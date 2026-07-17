@@ -150,12 +150,12 @@ and keep the sort), or `Unsupported` (the sort stays).*
 For example, given a query that returns the 10 most recent trades:
 
 ```sql
-SELECT ts, symbol, amount FROM trades ORDER BY ts LIMIT 10;
+SELECT ts, symbol, amount FROM trades ORDER BY ts DESC LIMIT 10;
 ```
 
 - With no ordering knowledge, DataFusion scans everything and uses a
   `TopK` heap to keep the running best 10.
-- With **`Exact`** ordering, DataFusion drops the sort entirely and
+- With **`Exact`** ordering knowledge, DataFusion drops the sort entirely and
   stops reading after emitting 10 rows.
 - With **`Inexact`** ordering, the `SortExec` stays but scans start
   from the most-promising data, so the `TopK` threshold is more likely to
@@ -163,7 +163,7 @@ SELECT ts, symbol, amount FROM trades ORDER BY ts LIMIT 10;
 
 ## Exact: Sort Elimination via Statistics
 
-DataFusion can also eliminate sorts when it can use Parquet min/max statistics to reorder files and prove global ordering
+DataFusion can eliminate sorts entirely when it can use Parquet min/max statistics to reorder files and prove global ordering
 (relevant PRs: [apache/datafusion#19064][#19064], and
 [apache/datafusion#21182][#21182]) as shown below.
 
@@ -238,7 +238,9 @@ as follows:
 | Q3 — `SELECT * ORDER BY key`                | 700 ms  | 313 ms  | **2.2×** |
 | Q4 — `SELECT * ORDER BY key LIMIT 100`      | 342 ms  |   7 ms  | **49×**  |
 
-*Figure: `sort_pushdown` results. Note `ASC` queries with the file list reversed against sort-key ranges.*
+*Figure: `sort_pushdown` results. All four are `ASC` `ORDER BY` queries where the
+file list on disk is in the reverse of sort-key order, so a naive engine sorts even
+though the files are already individually sorted.*
 
 While DataFusion can avoid sorting for all four queries, the benefit is most dramatic for `LIMIT` queries: 
 
@@ -343,16 +345,17 @@ but the filter column still has to be read to discover that no rows
 qualify.*
 
 
-## Benchmark: topk_tpch
+## Benchmark: sort_tpch with LIMIT 100
 
-For this work, we defined a new [`topk_tpch`](https://github.com/apache/datafusion/blob/main/benchmarks/src/sort_tpch.rs)
-benchmark that runs 11 queries over the TPC-H SF1 data. Each query has 
+For this work, we ran DataFusion's
+[`sort_tpch`](https://github.com/apache/datafusion/blob/main/benchmarks/src/sort_tpch.rs)
+benchmark that runs 11 queries over the TPC-H SF1 data, each with
 `ORDER BY ... LIMIT 100`. The data is stored in Parquet files, sorted by
 `l_orderkey`. For the largest table, `lineitem`, this is a `BIGINT` with ~1.5M
 distinct values, so per Row Group `min/max` ranges are cleanly disjoint.
 We compare DataFusion 54 with the sort optimizations enabled (the default) and disabled.
 
-<img src="/blog/images/sort-pushdown/topk_tpch_bench.svg" alt="topk_tpch benchmark results: 5 of 11 queries 3-4× faster, 0 regressions, total -44%" width="100%" class="img-fluid"/>
+<img src="/blog/images/sort-pushdown/topk_tpch_bench.svg" alt="sort_tpch benchmark results: 5 of 11 queries 3-4× faster, 0 regressions, total -44%" width="100%" class="img-fluid"/>
 
 | Metric                              | Value                              |
 | ----------------------------------- | ---------------------------------- |
@@ -493,7 +496,7 @@ In flight / open:
 * Per-RG `fully_matched` RowFilter skip on top of [#22450] (blocked on arrow-rs#10158): [apache/datafusion#23067](https://github.com/apache/datafusion/issues/23067)
 * Multi-column / function-wrapped stats reorder follow-ups: [apache/datafusion#22198](https://github.com/apache/datafusion/issues/22198)
 
-Benchmark suites: [sort_pushdown](https://github.com/apache/datafusion/tree/main/benchmarks/queries/sort_pushdown), [topk_tpch](https://github.com/apache/datafusion/blob/main/benchmarks/src/sort_tpch.rs).
+Benchmark suites: [sort_pushdown](https://github.com/apache/datafusion/tree/main/benchmarks/queries/sort_pushdown), [sort_tpch](https://github.com/apache/datafusion/blob/main/benchmarks/src/sort_tpch.rs) (run with `--limit 100`).
 
 
 ## Appendix: Buffering Without Sorting
