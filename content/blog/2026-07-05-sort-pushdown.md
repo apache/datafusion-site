@@ -39,8 +39,8 @@ by [dynamic filters][dyn-filters-blog] make that possible.
 
 ## Are Real Datasets Sorted?
 
-Resorting data is prohibitively expensive for many workloads so fully sorting is often
-not practical.
+Sorting data is prohibitively expensive for many workloads, so maintaining it in fully
+sorted order is often not practical.
 
 However, many real datasets are at least partly sorted when stored: time-series files by
 ingestion time, event logs by event id, partitioned tables by partition key, and
@@ -163,7 +163,7 @@ SELECT ts, symbol, amount FROM trades ORDER BY ts DESC LIMIT 10;
 
 ## Exact: Sort Elimination via Statistics
 
-DataFusion can eliminate sorts entirely when it can use Parquet min/max statistics to reorder files and prove global ordering
+DataFusion can eliminate sorts entirely when it can use Parquet min/max statistics to reorder files and prove a global ordering
 (relevant PRs: [apache/datafusion#19064][#19064], and
 [apache/datafusion#21182][#21182]) as shown below.
 
@@ -229,7 +229,7 @@ We measured statistics-based sort elimination with DataFusion's
 forcing execution to a single core using `--partitions 1`. The results are 
 as follows: 
 
-<img src="/blog/images/sort-pushdown/benchmark.svg" alt="Sort pushdown benchmark: 2x-49x speedup across four queries" width="100%" class="img-fluid" /><br/>
+<img src="/blog/images/sort-pushdown/benchmark.svg" alt="Sort pushdown benchmark: 2×–49× speedup across four queries" width="100%" class="img-fluid" /><br/>
 
 | Query                                       | Before  | After   | Speedup  |
 | ------------------------------------------- | -------:| -------:| -------: |
@@ -244,8 +244,8 @@ though the files are already individually sorted.*
 
 While DataFusion can avoid sorting for all four queries, the benefit is most dramatic for `LIMIT` queries: 
 
-- **Full-scan queries (Q1, Q3)** result in a ~2x speedup as the scan is now a single-pass streaming read.
-- **`LIMIT` queries (Q2, Q4)** result in 27x-49x speedup because `LIMIT N` turns into a streaming read with early stopping.
+- **Full-scan queries (Q1, Q3)** result in a ~2× speedup as the scan is now a single-pass streaming read.
+- **`LIMIT` queries (Q2, Q4)** result in a 27×–49× speedup because `LIMIT N` turns into a streaming read with early stopping.
 
 ## Inexact: Scan Reordering Makes Dynamic Filters More Effective
 
@@ -286,7 +286,7 @@ the scan before and during execution using three steps:
    so the most-promising file is picked first across all partitions.
 2. **Row-group-level reorder** — once a file is opened, its row groups
    are sorted by `min(col)`.
-3. **Iteration reverse** — for queries which want the data in `DESC` 
+3. **Iteration reverse** — for queries that want the data in `DESC` 
    order, the file and row group order is reversed.
 
 **File-Level Pruning**: once files are ordered "most-promising first", the
@@ -345,17 +345,17 @@ but the filter column still has to be read to discover that no rows
 qualify.*
 
 
-## Benchmark: sort_tpch with LIMIT 100
+## Benchmark: sort_tpch
 
 For this work, we ran DataFusion's
 [`sort_tpch`](https://github.com/apache/datafusion/blob/main/benchmarks/src/sort_tpch.rs)
 benchmark that runs 11 queries over the TPC-H SF1 data, each with
 `ORDER BY ... LIMIT 100`. The data is stored in Parquet files, sorted by
 `l_orderkey`. For the largest table, `lineitem`, this is a `BIGINT` with ~1.5M
-distinct values, so per Row Group `min/max` ranges are cleanly disjoint.
+distinct values, so per-row-group `min/max` ranges are cleanly disjoint.
 We compare DataFusion 54 with the sort optimizations enabled (the default) and disabled.
 
-<img src="/blog/images/sort-pushdown/topk_tpch_bench.svg" alt="sort_tpch benchmark results: 5 of 11 queries 3-4× faster, 0 regressions, total -44%" width="100%" class="img-fluid"/>
+<img src="/blog/images/sort-pushdown/topk_tpch_bench.svg" alt="sort_tpch benchmark results: 5 of 11 queries ≥2× faster (up to ~4×), 0 regressions, total -44%" width="100%" class="img-fluid"/>
 
 | Metric                              | Value                              |
 | ----------------------------------- | ---------------------------------- |
@@ -368,7 +368,7 @@ The five queries which improved use `l_orderkey` as the **first** sort key colum
 `Layer 2` (row group pruning) can cascade-prune aggressively. The other queries have multi-column
 sorts with
 low-cardinality or unsorted columns (`l_linenumber`, `l_comment`,
-`l_shipmode`), whose per-Row Group ranges overlap heavily. Even when `l_orderkey`
+`l_shipmode`), whose per-row-group ranges overlap heavily. Even when `l_orderkey`
 appears later as a tie-breaker, the leading key controls RG-level disjointness,
 so `Layer 3` (row-level) is still partially effective.
 
@@ -379,10 +379,10 @@ Use cases where the query sort key (e.g. `ORDER BY time DESC LIMIT 10`) is
 aligned with the physical layout (e.g. the data is ordered by `time`) are common
 in time-series, partitioned tables, and ingestion-ordered event logs. In
 DataFusion 54, we implemented several optimizations, speeding up the target
-workloads by a factor of 3-4 without slowing down queries for which they don't
+workloads by up to ~4× without slowing down queries for which they don't
 apply. We hope you enjoy using them and welcome your feedback.
 
-Two follow-ups are open:  Page-level `Exact` reverse would let `DESC` queries drop the sort
+Two follow-ups are open: Page-level `Exact` reverse would let `DESC` queries drop the sort
 but needs lower level support in the Parquet reader ([arrow-rs#9937](https://github.com/apache/arrow-rs/pull/9937))
 for reading pages in reverse order.
 We are also considering implementing Page-level dynamic pruning at
@@ -427,11 +427,10 @@ eliminate redundant sorts goes back to "interesting orders" in System R
 ([Selinger et al., SIGMOD 1979][selinger1979]) and was formalized by
 [Simmen, Shekita, and Malkemus (SIGMOD 1996)][simmen1996]. Those techniques
 derive orderings from *schema* — declared keys, indexes, and functional
-dependencies — whereas we use per-file min/max *statistics*. Concatenating disjoint key ranges
-rather than merging is described as *virtual
-concatenation* by [Graefe (ACM Computing Surveys 2006)][graefe2006], and is mirrored in
-LSM "trivial move" compaction ([RocksDB][rocksdb-trivial]). For *declared* partition
-bounds, the "concatenate, don't merge" optimization appears in
+dependencies — whereas we derive them from per-file min/max *statistics*
+(the *virtual concatenation* idea discussed
+[above](#exact-sort-elimination-via-statistics)). For *declared* partition
+bounds, the same "concatenate, don't merge" optimization appears in
 [TimescaleDB's OrderedAppend][timescale-append] and [PostgreSQL's ordered partition scans][pg-append].
 
 **Top-k early termination and threshold pushdown.** Using a running
@@ -447,7 +446,7 @@ via min/max is described for Snowflake in
 runtime filters), and InfluxDB IOx ([`ProgressiveEvalExec`][iox-progressive]).
 
 **Reverse scans and data skipping.** Reading physically-ordered data in
-reverse to satisfy `DESC ... LIMIT` is a well known technique in traditional
+reverse to satisfy `DESC ... LIMIT` is a well-known technique in traditional
 databases (backward/descending index scans in [PostgreSQL][pg-backward] and [Oracle][oracle-backward]).
 Min/max block skipping itself originates with
 [Small Materialized Aggregates (Moerkotte, VLDB 1998)][sma1998] and is
@@ -496,7 +495,7 @@ In flight / open:
 * Per-RG `fully_matched` RowFilter skip on top of [#22450] (blocked on arrow-rs#10158): [apache/datafusion#23067](https://github.com/apache/datafusion/issues/23067)
 * Multi-column / function-wrapped stats reorder follow-ups: [apache/datafusion#22198](https://github.com/apache/datafusion/issues/22198)
 
-Benchmark suites: [sort_pushdown](https://github.com/apache/datafusion/tree/main/benchmarks/queries/sort_pushdown), [sort_tpch](https://github.com/apache/datafusion/blob/main/benchmarks/src/sort_tpch.rs) (run with `--limit 100`).
+Benchmark suites: [sort_pushdown](https://github.com/apache/datafusion/tree/main/benchmarks/queries/sort_pushdown), [sort_tpch](https://github.com/apache/datafusion/blob/main/benchmarks/src/sort_tpch.rs).
 
 
 ## Appendix: Buffering Without Sorting
