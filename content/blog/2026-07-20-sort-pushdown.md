@@ -1,7 +1,7 @@
 ---
 layout: post
 title: Optimizing for Almost Sorted Data: Sort Pushdown in Apache DataFusion
-date: 2026-07-05
+date: 2026-07-20
 author: Qi Zhu and Andrew Lamb
 categories: [performance]
 ---
@@ -29,8 +29,8 @@ limitations under the License.
 
 *[Qi Zhu](https://github.com/zhuqi-lucas) ([Massive](https://www.massive.com/)); [Andrew Lamb](https://github.com/alamb) ([InfluxData](https://www.influxdata.com/))*
 
-**[Apache DataFusion] uses sortedness automatically — even when data is only
-partially sorted or when no ordering was declared.** This post explains how
+[Apache DataFusion] uses sortedness automatically — even when data is only
+partially sorted or when no ordering was declared. This post explains how
 plan-time sort pushdown, runtime scan reordering, and row-group pruning driven
 by [dynamic filters][dyn-filters-blog] make that possible.
 
