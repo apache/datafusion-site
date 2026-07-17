@@ -374,9 +374,7 @@ so `Layer 3` (row-level) is still partially effective.
 ## Related Work
 
 The ideas here build on a long line of research, and several other
-systems implement closely related techniques. We summarize the most
-relevant prior art so readers can place DataFusion's contribution in
-context.
+systems implement closely related techniques. 
 
 **Exploiting and proving sort order.** Reasoning about orderings to
 eliminate redundant sorts goes back to "interesting orders" in System R
@@ -384,9 +382,8 @@ eliminate redundant sorts goes back to "interesting orders" in System R
 [Simmen, Shekita, and Malkemus (SIGMOD 1996)][simmen1996] and
 [Neumann and Moerkotte (VLDB 2004)][neumann2004]. Those techniques
 derive orderings from *schema* — declared keys, indexes, and functional
-dependencies — whereas the `Exact` path here derives a provable order
-from per-file min/max *statistics*. The underlying "disjoint key ranges
-can be concatenated rather than merged" principle is stated as *virtual
+dependencies — whereas we use  per-file min/max *statistics*. Concatenating disjoint key ranges
+rather than merging principle is described as *virtual
 concatenation* by [Graefe (ACM Computing Surveys 2006)][graefe2006], is
 rooted in range-partitioned parallel sort
 ([Graefe, ACM Computing Surveys 1993][graefe1993]), and is mirrored in
@@ -399,7 +396,7 @@ machinery to *delete* the surrounding sort and to the undeclared-ordering
 case.
 
 **Top-k early termination and threshold pushdown.** Using a running
-threshold to stop early is rooted in [Fagin's Threshold Algorithm
+threshold to stop early is described in [Fagin's Threshold Algorithm
 (PODS 2001)][fagin2001], with access scheduling for faster convergence
 explored in [IO-Top-k (VLDB 2006)][iotopk2006]; see
 [Ilyas et al. (ACM Computing Surveys 2008)][ilyas2008] for a survey.
@@ -409,10 +406,7 @@ via min/max is described for Snowflake in
 ClickHouse (granule-level top-N skipping), DuckDB (dynamic Top-N table
 filters), PolarDB-IMCI (self-sharpening runtime filters), and InfluxDB
 IOx (`ProgressiveEvalExec`). DataFusion's earlier
-[dynamic filters post][dyn-filters-blog] credits several of these. The
-contribution here is an open-source, engine-agnostic implementation that
-drives file-, row-group-, and (planned) page-level pruning from the same
-`TopK` dynamic filter, together with runtime scan reordering.
+[dynamic filters post][dyn-filters-blog] credits several of these. 
 
 **Reverse scans and data skipping.** Reading physically-ordered data in
 reverse to satisfy `DESC ... LIMIT` is long-standing in traditional
@@ -420,7 +414,7 @@ databases (backward/descending index scans in PostgreSQL and Oracle); the
 step here is applying it to file and row-group order inside a columnar
 reader. Min/max block skipping itself originates with
 [Small Materialized Aggregates (Moerkotte, VLDB 1998)][sma1998] and is
-now ubiquitous as zone maps, BRIN indexes, and Parquet/ORC statistics.
+now ubiquitous as zone maps and Parquet statistics.
 
 [selinger1979]: https://dl.acm.org/doi/10.1145/582095.582099
 [simmen1996]: https://dl.acm.org/doi/10.1145/233269.233320
