@@ -241,30 +241,28 @@ functions<sup id="fn1">[1](#footnote1)</sup>, constants inferred from filters,
 and multi-column orderings. The same dynamic filter is used to drive three layers of pruning:
 
 <img src="/blog/images/sort-pushdown/pruning_stack.svg" alt="Three-layer pruning: file-level, row-group-level, row-level, all driven by the same TopK dynamic filter" width="100%" class="img-fluid" /><br/>
-*Figure: three pruning layers within the Parquet reader, all driven by the same `TopK` dynamic filter.*
+*Figure: The Parquet reader applies three pruning layers, all driven by the same `TopK` dynamic filter.*
 
 * **Layer 1 · file-level** ([file_pruner] + [EarlyStoppingStream]) — skips whole files before they are opened.
 * **Layer 2 · row-group-level** ([#22450]) — skips whole row groups at each boundary, before any pages are fetched.
 * **Layer 3 · row-level** ([RowFilter]) — skips decoding the remaining columns in a surviving row group.
 
-Each layer is described in detail below.
-
 [file_pruner]: https://docs.rs/datafusion-pruning/latest/datafusion_pruning/struct.FilePruner.html
 [EarlyStoppingStream]: https://github.com/apache/datafusion/blob/e104138b4d45d3acfb76223cd968385f6764477b/datafusion/datasource-parquet/src/opener/early_stop.rs
 [RowFilter]: https://docs.rs/parquet/latest/parquet/arrow/arrow_reader/struct.RowFilter.html
 
-Once `PushdownSort` determines `Inexact` applies, the Parquet opener reorders
+When `Inexact` applies, the Parquet opener reorders
 the scan before and during execution using three steps:
 
 <img src="/blog/images/sort-pushdown/pr21956-runtime-pipeline.svg" alt="Runtime reorder pipeline: file reorder, RG reorder, then optional reverse" width="100%" class="img-fluid" /><br/>
 
-*Figure: the Parquet opener applies file-level reorder → row-group-level reorder → optional iteration reverse.*
+*Figure: the Parquet opener applies file-level reordering, row-group-level reordering, an optional iteration reverse.*
 
-1. **File-level reorder** — the file list is sorted by `min(col)`,
+1. **File-level reordering** — the file list is sorted by `min(col)`,
    so the most-promising file is picked first across all partitions.
-2. **Row-group-level reorder** — once a file is opened, its row groups
+2. **Row-group-level reordering** — once a file is opened, its row groups
    are sorted by `min(col)`.
-3. **Iteration reverse** — for queries that want the data in `DESC` 
+3. **Iteration reverse** — for queries that have  `DESC` 
    order, the file and row group order is reversed.
 
 **File-Level Pruning**: once files are ordered "most-promising first", the
@@ -276,29 +274,29 @@ following example.
 
 <img src="/blog/images/sort-pushdown/desc_walk_file.svg" alt="File-level reorder with early stop via file_pruner" width="100%" class="img-fluid" /><br/>
 
-*Figure: after reordering files by their sort key, the low-value files (`file_d` and `file_c`,
-whose sort-key values are smallest and therefore least promising for this `DESC LIMIT` query)
-end up at the tail of the queue and are pruned by the file-level pruner before they
+*Figure: after reordering files by their sort key, the low sort-key value files (`file_d` and `file_c`,
+whose sort-key values are least promising for this `DESC LIMIT` query)
+end up at the tail of the read queue and are pruned by the file-level pruner before they
 are ever opened.*
 
 **Row-Group-Level Pruning**: When a file is first opened, DataFusion prunes
 row groups based on predicates and statistics and then determines
 the order to scan the row groups. During the scan, immediately before DataFusion
 reads the next row group, it checks if the `TopK` dynamic filter has changed. If so, 
-after [#22450] it checks the remaining row groups against the new threshold and 
-prunes any that cannot contribute to the final result. See the 
-[Appendix: Decoder Loop and Decision Point](#appendix-decoder-loop-and-decision-point) for more details on how this works.
+ it checks the remaining row groups against the new threshold and 
+prunes any that cannot contribute to the final result (added in [#22450]). See the 
+[Appendix: Decoder Loop and Decision Point](#appendix-decoder-loop-and-decision-point) for more details.
 
 
 <img src="/blog/images/sort-pushdown/rg_cascade.svg" alt="Cascading prune: one row group fills the heap, threshold snaps, all subsequent row groups are pruned in a single pass" width="100%" class="img-fluid" /><br/>
-*Figure: for `ORDER BY x DESC LIMIT 10`, reading just the first row group can prune all the rest in a single pass (walkthrough below).*
+*Figure: for `ORDER BY x DESC LIMIT 10`, after reading the first row group, DataFusion prunes the rest of the row groups in a single pass (walkthrough below).*
 
-For example, consider a file with 10 row groups, each containing rows with values
+For the example shown above, the file has 10 row groups, each containing rows with values
 `[0..10)`, `[10..20)`, ..., `[90..100)` and a query with `ORDER BY x DESC LIMIT 10`. 
 
 1. The row groups are first reordered by their maximum values, so the highest-value row group is read first.
 2. Row group 9 (values `[90..100)`) is opened and read, filling
-   the heap with at least 10 values (the minimum heap value is `90`). The `TopK` dynamic filter threshold is updated to `90`.
+   the heap with 10 values (the minimum heap value is `90`). The `TopK` dynamic filter threshold is updated to `90`.
 3. At the next row-group boundary, the pruner sees the dynamic filter has been updated
    and re-evaluates the filter on all remaining row groups. Since row group 8
    through row group 0 have `max < 90` they are all pruned out and skipped in a single pass. 
