@@ -79,12 +79,12 @@ most-promising data.
 ## Exact vs. Inexact Ordering
 
 DataFusion has long skipped sorts when it knows the data is **exactly** sorted, as covered in
-[@akurmustafa's earlier post on ordering analysis][ordering-analysis]:
+[@akurmustafa's earlier post][ordering-analysis]:
 if the table declares an ordering (via `WITH ORDER` or Parquet
 `sorting_columns`) and the file listing matches it, the redundant sort is removed. 
 
-This post is about **everything else** — the messier real-world cases
-where sortedness exists but is **inexact** or not provable up front:
+This post is about messier real-world cases
+where sortedness exists but is *inexact* or not provable up front:
 
 - Files listed in the "wrong" order on disk (each file is internally
   sorted, but the files are not globally ordered).
@@ -95,14 +95,13 @@ where sortedness exists but is **inexact** or not provable up front:
 This post describes two primary techniques:
 
 1. **Statistics-based sort elimination** (`Exact`): avoids sorts entirely by
-   reordering files by min/max statistics to prove a global ordering. This
+   reordering files by min/max statistics to create a global ordering. This
    extends DataFusion's existing statistics-based file-group ordering
-   ([#9593]) and the classic "disjoint ranges concatenate rather than
-   merge" idea (see [Related Work](#related-work)) to the case where the
-   *global* order across files was not known up front.
+   ([#9593]) and is similar to prior work for concatenating disjoint ranges rather than
+   merging them (see [Related Work](#related-work)).
 2. **Runtime reorder and dynamic pruning** (`Inexact`): reorders the scan to read
    the most-promising data first, then re-checks the `TopK` dynamic filter at file
-   and row-group boundaries, skipping pruned data before fetching bytes. This
+   and row-group boundaries. This
    follows the same runtime-threshold pattern used by Snowflake, ClickHouse,
    DuckDB, and PolarDB, applied here at file, row-group, and row granularity.
 
@@ -111,7 +110,7 @@ These techniques are implemented in DataFusion and together result in:
 - **Sort elimination**: 2×–49× faster on `ORDER BY` and `ORDER BY ... LIMIT`
   queries where the file list was in the wrong disk order.
 - **Runtime row-group pruning**: 5 of 11 benchmark queries run ≥2× faster
-  (up to ~4×) with zero regressions; total runtime drops −44%.
+  (up to ~4×) with zero regressions; total runtime drops by 44%.
 
 The rest of this post walks through each technique in detail.
 
@@ -427,11 +426,13 @@ eliminate redundant sorts goes back to "interesting orders" in System R
 ([Selinger et al., SIGMOD 1979][selinger1979]) and was formalized by
 [Simmen, Shekita, and Malkemus (SIGMOD 1996)][simmen1996]. Those techniques
 derive orderings from *schema* — declared keys, indexes, and functional
-dependencies — whereas we derive them from per-file min/max *statistics*
-(the *virtual concatenation* idea discussed
-[above](#exact-sort-elimination-via-statistics)). For *declared* partition
-bounds, the same "concatenate, don't merge" optimization appears in
-[TimescaleDB's OrderedAppend][timescale-append] and [PostgreSQL's ordered partition scans][pg-append].
+dependencies — whereas we derive them from per-file min/max *statistics*.
+Concatenating disjoint key ranges rather than merging them is Graefe's
+*virtual concatenation* ([ACM Computing Surveys 2006][graefe2006]), and is
+mirrored in LSM "trivial move" compaction ([RocksDB][rocksdb-trivial]). For
+*declared* partition bounds, the same "concatenate, don't merge" optimization
+appears in [TimescaleDB's OrderedAppend][timescale-append] and
+[PostgreSQL's ordered partition scans][pg-append].
 
 **Top-k early termination and threshold pushdown.** Using a running
 threshold to stop early is described in [Fagin's Threshold Algorithm
