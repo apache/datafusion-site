@@ -112,7 +112,7 @@ This post describes two primary techniques:
 
 These techniques are implemented in DataFusion and together result in:
 
-- **Sort elimination**: 2×–49× faster on `ORDER BY ... LIMIT`
+- **Sort elimination**: 2×–49× faster on `ORDER BY` and `ORDER BY ... LIMIT`
   queries where the file list was in the wrong disk order.
 - **Runtime row-group pruning**: 5 of 11 benchmark queries run ≥2× faster
   (up to ~4×) with zero regressions; total runtime drops −44%.
@@ -120,9 +120,7 @@ These techniques are implemented in DataFusion and together result in:
 The rest of this post walks through each technique in detail.
 
 [#22450]: https://github.com/apache/datafusion/pull/22450
-[#20839]: https://github.com/apache/datafusion/pull/20839
 [#9593]: https://github.com/apache/datafusion/pull/9593
-[Apache Parquet]: https://parquet.apache.org/
 [ordering-analysis]: https://datafusion.apache.org/blog/2025/03/11/ordering-analysis/
 
 ## Tracking Ordering
@@ -152,7 +150,7 @@ and keep the sort), or `Unsupported` (the sort stays).*
 For example, given a query that returns the 10 most recent trades:
 
 ```sql
-SELECT ts, symbol, amount FROM trades ORDER BY ts DESC LIMIT 10;
+SELECT ts, symbol, amount FROM trades ORDER BY ts LIMIT 10;
 ```
 
 - With no ordering knowledge, DataFusion scans everything and uses a
@@ -208,7 +206,7 @@ runs with disjoint key ranges … can together … serve as a single input"
 well-established — it is stated there in a *survey* (i.e. already common
 by 2006), is rooted further back in range-partitioned parallel sort
 ([Graefe, ACM Computing Surveys 1993][graefe1993]), and is mirrored in
-LSM "trivial move" compaction (RocksDB/LevelDB). What is less common, and
+LSM "trivial move" compaction ([RocksDB][rocksdb-trivial]). What is less common, and
 the focus here, is *discovering* the disjoint ranges from per-file
 min/max statistics rather than from a declared partitioning scheme.
 
@@ -244,7 +242,7 @@ as follows:
 
 While DataFusion can avoid sorting for all four queries, the benefit is most dramatic for `LIMIT` queries: 
 
-- **Full-scan queries (Q1, Q3)** result in a ~2 speedup as the scan is now a single-pass streaming read.
+- **Full-scan queries (Q1, Q3)** result in a ~2x speedup as the scan is now a single-pass streaming read.
 - **`LIMIT` queries (Q2, Q4)** result in 27x-49x speedup because `LIMIT N` turns into a streaming read with early stopping.
 
 ## Inexact: Scan Reordering Makes Dynamic Filters More Effective
@@ -301,7 +299,7 @@ following example.
 *Figure: after reordering files by their sort key, the low-value files (`file_d` and `file_c`,
 whose sort-key values are smallest and therefore least promising for this `DESC LIMIT` query)
 end up at the tail of the queue and are pruned by the file-level pruner before they
-are ever opened — no metadata I/O.*
+are ever opened.*
 
 **Row-Group-Level Pruning**: When a file is first opened, DataFusion prunes
 row groups based on predicates and statistics and then determines
@@ -347,7 +345,7 @@ qualify.*
 
 ## Benchmark: topk_tpch
 
-For this work, we defined a new  [`topk_tpch`](https://github.com/apache/datafusion/blob/main/benchmarks/src/sort_tpch.rs)
+For this work, we defined a new [`topk_tpch`](https://github.com/apache/datafusion/blob/main/benchmarks/src/sort_tpch.rs)
 benchmark that runs 11 queries over the TPC-H SF1 data. Each query has 
 `ORDER BY ... LIMIT 100`. The data is stored in Parquet files, sorted by
 `l_orderkey`. For the largest table, `lineitem`, this is a `BIGINT` with ~1.5M
@@ -404,7 +402,6 @@ work.
 `ts DESC`, reversing that ordering gives `ts ASC`, which can satisfy
 `date_trunc('day', ts) ASC`.
 
-[@alamb]: https://github.com/alamb
 [@adriangb]: https://github.com/adriangb
 [@xudong963]: https://github.com/xudong963
 [@2010YOUY01]: https://github.com/2010YOUY01
@@ -427,7 +424,7 @@ eliminate redundant sorts goes back to "interesting orders" in System R
 ([Selinger et al., SIGMOD 1979][selinger1979]) and was formalized by
 [Simmen, Shekita, and Malkemus (SIGMOD 1996)][simmen1996]. Those techniques
 derive orderings from *schema* — declared keys, indexes, and functional
-dependencies — whereas we use  per-file min/max *statistics*. Concatenating disjoint key ranges
+dependencies — whereas we use per-file min/max *statistics*. Concatenating disjoint key ranges
 rather than merging is described as *virtual
 concatenation* by [Graefe (ACM Computing Surveys 2006)][graefe2006], and is mirrored in
 LSM "trivial move" compaction ([RocksDB][rocksdb-trivial]). For *declared* partition
@@ -455,7 +452,6 @@ now ubiquitous across columnar storage formats and query engines.
 
 [selinger1979]: https://dl.acm.org/doi/10.1145/582095.582099
 [simmen1996]: https://dl.acm.org/doi/10.1145/233269.233320
-[neumann2004]: https://www.vldb.org/conf/2004/RS24P3.PDF
 [fagin2001]: https://arxiv.org/abs/cs/0204046
 [iotopk2006]: https://www.vldb.org/conf/2006/p475-bast.pdf
 [ilyas2008]: https://dl.acm.org/doi/10.1145/1391729.1391730
