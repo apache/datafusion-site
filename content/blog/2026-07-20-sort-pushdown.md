@@ -59,12 +59,12 @@ In both cases, queries with `ORDER BY` or `ORDER BY ... LIMIT N` pay for a full
 scan and sometimes a blocking full sort, which buffers every row and can
 dominate latency and peak memory on large scans.
 
-Using Min/max statistics for *predicate* pushdown is well-known and widely
+Using min/max statistics for *predicate* pushdown is well-known and widely
 implemented across databases, as covered in [@XiangpengHao]'s 
 post on [Parquet pruning][parquet-pruning-blog]. Using the same
 statistics to *reason about sort order* and to prune `ORDER BY ... LIMIT`
 (top-k) queries is also increasingly common, for example in the 
-[Pruning in Snowflake: Working Smarter, Not Harder] (see [Related Work](#related-work) for more). 
+[Pruning in Snowflake: Working Smarter, Not Harder] paper (see [Related Work](#related-work) for more). 
 This post describes more of 
 these techniques for a general audience, including the less-common case of *discovering* a
 global sort order from per-file statistics,
@@ -83,7 +83,7 @@ DataFusion has long skipped sorts when it knows the data is **exactly** sorted, 
 if the table declares an ordering (via `WITH ORDER` or Parquet
 `sorting_columns`) and the file listing matches it, the redundant sort is removed. 
 
-This post is about messier real-world cases
+This post is about the messier real-world cases
 where sortedness exists but is *inexact* or not provable up front:
 
 - Files listed in the "wrong" order on disk (each file is internally
@@ -97,13 +97,10 @@ This post describes two primary techniques:
 1. **Statistics-based sort elimination** (`Exact`): avoids sorts entirely by
    reordering files by min/max statistics to create a global ordering. This
    extends DataFusion's existing statistics-based file-group ordering
-   ([#9593]) and is similar to prior work for concatenating disjoint ranges rather than
-   merging them (see [Related Work](#related-work)).
+   ([#9593]) and is similar to prior work for concatenating disjoint ranges.
 2. **Runtime reorder and dynamic pruning** (`Inexact`): reorders the scan to read
    the most-promising data first, then re-checks the `TopK` dynamic filter at file
-   and row-group boundaries. This
-   follows the same runtime-threshold pattern used by Snowflake, ClickHouse,
-   DuckDB, and PolarDB, applied here at file, row-group, and row granularity.
+   and row-group boundaries.
 
 These techniques are implemented in DataFusion and together result in:
 
@@ -127,7 +124,7 @@ optimizer rule classifies each scan below a sort as either `Unsupported`,
 [`FileScanConfig`](https://docs.rs/datafusion-datasource/latest/datafusion_datasource/file_scan_config/struct.FileScanConfig.html):
 
 - **`Unsupported`** — the optimizer cannot determine the ordering, so no sort is removed.
-- **`Exact`** — the optimizer is *certain* the output is in this order,
+- **`Exact`** — the optimizer is *certain* of the output order,
   and removes redundant [`SortExec`](https://docs.rs/datafusion-physical-plan/latest/datafusion_physical_plan/sorts/sort/struct.SortExec.html) operators entirely.
 - **`Inexact`** — the optimizer believes the output is probably ordered
   but cannot prove it. Downstream operators like
@@ -363,7 +360,7 @@ We compare DataFusion 54 with the sort optimizations enabled (the default) and d
 
 [topk-tpch-raw]: https://github.com/apache/datafusion/pull/22450#issuecomment-4765161078
 
-The five queries which improved use `l_orderkey` as the **first** sort key column, so
+The five queries that improved use `l_orderkey` as the **first** sort key column, so
 `Layer 2` (row group pruning) can cascade-prune aggressively. The other queries have multi-column
 sorts with
 low-cardinality or unsorted columns (`l_linenumber`, `l_comment`,
@@ -377,8 +374,8 @@ so `Layer 3` (row-level) is still partially effective.
 Use cases where the query sort key (e.g. `ORDER BY time DESC LIMIT 10`) is
 aligned with the physical layout (e.g. the data is ordered by `time`) are common
 in time-series, partitioned tables, and ingestion-ordered event logs. Over the
-last few DataFusion releases we implemented several optimizations that speed
-these workloads up by up to ~4× without slowing down queries for which they
+last few DataFusion releases we implemented several optimizations that make
+these workloads up to ~4× faster without slowing down queries for which they
 don't apply. We hope you enjoy using them and welcome your feedback.
 
 Two follow-ups are open: Page-level `Exact` reverse would let `DESC` queries drop the sort
