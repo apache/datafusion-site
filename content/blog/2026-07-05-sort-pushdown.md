@@ -371,66 +371,14 @@ low-cardinality or unsorted columns (`l_linenumber`, `l_comment`,
 appears later as a tie-breaker, the leading key controls RG-level disjointness,
 so `Layer 3` (row-level) is still partially effective.
 
-## Related Work
-
-The ideas here build on a long line of research, and several other
-systems implement closely related techniques. 
-
-**Exploiting and proving sort order.** Reasoning about orderings to
-eliminate redundant sorts goes back to "interesting orders" in System R
-([Selinger et al., SIGMOD 1979][selinger1979]) and was formalized by
-[Simmen, Shekita, and Malkemus (SIGMOD 1996)][simmen1996] and
-[Neumann and Moerkotte (VLDB 2004)][neumann2004]. Those techniques
-derive orderings from *schema* — declared keys, indexes, and functional
-dependencies — whereas we use  per-file min/max *statistics*. Concatenating disjoint key ranges
-rather than merging principle is described as *virtual
-concatenation* by [Graefe (ACM Computing Surveys 2006)][graefe2006], is
-rooted in range-partitioned parallel sort
-([Graefe, ACM Computing Surveys 1993][graefe1993]), and is mirrored in
-LSM "trivial move" compaction (RocksDB/LevelDB). For *declared* partition
-bounds, the same "concatenate, don't merge" optimization appears in
-TimescaleDB's OrderedAppend and PostgreSQL's ordered partition scans
-(`Append` instead of `MergeAppend`). DataFusion's own [#9593] already
-reorders files by min/max to derive an ordering; this post extends that
-machinery to *delete* the surrounding sort and to the undeclared-ordering
-case.
-
-**Top-k early termination and threshold pushdown.** Using a running
-threshold to stop early is described in [Fagin's Threshold Algorithm
-(PODS 2001)][fagin2001], with access scheduling for faster convergence
-explored in [IO-Top-k (VLDB 2006)][iotopk2006]; see
-[Ilyas et al. (ACM Computing Surveys 2008)][ilyas2008] for a survey.
-Pushing a *live* top-k boundary value into a columnar scan to skip blocks
-via min/max is described for Snowflake in
-[Pruning in Snowflake: Working Smarter, Not Harder] and ships in
-ClickHouse (granule-level top-N skipping), DuckDB (dynamic Top-N table
-filters), PolarDB-IMCI (self-sharpening runtime filters), and InfluxDB
-IOx (`ProgressiveEvalExec`). DataFusion's earlier
-[dynamic filters post][dyn-filters-blog] credits several of these. 
-
-**Reverse scans and data skipping.** Reading physically-ordered data in
-reverse to satisfy `DESC ... LIMIT` is long-standing in traditional
-databases (backward/descending index scans in PostgreSQL and Oracle); the
-step here is applying it to file and row-group order inside a columnar
-reader. Min/max block skipping itself originates with
-[Small Materialized Aggregates (Moerkotte, VLDB 1998)][sma1998] and is
-now ubiquitous as zone maps and Parquet statistics.
-
-[selinger1979]: https://dl.acm.org/doi/10.1145/582095.582099
-[simmen1996]: https://dl.acm.org/doi/10.1145/233269.233320
-[neumann2004]: https://www.vldb.org/conf/2004/RS24P3.PDF
-[fagin2001]: https://arxiv.org/abs/cs/0204046
-[iotopk2006]: https://www.vldb.org/conf/2006/p475-bast.pdf
-[ilyas2008]: https://dl.acm.org/doi/10.1145/1391729.1391730
-[sma1998]: https://www.vldb.org/conf/1998/p476.pdf
 
 ## Conclusion and Future Work
 
 Use cases where the query sort key (e.g. `ORDER BY time DESC LIMIT 10`) is
 aligned with the physical layout (e.g. the data is ordered by `time`) are common
 in time-series, partitioned tables, and ingestion-ordered event logs. In
-DataFusion 54, we implemented several novel optimizations, speeding up several
-work loads by a factor of 3-4 without slowing down queries for which they don't
+DataFusion 54, we implemented several optimizations, speeding up the target
+workloads by a factor of 3-4 without slowing down queries for which they don't
 apply. We hope you enjoy using them and welcome your feedback.
 
 Two follow-ups are open:  Page-level `Exact` reverse would let `DESC` queries drop the sort
@@ -468,6 +416,60 @@ work.
 - **Work on a [good first issue](https://github.com/apache/datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)**, or pick up one of the [follow-ups](https://github.com/apache/datafusion/issues/23036) listed in the umbrella issue.
 - **File issues or join the conversation**: [GitHub](https://github.com/apache/datafusion/) for bugs and feature requests, [Slack or Discord](https://datafusion.apache.org/contributor-guide/communication.html) for discussion.
 - Learn more by visiting the [DataFusion](https://datafusion.apache.org/index.html) project page.
+
+## Related Work
+
+The ideas in this blog build on a long line of research, and several other
+systems implement closely related techniques.
+
+**Exploiting and proving sort order.** Reasoning about orderings to
+eliminate redundant sorts goes back to "interesting orders" in System R
+([Selinger et al., SIGMOD 1979][selinger1979]) and was formalized by
+[Simmen, Shekita, and Malkemus (SIGMOD 1996)][simmen1996]. Those techniques
+derive orderings from *schema* — declared keys, indexes, and functional
+dependencies — whereas we use  per-file min/max *statistics*. Concatenating disjoint key ranges
+rather than merging is described as *virtual
+concatenation* by [Graefe (ACM Computing Surveys 2006)][graefe2006], and is mirrored in
+LSM "trivial move" compaction ([RocksDB][rocksdb-trivial]). For *declared* partition
+bounds, the "concatenate, don't merge" optimization appears in
+[TimescaleDB's OrderedAppend][timescale-append] and [PostgreSQL's ordered partition scans][pg-append].
+
+**Top-k early termination and threshold pushdown.** Using a running
+threshold to stop early is described in [Fagin's Threshold Algorithm
+(PODS 2001)][fagin2001], with index choice for faster convergence
+explored in [IO-Top-k (VLDB 2006)][iotopk2006]; see
+[Ilyas et al. (ACM Computing Surveys 2008)][ilyas2008] for a survey.
+Pushing a *live* top-k boundary value into a columnar scan to skip blocks
+via min/max is described for Snowflake in
+[Pruning in Snowflake: Working Smarter, Not Harder] and ships in
+[ClickHouse][ch-topn] (granule-level top-N skipping), [DuckDB][duckdb-topn]
+(dynamic Top-N table filters), [PolarDB-IMCI][polardb-topk] (self-sharpening
+runtime filters), and InfluxDB IOx ([`ProgressiveEvalExec`][iox-progressive]).
+
+**Reverse scans and data skipping.** Reading physically-ordered data in
+reverse to satisfy `DESC ... LIMIT` is a well known technique in traditional
+databases (backward/descending index scans in [PostgreSQL][pg-backward] and [Oracle][oracle-backward]).
+Min/max block skipping itself originates with
+[Small Materialized Aggregates (Moerkotte, VLDB 1998)][sma1998] and is
+now ubiquitous across columnar storage formats and query engines.
+
+[selinger1979]: https://dl.acm.org/doi/10.1145/582095.582099
+[simmen1996]: https://dl.acm.org/doi/10.1145/233269.233320
+[neumann2004]: https://www.vldb.org/conf/2004/RS24P3.PDF
+[fagin2001]: https://arxiv.org/abs/cs/0204046
+[iotopk2006]: https://www.vldb.org/conf/2006/p475-bast.pdf
+[ilyas2008]: https://dl.acm.org/doi/10.1145/1391729.1391730
+[sma1998]: https://www.vldb.org/conf/1998/p476.pdf
+[rocksdb-trivial]: https://github.com/facebook/rocksdb/wiki/Compaction-Trivial-Move
+[timescale-append]: https://www.tigerdata.com/blog/ordered-append-postgresql-optimization
+[pg-append]: https://www.postgresql.org/message-id/2401607.SfZhPQhbS4@ronan_laptop
+[pg-backward]: https://www.postgresql.org/docs/current/indexes-ordering.html
+[oracle-backward]: https://docs.oracle.com/en/database/oracle/oracle-database/19/tgsql/optimizer-access-paths.html
+[ch-topn]: https://clickhouse.com/blog/clickhouse-top-n-queries-granule-level-data-skipping
+[duckdb-topn]: https://duckdb.org/2024/10/25/topn
+[polardb-topk]: https://www.alibabacloud.com/blog/how-does-the-imci-of-polardb-for-mysql-achieve-ultimate-topk-query-performance_600006
+[iox-progressive]: https://www.influxdata.com/blog/query-optimization-progressive-evaluation-influxdb/
+
 
 ## References
 
