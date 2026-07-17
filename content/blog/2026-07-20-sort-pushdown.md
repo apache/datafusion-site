@@ -123,16 +123,11 @@ optimizer rule classifies each scan below a sort as either `Unsupported`,
 `Exact`, or `Inexact`, and records this information on DataFusion's
 [`FileScanConfig`](https://docs.rs/datafusion-datasource/latest/datafusion_datasource/file_scan_config/struct.FileScanConfig.html):
 
-- **`Unsupported`** — the optimizer cannot determine the ordering, so no sort is removed.
 - **`Exact`** — the optimizer is *certain* of the output order,
   and removes redundant [`SortExec`](https://docs.rs/datafusion-physical-plan/latest/datafusion_physical_plan/sorts/sort/struct.SortExec.html) operators entirely.
 - **`Inexact`** — the optimizer believes the output is probably ordered
-  but cannot prove it. Downstream operators like
-  [`SortPreservingMergeExec`](https://docs.rs/datafusion-physical-plan/latest/datafusion_physical_plan/sorts/sort_preserving_merge/struct.SortPreservingMergeExec.html) can still benefit, but the
-  explicit sort must remain. In this case `TopK`'s
-  [dynamic filter][dyn-filters-blog] tightens as the heap fills, and
-  data whose min/max cannot beat the threshold is pruned before it is
-  fully read.
+  but cannot prove it, so the sort is kept but the scan is biased to read the most-promising data first.
+- **`Unsupported`** — the optimizer cannot determine the ordering, so no sort is removed.
 
 <img src="/blog/images/sort-pushdown/pr21956-decision.svg" alt="PushdownSort decision tree: Exact, Inexact, or Unsupported" width="100%" class="img-fluid" /><br/>
 *Figure: the `PushdownSort` rule asks each scan whether it can satisfy the
@@ -145,19 +140,19 @@ For example, given a query that returns the 10 most recent trades:
 SELECT ts, symbol, amount FROM trades ORDER BY ts DESC LIMIT 10;
 ```
 
-- With no ordering knowledge, DataFusion scans everything and uses a
-  `TopK` heap to keep the running best 10.
 - With **`Exact`** ordering knowledge, DataFusion drops the sort entirely and
   stops reading after emitting 10 rows.
 - With **`Inexact`** ordering, the `SortExec` stays but scans start
   from the most-promising data, so the `TopK` threshold is more likely to
   tighten quickly and prune the rest with statistics.
+- With no ordering knowledge, DataFusion scans everything and uses a
+  `TopK` heap to keep the running best 10.
 
 ## Exact: Sort Elimination via Statistics
 
 DataFusion can eliminate sorts entirely when it can use Parquet min/max statistics to reorder files and prove a global ordering
-(relevant PRs: [apache/datafusion#19064][#19064], and
-[apache/datafusion#21182][#21182]) as shown below.
+(relevant PRs: [#19064], and
+[#21182]) as shown below.
 
 <img src="/blog/images/sort-pushdown/plan-diff.svg" alt="EXPLAIN before / after: SortExec eliminated once ordering is Exact" width="100%" class="img-fluid"/>
 *Figure: EXPLAIN output before and after `PushdownSort` eliminates the sort. The `SortExec` is removed and the scan's ordering claim is upgraded to `Exact`.*
@@ -169,8 +164,8 @@ DataFusion can eliminate sorts entirely when it can use Parquet min/max statisti
 
 For example, consider three files `a.parquet`, `b.parquet`, `c.parquet`. Each is
 internally sorted by `ts` and the time ranges do not overlap, but were written
-by different jobs. Unless it is careful, a query engine will be forced to use a full
-external sort for a query with `ORDER BY ts`, even when it could simply read the
+by different jobs. Without this optimization, a query engine will be forced to use a full
+sort for  `ORDER BY ts` queries, even when it could simply read the
 files one after another and produce the correct result.
 
 The `Exact` path has one important precondition: each file must be
@@ -326,7 +321,7 @@ group.
 **Row-Level Early Stopping**: Even if the row group cannot be pruned with statistics,
 the tightened dynamic filter often rules out all rows after evaluating just the
 filter columns. When it does, arrow-rs's `RowFilter` skips fetching the projection
-columns for that row group entirely. [#22450][#22450] makes this fire more often
+columns for that row group entirely. [#22450] makes this fire more often
 by keeping the threshold up-to-date at every row-group boundary.
 
 <img src="/blog/images/sort-pushdown/desc_walk_rg.svg" alt="Row-group-level reorder — filter column still read for every row group before row-group filter early stop" width="100%" class="img-fluid" /><br/>
@@ -382,7 +377,7 @@ Two follow-ups are open: Page-level `Exact` reverse would let `DESC` queries dro
 but needs lower level support in the Parquet reader ([arrow-rs#9937](https://github.com/apache/arrow-rs/pull/9937))
 for reading pages in reverse order.
 We are also considering implementing Page-level dynamic pruning at
-row-group boundaries ([apache/datafusion#23216](https://github.com/apache/datafusion/issues/23216))
+row-group boundaries ([#23216](https://github.com/apache/datafusion/issues/23216))
 using the same pattern one level deeper in Parquet.
 
 ## Acknowledgements
@@ -471,27 +466,27 @@ now ubiquitous across columnar storage formats and query engines.
 
 Umbrella issue tracking the entire effort:
 
-* **[EPIC] Sort Pushdown · skip sorts and skip IO for ORDER BY / TopK queries: [apache/datafusion#23036](https://github.com/apache/datafusion/issues/23036)** — phase-by-phase status of all the PRs and follow-ups.
+* **[EPIC] Sort Pushdown · skip sorts and skip IO for ORDER BY / TopK queries: [#23036](https://github.com/apache/datafusion/issues/23036)** — phase-by-phase status of all the PRs and follow-ups.
 
 Major PRs:
 
-* `MinMaxStatistics` foundation: [apache/datafusion#9593](https://github.com/apache/datafusion/pull/9593)
-* `PushdownSort` rule + row-group reverse: [apache/datafusion#19064](https://github.com/apache/datafusion/pull/19064)
-* Reverse-output redesign: [apache/datafusion#19446](https://github.com/apache/datafusion/pull/19446), [apache/datafusion#19557](https://github.com/apache/datafusion/pull/19557)
-* Sort elimination via statistics: [apache/datafusion#21182](https://github.com/apache/datafusion/pull/21182)
-* `BufferExec` capacity for sort elimination: [apache/datafusion#21426](https://github.com/apache/datafusion/pull/21426)
-* Push-based Parquet decoder (DataFusion owns the loop): [apache/datafusion#20839](https://github.com/apache/datafusion/pull/20839)
-* Morsel-style work scheduling: [apache/datafusion#21351](https://github.com/apache/datafusion/pull/21351)
-* Runtime reorder for `TopK` convergence: [apache/datafusion#21956](https://github.com/apache/datafusion/pull/21956)
+* `MinMaxStatistics` foundation: [#9593](https://github.com/apache/datafusion/pull/9593)
+* `PushdownSort` rule + row-group reverse: [#19064](https://github.com/apache/datafusion/pull/19064)
+* Reverse-output redesign: [#19446](https://github.com/apache/datafusion/pull/19446), [#19557](https://github.com/apache/datafusion/pull/19557)
+* Sort elimination via statistics: [#21182](https://github.com/apache/datafusion/pull/21182)
+* `BufferExec` capacity for sort elimination: [#21426](https://github.com/apache/datafusion/pull/21426)
+* Push-based Parquet decoder (DataFusion owns the loop): [#20839](https://github.com/apache/datafusion/pull/20839)
+* Morsel-style work scheduling: [#21351](https://github.com/apache/datafusion/pull/21351)
+* Runtime reorder for `TopK` convergence: [#21956](https://github.com/apache/datafusion/pull/21956)
 * **Runtime row-group dynamic pruning ([#22450])** — the centerpiece of this post.
-* `peek_next_row_group` API (arrow-rs): [apache/arrow-rs#10158](https://github.com/apache/arrow-rs/pull/10158) — enables per-RG `fully_matched` RowFilter skip.
+* `peek_next_row_group` API (arrow-rs): [arrow-rs#10158](https://github.com/apache/arrow-rs/pull/10158) — enables per-RG `fully_matched` RowFilter skip.
 
 In flight / open:
 
-* Page-level reverse (arrow-rs): [apache/arrow-rs#9937](https://github.com/apache/arrow-rs/pull/9937), discussion in [apache/arrow-rs#9934](https://github.com/apache/arrow-rs/issues/9934)
-* Per-RG `fully_matched` RowFilter skip on top of [#22450] (uses arrow-rs#10158): [apache/datafusion#23067](https://github.com/apache/datafusion/issues/23067)
-* Page-level dynamic prune at RG boundary: [apache/datafusion#23216](https://github.com/apache/datafusion/issues/23216)
-* Multi-column / function-wrapped stats reorder follow-ups: [apache/datafusion#22198](https://github.com/apache/datafusion/issues/22198)
+* Page-level reverse (arrow-rs): [arrow-rs#9937](https://github.com/apache/arrow-rs/pull/9937), discussion in [arrow-rs#9934](https://github.com/apache/arrow-rs/issues/9934)
+* Per-RG `fully_matched` RowFilter skip on top of [#22450] (uses arrow-rs#10158): [#23067](https://github.com/apache/datafusion/issues/23067)
+* Page-level dynamic prune at RG boundary: [#23216](https://github.com/apache/datafusion/issues/23216)
+* Multi-column / function-wrapped stats reorder follow-ups: [#22198](https://github.com/apache/datafusion/issues/22198)
 
 Benchmark suites: [sort_pushdown](https://github.com/apache/datafusion/tree/main/benchmarks/queries/sort_pushdown), [sort_tpch](https://github.com/apache/datafusion/blob/main/benchmarks/src/sort_tpch.rs).
 
@@ -506,7 +501,7 @@ on any partition stalls the whole plan.*
 Removing `SortExec` was not always faster in multi-partition plans: the deleted
 sort had also acted as an implicit buffer. The fix was explicit buffering in
 some plans; see
-[apache/datafusion#21426](https://github.com/apache/datafusion/pull/21426)
+[#21426](https://github.com/apache/datafusion/pull/21426)
 for details, as shown in the following figure.
 
 <img src="/blog/images/sort-pushdown/buffer-exec.svg" alt="BufferExec replaces the deleted SortExec with a bounded streaming buffer per partition" width="100%" class="img-fluid" /><br/>
