@@ -49,9 +49,9 @@ Sortedness only helps if the query engine can detect and use it. Two common
 cases make that hard:
 
 1. The ordering is undeclared in the file. For example, the writer did not set Parquet
-   [`sorting_columns`](https://github.com/apache/parquet-format/blob/8a5e04bdecf100e8e981daacfa117e8b5aadacb9/src/main/thrift/parquet.thrift#L1044),
+   [sorting_columns](https://github.com/apache/parquet-format/blob/8a5e04bdecf100e8e981daacfa117e8b5aadacb9/src/main/thrift/parquet.thrift#L1044),
    or the table was not created with DataFusion's
-   [`WITH ORDER`](https://datafusion.apache.org/user-guide/sql/ddl.html#create-external-table) clause.
+   [WITH ORDER](https://datafusion.apache.org/user-guide/sql/ddl.html#create-external-table) clause.
 2. Files are individually sorted, but the engine is scanning multiple files
    and does not know a global ordering at plan time.
 
@@ -118,13 +118,13 @@ The rest of this post walks through each technique in detail.
 ## Tracking Ordering
 
 
-The [`PushdownSort`](https://github.com/apache/datafusion/blob/main/datafusion/physical-optimizer/src/pushdown_sort.rs)
+The [PushdownSort](https://github.com/apache/datafusion/blob/main/datafusion/physical-optimizer/src/pushdown_sort.rs)
 optimizer rule classifies each scan below a sort as either `Exact`,
 `Inexact`, or `Unsupported`, and records this information on DataFusion's
-[`FileScanConfig`](https://docs.rs/datafusion-datasource/latest/datafusion_datasource/file_scan_config/struct.FileScanConfig.html):
+[FileScanConfig](https://docs.rs/datafusion-datasource/latest/datafusion_datasource/file_scan_config/struct.FileScanConfig.html):
 
 - **`Exact`** — the optimizer is *certain* of the output order,
-  and removes redundant [`SortExec`](https://docs.rs/datafusion-physical-plan/latest/datafusion_physical_plan/sorts/sort/struct.SortExec.html) operators entirely.
+  and removes redundant [SortExec](https://docs.rs/datafusion-physical-plan/latest/datafusion_physical_plan/sorts/sort/struct.SortExec.html) operators entirely.
 - **`Inexact`** — the optimizer believes the output is probably ordered
   but cannot prove it, so the sort is kept but the scan is biased to read the most-promising data first.
 - **`Unsupported`** — the optimizer cannot determine the ordering, so no sort is removed.
@@ -203,7 +203,7 @@ ranges are safe to upgrade to `Exact` and the sort is removed; right:
 overlapping ranges keep the sort and fall through to the `Inexact` path described next.*
 
 We measured the single-core performance of statistics-based sort elimination with DataFusion's
-[`sort_pushdown`](https://github.com/apache/datafusion/tree/main/benchmarks/queries/sort_pushdown) benchmark suite
+[sort_pushdown](https://github.com/apache/datafusion/tree/main/benchmarks/queries/sort_pushdown) benchmark suite
 by setting `--partitions 1`. The results are as follows:
 
 <img src="/blog/images/sort-pushdown/benchmark.svg" alt="Sort pushdown benchmark: 2×–49× speedup across four queries" width="100%" class="img-fluid" /><br/>
@@ -323,7 +323,7 @@ qualify.*
 ## Benchmark: sort_tpch
 
 To test the overall benefit of this work, we used DataFusion's
-[`sort_tpch`](https://github.com/apache/datafusion/blob/main/benchmarks/src/sort_tpch.rs)
+[sort_tpch](https://github.com/apache/datafusion/blob/main/benchmarks/src/sort_tpch.rs)
 benchmark that runs 11 queries over the TPC-H SF1 dataset, each with
 `ORDER BY ... LIMIT 100`. The data is stored in Parquet files, sorted by
 `l_orderkey`. For the largest table, `lineitem`, `l_orderkey` is a `BIGINT` with ~1.5M
@@ -426,7 +426,7 @@ via min/max is described for Snowflake in
 [Pruning in Snowflake: Working Smarter, Not Harder] and ships in
 [ClickHouse][ch-topn] (granule-level top-N skipping), [DuckDB][duckdb-topn]
 (dynamic Top-N table filters), [PolarDB-IMCI][polardb-topk] (self-sharpening
-runtime filters), and InfluxDB IOx ([`ProgressiveEvalExec`][iox-progressive]).
+runtime filters), and InfluxDB IOx ([ProgressiveEvalExec][iox-progressive]).
 
 **Reverse scans and data skipping.** Reading physically-ordered data in
 reverse to satisfy `DESC ... LIMIT` is a well-known technique in traditional
@@ -498,7 +498,7 @@ for details, as shown in the following figure.
 *Figure: `BufferExec` is inserted where the `SortExec` used to live —
 same greedy per-partition prefill, but no blocking sort.*
 
-The fix is [`BufferExec`](https://github.com/apache/datafusion/blob/main/datafusion/physical-plan/src/buffer.rs):
+The fix is [BufferExec](https://github.com/apache/datafusion/blob/main/datafusion/physical-plan/src/buffer.rs):
 a bounded per-partition prefill buffer that restores the greedy parallel I/O
 driver role without sorting.
 
