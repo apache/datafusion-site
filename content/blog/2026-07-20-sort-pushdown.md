@@ -41,7 +41,6 @@ by [dynamic filters][dyn-filters-blog] make that possible.
 
 Sorting data is prohibitively expensive for many workloads, so maintaining it in fully
 sorted order is often not practical.
-
 However, many real datasets are at least partly sorted when stored: time-series files by
 ingestion time, event logs by event id, partitioned tables by partition key, and
 data lakes based on [Apache Iceberg] and similar formats in write order.
@@ -56,22 +55,19 @@ cases make that hard:
 2. Files are individually sorted, but the engine is scanning multiple files
    and does not know a global ordering at plan time.
 
-In both cases, `ORDER BY` or `ORDER BY ... LIMIT N` pays for a potentially blocking full
-sort, which buffers every row and dominates latency and peak memory on large
-scans.
+In both cases, queries with `ORDER BY` or `ORDER BY ... LIMIT N` pay for a full
+scan and sometimes a blocking full sort, which buffers every row and can
+dominate latency and peak memory on large scans.
 
-Min/max statistics for *predicate* pushdown are well-known and widely
-implemented across databases, as covered in [@XiangpengHao]'s earlier
+Using Min/max statistics for *predicate* pushdown is well-known and widely
+implemented across databases, as covered in [@XiangpengHao]'s 
 post on [Parquet pruning][parquet-pruning-blog]. Using the same
 statistics to *reason about sort order* and to prune `ORDER BY ... LIMIT`
-(top-k) queries is also increasingly common: the
-[Pruning in Snowflake: Working Smarter, Not Harder] paper describes
-top-k pruning that keeps the current k-th-best value and
-skips micro-partitions whose min/max cannot beat it, and systems such as
-ClickHouse, DuckDB, PolarDB, and InfluxDB IOx apply closely related
-ideas (see [Related Work](#related-work)). This post describes 
-these techniques for a general audience, including the less-common case of *discovering* a provable
-global sort order from per-file statistics when no ordering was declared,
+(top-k) queries is also increasingly common, for example in the 
+[Pruning in Snowflake: Working Smarter, Not Harder] (see [Related Work](#related-work) for more). 
+This post describes more of 
+these techniques for a general audience, including the less-common case of *discovering* a
+global sort order from per-file statistics,
 deleting redundant sorts, and biasing scan order toward the
 most-promising data.
 
