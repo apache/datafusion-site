@@ -60,13 +60,20 @@ In both cases, `ORDER BY` or `ORDER BY ... LIMIT N` pays for a potentially block
 sort, which buffers every row and dominates latency and peak memory on large
 scans.
 
-Min/max statistics used for *predicate* pushdown are well-known and
-widely implemented across databases, as covered in [@XiangpengHao]'s
-earlier post on [Parquet pruning][parquet-pruning-blog]
-and the [Pruning in Snowflake: Working Smarter, Not Harder] paper.
-Using them to
-*reason about sort order* — deleting redundant sorts and biasing scan
-order toward the most-promising data — is less common and what this blog is about.
+Min/max statistics for *predicate* pushdown are well-known and widely
+implemented across databases, as covered in [@XiangpengHao]'s earlier
+post on [Parquet pruning][parquet-pruning-blog]. Using the same
+statistics to *reason about sort order* and to prune `ORDER BY ... LIMIT`
+(top-k) queries is also increasingly common: the
+[Pruning in Snowflake: Working Smarter, Not Harder] paper describes
+top-k pruning that keeps the current k-th-best value and
+skips micro-partitions whose min/max cannot beat it, and systems such as
+ClickHouse, DuckDB, PolarDB, and InfluxDB IOx apply closely related
+ideas (see [Related Work](#related-work)). This post describes 
+these techniques for a general audience, including the less-common case of *discovering* a provable
+global sort order from per-file statistics when no ordering was declared,
+deleting redundant sorts, and biasing scan order toward the
+most-promising data.
 
 [Apache Iceberg]: https://iceberg.apache.org/
 [@XiangpengHao]: https://github.com/XiangpengHao
@@ -89,25 +96,32 @@ where sortedness exists but is **inexact** or not provable up front:
 - **No** declared ordering at all.
 - `ORDER BY ... DESC` on ASC-sorted data.
 
-This post covers two novel techniques:
+This post describes two primary techniques:
 
 1. **Statistics-based sort elimination** (`Exact`): avoids sorts entirely by
-   reordering files by min/max statistics to prove a global ordering.
+   reordering files by min/max statistics to prove a global ordering. This
+   extends DataFusion's existing statistics-based file-group ordering
+   ([#9593]) and the classic "disjoint ranges concatenate rather than
+   merge" idea (see [Related Work](#related-work)) to the case where the
+   *global* order across files was not known up front.
 2. **Runtime reorder and dynamic pruning** (`Inexact`): reorders the scan to read
    the most-promising data first, then re-checks the `TopK` dynamic filter at file
-   and row-group boundaries, skipping pruned data before fetching bytes.
+   and row-group boundaries, skipping pruned data before fetching bytes. This
+   follows the same runtime-threshold pattern used by Snowflake, ClickHouse,
+   DuckDB, and PolarDB, applied here at file, row-group, and row granularity.
 
 These techniques are implemented in DataFusion and together result in:
 
-- **Sort elimination**: 2×–49× faster on ASC-LIMIT queries where the
-  file list was in the wrong disk order.
-- **Runtime row-group pruning**: 5 of 11 benchmark queries run 3–4×
-  faster with zero regressions; total runtime drops −44%.
+- **Sort elimination**: 2×–49× faster on `ORDER BY ... LIMIT`
+  queries where the file list was in the wrong disk order.
+- **Runtime row-group pruning**: 5 of 11 benchmark queries run ≥2× faster
+  (up to ~4×) with zero regressions; total runtime drops −44%.
 
 The rest of this post walks through each technique in detail.
 
 [#22450]: https://github.com/apache/datafusion/pull/22450
 [#20839]: https://github.com/apache/datafusion/pull/20839
+[#9593]: https://github.com/apache/datafusion/pull/9593
 [Apache Parquet]: https://parquet.apache.org/
 [ordering-analysis]: https://datafusion.apache.org/blog/2025/03/11/ordering-analysis/
 
@@ -151,7 +165,7 @@ SELECT ts, symbol, amount FROM trades ORDER BY ts DESC LIMIT 10;
 
 ## Exact: Sort Elimination via Statistics
 
-DataFusion can also eliminate sorts when  it can use  Parquet min/max statistics to reorder files and prove global ordering
+DataFusion can also eliminate sorts when it can use Parquet min/max statistics to reorder files and prove global ordering
 (relevant PRs: [apache/datafusion#19064][#19064], and
 [apache/datafusion#21182][#21182]) as shown below.
 
@@ -169,15 +183,37 @@ by different jobs. Unless it is careful, a query engine will be forced to use a 
 external sort for a query with `ORDER BY ts`, even when it could simply read the
 files one after another and produce the correct result.
 
+The `Exact` path has one important precondition: each file must be
+*individually* sorted on the key. DataFusion knows this from the declared
+ordering (`WITH ORDER` or Parquet `sorting_columns`); statistics alone
+cannot establish within-file order. The min/max reasoning below proves
+only that concatenating the already-sorted files *in range order* yields
+a globally sorted stream. When no per-file ordering is declared, the
+`Inexact` path (described next) applies instead.
+
 `PushdownSort` fixes this in three steps at the file-scan node:
 
 1. **Sort the file list by per-file `min`** on the sort column.
 2. **Check overlap**: does `file[i].max ≤ file[i+1].min` hold for
    every adjacent pair? If yes, the sorted file list produces a globally
-   sorted stream.
+   sorted stream. (Equal values at a boundary, `file[i].max == file[i+1].min`,
+   are safe for `ORDER BY key`.)
 3. **Upgrade the source's ordering claim to `Exact`** and remove the
    surrounding `Sort`. Note this requires some additional performance optimizations
    described in [appendix on buffering without sorting](#appendix-buffering-without-sorting). 
+
+This is an instance of what Graefe calls *virtual concatenation*: "two
+runs with disjoint key ranges … can together … serve as a single input"
+([Graefe, ACM Computing Surveys 2006][graefe2006]). The idea is
+well-established — it is stated there in a *survey* (i.e. already common
+by 2006), is rooted further back in range-partitioned parallel sort
+([Graefe, ACM Computing Surveys 1993][graefe1993]), and is mirrored in
+LSM "trivial move" compaction (RocksDB/LevelDB). What is less common, and
+the focus here, is *discovering* the disjoint ranges from per-file
+min/max statistics rather than from a declared partitioning scheme.
+
+[graefe2006]: https://dl.acm.org/doi/10.1145/1132960.1132964
+[graefe1993]: https://dl.acm.org/doi/10.1145/152610.152611
 
 <img src="/blog/images/sort-pushdown/phase1-file-reorder.svg" alt="File reorder: rearranging files within a partition by min/max statistics so the file list is in range order" width="100%" class="img-fluid" /><br/>
 *Figure: file reorder by per-file `min/max` puts the file list in range
@@ -312,7 +348,7 @@ qualify.*
 ## Benchmark: topk_tpch
 
 For this work, we defined a new  [`topk_tpch`](https://github.com/apache/datafusion/blob/main/benchmarks/src/sort_tpch.rs)
-benchmark that runs 11 queries over the TPC-C SF1 data. Each query has 
+benchmark that runs 11 queries over the TPC-H SF1 data. Each query has 
 `ORDER BY ... LIMIT 100`. The data is stored in Parquet files, sorted by
 `l_orderkey`. For the largest table, `lineitem`, this is a `BIGINT` with ~1.5M
 distinct values, so per Row Group `min/max` ranges are cleanly disjoint.
@@ -334,6 +370,65 @@ low-cardinality or unsorted columns (`l_linenumber`, `l_comment`,
 `l_shipmode`), whose per-Row Group ranges overlap heavily. Even when `l_orderkey`
 appears later as a tie-breaker, the leading key controls RG-level disjointness,
 so `Layer 3` (row-level) is still partially effective.
+
+## Related Work
+
+The ideas here build on a long line of research, and several other
+systems implement closely related techniques. We summarize the most
+relevant prior art so readers can place DataFusion's contribution in
+context.
+
+**Exploiting and proving sort order.** Reasoning about orderings to
+eliminate redundant sorts goes back to "interesting orders" in System R
+([Selinger et al., SIGMOD 1979][selinger1979]) and was formalized by
+[Simmen, Shekita, and Malkemus (SIGMOD 1996)][simmen1996] and
+[Neumann and Moerkotte (VLDB 2004)][neumann2004]. Those techniques
+derive orderings from *schema* — declared keys, indexes, and functional
+dependencies — whereas the `Exact` path here derives a provable order
+from per-file min/max *statistics*. The underlying "disjoint key ranges
+can be concatenated rather than merged" principle is stated as *virtual
+concatenation* by [Graefe (ACM Computing Surveys 2006)][graefe2006], is
+rooted in range-partitioned parallel sort
+([Graefe, ACM Computing Surveys 1993][graefe1993]), and is mirrored in
+LSM "trivial move" compaction (RocksDB/LevelDB). For *declared* partition
+bounds, the same "concatenate, don't merge" optimization appears in
+TimescaleDB's OrderedAppend and PostgreSQL's ordered partition scans
+(`Append` instead of `MergeAppend`). DataFusion's own [#9593] already
+reorders files by min/max to derive an ordering; this post extends that
+machinery to *delete* the surrounding sort and to the undeclared-ordering
+case.
+
+**Top-k early termination and threshold pushdown.** Using a running
+threshold to stop early is rooted in [Fagin's Threshold Algorithm
+(PODS 2001)][fagin2001], with access scheduling for faster convergence
+explored in [IO-Top-k (VLDB 2006)][iotopk2006]; see
+[Ilyas et al. (ACM Computing Surveys 2008)][ilyas2008] for a survey.
+Pushing a *live* top-k boundary value into a columnar scan to skip blocks
+via min/max is described for Snowflake in
+[Pruning in Snowflake: Working Smarter, Not Harder] and ships in
+ClickHouse (granule-level top-N skipping), DuckDB (dynamic Top-N table
+filters), PolarDB-IMCI (self-sharpening runtime filters), and InfluxDB
+IOx (`ProgressiveEvalExec`). DataFusion's earlier
+[dynamic filters post][dyn-filters-blog] credits several of these. The
+contribution here is an open-source, engine-agnostic implementation that
+drives file-, row-group-, and (planned) page-level pruning from the same
+`TopK` dynamic filter, together with runtime scan reordering.
+
+**Reverse scans and data skipping.** Reading physically-ordered data in
+reverse to satisfy `DESC ... LIMIT` is long-standing in traditional
+databases (backward/descending index scans in PostgreSQL and Oracle); the
+step here is applying it to file and row-group order inside a columnar
+reader. Min/max block skipping itself originates with
+[Small Materialized Aggregates (Moerkotte, VLDB 1998)][sma1998] and is
+now ubiquitous as zone maps, BRIN indexes, and Parquet/ORC statistics.
+
+[selinger1979]: https://dl.acm.org/doi/10.1145/582095.582099
+[simmen1996]: https://dl.acm.org/doi/10.1145/233269.233320
+[neumann2004]: https://www.vldb.org/conf/2004/RS24P3.PDF
+[fagin2001]: https://arxiv.org/abs/cs/0204046
+[iotopk2006]: https://www.vldb.org/conf/2006/p475-bast.pdf
+[ilyas2008]: https://dl.acm.org/doi/10.1145/1391729.1391730
+[sma1998]: https://www.vldb.org/conf/1998/p476.pdf
 
 ## Conclusion and Future Work
 
