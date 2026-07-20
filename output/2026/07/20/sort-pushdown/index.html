@@ -1,0 +1,587 @@
+<!doctype html>
+<html class="no-js" lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Optimizing for Almost Sorted Data: Sort Pushdown in Apache DataFusion - Apache DataFusion Blog</title>
+<link href="/blog/favicon.ico" rel="icon" type="image/x-icon">
+<link href="/blog/favicon.ico" rel="shortcut icon" type="image/x-icon">
+<link href="/blog/css/bootstrap.min.css" rel="stylesheet">
+<link href="/blog/css/fontawesome.all.min.css" rel="stylesheet">
+<link href="/blog/css/headerlink.css" rel="stylesheet">
+<link href="/blog/highlight/default.min.css" rel="stylesheet">
+<link href="/blog/css/app.css" rel="stylesheet">
+<link href="/blog/css/dark-mode.css" rel="stylesheet">
+<script src="/blog/js/dark-mode.js"></script>
+<script src="/blog/highlight/highlight.js"></script>
+<script>hljs.highlightAll();</script>  </head>
+  <body class="d-flex flex-column h-100">
+  <main class="flex-shrink-0">
+<!-- nav bar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark" aria-label="Fifth navbar example">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/blog/"><img src="/blog/images/logo_original4x.png" style="height: 32px;"/> Apache DataFusion Blog</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarADP" aria-controls="navbarADP" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarADP">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/about.html">About</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/feed.xml">RSS</a>
+                </li>
+            </ul>
+            <button id="dark-mode-toggle" type="button" class="dark-mode-toggle" aria-label="Toggle dark mode" aria-pressed="false" title="Toggle dark mode">
+                <span class="sun-icon" aria-hidden="true">☀</span>
+                <span class="moon-icon" aria-hidden="true">☾</span>
+            </button>
+        </div>
+    </div>
+</nav>    
+<!-- article contents -->
+<div id="contents">
+  <div class="bg-white p-4 p-md-5 rounded">
+    <div class="row justify-content-center">
+      <div class="col-12 col-md-8 main-content">
+        <h1>
+          Optimizing for Almost Sorted Data: Sort Pushdown in Apache DataFusion
+        </h1>
+        <p>Posted on: Mon 20 July 2026 by Qi Zhu and Andrew Lamb</p>
+
+        <aside class="toc-container d-md-none mb-2">
+          <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#are-real-datasets-sorted">Are Real Datasets Sorted?</a></li>
+<li><a href="#exact-vs-inexact-ordering">Exact vs. Inexact Ordering</a></li>
+<li><a href="#tracking-ordering">Tracking Ordering</a></li>
+<li><a href="#exact-sort-elimination-via-statistics">Exact: Sort Elimination via Statistics</a></li>
+<li><a href="#inexact-scan-reordering-makes-dynamic-filters-more-effective">Inexact: Scan Reordering Makes Dynamic Filters More Effective</a></li>
+<li><a href="#benchmark-sort_tpch">Benchmark: sort_tpch</a></li>
+<li><a href="#conclusion-and-future-work">Conclusion and Future Work</a></li>
+<li><a href="#acknowledgements">Acknowledgements</a></li>
+<li><a href="#get-involved">Get Involved</a></li>
+<li><a href="#related-work">Related Work</a></li>
+<li><a href="#references">References</a></li>
+<li><a href="#appendix-buffering-without-sorting">Appendix: Buffering Without Sorting</a></li>
+<li><a href="#appendix-decoder-loop-and-decision-point">Appendix: Decoder Loop and Decision Point</a></li>
+</ul>
+</div>
+        </aside>
+
+        <!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+-->
+
+<p><em><a href="https://github.com/zhuqi-lucas">Qi Zhu</a> (<a href="https://www.massive.com/">Massive</a>); <a href="https://github.com/alamb">Andrew Lamb</a> (<a href="https://www.influxdata.com/">InfluxData</a>)</em></p>
+<p><a href="https://datafusion.apache.org/">Apache DataFusion</a> uses sortedness automatically — even when data is only
+partially sorted or when no ordering was declared. This post explains how
+plan-time sort pushdown, runtime scan reordering, and row-group pruning driven
+by <a href="https://datafusion.apache.org/blog/2025/09/10/dynamic-filters/">dynamic filters</a> make that possible.</p>
+<h2 id="are-real-datasets-sorted">Are Real Datasets Sorted?<a class="headerlink" href="#are-real-datasets-sorted" title="Permanent link">¶</a></h2>
+<p>Sorting data is prohibitively expensive for many workloads, so maintaining it in fully
+sorted order is often not practical.
+However, many real datasets are at least partly sorted when stored: time-series files by
+ingestion time, event logs by event id, partitioned tables by partition key, and
+data lakes based on <a href="https://iceberg.apache.org/">Apache Iceberg</a> and similar formats in write order.</p>
+<p>Sortedness only helps if the query engine can detect and use it. Two common
+cases make that hard:</p>
+<ol>
+<li>The ordering is undeclared in the file. For example, the writer did not set Parquet
+   <a href="https://github.com/apache/parquet-format/blob/8a5e04bdecf100e8e981daacfa117e8b5aadacb9/src/main/thrift/parquet.thrift#L1044">sorting_columns</a>,
+   or the table was not created with DataFusion's
+   <a href="https://datafusion.apache.org/user-guide/sql/ddl.html#create-external-table">WITH ORDER</a> clause.</li>
+<li>Files are individually sorted, but the engine is scanning multiple files
+   and does not know a global ordering at plan time.</li>
+</ol>
+<p>In both cases, queries with <code>ORDER BY</code> or <code>ORDER BY ... LIMIT N</code> pay for a full
+scan and sometimes a blocking full sort, which buffers every row and can
+dominate latency and peak memory on large scans.</p>
+<p>Using min/max statistics for <em>predicate</em> pushdown is well-known and widely
+implemented across databases, as covered in <a href="https://github.com/XiangpengHao">@XiangpengHao</a>'s
+post on <a href="https://datafusion.apache.org/blog/2025/03/20/parquet-pruning">Parquet pruning</a>. Using the same
+statistics to <em>reason about sort order</em> and to prune <code>ORDER BY ... LIMIT</code>
+(top-k) queries is also increasingly common, for example in the
+<a href="https://dl.acm.org/doi/10.1145/3722212.3724447">Pruning in Snowflake: Working Smarter, Not Harder</a> paper (see <a href="#related-work">Related Work</a> for more).
+This post describes several such techniques for a general audience,
+including the less-common case of <em>discovering</em> a
+global sort order from per-file statistics,
+deleting redundant sorts, and biasing scan order toward the
+most-promising data.</p>
+<h2 id="exact-vs-inexact-ordering">Exact vs. Inexact Ordering<a class="headerlink" href="#exact-vs-inexact-ordering" title="Permanent link">¶</a></h2>
+<p>DataFusion has long skipped sorts when it knows the data is <strong>exactly</strong> sorted, as covered in
+<a href="https://datafusion.apache.org/blog/2025/03/11/ordering-analysis/">@akurmustafa's earlier post</a>:
+if the table declares an ordering (via <code>WITH ORDER</code> or Parquet
+<code>sorting_columns</code>) and the file listing matches it, the redundant sort is removed.</p>
+<p>This post is about the messier real-world cases
+where sortedness exists but is <em>inexact</em> or not provable up front:</p>
+<ul>
+<li>Files listed in the "wrong" order on disk (each file is internally
+  sorted, but the files are not globally ordered).</li>
+<li>Ordering is known, but the sort key ranges <strong>overlap</strong> across files.</li>
+<li><strong>No</strong> declared ordering at all.</li>
+<li><code>ORDER BY ... DESC</code> on ASC-sorted data.</li>
+</ul>
+<p>This post describes two primary techniques:</p>
+<ol>
+<li><strong>Statistics-based sort elimination</strong> (<code>Exact</code>): avoids sorts entirely by
+   reordering files by min/max statistics to create a global ordering. This
+   extends DataFusion's existing statistics-based file-group ordering
+   (<a href="https://github.com/apache/datafusion/pull/9593">#9593</a>) and is similar to prior work on concatenating disjoint ranges.</li>
+<li><strong>Runtime reorder and dynamic pruning</strong> (<code>Inexact</code>): reorders the scan to read
+   the most-promising data first, then re-checks the <code>TopK</code> dynamic filter at file
+   and row-group boundaries.</li>
+</ol>
+<p>These techniques are implemented in DataFusion and together result in:</p>
+<ul>
+<li><strong>Sort elimination</strong>: 2×–49× faster on <code>ORDER BY</code> and <code>ORDER BY ... LIMIT</code>
+  queries where the file list was in the wrong disk order.</li>
+<li><strong>Runtime row-group pruning</strong>: 5 of 11 benchmark queries run ≥2× faster
+  (up to ~4×) with zero regressions; total runtime drops by 44%.</li>
+</ul>
+<p>The rest of this post walks through each technique in detail.</p>
+<h2 id="tracking-ordering">Tracking Ordering<a class="headerlink" href="#tracking-ordering" title="Permanent link">¶</a></h2>
+<p>The <a href="https://github.com/apache/datafusion/blob/main/datafusion/physical-optimizer/src/pushdown_sort.rs">PushdownSort</a>
+optimizer rule classifies each scan below a sort as either <code>Exact</code>,
+<code>Inexact</code>, or <code>Unsupported</code>, and records this information on DataFusion's
+<a href="https://docs.rs/datafusion-datasource/latest/datafusion_datasource/file_scan_config/struct.FileScanConfig.html">FileScanConfig</a>:</p>
+<ul>
+<li><strong><code>Exact</code></strong> — the optimizer is <em>certain</em> of the output order,
+  and removes redundant <a href="https://docs.rs/datafusion-physical-plan/latest/datafusion_physical_plan/sorts/sort/struct.SortExec.html">SortExec</a> operators entirely.</li>
+<li><strong><code>Inexact</code></strong> — the optimizer believes the output is probably ordered
+  but cannot prove it, so the sort is kept but the scan is biased to read the most-promising data first.</li>
+<li><strong><code>Unsupported</code></strong> — the optimizer cannot determine the ordering, so no sort is removed.</li>
+</ul>
+<p><img alt="PushdownSort decision tree: Exact, Inexact, or Unsupported" class="img-fluid" src="/blog/images/sort-pushdown/pr21956-decision.svg" width="100%"/><br/>
+<em>Figure: the <code>PushdownSort</code> rule asks each scan whether it can satisfy the
+required ordering, returning <code>Exact</code> (drop the sort), <code>Inexact</code> (bias the scan
+and keep the sort), or <code>Unsupported</code> (the sort stays).</em></p>
+<p>For example, given a query that returns the 10 most recent trades:</p>
+<pre><code class="language-sql">SELECT ts, symbol, amount FROM trades ORDER BY ts DESC LIMIT 10;
+</code></pre>
+<ul>
+<li>With <strong><code>Exact</code></strong> ordering knowledge, DataFusion drops the sort entirely and
+  stops reading after emitting 10 rows.</li>
+<li>With <strong><code>Inexact</code></strong> ordering, the <code>SortExec</code> stays but scans start
+  from the most-promising data, so the <code>TopK</code> threshold is more likely to
+  tighten quickly and prune the rest with statistics.</li>
+<li>With no ordering knowledge, DataFusion scans everything and uses a
+  <code>TopK</code> heap to keep the running best 10.</li>
+</ul>
+<h2 id="exact-sort-elimination-via-statistics">Exact: Sort Elimination via Statistics<a class="headerlink" href="#exact-sort-elimination-via-statistics" title="Permanent link">¶</a></h2>
+<p>DataFusion can eliminate sorts entirely when it can use Parquet min/max statistics to reorder files and prove a global ordering
+(relevant PRs: <a href="https://github.com/apache/datafusion/pull/19064">#19064</a> and <a href="https://github.com/apache/datafusion/pull/21182">#21182</a>) as shown below.</p>
+<p><img alt="EXPLAIN before / after: SortExec eliminated once ordering is Exact" class="img-fluid" src="/blog/images/sort-pushdown/plan-diff.svg" width="100%"/>
+<em>Figure: EXPLAIN output before and after <code>PushdownSort</code> eliminates the sort. The <code>SortExec</code> is removed and the scan's ordering claim is upgraded to <code>Exact</code>.</em></p>
+<p>For example, consider three files <code>a.parquet</code>, <code>b.parquet</code>, <code>c.parquet</code>. Each is
+internally sorted by <code>ts</code> and the time ranges do not overlap, but the files were
+written by different jobs. Without this optimization, a query engine is forced to
+use a full sort for <code>ORDER BY ts</code> queries, even though it could simply read the
+files one after another and produce the correct result.</p>
+<p>The <code>Exact</code> path requires each file to be
+<em>individually</em> sorted on the key, and DataFusion knows this from the declared
+ordering (<code>WITH ORDER</code> or Parquet <code>sorting_columns</code>).
+Concatenating the files in min/max range order yields a globally sorted stream
+only when that per-file precondition holds. When no per-file ordering is declared, the
+<code>Inexact</code> path (described next) applies instead.</p>
+<p><code>PushdownSort</code> fixes this in three steps at the file-scan node:</p>
+<ol>
+<li><strong>Sort the file list by per-file <code>min</code></strong> on the sort column.</li>
+<li><strong>Check overlap</strong>: does <code>file[i].max ≤ file[i+1].min</code> hold for
+   every adjacent pair? If yes, the sorted file list produces a globally
+   sorted stream.</li>
+<li><strong>Upgrade the source's ordering claim to <code>Exact</code></strong> and remove the
+   surrounding <code>Sort</code>. Note that this requires some additional performance optimizations
+   described in <a href="#appendix-buffering-without-sorting">appendix on buffering without sorting</a>.</li>
+</ol>
+<p>This is an instance of what Graefe calls <em>virtual concatenation</em>, and is similar to
+LSM "trivial move" compaction (see <a href="#related-work">Related Work</a>). It is less common
+to discover the disjoint ranges from per-file
+min/max statistics rather than from a declared partitioning scheme.</p>
+<p><img alt="File reorder: rearranging files within a partition by min/max statistics so the file list is in range order" class="img-fluid" src="/blog/images/sort-pushdown/phase1-file-reorder.svg" width="100%"/><br/>
+<em>Figure: reordering by per-file <code>min/max</code> puts the file list in range order.</em></p>
+<p><img alt="Detecting non-overlapping ranges via min/max statistics" class="img-fluid" src="/blog/images/sort-pushdown/phase2-stats-overlap.svg" width="100%"/><br/>
+<em>Figure: <code>PushdownSort</code> sorts files by <code>min</code> and checks adjacency,
+upgrading to <code>Exact</code> only when the ranges don't overlap. Left: non-overlapping
+ranges are safe to upgrade to <code>Exact</code> and the sort is removed; right:
+overlapping ranges keep the sort and fall through to the <code>Inexact</code> path described next.</em></p>
+<p>We measured the single-core performance of statistics-based sort elimination with DataFusion's
+<a href="https://github.com/apache/datafusion/tree/main/benchmarks/queries/sort_pushdown">sort_pushdown</a> benchmark suite
+by setting <code>--partitions 1</code>. The results are as follows:</p>
+<p><img alt="Sort pushdown benchmark: 2×–49× speedup across four queries" class="img-fluid" src="/blog/images/sort-pushdown/benchmark.svg" width="100%"/><br/></p>
+<table class="table">
+<thead>
+<tr>
+<th>Query</th>
+<th style="text-align: right;">Before</th>
+<th style="text-align: right;">After</th>
+<th style="text-align: right;">Speedup</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Q1 — <code>ORDER BY key</code> (full scan)</td>
+<td style="text-align: right;">259 ms</td>
+<td style="text-align: right;">122 ms</td>
+<td style="text-align: right;"><strong>2.1×</strong></td>
+</tr>
+<tr>
+<td>Q2 — <code>ORDER BY key LIMIT 100</code></td>
+<td style="text-align: right;">80 ms</td>
+<td style="text-align: right;">3 ms</td>
+<td style="text-align: right;"><strong>27×</strong></td>
+</tr>
+<tr>
+<td>Q3 — <code>SELECT * ORDER BY key</code></td>
+<td style="text-align: right;">700 ms</td>
+<td style="text-align: right;">313 ms</td>
+<td style="text-align: right;"><strong>2.2×</strong></td>
+</tr>
+<tr>
+<td>Q4 — <code>SELECT * ORDER BY key LIMIT 100</code></td>
+<td style="text-align: right;">342 ms</td>
+<td style="text-align: right;">7 ms</td>
+<td style="text-align: right;"><strong>49×</strong></td>
+</tr>
+</tbody>
+</table>
+<p><em>Figure: <code>sort_pushdown</code> results. All four queries are <code>ASC</code> <code>ORDER BY</code> where the
+file list on disk is in the reverse of sort-key order; a naive engine sorts even
+though the files are already individually sorted.</em></p>
+<p>While DataFusion can avoid sorting for all four queries, the benefit is most
+dramatic for <code>LIMIT</code> queries:</p>
+<ul>
+<li><strong>Full-scan queries (Q1, Q3)</strong> result in a ~2× speedup as the scan is now a single-pass streaming read.</li>
+<li><strong><code>LIMIT</code> queries (Q2, Q4)</strong> result in a 27×–49× speedup because <code>LIMIT N</code> turns into a streaming read with early stopping.</li>
+</ul>
+<h2 id="inexact-scan-reordering-makes-dynamic-filters-more-effective">Inexact: Scan Reordering Makes Dynamic Filters More Effective<a class="headerlink" href="#inexact-scan-reordering-makes-dynamic-filters-more-effective" title="Permanent link">¶</a></h2>
+<p>It is not possible to eliminate the sort when the files have
+overlapping sort key ranges. However, it is still possible to use sorted or
+partly sorted data to optimize <code>LIMIT</code> queries. By reordering the read,
+data that is most likely to improve the <code>TopK</code> dynamic filter is seen first and
+the filter is more effective at pruning files, row groups, and rows that cannot
+possibly contribute to the final result.</p>
+<p>This <code>Inexact</code> path is used when Parquet min/max statistics are available
+and the sort expression is supported by DataFusion's
+<a href="https://datafusion.apache.org/blog/2025/03/11/ordering-analysis/">equivalence-properties</a>, including plain columns, monotonic
+functions<sup id="fn1"><a href="#footnote1">1</a></sup>, constants inferred from filters,
+and multi-column orderings. The same dynamic filter is used to drive three layers of pruning:</p>
+<p><img alt="Three-layer pruning: file-level, row-group-level, row-level, all driven by the same TopK dynamic filter" class="img-fluid" src="/blog/images/sort-pushdown/pruning_stack.svg" width="100%"/><br/>
+<em>Figure: the Parquet reader applies three pruning layers, all driven by the same <code>TopK</code> dynamic filter.</em></p>
+<ul>
+<li><strong>File-level pruning</strong> (<a href="https://docs.rs/datafusion-pruning/latest/datafusion_pruning/struct.FilePruner.html">file_pruner</a> + <a href="https://github.com/apache/datafusion/blob/e104138b4d45d3acfb76223cd968385f6764477b/datafusion/datasource-parquet/src/opener/early_stop.rs">EarlyStoppingStream</a>) — skips whole files before they are opened.</li>
+<li><strong>Row-group-level pruning</strong> (<a href="https://github.com/apache/datafusion/pull/22450">#22450</a>) — skips whole row groups at each boundary, before any pages are fetched.</li>
+<li><strong>Row-level filtering</strong> (<a href="https://docs.rs/parquet/latest/parquet/arrow/arrow_reader/struct.RowFilter.html">RowFilter</a>) — skips decoding the remaining columns in a surviving row group.</li>
+</ul>
+<p>When <code>Inexact</code> applies, the Parquet opener reorders
+the scan before and during execution using three steps:</p>
+<p><img alt="Runtime reorder pipeline: file reorder, RG reorder, then optional reverse" class="img-fluid" src="/blog/images/sort-pushdown/pr21956-runtime-pipeline.svg" width="100%"/><br/></p>
+<p><em>Figure: the Parquet opener applies file-level reordering, row-group-level reordering, and an optional iteration reverse.</em></p>
+<ol>
+<li><strong>File-level reordering</strong> — the file list is sorted by <code>min(col)</code>,
+   so the most-promising file is picked first across all partitions.</li>
+<li><strong>Row-group-level reordering</strong> — once a file is opened, its row groups
+   are sorted by <code>min(col)</code>.</li>
+<li><strong>Iteration reverse</strong> — for <code>DESC</code> queries, the file and row-group order is reversed.</li>
+</ol>
+<p><strong>File-Level Pruning</strong>: once files are ordered "most-promising first", the
+<code>TopK</code>'s heap fills quickly and its dynamic filter threshold tightens. The
+<a href="https://github.com/apache/datafusion/blob/e104138b4d45d3acfb76223cd968385f6764477b/datafusion/pruning/src/file_pruner.rs">FilePruner</a> then cuts low-value files before opening them, as shown in the
+following example.</p>
+<p><img alt="File-level reorder with early stop via file_pruner" class="img-fluid" src="/blog/images/sort-pushdown/desc_walk_file.svg" width="100%"/><br/></p>
+<p><em>Figure: after reordering files by their sort key, the low sort-key value files (<code>file_d</code> and <code>file_c</code>,
+whose sort-key values are least promising for this <code>DESC LIMIT</code> query)
+end up at the tail of the read queue and are pruned by the file-level pruner before they
+are ever opened.</em></p>
+<p><strong>Row-Group-Level Pruning</strong>: When a file is first opened, DataFusion prunes
+row groups based on predicates and statistics, and then determines
+the order to scan the row groups. During the scan, immediately before DataFusion
+reads the next row group, it checks whether the <code>TopK</code> dynamic filter has changed. If so,
+it re-evaluates the remaining row groups against the new threshold and
+prunes any that cannot contribute to the final result (added in <a href="https://github.com/apache/datafusion/pull/22450">#22450</a>). See the
+<a href="#appendix-decoder-loop-and-decision-point">Appendix: Decoder Loop and Decision Point</a> for more details.</p>
+<p><img alt="Cascading prune: one row group fills the heap, threshold snaps, all subsequent row groups are pruned in a single pass" class="img-fluid" src="/blog/images/sort-pushdown/rg_cascade.svg" width="100%"/><br/>
+<em>Figure: for <code>ORDER BY x DESC LIMIT 10</code>, after reading the first row group, DataFusion prunes the rest of the row groups in a single pass (walkthrough below).</em></p>
+<p>For the example shown above, the file has 10 row groups, each containing rows with values
+<code>[0..10)</code>, <code>[10..20)</code>, ..., <code>[90..100)</code> and the query is <code>ORDER BY x DESC LIMIT 10</code>. </p>
+<ol>
+<li>The row groups are first reordered by their maximum values, so the highest-value row group is read first.</li>
+<li>Row group 9 (values <code>[90..100)</code>) is opened and read, filling
+   the heap with 10 values (the minimum heap value is <code>90</code>). The <code>TopK</code> dynamic filter threshold is updated to <code>90</code>.</li>
+<li>At the next row-group boundary, the pruner sees the dynamic filter has been updated
+   and re-evaluates the filter on all remaining row groups. Since row group 8
+   through row group 0 have <code>max &lt; 90</code>, they are all pruned and skipped in a single pass.</li>
+<li>The scan ends early, having read only one row group instead of all 10.</li>
+</ol>
+<p>Note that for the row groups that were skipped, no data is fetched or decoded.
+This example shows the core benefit provided by runtime row-group dynamic
+pruning: reading a single row group can cascade-eliminate every remaining row
+group.</p>
+<p><strong>Row-Level Early Stopping</strong>: Even if the row group cannot be pruned with statistics,
+the tightened dynamic filter often rules out all rows after evaluating just the
+filter columns. When it does, arrow-rs's <code>RowFilter</code> skips fetching the projection
+columns for that row group entirely. <a href="https://github.com/apache/datafusion/pull/22450">#22450</a> makes this fire more often
+by keeping the threshold up-to-date at every row-group boundary.</p>
+<p><img alt="Row-group-level reorder — filter column still read for every row group before row-group filter early stop" class="img-fluid" src="/blog/images/sort-pushdown/desc_walk_rg.svg" width="100%"/><br/></p>
+<p><em>Figure: inside a file, the first row group tightens the threshold —
+subsequent row groups have their projection columns short-circuited,
+but the filter column still has to be read to discover that no rows
+qualify.</em></p>
+<h2 id="benchmark-sort_tpch">Benchmark: sort_tpch<a class="headerlink" href="#benchmark-sort_tpch" title="Permanent link">¶</a></h2>
+<p>To test the overall benefit of this work, we used DataFusion's
+<a href="https://github.com/apache/datafusion/blob/main/benchmarks/src/sort_tpch.rs">sort_tpch</a>
+benchmark that runs 11 queries over the TPC-H SF1 dataset, each with
+<code>ORDER BY ... LIMIT 100</code>. The data is stored in Parquet files, sorted by
+<code>l_orderkey</code>. For the largest table, <code>lineitem</code>, <code>l_orderkey</code> is a <code>BIGINT</code> with ~1.5M
+distinct values, so per-row-group <code>min/max</code> ranges are cleanly disjoint.
+We compared DataFusion with the sort optimizations enabled (the default) and disabled.</p>
+<p><img alt="sort_tpch benchmark results: 5 of 11 queries ≥2× faster (up to ~4×), 0 regressions, total -44%" class="img-fluid" src="/blog/images/sort-pushdown/topk_tpch_bench.svg" width="100%"/></p>
+<table class="table">
+<thead>
+<tr>
+<th>Metric</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Total wall-clock (sum of 11 queries)</td>
+<td>248.8 ms → 139.1 ms (<strong>−44%</strong>)</td>
+</tr>
+<tr>
+<td>Queries with ≥2× speedup</td>
+<td><strong>5 of 11</strong> (Q2, Q4, Q8, Q9, Q10)</td>
+</tr>
+<tr>
+<td>Queries with regression</td>
+<td><strong>0</strong></td>
+</tr>
+<tr>
+<td>Best single-query speedup</td>
+<td><strong>~4×</strong></td>
+</tr>
+</tbody>
+</table>
+<p><em>Per-query raw numbers are available in the <a href="https://github.com/apache/datafusion/pull/22450#issuecomment-4765161078">#22450 benchmark run</a>.</em></p>
+<p>The five queries that improved use <code>l_orderkey</code> as the <strong>first</strong> sort key column, so
+row-group-level pruning can cascade-prune aggressively. The other queries have multi-column
+sorts with
+low-cardinality or unsorted columns (<code>l_linenumber</code>, <code>l_comment</code>,
+<code>l_shipmode</code>), whose per-row-group ranges overlap heavily. Even when <code>l_orderkey</code>
+appears later as a tie-breaker, the leading key controls row-group-level disjointness,
+so row-level filtering is still partially effective.</p>
+<h2 id="conclusion-and-future-work">Conclusion and Future Work<a class="headerlink" href="#conclusion-and-future-work" title="Permanent link">¶</a></h2>
+<p>Use cases where the query sort key (e.g. <code>ORDER BY time DESC LIMIT 10</code>) is
+aligned with the physical layout (e.g. the data is ordered by <code>time</code>) are common
+in time-series, partitioned tables, and ingestion-ordered event logs. Over the
+last few DataFusion releases, we implemented several optimizations that make
+these workloads up to ~4× faster without slowing down queries for which they
+don't apply. We hope you enjoy using them and welcome your feedback.</p>
+<p>Two follow-ups are open: page-level <code>Exact</code> reverse would let <code>DESC</code> queries drop the sort
+but needs lower-level support in the Parquet reader (<a href="https://github.com/apache/arrow-rs/pull/9937">arrow-rs#9937</a>)
+for reading pages in reverse order.
+We are also considering implementing page-level dynamic pruning at
+row-group boundaries (<a href="https://github.com/apache/datafusion/issues/23216">#23216</a>)
+using the same pattern one level deeper in Parquet.</p>
+<h2 id="acknowledgements">Acknowledgements<a class="headerlink" href="#acknowledgements" title="Permanent link">¶</a></h2>
+<p>Thank you to <a href="https://github.com/adriangb">@adriangb</a>, <a href="https://github.com/xudong963">@xudong963</a>, <a href="https://github.com/2010YOUY01">@2010YOUY01</a>, and
+<a href="https://github.com/Dandandan">@Dandandan</a> for reviewing the design and the patches across many
+iterations. The DataFusion community's willingness to engage deeply
+with optimizer changes, including ones that touch foundational
+code like the Parquet inner decode loop, is what made this work
+possible.</p>
+<p>We also thank <a href="https://www.massive.com/">Massive</a> and <a href="https://www.influxdata.com/">InfluxData</a> for sponsoring this
+work.</p>
+<p><a id="footnote1"></a><sup><a href="#fn1">1</a></sup> For example, if the source declares
+<code>ts DESC</code>, reversing that ordering gives <code>ts ASC</code>, which can satisfy
+<code>date_trunc('day', ts) ASC</code>.</p>
+<h2 id="get-involved">Get Involved<a class="headerlink" href="#get-involved" title="Permanent link">¶</a></h2>
+<ul>
+<li><strong>Try it out</strong>: Run your <code>ORDER BY</code> / <code>ORDER BY ... LIMIT N</code> queries on your own data and share what you see.</li>
+<li><strong>Work on a <a href="https://github.com/apache/datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22">good first issue</a></strong>, or pick up one of the <a href="https://github.com/apache/datafusion/issues/23036">follow-ups</a> listed in the umbrella issue.</li>
+<li><strong>File issues or join the conversation</strong>: <a href="https://github.com/apache/datafusion/">GitHub</a> for bugs and feature requests, <a href="https://datafusion.apache.org/contributor-guide/communication.html">Slack or Discord</a> for discussion.</li>
+<li>Learn more by visiting the <a href="https://datafusion.apache.org/index.html">DataFusion</a> project page.</li>
+</ul>
+<h2 id="related-work">Related Work<a class="headerlink" href="#related-work" title="Permanent link">¶</a></h2>
+<p>The ideas in this blog build on a long line of research, and several other
+systems implement closely related techniques.</p>
+<p><strong>Exploiting and proving sort order.</strong> Reasoning about orderings to
+eliminate redundant sorts goes back to "interesting orders" in System R
+(<a href="https://dl.acm.org/doi/10.1145/582095.582099">Selinger et al., SIGMOD 1979</a>) and was formalized by
+<a href="https://dl.acm.org/doi/10.1145/233269.233320">Simmen, Shekita, and Malkemus (SIGMOD 1996)</a>. Those techniques
+derive orderings from <em>schema</em> — declared keys, indexes, and functional
+dependencies — whereas we derive them from per-file min/max <em>statistics</em>.
+Concatenating disjoint key ranges rather than merging them is Graefe's
+<em>virtual concatenation</em> (<a href="https://dl.acm.org/doi/10.1145/1132960.1132964">ACM Computing Surveys 2006</a>) — an idea
+rooted further back in range-partitioned parallel sort
+(<a href="https://dl.acm.org/doi/10.1145/152610.152611">Graefe, ACM Computing Surveys 1993</a>). It also appears as
+"trivial move" compaction in LSM trees (<a href="https://github.com/facebook/rocksdb/wiki/Compaction-Trivial-Move">RocksDB</a>). For
+<em>declared</em> partition bounds, the "concatenate, don't merge" optimization
+appears in <a href="https://www.tigerdata.com/blog/ordered-append-postgresql-optimization">TimescaleDB's OrderedAppend</a> and
+<a href="https://www.postgresql.org/message-id/2401607.SfZhPQhbS4@ronan_laptop">PostgreSQL's ordered partition scans</a>.</p>
+<p><strong>Top-k early termination and threshold pushdown.</strong> Using a running
+threshold to stop early is described in <a href="https://arxiv.org/abs/cs/0204046">Fagin's Threshold Algorithm
+(PODS 2001)</a>, with index choice for faster convergence
+explored in <a href="https://www.vldb.org/conf/2006/p475-bast.pdf">IO-Top-k (VLDB 2006)</a>; see
+<a href="https://dl.acm.org/doi/10.1145/1391729.1391730">Ilyas et al. (ACM Computing Surveys 2008)</a> for a survey.
+Pushing a <em>live</em> top-k boundary value into a columnar scan to skip blocks
+via min/max is described for Snowflake in
+<a href="https://dl.acm.org/doi/10.1145/3722212.3724447">Pruning in Snowflake: Working Smarter, Not Harder</a> and ships in
+<a href="https://clickhouse.com/blog/clickhouse-top-n-queries-granule-level-data-skipping">ClickHouse</a> (granule-level top-N skipping), <a href="https://duckdb.org/2024/10/25/topn">DuckDB</a>
+(dynamic Top-N table filters), <a href="https://www.alibabacloud.com/blog/how-does-the-imci-of-polardb-for-mysql-achieve-ultimate-topk-query-performance_600006">PolarDB-IMCI</a> (self-sharpening
+runtime filters), and InfluxDB IOx (<a href="https://www.influxdata.com/blog/query-optimization-progressive-evaluation-influxdb/">ProgressiveEvalExec</a>).</p>
+<p><strong>Reverse scans and data skipping.</strong> Reading physically-ordered data in
+reverse to satisfy <code>DESC ... LIMIT</code> is a well-known technique in traditional
+databases (backward/descending index scans in <a href="https://www.postgresql.org/docs/current/indexes-ordering.html">PostgreSQL</a> and <a href="https://docs.oracle.com/en/database/oracle/oracle-database/19/tgsql/optimizer-access-paths.html">Oracle</a>).
+Min/max block skipping itself originates with
+<a href="https://www.vldb.org/conf/1998/p476.pdf">Small Materialized Aggregates (Moerkotte, VLDB 1998)</a> and is
+now ubiquitous across columnar storage formats and query engines.</p>
+<h2 id="references">References<a class="headerlink" href="#references" title="Permanent link">¶</a></h2>
+<p>Umbrella issue tracking the entire effort:</p>
+<ul>
+<li><strong>[EPIC] Sort Pushdown · skip sorts and skip IO for ORDER BY / TopK queries: <a href="https://github.com/apache/datafusion/issues/23036">#23036</a></strong> — phase-by-phase status of all the PRs and follow-ups.</li>
+</ul>
+<p>Major PRs:</p>
+<ul>
+<li><code>MinMaxStatistics</code> foundation: <a href="https://github.com/apache/datafusion/pull/9593">#9593</a></li>
+<li><code>PushdownSort</code> rule + row-group reverse: <a href="https://github.com/apache/datafusion/pull/19064">#19064</a></li>
+<li>Reverse-output redesign: <a href="https://github.com/apache/datafusion/pull/19446">#19446</a>, <a href="https://github.com/apache/datafusion/pull/19557">#19557</a></li>
+<li>Sort elimination via statistics: <a href="https://github.com/apache/datafusion/pull/21182">#21182</a></li>
+<li><code>BufferExec</code> capacity for sort elimination: <a href="https://github.com/apache/datafusion/pull/21426">#21426</a></li>
+<li>Push-based Parquet decoder (DataFusion owns the loop): <a href="https://github.com/apache/datafusion/pull/20839">#20839</a></li>
+<li>Morsel-style work scheduling: <a href="https://github.com/apache/datafusion/pull/21351">#21351</a></li>
+<li>Runtime reorder for <code>TopK</code> convergence: <a href="https://github.com/apache/datafusion/pull/21956">#21956</a></li>
+<li><strong>Runtime row-group dynamic pruning (<a href="https://github.com/apache/datafusion/pull/22450">#22450</a>)</strong> — the centerpiece of this post.</li>
+<li><code>peek_next_row_group</code> API (arrow-rs): <a href="https://github.com/apache/arrow-rs/pull/10158">arrow-rs#10158</a> — enables per-RG <code>fully_matched</code> RowFilter skip.</li>
+</ul>
+<p>In flight / open:</p>
+<ul>
+<li>Page-level reverse (arrow-rs): <a href="https://github.com/apache/arrow-rs/pull/9937">arrow-rs#9937</a>, discussion in <a href="https://github.com/apache/arrow-rs/issues/9934">arrow-rs#9934</a></li>
+<li>Per-RG <code>fully_matched</code> RowFilter skip on top of <a href="https://github.com/apache/datafusion/pull/22450">#22450</a> (uses arrow-rs#10158): <a href="https://github.com/apache/datafusion/issues/23067">#23067</a></li>
+<li>Page-level dynamic prune at RG boundary: <a href="https://github.com/apache/datafusion/issues/23216">#23216</a></li>
+<li>Multi-column / function-wrapped stats reorder follow-ups: <a href="https://github.com/apache/datafusion/issues/22198">#22198</a></li>
+</ul>
+<p>Benchmark suites: <a href="https://github.com/apache/datafusion/tree/main/benchmarks/queries/sort_pushdown">sort_pushdown</a>, <a href="https://github.com/apache/datafusion/blob/main/benchmarks/src/sort_tpch.rs">sort_tpch</a>.</p>
+<h2 id="appendix-buffering-without-sorting">Appendix: Buffering Without Sorting<a class="headerlink" href="#appendix-buffering-without-sorting" title="Permanent link">¶</a></h2>
+<p><img alt="SPM stalls when SortExec is removed in multi-partition plans" class="img-fluid" src="/blog/images/sort-pushdown/buffer-exec-stall.svg" width="100%"/><br/>
+<em>Figure: removing the per-partition <code>SortExec</code> leaves the top-of-plan
+merge (<code>SortPreservingMergeExec</code>) directly consuming raw I/O; a stall
+on any partition stalls the whole plan.</em></p>
+<p>Removing <code>SortExec</code> was not always faster in multi-partition plans: the deleted
+sort had also acted as an implicit buffer. The fix was explicit buffering in
+some plans; see
+<a href="https://github.com/apache/datafusion/pull/21426">#21426</a>
+for details, as shown in the following figure.</p>
+<p><img alt="BufferExec replaces the deleted SortExec with a bounded streaming buffer per partition" class="img-fluid" src="/blog/images/sort-pushdown/buffer-exec.svg" width="100%"/><br/>
+<em>Figure: <code>BufferExec</code> is inserted where the <code>SortExec</code> used to live —
+same greedy per-partition prefill, but no blocking sort.</em></p>
+<p>The fix is <a href="https://github.com/apache/datafusion/blob/main/datafusion/physical-plan/src/buffer.rs">BufferExec</a>:
+a bounded per-partition prefill buffer that restores the greedy parallel I/O
+driver role without sorting.</p>
+<h2 id="appendix-decoder-loop-and-decision-point">Appendix: Decoder Loop and Decision Point<a class="headerlink" href="#appendix-decoder-loop-and-decision-point" title="Permanent link">¶</a></h2>
+<p><img alt="transition() loop: drain, decide, drive — Step 2 is the #22450 addition" class="img-fluid" src="/blog/images/sort-pushdown/transition_anatomy.png" width="100%"/><br/>
+<em>Figure: the decoder loop has three steps. Step 2 (DECIDE) is what
+<a href="https://github.com/apache/datafusion/pull/22450">#22450</a> adds — it only fires at row-group boundaries.</em></p>
+<p>The loop body reads: <strong>drain</strong> the current row group's batches until
+it's exhausted; <strong>decide</strong> at the boundary whether any of the
+remaining row groups can be dropped based on the live threshold; then
+<strong>drive</strong> the decoder into the next row group and repeat. Inside a
+row group, only drain and drive run — no decision point.</p>
+<p><img alt="RowGroupPruner: watch (cheap), rebuild (expensive, only if changed), prune (cheap)" class="img-fluid" src="/blog/images/sort-pushdown/pruner_loop.png" width="100%"/><br/>
+<em>Figure: the pruner has a cheap "check if the filter changed" step, a
+moderately expensive "rebuild the predicate if so" step, and a cheap
+"apply the predicate to remaining row groups" step.</em></p>
+<p>The pruner does expensive work only when it can help: a cheap epoch check
+detects dynamic-filter changes, and only then rebuilds the pruning predicate.
+The predicate is then applied to remaining row groups' min/max statistics using
+metadata only.</p>
+
+<!--
+  Comments Section
+  Loaded only after explicit visitor consent to comply with ASF policy.
+-->
+
+<div>
+  <hr>
+  <h3 id="comments">Comments<a class="headerlink" href="#comments" title="Permanent link">&para;</a></h3>
+
+  <!-- Local loader script -->
+  <script src="/blog/js/giscus-consent.js" defer></script>
+
+  <!-- Consent UI -->
+  <div id="giscus-consent">
+    <p>
+        We use <a href="https://giscus.app/">Giscus</a> for comments, powered by GitHub Discussions.
+        To respect your privacy, Giscus and comments will load only if you click "Show Comments"
+    </p>
+
+    <div class="consent-actions">
+      <button id="giscus-load" type="button">Show Comments</button>
+      <button id="giscus-revoke" type="button" hidden>Hide Comments</button>
+    </div>
+
+    <noscript>JavaScript is required to load comments from Giscus.</noscript>
+  </div>
+
+  <!-- Container where Giscus will render -->
+  <div id="comment-thread"></div>
+</div>      </div>
+      <aside class="toc-container d-none d-md-block col-md-4 col-xl-3 ms-xl-2">
+        <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#are-real-datasets-sorted">Are Real Datasets Sorted?</a></li>
+<li><a href="#exact-vs-inexact-ordering">Exact vs. Inexact Ordering</a></li>
+<li><a href="#tracking-ordering">Tracking Ordering</a></li>
+<li><a href="#exact-sort-elimination-via-statistics">Exact: Sort Elimination via Statistics</a></li>
+<li><a href="#inexact-scan-reordering-makes-dynamic-filters-more-effective">Inexact: Scan Reordering Makes Dynamic Filters More Effective</a></li>
+<li><a href="#benchmark-sort_tpch">Benchmark: sort_tpch</a></li>
+<li><a href="#conclusion-and-future-work">Conclusion and Future Work</a></li>
+<li><a href="#acknowledgements">Acknowledgements</a></li>
+<li><a href="#get-involved">Get Involved</a></li>
+<li><a href="#related-work">Related Work</a></li>
+<li><a href="#references">References</a></li>
+<li><a href="#appendix-buffering-without-sorting">Appendix: Buffering Without Sorting</a></li>
+<li><a href="#appendix-decoder-loop-and-decision-point">Appendix: Decoder Loop and Decision Point</a></li>
+</ul>
+</div>
+      </aside>
+    </div>
+  </div>
+</div>    
+    <!-- footer -->
+    <div class="row g-0">
+      <div class="col-12">
+        <p style="font-style: italic; font-size: 0.8rem; text-align: center;">
+          Copyright 2026, <a href="https://www.apache.org/">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a>.<br/>
+          Apache&reg; and the Apache logo are trademarks of The Apache Software Foundation.
+        </p>
+        <p style="font-size: 0.8rem; text-align: center;">
+          <a href="https://www.apache.org/">Foundation</a> |
+          <a href="https://www.apache.org/events/current-event.html">Events</a> |
+          <a href="https://www.apache.org/licenses/">License</a> |
+          <a href="https://www.apache.org/security/">Security</a> |
+          <a href="https://www.apache.org/foundation/sponsorship.html">Sponsorship</a> |
+          <a href="https://www.apache.org/foundation/thanks.html">Thanks</a> |
+          <a href="https://privacy.apache.org/policies/privacy-policy-public.html">Privacy</a>
+        </p>
+      </div>
+    </div>
+    <script src="/blog/js/bootstrap.bundle.min.js"></script>  </main>
+  </body>
+</html>
