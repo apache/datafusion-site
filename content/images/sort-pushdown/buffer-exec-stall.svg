@@ -1,0 +1,160 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 460">
+  <style>
+    text { font-family: 'Segoe UI', Arial, sans-serif; }
+    .title { font-size: 14px; font-weight: 700; fill: #222; }
+    .header-bad { font-size: 18px; font-weight: 800; fill: #c0392b; }
+    .header-good { font-size: 18px; font-weight: 800; fill: #27ae60; }
+    .panel { font-size: 13px; font-weight: 700; fill: #1d1d1f; }
+    .lbl { font-size: 12px; fill: #555; }
+    .lbl-poll { font-size: 11px; fill: #c0392b; font-style: italic; }
+    .lbl-fast { font-size: 12px; fill: #27ae60; font-weight: 700; }
+    .small { font-size: 11px; fill: #666; font-family: 'Courier New', monospace; }
+    .stall { font-size: 13px; font-weight: 700; fill: #c0392b; }
+    .arr { fill: none; stroke: #555; stroke-width: 1.4; marker-end: url(#arr); }
+    .arr-good { fill: none; stroke: #27ae60; stroke-width: 1.6; marker-end: url(#arr-g); }
+    .arr-blocked { fill: none; stroke: #c0392b; stroke-width: 1.4; stroke-dasharray: 4,3; marker-end: url(#arr-r); }
+    .arr-prefill { fill: none; stroke: #c0392b; stroke-width: 1.2; stroke-dasharray: 3,3; marker-end: url(#arr-r); }
+  </style>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#555"/>
+    </marker>
+    <marker id="arr-g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#27ae60"/>
+    </marker>
+    <marker id="arr-r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#c0392b"/>
+    </marker>
+  </defs>
+
+  <!-- ============ LEFT PANEL: WITHOUT BufferExec ============ -->
+  <text class="header-bad" x="270" y="30" text-anchor="middle">✗ Without BufferExec</text>
+  <text class="lbl" x="270" y="50" text-anchor="middle">SPM polls I/O directly — k-way merge stalls on any slow partition</text>
+
+  <!-- Source side -->
+  <rect x="20" y="70" width="120" height="320" rx="6" fill="#fafafa" stroke="#bbb" stroke-width="1"/>
+  <text class="panel" x="80" y="92" text-anchor="middle">DataSource</text>
+  <text class="small" x="80" y="108" text-anchor="middle">(I/O bound)</text>
+
+  <!-- P0: waiting on I/O -->
+  <rect x="160" y="110" width="220" height="46" rx="4" fill="#fff5f5" stroke="#c0392b" stroke-width="1.5"/>
+  <text class="lbl" x="172" y="130">Partition 0</text>
+  <text class="stall" x="370" y="138" text-anchor="end">⏳ I/O in flight</text>
+  <text class="small" x="370" y="152" text-anchor="end">no batch ready</text>
+
+  <!-- P1: ready -->
+  <rect x="160" y="170" width="220" height="46" rx="4" fill="#f5f5f7" stroke="#bbb"/>
+  <text class="lbl" x="172" y="190">Partition 1</text>
+  <rect x="290" y="180" width="20" height="26" fill="#5b8def"/>
+  <text class="small" x="370" y="200" text-anchor="end">ready</text>
+
+  <!-- P2: ready -->
+  <rect x="160" y="230" width="220" height="46" rx="4" fill="#f5f5f7" stroke="#bbb"/>
+  <text class="lbl" x="172" y="250">Partition 2</text>
+  <rect x="290" y="240" width="20" height="26" fill="#5b8def"/>
+  <text class="small" x="370" y="260" text-anchor="end">ready</text>
+
+  <!-- PN: ready -->
+  <rect x="160" y="290" width="220" height="46" rx="4" fill="#f5f5f7" stroke="#bbb"/>
+  <text class="lbl" x="172" y="310">Partition N</text>
+  <rect x="290" y="300" width="20" height="26" fill="#5b8def"/>
+  <text class="small" x="370" y="320" text-anchor="end">ready</text>
+
+  <!-- Arrows source → partitions -->
+  <line class="arr" x1="140" y1="133" x2="158" y2="133"/>
+  <line class="arr" x1="140" y1="193" x2="158" y2="193"/>
+  <line class="arr" x1="140" y1="253" x2="158" y2="253"/>
+  <line class="arr" x1="140" y1="313" x2="158" y2="313"/>
+
+  <!-- Blocked arrows partitions → SPM -->
+  <line class="arr-blocked" x1="380" y1="133" x2="430" y2="190"/>
+  <line class="arr-blocked" x1="380" y1="193" x2="430" y2="195"/>
+  <line class="arr-blocked" x1="380" y1="253" x2="430" y2="220"/>
+  <line class="arr-blocked" x1="380" y1="313" x2="430" y2="245"/>
+
+  <!-- SPM blocked -->
+  <rect x="430" y="170" width="90" height="100" rx="6" fill="#fff5f5" stroke="#c0392b" stroke-width="1.8"/>
+  <text class="panel" x="475" y="194" text-anchor="middle" fill="#c0392b">SPM</text>
+  <text class="small" x="475" y="212" text-anchor="middle">k-way merge</text>
+  <text class="stall" x="475" y="234" text-anchor="middle">STALLED</text>
+  <text class="small" x="475" y="252" text-anchor="middle">waits for P0</text>
+
+  <!-- Output: nothing -->
+  <text class="stall" x="475" y="300" text-anchor="middle">↓</text>
+  <text class="stall" x="475" y="320" text-anchor="middle">no progress</text>
+
+  <!-- Divider -->
+  <line x1="555" y1="20" x2="555" y2="440" stroke="#ddd" stroke-width="1.5" stroke-dasharray="2,4"/>
+
+  <!-- ============ RIGHT PANEL: WITH BufferExec ============ -->
+  <text class="header-good" x="820" y="30" text-anchor="middle">✓ With BufferExec</text>
+  <text class="lbl" x="820" y="50" text-anchor="middle">Background prefill — SPM always has rows in hand</text>
+
+  <!-- Source side -->
+  <rect x="575" y="70" width="100" height="320" rx="6" fill="#fafafa" stroke="#bbb" stroke-width="1"/>
+  <text class="panel" x="625" y="92" text-anchor="middle">DataSource</text>
+  <text class="small" x="625" y="108" text-anchor="middle">(I/O bound)</text>
+
+  <!-- BufferExec container -->
+  <rect x="700" y="78" width="280" height="304" rx="6" fill="#fff" stroke="#5b8def" stroke-width="1.8"/>
+  <text class="panel" x="840" y="98" text-anchor="middle" fill="#5b8def">BufferExec (bounded)</text>
+
+  <!-- P0 with queue -->
+  <rect x="715" y="110" width="250" height="46" rx="4" fill="#f5f5f7" stroke="#bbb"/>
+  <text class="lbl" x="728" y="130">Partition 0</text>
+  <rect x="820" y="120" width="18" height="26" fill="#5b8def"/>
+  <rect x="842" y="120" width="18" height="26" fill="#5b8def"/>
+  <rect x="864" y="120" width="18" height="26" fill="#5b8def"/>
+  <rect x="886" y="120" width="18" height="26" fill="none" stroke="#bbb" stroke-dasharray="2,2"/>
+  <rect x="908" y="120" width="18" height="26" fill="none" stroke="#bbb" stroke-dasharray="2,2"/>
+  <text class="lbl-fast" x="960" y="140" text-anchor="end">ready</text>
+
+  <!-- P1 -->
+  <rect x="715" y="170" width="250" height="46" rx="4" fill="#f5f5f7" stroke="#bbb"/>
+  <text class="lbl" x="728" y="190">Partition 1</text>
+  <rect x="820" y="180" width="18" height="26" fill="#5b8def"/>
+  <rect x="842" y="180" width="18" height="26" fill="#5b8def"/>
+  <rect x="864" y="180" width="18" height="26" fill="none" stroke="#bbb" stroke-dasharray="2,2"/>
+  <rect x="886" y="180" width="18" height="26" fill="none" stroke="#bbb" stroke-dasharray="2,2"/>
+  <rect x="908" y="180" width="18" height="26" fill="none" stroke="#bbb" stroke-dasharray="2,2"/>
+  <text class="lbl-fast" x="960" y="200" text-anchor="end">ready</text>
+
+  <!-- P2 -->
+  <rect x="715" y="230" width="250" height="46" rx="4" fill="#f5f5f7" stroke="#bbb"/>
+  <text class="lbl" x="728" y="250">Partition 2</text>
+  <rect x="820" y="240" width="18" height="26" fill="#5b8def"/>
+  <rect x="842" y="240" width="18" height="26" fill="#5b8def"/>
+  <rect x="864" y="240" width="18" height="26" fill="#5b8def"/>
+  <rect x="886" y="240" width="18" height="26" fill="#5b8def"/>
+  <rect x="908" y="240" width="18" height="26" fill="none" stroke="#bbb" stroke-dasharray="2,2"/>
+  <text class="lbl-fast" x="960" y="260" text-anchor="end">ready</text>
+
+  <!-- PN -->
+  <rect x="715" y="290" width="250" height="46" rx="4" fill="#f5f5f7" stroke="#bbb"/>
+  <text class="lbl" x="728" y="310">Partition N</text>
+  <rect x="820" y="300" width="18" height="26" fill="#5b8def"/>
+  <rect x="842" y="300" width="18" height="26" fill="#5b8def"/>
+  <rect x="864" y="300" width="18" height="26" fill="none" stroke="#bbb" stroke-dasharray="2,2"/>
+  <rect x="886" y="300" width="18" height="26" fill="none" stroke="#bbb" stroke-dasharray="2,2"/>
+  <rect x="908" y="300" width="18" height="26" fill="none" stroke="#bbb" stroke-dasharray="2,2"/>
+  <text class="lbl-fast" x="960" y="320" text-anchor="end">ready</text>
+
+  <!-- Background poll arrows source → queues -->
+  <line class="arr-prefill" x1="675" y1="133" x2="818" y2="133"/>
+  <line class="arr-prefill" x1="675" y1="193" x2="818" y2="193"/>
+  <line class="arr-prefill" x1="675" y1="253" x2="818" y2="253"/>
+  <line class="arr-prefill" x1="675" y1="313" x2="818" y2="313"/>
+
+  <!-- Drain arrows queues → SPM (off-panel arrow indicator) -->
+  <text class="lbl-fast" x="1010" y="220" text-anchor="middle">→ SPM</text>
+  <text class="lbl-fast" x="1010" y="238" text-anchor="middle">unblocked</text>
+
+  <!-- Legend -->
+  <rect x="20" y="412" width="1040" height="36" rx="4" fill="#fafafa" stroke="#ddd"/>
+  <line class="arr-blocked" x1="35" y1="430" x2="75" y2="430"/>
+  <text class="lbl" x="82" y="434">SPM polls partition (blocked when no batch)</text>
+  <line class="arr-prefill" x1="430" y1="430" x2="470" y2="430"/>
+  <text class="lbl" x="477" y="434">background prefill keeps queue warm</text>
+  <rect x="790" y="420" width="14" height="14" fill="#5b8def"/>
+  <text class="lbl" x="810" y="432">buffered batch (ready to drain)</text>
+</svg>

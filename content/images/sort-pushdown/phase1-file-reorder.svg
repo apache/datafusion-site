@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-25 0 845 320">
+  <style>
+    text { font-family: 'Segoe UI', Arial, sans-serif; }
+    .title { font-size: 14px; font-weight: 700; fill: #222; }
+    .sub { font-size: 12px; fill: #555; }
+    .filename { font-size: 11px; font-weight: 600; fill: #fff; }
+    .range { font-size: 11px; fill: #333; font-family: 'Courier New', monospace; }
+    .label { font-size: 11px; fill: #555; }
+    .arrow { fill: none; stroke: #555; stroke-width: 1.6; marker-end: url(#arrow); }
+    .verdict-good { font-size: 11px; font-weight: 600; fill: #27ae60; }
+    .verdict-bad { font-size: 11px; font-weight: 600; fill: #c0392b; }
+  </style>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#555"/>
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text class="title" x="410" y="22" text-anchor="middle">File rearrangement by min/max statistics</text>
+
+  <!-- BEFORE column -->
+  <text class="sub" x="20" y="55">Before — directory order:</text>
+
+  <!-- file boxes (before) -->
+  <rect x="20" y="65" width="160" height="36" rx="4" fill="#5b8def"/>
+  <text class="filename" x="100" y="80" text-anchor="middle">a.parquet</text>
+  <text class="range" x="100" y="95" text-anchor="middle" fill="#fff">ts ∈ [200, 300]</text>
+
+  <rect x="20" y="111" width="160" height="36" rx="4" fill="#5b8def"/>
+  <text class="filename" x="100" y="126" text-anchor="middle">b.parquet</text>
+  <text class="range" x="100" y="141" text-anchor="middle" fill="#fff">ts ∈ [100, 200]</text>
+
+  <rect x="20" y="157" width="160" height="36" rx="4" fill="#5b8def"/>
+  <text class="filename" x="100" y="172" text-anchor="middle">c.parquet</text>
+  <text class="range" x="100" y="187" text-anchor="middle" fill="#fff">ts ∈ [0, 100]</text>
+
+  <text class="verdict-bad" x="100" y="220" text-anchor="middle">validated_output_ordering() = Unsupported</text>
+  <text class="label" x="100" y="238" text-anchor="middle">→ Sort required</text>
+
+  <!-- arrow -->
+  <line class="arrow" x1="210" y1="130" x2="320" y2="130"/>
+  <text class="label" x="265" y="120" text-anchor="middle">PushdownSort</text>
+  <text class="label" x="265" y="146" text-anchor="middle">sort by min(ts)</text>
+
+  <!-- AFTER column -->
+  <text class="sub" x="350" y="55">After — sorted by stats:</text>
+
+  <rect x="350" y="65" width="160" height="36" rx="4" fill="#27ae60"/>
+  <text class="filename" x="430" y="80" text-anchor="middle">c.parquet</text>
+  <text class="range" x="430" y="95" text-anchor="middle" fill="#fff">ts ∈ [0, 100]</text>
+
+  <rect x="350" y="111" width="160" height="36" rx="4" fill="#27ae60"/>
+  <text class="filename" x="430" y="126" text-anchor="middle">b.parquet</text>
+  <text class="range" x="430" y="141" text-anchor="middle" fill="#fff">ts ∈ [100, 200]</text>
+
+  <rect x="350" y="157" width="160" height="36" rx="4" fill="#27ae60"/>
+  <text class="filename" x="430" y="172" text-anchor="middle">a.parquet</text>
+  <text class="range" x="430" y="187" text-anchor="middle" fill="#fff">ts ∈ [200, 300]</text>
+
+  <text class="verdict-good" x="430" y="220" text-anchor="middle">validated_output_ordering() = Exact</text>
+  <text class="label" x="430" y="238" text-anchor="middle">→ Sort removed</text>
+
+  <!-- Right column: number line -->
+  <text class="sub" x="640" y="55" text-anchor="middle">Range layout</text>
+  <line x1="560" y1="130" x2="800" y2="130" stroke="#888" stroke-width="1"/>
+  <line x1="560" y1="125" x2="560" y2="135" stroke="#888"/>
+  <line x1="640" y1="125" x2="640" y2="135" stroke="#888"/>
+  <line x1="720" y1="125" x2="720" y2="135" stroke="#888"/>
+  <line x1="800" y1="125" x2="800" y2="135" stroke="#888"/>
+  <text class="range" x="560" y="148" text-anchor="middle">0</text>
+  <text class="range" x="640" y="148" text-anchor="middle">100</text>
+  <text class="range" x="720" y="148" text-anchor="middle">200</text>
+  <text class="range" x="800" y="148" text-anchor="middle">300</text>
+
+  <!-- range bars -->
+  <rect x="560" y="80" width="80" height="14" rx="3" fill="#27ae60"/>
+  <text class="range" x="600" y="91" text-anchor="middle" fill="#fff">c</text>
+  <rect x="640" y="98" width="80" height="14" rx="3" fill="#27ae60"/>
+  <text class="range" x="680" y="109" text-anchor="middle" fill="#fff">b</text>
+  <rect x="720" y="116" width="80" height="14" rx="3" fill="#27ae60"/>
+  <text class="range" x="760" y="127" text-anchor="middle" fill="#fff">a</text>
+
+  <text class="label" x="680" y="170" text-anchor="middle">Non-overlapping → ordering provable</text>
+
+  <!-- Bottom: SQL hint -->
+  <text x="410" y="290" text-anchor="middle" font-size="12" fill="#555" font-family="'Courier New', monospace">SELECT * FROM events ORDER BY ts</text>
+</svg>
