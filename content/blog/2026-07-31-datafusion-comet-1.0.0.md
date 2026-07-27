@@ -36,7 +36,7 @@ This is a major milestone. Comet began as a code donation in early 2024 and has 
 one release at a time. Version 1.0.0 marks the point where the project is mature enough to commit to a stable
 release line: broad Apache Spark coverage, ANSI SQL semantics, native Parquet and Iceberg scans, and a native
 shuffle, all validated continuously against Spark's own test suites. This release covers roughly six weeks of
-development since 0.17.0 and is the result of merging over 140 PRs from 19 contributors. See the
+development since 0.17.0 and is the result of merging over 190 PRs from 22 contributors. See the
 [change log] for more information.
 
 [change log]: https://github.com/apache/datafusion-comet/blob/main/docs/source/changelog/1.0.0.md
@@ -70,9 +70,19 @@ run per-row or per-batch, so improvements here compound across every query that 
   ([#4893](https://github.com/apache/datafusion-comet/pull/4893)): optimized regex and URL parsing paths.
 - **Casts**: a faster floating-point-to-decimal cast
   ([#4940](https://github.com/apache/datafusion-comet/pull/4940)), an optimized integer-to-integer cast
-  ([#4920](https://github.com/apache/datafusion-comet/pull/4920)), and shared no-overflow fast paths in
+  ([#4920](https://github.com/apache/datafusion-comet/pull/4920)), shared no-overflow fast paths in
   `CheckOverflow` ([#4937](https://github.com/apache/datafusion-comet/pull/4937)) and
-  `DecimalRescaleCheckOverflow` ([#4938](https://github.com/apache/datafusion-comet/pull/4938)).
+  `DecimalRescaleCheckOverflow` ([#4938](https://github.com/apache/datafusion-comet/pull/4938)), a ~40% faster
+  `float64`-to-`utf8` cast ([#4918](https://github.com/apache/datafusion-comet/pull/4918)), an optimized
+  `decimal128`-to-`utf8` cast ([#4924](https://github.com/apache/datafusion-comet/pull/4924)), string-to-date
+  parsing up to 2x faster ([#4917](https://github.com/apache/datafusion-comet/pull/4917)),
+  `parse_string_to_decimal` 30-40% faster ([#4916](https://github.com/apache/datafusion-comet/pull/4916)), and
+  `cast_binary_to_string` up to 27x faster on binary-format styles
+  ([#4912](https://github.com/apache/datafusion-comet/pull/4912)).
+- **Decimal and date/time kernels**: `date_trunc` more than 2x faster
+  ([#4915](https://github.com/apache/datafusion-comet/pull/4915)),
+  `spark_ceil` 3x faster ([#4926](https://github.com/apache/datafusion-comet/pull/4926)), and a vectorized
+  `spark_unscaled_value` 9x faster ([#4972](https://github.com/apache/datafusion-comet/pull/4972)).
 - **String and array kernels**: `lpad` ([#4919](https://github.com/apache/datafusion-comet/pull/4919)),
   `unhex` ([#4876](https://github.com/apache/datafusion-comet/pull/4876)),
   `size` ([#4877](https://github.com/apache/datafusion-comet/pull/4877)),
@@ -96,14 +106,21 @@ revised ([#4722](https://github.com/apache/datafusion-comet/pull/4722)).
 This release expands the set of Spark expressions and aggregates that run natively:
 
 - **Aggregates**: `approx_percentile` / `percentile_approx`
-  ([#4801](https://github.com/apache/datafusion-comet/pull/4801)) and exact `percentile` / `median`
-  ([#4542](https://github.com/apache/datafusion-comet/pull/4542)).
+  ([#4801](https://github.com/apache/datafusion-comet/pull/4801)), exact `percentile` / `median`
+  ([#4542](https://github.com/apache/datafusion-comet/pull/4542)),
+  `approx_count_distinct` ([#4819](https://github.com/apache/datafusion-comet/pull/4819)), and native
+  `collect_list` / `array_agg` ([#4720](https://github.com/apache/datafusion-comet/pull/4720)).
 - **Grouping**: `grouping()` and `grouping_id()` indicator functions
   ([#4815](https://github.com/apache/datafusion-comet/pull/4815)).
 - **Intervals**: interval types with `make_ym_interval` and `make_dt_interval`
-  ([#4541](https://github.com/apache/datafusion-comet/pull/4541)).
-- **String**: `base64` ([#4778](https://github.com/apache/datafusion-comet/pull/4778)) and `split_part` via
-  `StringSplitSQL` ([#4592](https://github.com/apache/datafusion-comet/pull/4592)).
+  ([#4541](https://github.com/apache/datafusion-comet/pull/4541)),
+  `CalendarIntervalType` support ([#4898](https://github.com/apache/datafusion-comet/pull/4898)), and
+  `multiply_dt_interval` via codegen dispatch
+  ([#4900](https://github.com/apache/datafusion-comet/pull/4900)).
+- **String**: `base64` ([#4778](https://github.com/apache/datafusion-comet/pull/4778)),
+  `split_part` via `StringSplitSQL` ([#4592](https://github.com/apache/datafusion-comet/pull/4592)),
+  native `levenshtein` ([#4105](https://github.com/apache/datafusion-comet/pull/4105)), and native
+  `randstr` compatible with Spark ([#5035](https://github.com/apache/datafusion-comet/pull/5035)).
 - **Array / map**: `array_prepend` ([#4716](https://github.com/apache/datafusion-comet/pull/4716)),
   `size()` for `MapType` ([#4580](https://github.com/apache/datafusion-comet/pull/4580)), `ElementAt` over
   `MapType` ([#4697](https://github.com/apache/datafusion-comet/pull/4697)), and removal of the constraint on
@@ -130,10 +147,16 @@ early-stage feature and we welcome feedback from users experimenting with it.
 - **Iceberg 1.11 support** ([#4840](https://github.com/apache/datafusion-comet/pull/4840)): adds support for
   Iceberg 1.11, audits the existing Iceberg diffs, bumps the iceberg-rust dependency, and adds a
   `run-iceberg-tests` CI trigger.
+- **Iceberg table format V3** ([#4991](https://github.com/apache/datafusion-comet/pull/4991)): native table
+  decryption for V3 tables, with fallback to Spark for other V3 features. Follow-up
+  [#5020](https://github.com/apache/datafusion-comet/pull/5020) applies the same diff changes across other
+  Iceberg versions.
 - **Delete-file correctness** ([#4760](https://github.com/apache/datafusion-comet/pull/4760)): the native scan
   now sizes Iceberg delete files correctly, avoiding dropped deletes.
 - **Exchange-reuse correctness** ([#4812](https://github.com/apache/datafusion-comet/pull/4812)): fixed a case
   where Iceberg native scan exchange reuse with different pushed filters could produce wrong results.
+- **Native serde dedup** ([#4982](https://github.com/apache/datafusion-comet/pull/4982)): dedupes Iceberg
+  residuals and delete files in the native scan serde, reducing planning overhead.
 
 ## Native Parquet I/O and Cloud
 
@@ -153,11 +176,30 @@ early-stage feature and we welcome feedback from users experimenting with it.
   expressions reported as `Unsupported` can now route through JVM codegen dispatch for opt-in serdes, and
   native opt-in expressions surface as compatible-by-default with a `COMET-INFO` plan hint
   ([#4721](https://github.com/apache/datafusion-comet/pull/4721)).
+- **Collated predicate fallback** ([#4948](https://github.com/apache/datafusion-comet/pull/4948)): Comet
+  now falls back to Spark for predicates whose operands use non-default collations, avoiding subtle
+  correctness issues.
+- **ANSI cast to date** ([#5014](https://github.com/apache/datafusion-comet/pull/5014)): invalid calendar
+  dates now raise `CAST_INVALID_INPUT` under ANSI mode, matching Spark's behavior.
+- **Local scan nullability** ([#4843](https://github.com/apache/datafusion-comet/pull/4843)): local table scan
+  child nullability is now widened to match the native kernels, fixing a class of nullability mismatches.
+- **Config aliases** ([#4979](https://github.com/apache/datafusion-comet/pull/4979)): a `withAlternative`
+  alias mechanism lets `CometConf` entries carry old names during renames without breaking existing
+  configurations.
 - **Runtime cleanup** ([#4734](https://github.com/apache/datafusion-comet/pull/4734)): the Tokio runtime is
   now released on driver and executor exit.
 - **Contrib scan SPI** ([#4700](https://github.com/apache/datafusion-comet/pull/4700)): a core SPI for
   contrib leaf scans (`CometScanWithPlanData`), the first part of splitting the Delta integration into a
   contrib module.
+
+## Shuffle Improvements
+
+- **Native shuffle memory cap** ([#4989](https://github.com/apache/datafusion-comet/pull/4989)): a new
+  `spark.comet.shuffle.maxBufferBytes` config caps native shuffle writer memory to bound worst-case usage.
+- **Shuffle IPC schema encoding** ([#5006](https://github.com/apache/datafusion-comet/pull/5006)): the IPC
+  schema is now encoded once per writer instead of per block, cutting per-batch shuffle overhead.
+- **BatchCoalescer bypass** ([#5003](https://github.com/apache/datafusion-comet/pull/5003)): shuffle bypasses
+  the `BatchCoalescer` for batches that are already appropriately sized.
 
 ## Deprecation Notice
 
@@ -182,7 +224,7 @@ See the [Spark Version Compatibility] page for known limitations specific to eac
 
 [Spark Version Compatibility]: https://datafusion.apache.org/comet/user-guide/latest/compatibility/spark-versions.html
 
-This release upgrades to **DataFusion 54** and **Arrow 58.3**.
+This release upgrades to **DataFusion 54.1** and **Arrow 58.3**.
 
 ## Get Started with Comet 1.0.0
 
