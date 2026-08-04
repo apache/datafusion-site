@@ -101,40 +101,26 @@ boundary, so this shrinks per-query overhead across the board. Plan-data injecti
 operator kind and no longer rebuilds operators it does not touch. Comet also makes far fewer timer calls in
 the native execution loop.&lt;/p&gt;
 &lt;h2 id="correctness"&gt;Correctness&lt;a class="headerlink" href="#correctness" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
-&lt;p&gt;A 1.0 release is only as good as its results. This release fixes a broad set of divergences from Spark, most
-of them found by running extensive AI-assisted audit sweeps of the code base, comparing Comet's expression
-implementations with all supported versions of Spark. Highlights:&lt;/p&gt;
+&lt;p&gt;A 1.0 release is only as good as its results. This release fixes roughly 30 divergences from Spark, spanning
+casts, ANSI error semantics, wrong-result bugs, string and encoding handling, collations, and error
+reporting. Most were found by running extensive AI-assisted audit sweeps of the code base, comparing Comet's
+expression implementations with all supported versions of Spark. See the &lt;a href="https://github.com/apache/datafusion-comet/blob/main/docs/source/changelog/1.0.0.md"&gt;change log&lt;/a&gt; for the full list; two
+representative fixes give a sense of the shape of the work:&lt;/p&gt;
 &lt;ul&gt;
-&lt;li&gt;&lt;strong&gt;Casts&lt;/strong&gt; to &lt;code&gt;boolean&lt;/code&gt;, integral types, &lt;code&gt;float&lt;/code&gt;/&lt;code&gt;double&lt;/code&gt;, and &lt;code&gt;decimal&lt;/code&gt; now use Spark's exact
-  whitespace-trimming rules. Comet's kernels had used four different trim sets, three of them wrong, so
-  results diverged in both directions — returning null where Spark parses a value, and returning a value
-  where Spark returns null. Casts from &lt;code&gt;float&lt;/code&gt;/&lt;code&gt;double&lt;/code&gt; to &lt;code&gt;decimal&lt;/code&gt; now round the shortest decimal string
-  form as Spark does, and return null for &lt;code&gt;NaN&lt;/code&gt; and infinity even in ANSI mode.&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;ANSI error semantics.&lt;/strong&gt; The codegen dispatcher's null short-circuit no longer swallows errors Spark
-  raises. Spark evaluates null-intolerant expressions per node and left to right, so short-circuiting on the
-  union of input ordinals skipped subtrees Spark would have evaluated, losing their errors. Roughly 70
-  built-in expressions route through this dispatcher and ANSI is on by default in Spark 4, so this affected a
-  wide surface. Other ANSI fixes cover overflow on &lt;code&gt;round&lt;/code&gt; with a large negative scale, &lt;code&gt;Long.MinValue / -1&lt;/code&gt;,
-  floating-point remainder by zero, &lt;code&gt;make_decimal&lt;/code&gt; fail-on-error, invalid calendar dates, and errors from
-  nested casts.&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;Wrong results&lt;/strong&gt; in &lt;code&gt;count&lt;/code&gt; when the native scan is disabled, Spark's legacy &lt;code&gt;null IN ()&lt;/code&gt; behavior, &lt;code&gt;pow&lt;/code&gt;
-  edge cases where C and Java disagree, &lt;code&gt;percentile&lt;/code&gt; interpolation precision, &lt;code&gt;date_trunc&lt;/code&gt; across DST
-  boundaries, &lt;code&gt;flatten&lt;/code&gt; and &lt;code&gt;ArrayInsert&lt;/code&gt; with null inputs, and the &lt;code&gt;array_filter&lt;/code&gt; / &lt;code&gt;array_compact&lt;/code&gt; fast
-  path.&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;Strings and encodings.&lt;/strong&gt; &lt;code&gt;CAST(binary AS string)&lt;/code&gt; now decodes exactly as the JVM's
-  &lt;code&gt;new String(bytes, UTF_8)&lt;/code&gt; does, including the surrogate cases where Rust's lossy decoder diverges, and
-  shuffle tolerates non-UTF-8 bytes rather than failing.&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;Deep expression trees.&lt;/strong&gt; Long chains of associative bitwise, &lt;code&gt;Add&lt;/code&gt;, and &lt;code&gt;Multiply&lt;/code&gt; operators are
-  rebalanced so plans no longer hit protobuf's recursion limit.&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;Collations.&lt;/strong&gt; Comet now falls back for predicates whose operands use non-default collations, for Spark 4
-  datetime expressions under non-default collations, and for &lt;code&gt;str_to_map&lt;/code&gt;.&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;Conservative fallbacks&lt;/strong&gt; where native behavior could not be made to match: decimal &lt;code&gt;SUM&lt;/code&gt; / &lt;code&gt;AVG&lt;/code&gt; over
-  sliding window frames, &lt;code&gt;FromUnixTime&lt;/code&gt; with a non-default format, &lt;code&gt;CreateArray&lt;/code&gt; with
-  struct-nullability-divergent children, and native V1 scans on filesystem schemes that &lt;code&gt;object_store&lt;/code&gt; does
-  not support.&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;Error reporting.&lt;/strong&gt; Native Parquet read failures now surface as Spark's &lt;code&gt;FAILED_READ_FILE&lt;/code&gt;, and a
-  DataFusion 54.1.0 Parquet page-index regression is worked around.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Whitespace trimming in string-to-numeric casts.&lt;/strong&gt; Casts to &lt;code&gt;boolean&lt;/code&gt;, integral types, &lt;code&gt;float&lt;/code&gt;/&lt;code&gt;double&lt;/code&gt;,
+  and &lt;code&gt;decimal&lt;/code&gt; now use Spark's exact trim rules. Comet's kernels had used four different trim sets, three of
+  them wrong, so results diverged in both directions — returning null where Spark parses a value, and
+  returning a value where Spark returns null.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;ANSI errors swallowed by null short-circuit.&lt;/strong&gt; The codegen dispatcher's null short-circuit no longer
+  swallows errors Spark raises. Spark evaluates null-intolerant expressions per node and left to right, so
+  short-circuiting on the union of input ordinals skipped subtrees Spark would have evaluated, losing their
+  errors. Roughly 70 built-in expressions route through this dispatcher and ANSI is on by default in Spark 4,
+  so this affected a wide surface.&lt;/li&gt;
 &lt;/ul&gt;
+&lt;p&gt;Alongside the bug fixes, Comet also adds conservative fallbacks where native behavior could not be made to
+match — decimal &lt;code&gt;SUM&lt;/code&gt; / &lt;code&gt;AVG&lt;/code&gt; over sliding window frames, &lt;code&gt;FromUnixTime&lt;/code&gt; with a non-default format, and a
+handful of others — and falls back for predicates and datetime expressions under non-default collations
+rather than risking a wrong result.&lt;/p&gt;
 &lt;h2 id="new-expression-and-aggregate-support"&gt;New Expression and Aggregate Support&lt;a class="headerlink" href="#new-expression-and-aggregate-support" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;This release expands the set of Spark expressions and aggregates that run natively:&lt;/p&gt;
 &lt;ul&gt;
