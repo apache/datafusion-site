@@ -102,11 +102,12 @@ the native execution loop.
 
 ## Correctness
 
-A 1.0 release is only as good as its results. This release fixes roughly 30 divergences from Spark, spanning
-casts, ANSI error semantics, wrong-result bugs, string and encoding handling, collations, and error
-reporting. Most were found by running extensive AI-assisted audit sweeps of the code base, comparing Comet's
-expression implementations with all supported versions of Spark. See the [change log] for the full list; two
-representative fixes give a sense of the shape of the work:
+Correctness fixes have been a regular part of every Comet release, but for 1.0 we made an extra push to
+clear out the bulk of the known issues before drawing a line under the stable release. This release fixes
+roughly 30 divergences from Spark, spanning casts, ANSI error semantics, wrong-result bugs, string and
+encoding handling, collations, and error reporting. Most were found by running extensive AI-assisted audit
+sweeps of the code base, comparing Comet's expression implementations with all supported versions of Spark.
+See the [change log] for the full list; two representative fixes give a sense of the shape of the work:
 
 - **Whitespace trimming in string-to-numeric casts.** Casts to `boolean`, integral types, `float`/`double`,
   and `decimal` now use Spark's exact trim rules. Comet's kernels had used four different trim sets, three of
