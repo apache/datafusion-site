@@ -32,18 +32,17 @@ The Apache DataFusion PMC is pleased to announce version 1.0.0 of the [Comet](ht
 Comet is an accelerator for Apache Spark that translates Spark physical plans to DataFusion physical plans for
 improved performance and efficiency without requiring any code changes.
 
-This is a major milestone. Comet began as a code donation in early 2024 and has shipped steadily ever since,
-one release at a time. Version 1.0.0 marks the point where the project is mature enough to commit to a stable
-release line: broad Apache Spark coverage, ANSI SQL semantics, native Parquet and Iceberg scans, and a native
-shuffle, all validated continuously against Spark's own test suites. This release covers roughly six weeks of
-development since 0.17.0 and consists of 244 commits from 23 contributors. See the
-[change log] for more information.
+This release covers roughly six weeks of 
+development since 0.17.0 and consists of 244 commits from 23 contributors. See the [change log] for more information.
+
 
 [change log]: https://github.com/apache/datafusion-comet/blob/main/docs/source/changelog/1.0.0.md
 
 ## What 1.0 Means
 
-Reaching 1.0 is less about any single new feature than about the accumulated maturity of the project:
+The 1.0.0 release is the culmination of more than two year's work since the project was [donated] as an Apache DataFusion subproject in March, 2024, and is less about any single new feature than about the accumulated maturity of the project:
+
+[donated]: https://datafusion.apache.org/blog/2024/03/06/comet-donation/
 
 - **Broad Spark coverage.** Comet supports Apache Spark 3.4.3, 3.5.9, 4.0.4, and 4.1.3 out of the same
   codebase, with dedicated Maven profiles, shim sources, and CI matrices for each, plus an experimental
@@ -131,7 +130,7 @@ equality now uses Arrow's comparator ([#5176](https://github.com/apache/datafusi
 ## Correctness
 
 A 1.0 release is only as good as its results. This release fixes a broad set of divergences from Spark, most of
-them found by running Spark's own SQL test suites through Comet's native path:
+them found by running extensive AI-assisted audit sweeps of the code base, comparing Comet's expression implementations with all supported versions of Spark.
 
 - **Casts**: casting a string to `boolean`, an integral type, `float`/`double`, or `decimal` now uses Spark's
   exact whitespace-trimming rules ([#5150](https://github.com/apache/datafusion-comet/pull/5150)). Comet's
