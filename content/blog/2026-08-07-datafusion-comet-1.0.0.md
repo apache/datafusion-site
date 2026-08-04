@@ -41,14 +41,14 @@ contributors. See the [change log] for the full list of changes.
 
 Comet was [donated] to the Apache DataFusion project in March 2024 and cut its first release, 0.1.0, five
 months later with 15 data types, 13 operators, 106 expressions, and a "modest performance speedup." The
-nineteen releases between then and now cover a lot of ground:
+sixteen major releases between then and now cover a lot of ground:
 
 [donated]: https://datafusion.apache.org/blog/2024/03/06/comet-donation/
 
 - **Query coverage went from a handful of operators to the shape of a real Spark query.** Native
   SortMergeJoin, HashJoin, and BroadcastHashJoin landed early; native columnar and native shuffle,
   broadcast nested loop joins, native window functions, native sampling, and mixed partial/final aggregation
-  followed. Supported expressions grew from 106 at 0.1.0 to 404 in 1.0, and the introduction of the JVM
+  followed. Supported expressions grew from 106 at 0.1.0 to more than 400 in 1.0.0, and the introduction of the JVM
   codegen dispatcher in 0.17.0 gave Comet a way to keep unsupported expressions Arrow-native by running
   Spark's own generated code inside the pipeline rather than falling back to row-based execution.
 - **Spark support broadened.** The 0.1.0 release targeted Spark 3.3, 3.4, and 3.5, with experimental 4.0. The
@@ -56,7 +56,7 @@ nineteen releases between then and now cover a lot of ground:
   Spark 4 — moved from partial to a supported default across the natively implemented surface.
 - **The ecosystem story filled in.** Native Iceberg support arrived in 0.10.0 and has been extended through
   1.11 and format V3, native Parquet writes and CSV reads landed as experimental features and matured,
-  Azure joined S3 on the native cloud path, and 1.0 adds experimental accelerated PyArrow UDFs alongside the
+  Azure joined S3 on the native cloud path, and 1.0.0 adds experimental accelerated PyArrow UDFs alongside the
   Java and Scala UDF support that shipped in 0.17.0.
 - **Correctness rigor grew alongside the surface area.** Early releases relied on fuzz testing to surface
   divergences; later releases added a full Spark SQL test-suite run against every supported Spark version,
