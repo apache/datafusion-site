@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 500">
+  <style>
+    text { font-family: 'Segoe UI', Arial, sans-serif; }
+    .title { font-size: 20px; font-weight: 800; fill: #222; }
+    .entry-label { font-size: 16px; font-weight: 800; fill: #fff; }
+    .entry-sub { font-size: 13px; fill: #d8e0e8; font-family: 'Courier New', monospace; }
+    .check-label { font-size: 14px; fill: #1d1d1f; font-weight: 700; }
+    .check-sub { font-size: 13px; fill: #555; font-family: 'Courier New', monospace; }
+    .term-label { font-size: 17px; font-weight: 800; fill: #fff; }
+    .term-sub { font-size: 13px; fill: #fff; font-family: 'Courier New', monospace; }
+    .branch-yes { font-size: 14px; font-weight: 800; fill: #27ae60; }
+    .branch-no { font-size: 14px; font-weight: 800; fill: #c0392b; }
+    .effect { font-size: 13px; fill: #555; }
+    .arr { fill: none; stroke: #555; stroke-width: 1.8; marker-end: url(#arr); }
+    .arr-yes { fill: none; stroke: #27ae60; stroke-width: 2; marker-end: url(#arr-g); }
+    .arr-no { fill: none; stroke: #888; stroke-width: 1.8; marker-end: url(#arr); }
+  </style>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#555"/>
+    </marker>
+    <marker id="arr-g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#27ae60"/>
+    </marker>
+  </defs>
+
+  <text class="title" x="540" y="32" text-anchor="middle">try_pushdown_sort — Exact / Inexact / Unsupported</text>
+
+  <!-- ============ Entry pill ============ -->
+  <rect x="40" y="60" width="280" height="60" rx="30" fill="#34495e"/>
+  <text class="entry-label" x="180" y="86" text-anchor="middle">PushdownSort rule</text>
+  <text class="entry-sub" x="180" y="106" text-anchor="middle">source.try_pushdown_sort(req)</text>
+
+  <!-- arrow entry → check1 -->
+  <line class="arr" x1="320" y1="90" x2="370" y2="90"/>
+
+  <!-- ============ Check 1 ============ -->
+  <rect x="370" y="50" width="320" height="80" rx="10" fill="#fff" stroke="#5b8def" stroke-width="2"/>
+  <text class="check-label" x="530" y="80" text-anchor="middle">Natural ordering satisfies request?</text>
+  <text class="check-sub" x="530" y="104" text-anchor="middle">eq.ordering_satisfy(req)</text>
+
+  <!-- Branch yes → Exact (right) -->
+  <line class="arr-yes" x1="690" y1="90" x2="800" y2="90"/>
+  <text class="branch-yes" x="745" y="78" text-anchor="middle">yes</text>
+
+  <rect x="800" y="58" width="240" height="64" rx="10" fill="#27ae60"/>
+  <text class="term-label" x="920" y="84" text-anchor="middle">Exact</text>
+  <text class="term-sub" x="920" y="106" text-anchor="middle">drop SortExec</text>
+
+  <!-- Branch no (down to check 2) -->
+  <line class="arr-no" x1="530" y1="130" x2="530" y2="200"/>
+  <text class="branch-no" x="544" y="170" text-anchor="start">no</text>
+
+  <!-- ============ Check 2 ============ -->
+  <rect x="370" y="200" width="320" height="100" rx="10" fill="#fff" stroke="#5b8def" stroke-width="2"/>
+  <text class="check-label" x="530" y="232" text-anchor="middle">Pushdown still applies?</text>
+  <text class="check-sub" x="530" y="256" text-anchor="middle">column_in_file_schema</text>
+  <text class="check-sub" x="530" y="276" text-anchor="middle">OR reversed_satisfies(req)</text>
+
+  <!-- Branch yes → Inexact (right) -->
+  <line class="arr-yes" x1="690" y1="250" x2="800" y2="250"/>
+  <text class="branch-yes" x="745" y="238" text-anchor="middle">yes</text>
+
+  <rect x="800" y="218" width="240" height="64" rx="10" fill="#e67e22"/>
+  <text class="term-label" x="920" y="244" text-anchor="middle">Inexact</text>
+  <text class="term-sub" x="920" y="266" text-anchor="middle">set runtime-reorder flags</text>
+
+  <!-- Branch no (down to Unsupported) -->
+  <line class="arr-no" x1="530" y1="300" x2="530" y2="370"/>
+  <text class="branch-no" x="544" y="340" text-anchor="start">no</text>
+
+  <!-- ============ Unsupported terminal ============ -->
+  <rect x="370" y="370" width="320" height="64" rx="10" fill="#95a5a6"/>
+  <text class="term-label" x="530" y="396" text-anchor="middle">Unsupported</text>
+  <text class="term-sub" x="530" y="418" text-anchor="middle">SortExec stays · full external sort</text>
+
+  <!-- ============ Effects legend (right side, bottom) ============ -->
+  <rect x="800" y="320" width="240" height="114" rx="8" fill="#fafafa" stroke="#e3e3e3"/>
+  <text class="check-label" x="820" y="345">Outcomes</text>
+  <circle cx="826" cy="368" r="6" fill="#27ae60"/>
+  <text class="effect" x="840" y="372">Exact · static limit on source</text>
+  <circle cx="826" cy="392" r="6" fill="#e67e22"/>
+  <text class="effect" x="840" y="396">Inexact · TopK + RG pruner</text>
+  <circle cx="826" cy="416" r="6" fill="#95a5a6"/>
+  <text class="effect" x="840" y="420">Unsupported · no benefit</text>
+
+</svg>

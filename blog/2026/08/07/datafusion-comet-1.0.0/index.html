@@ -1,0 +1,524 @@
+<!doctype html>
+<html class="no-js" lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apache DataFusion Comet 1.0.0 Release - Apache DataFusion Blog</title>
+<link href="/blog/favicon.ico" rel="icon" type="image/x-icon">
+<link href="/blog/favicon.ico" rel="shortcut icon" type="image/x-icon">
+<link href="/blog/css/bootstrap.min.css" rel="stylesheet">
+<link href="/blog/css/fontawesome.all.min.css" rel="stylesheet">
+<link href="/blog/css/headerlink.css" rel="stylesheet">
+<link href="/blog/highlight/default.min.css" rel="stylesheet">
+<link href="/blog/css/app.css" rel="stylesheet">
+<link href="/blog/css/dark-mode.css" rel="stylesheet">
+<script src="/blog/js/dark-mode.js"></script>
+<script src="/blog/highlight/highlight.js"></script>
+<script>hljs.highlightAll();</script>  </head>
+  <body class="d-flex flex-column h-100">
+  <main class="flex-shrink-0">
+<!-- nav bar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark" aria-label="Fifth navbar example">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/blog/"><img src="/blog/images/logo_original4x.png" style="height: 32px;"/> Apache DataFusion Blog</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarADP" aria-controls="navbarADP" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarADP">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/about.html">About</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/feed.xml">RSS</a>
+                </li>
+            </ul>
+            <button id="dark-mode-toggle" type="button" class="dark-mode-toggle" aria-label="Toggle dark mode" aria-pressed="false" title="Toggle dark mode">
+                <span class="sun-icon" aria-hidden="true">☀</span>
+                <span class="moon-icon" aria-hidden="true">☾</span>
+            </button>
+        </div>
+    </div>
+</nav>    
+<!-- article contents -->
+<div id="contents">
+  <div class="bg-white p-4 p-md-5 rounded">
+    <div class="row justify-content-center">
+      <div class="col-12 col-md-8 main-content">
+        <h1>
+          Apache DataFusion Comet 1.0.0 Release
+        </h1>
+        <p>Posted on: Fri 07 August 2026 by pmc</p>
+
+        <aside class="toc-container d-md-none mb-2">
+          <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#what-10-means">What 1.0 Means</a></li>
+<li><a href="#native-expression-performance">Native Expression Performance</a></li>
+<li><a href="#correctness">Correctness</a></li>
+<li><a href="#new-expression-and-aggregate-support">New Expression and Aggregate Support</a></li>
+<li><a href="#native-sampling">Native Sampling</a></li>
+<li><a href="#experimental-pyarrow-udf-support">Experimental PyArrow UDF Support</a></li>
+<li><a href="#iceberg">Iceberg</a></li>
+<li><a href="#native-parquet-io-and-cloud">Native Parquet I/O and Cloud</a></li>
+<li><a href="#execution-and-fallback-improvements">Execution and Fallback Improvements</a></li>
+<li><a href="#shuffle-improvements">Shuffle Improvements</a></li>
+<li><a href="#configuration-changes">Configuration Changes</a></li>
+<li><a href="#documentation">Documentation</a></li>
+<li><a href="#deprecation-notice">Deprecation Notice</a></li>
+<li><a href="#compatibility">Compatibility</a></li>
+<li><a href="#get-started-with-comet-100">Get Started with Comet 1.0.0</a></li>
+</ul>
+</div>
+        </aside>
+
+        <!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+-->
+
+<p>The Apache DataFusion PMC is pleased to announce version 1.0.0 of the <a href="https://datafusion.apache.org/comet/">Comet</a> subproject.</p>
+<p>Comet is an accelerator for Apache Spark that translates Spark physical plans to DataFusion physical plans for
+improved performance and efficiency without requiring any code changes.</p>
+<p>This release covers roughly six weeks of 
+development since 0.17.0 and consists of 244 commits from 23 contributors. See the <a href="https://github.com/apache/datafusion-comet/blob/main/docs/source/changelog/1.0.0.md">change log</a> for more information.</p>
+<h2 id="what-10-means">What 1.0 Means<a class="headerlink" href="#what-10-means" title="Permanent link">¶</a></h2>
+<p>The 1.0.0 release is the culmination of more than two year's work since the project was <a href="https://datafusion.apache.org/blog/2024/03/06/comet-donation/">donated</a> as an Apache DataFusion subproject in March, 2024, and is less about any single new feature than about the accumulated maturity of the project:</p>
+<ul>
+<li><strong>Broad Spark coverage.</strong> Comet supports Apache Spark 3.4.3, 3.5.9, 4.0.4, and 4.1.3 out of the same
+  codebase, with dedicated Maven profiles, shim sources, and CI matrices for each, plus an experimental
+  Spark 4.2 profile for early evaluation. The
+  <a href="https://github.com/apache/datafusion-comet/pull/4977">Spark version adoption and support-lifetime policy</a>
+  now states how long each Spark minor stays supported.</li>
+<li><strong>ANSI SQL by default.</strong> Spark 4 enables ANSI semantics by default. Comet implements ANSI behavior for the
+  expressions it supports natively, including arithmetic overflow checks, ANSI cast behavior, and <code>try_*</code>
+  variants, so ANSI workloads keep accelerating rather than falling back.</li>
+<li><strong>A correctness harness, not just unit tests.</strong> Comet runs the full Apache Spark SQL test suite through its
+  native execution path against every supported Spark version. Running Spark's own correctness tests is what
+  surfaces semantic shifts before they reach user workloads, and it is the foundation of the confidence behind
+  a 1.0 release.</li>
+<li><strong>A stable release line going forward.</strong> With 1.0, the project commits to semantic versioning. The
+  <a href="https://github.com/apache/datafusion-comet/pull/5056">versioning policy</a> spells out what that covers:
+  because Comet is a plugin rather than a library, its configuration is its primary API surface, so
+  <code>spark.comet.*</code> keys, an explicitly enumerated public Java and Scala API, and query results documented as
+  Compatible are all part of the compatibility surface. Behavior changes in a minor release now require a
+  <code>spark.comet.legacy.*</code> key that restores the previous behavior, and each release records its behavior changes
+  in a user-facing upgrade guide. Correctness fixes are exempt from being treated as breaking changes. The very
+  first deprecations under that policy are announced in this release (see
+  <a href="#deprecation-notice">Deprecation Notice</a> below).</li>
+<li><strong>Documented limitations.</strong> Every open correctness issue is now surfaced in the generated compatibility guide
+  (<a href="https://github.com/apache/datafusion-comet/pull/5085">#5085</a>), down to the expression level, so you can see
+  where Comet is known to diverge from Spark before you hit it in production rather than after. Notes for bugs
+  that have since been fixed were removed in the same pass
+  (<a href="https://github.com/apache/datafusion-comet/pull/5154">#5154</a>).</li>
+</ul>
+<p>The rest of this post covers what is new since 0.17.0.</p>
+<h2 id="native-expression-performance">Native Expression Performance<a class="headerlink" href="#native-expression-performance" title="Permanent link">¶</a></h2>
+<p>A large share of this release is dedicated to making Comet's native scalar expressions faster. These kernels
+run per-row or per-batch, so improvements here compound across every query that uses them:</p>
+<ul>
+<li><strong><code>get_json_object</code></strong> (<a href="https://github.com/apache/datafusion-comet/pull/4907">#4907</a>): roughly 4x faster.</li>
+<li><strong><code>regexp_extract</code></strong> (<a href="https://github.com/apache/datafusion-comet/pull/4894">#4894</a>) and <strong><code>parse_url</code></strong>
+  (<a href="https://github.com/apache/datafusion-comet/pull/4893">#4893</a>): optimized regex and URL parsing paths.</li>
+<li><strong>Casts</strong>: a faster floating-point-to-decimal cast
+  (<a href="https://github.com/apache/datafusion-comet/pull/4940">#4940</a>), an optimized integer-to-integer cast
+  (<a href="https://github.com/apache/datafusion-comet/pull/4920">#4920</a>), shared no-overflow fast paths in
+  <code>CheckOverflow</code> (<a href="https://github.com/apache/datafusion-comet/pull/4937">#4937</a>) and
+  <code>DecimalRescaleCheckOverflow</code> (<a href="https://github.com/apache/datafusion-comet/pull/4938">#4938</a>), a ~40% faster
+  <code>float64</code>-to-<code>utf8</code> cast (<a href="https://github.com/apache/datafusion-comet/pull/4918">#4918</a>), an optimized
+  <code>decimal128</code>-to-<code>utf8</code> cast (<a href="https://github.com/apache/datafusion-comet/pull/4924">#4924</a>), string-to-date
+  parsing up to 2x faster (<a href="https://github.com/apache/datafusion-comet/pull/4917">#4917</a>),
+  <code>parse_string_to_decimal</code> 30-40% faster (<a href="https://github.com/apache/datafusion-comet/pull/4916">#4916</a>), and
+  <code>cast_binary_to_string</code> up to 27x faster on binary-format styles
+  (<a href="https://github.com/apache/datafusion-comet/pull/4912">#4912</a>).</li>
+<li><strong>Decimal and date/time kernels</strong>: <code>date_trunc</code> more than 2x faster
+  (<a href="https://github.com/apache/datafusion-comet/pull/4915">#4915</a>),
+  <code>spark_ceil</code> 3x faster (<a href="https://github.com/apache/datafusion-comet/pull/4926">#4926</a>), and a vectorized
+  <code>spark_unscaled_value</code> 9x faster (<a href="https://github.com/apache/datafusion-comet/pull/4972">#4972</a>).</li>
+<li><strong>String and array kernels</strong>: <code>lpad</code> (<a href="https://github.com/apache/datafusion-comet/pull/4919">#4919</a>),
+  <code>unhex</code> (<a href="https://github.com/apache/datafusion-comet/pull/4876">#4876</a>),
+  <code>size</code> (<a href="https://github.com/apache/datafusion-comet/pull/4877">#4877</a>),
+  <code>arrays_overlap</code> (<a href="https://github.com/apache/datafusion-comet/pull/4906">#4906</a>),
+  <code>escape_string</code> (<a href="https://github.com/apache/datafusion-comet/pull/4902">#4902</a>), and the
+  <code>try_*</code> arithmetic kernel (<a href="https://github.com/apache/datafusion-comet/pull/4910">#4910</a>).</li>
+</ul>
+<p>To make this kind of work repeatable, the release also adds a
+<a href="https://github.com/apache/datafusion-comet/pull/4933">scalar expression optimization guide</a> documenting how
+to benchmark a kernel, keep its output bit-identical to Spark, and gate changes on a no-regression check.</p>
+<p>On the scan side, Parquet reads pick up several improvements: full Parquet metadata (including the page index)
+is now cached via DataFusion's <code>CachedParquetFileReaderFactory</code>
+(<a href="https://github.com/apache/datafusion-comet/pull/4707">#4707</a>), identity casts are unwrapped in the schema
+adapter so Parquet statistics pruning can engage
+(<a href="https://github.com/apache/datafusion-comet/pull/4730">#4730</a>), filter pushdown configuration has been
+revised (<a href="https://github.com/apache/datafusion-comet/pull/4722">#4722</a>), the native scan now passes a metadata
+size hint so a single read usually captures the footer, matching the Iceberg path
+(<a href="https://github.com/apache/datafusion-comet/pull/4717">#4717</a>), and the native Parquet scan seeds its reader
+options from the session config so Parquet settings you already set take effect
+(<a href="https://github.com/apache/datafusion-comet/pull/5107">#5107</a>).</p>
+<p>Query planning and plan serialization also got cheaper. <code>QueryContext</code> SQL text is now interned into a per-plan
+pool (<a href="https://github.com/apache/datafusion-comet/pull/5204">#5204</a>), which makes serialized plans up to 20x
+smaller on TPC-DS — every plan crosses the JNI boundary, so this shrinks per-query overhead across the board.
+Plan-data injection is now an O(1) lookup by operator kind
+(<a href="https://github.com/apache/datafusion-comet/pull/4535">#4535</a>) and no longer rebuilds operators it does not
+touch (<a href="https://github.com/apache/datafusion-comet/pull/5220">#5220</a>). Comet also makes far fewer timer calls
+in the native execution loop (<a href="https://github.com/apache/datafusion-comet/pull/4739">#4739</a>), and nested array
+equality now uses Arrow's comparator (<a href="https://github.com/apache/datafusion-comet/pull/5176">#5176</a>).</p>
+<h2 id="correctness">Correctness<a class="headerlink" href="#correctness" title="Permanent link">¶</a></h2>
+<p>A 1.0 release is only as good as its results. This release fixes a broad set of divergences from Spark, most of
+them found by running extensive AI-assisted audit sweeps of the code base, comparing Comet's expression implementations with all supported versions of Spark.</p>
+<ul>
+<li><strong>Casts</strong>: casting a string to <code>boolean</code>, an integral type, <code>float</code>/<code>double</code>, or <code>decimal</code> now uses Spark's
+  exact whitespace-trimming rules (<a href="https://github.com/apache/datafusion-comet/pull/5150">#5150</a>). Comet's
+  kernels had used four different trim sets, three of them wrong, so results diverged in both directions —
+  returning null where Spark parses a value, and returning a value where Spark returns null. Casting
+  <code>float</code>/<code>double</code> to <code>decimal</code> now rounds the shortest decimal string form as Spark does, rather than the
+  binary value (<a href="https://github.com/apache/datafusion-comet/pull/5136">#5136</a>), which matters for values such
+  as <code>0.5153125</code> whose binary form sits just below the rounding tie the string form lands on; <code>NaN</code> and infinity
+  now return null even in ANSI mode, matching Spark. Decimal promotion also uses the per-expression eval mode
+  (<a href="https://github.com/apache/datafusion-comet/pull/5171">#5171</a>).</li>
+<li><strong>ANSI error semantics</strong>: the codegen dispatcher's null short-circuit no longer swallows errors Spark raises
+  (<a href="https://github.com/apache/datafusion-comet/pull/5219">#5219</a>) — Spark evaluates null-intolerant expressions
+  per node and left to right, so short-circuiting on the union of input ordinals skipped subtrees Spark would
+  have evaluated, losing their errors. Roughly 70 built-in expressions route through this dispatcher and ANSI is
+  on by default in Spark 4, so this affected a wide surface. Also: <code>round</code> on a <code>Long</code> with a large negative
+  scale now overflows instead of silently returning zero
+  (<a href="https://github.com/apache/datafusion-comet/pull/5082">#5082</a>), <code>Long.MinValue / -1</code> raises
+  <code>ARITHMETIC_OVERFLOW</code> (<a href="https://github.com/apache/datafusion-comet/pull/5084">#5084</a>), floating-point
+  <code>x % 0.0</code> raises <code>REMAINDER_BY_ZERO</code> instead of returning <code>NaN</code>
+  (<a href="https://github.com/apache/datafusion-comet/pull/5081">#5081</a>), <code>make_decimal</code> honors its
+  fail-on-error flag and throws <code>NUMERIC_VALUE_OUT_OF_RANGE</code> rather than returning null
+  (<a href="https://github.com/apache/datafusion-comet/pull/5080">#5080</a>), invalid calendar dates raise
+  <code>CAST_INVALID_INPUT</code> (<a href="https://github.com/apache/datafusion-comet/pull/5014">#5014</a>), and errors from nested
+  casts now propagate (<a href="https://github.com/apache/datafusion-comet/pull/4675">#4675</a>).</li>
+<li><strong>Wrong results</strong>: <code>count</code> no longer returns zero when the native scan is disabled
+  (<a href="https://github.com/apache/datafusion-comet/pull/4795">#4795</a>), Spark's legacy <code>null IN ()</code> behavior is
+  honored (<a href="https://github.com/apache/datafusion-comet/pull/5127">#5127</a>), <code>pow</code> matches Java's <code>Math.pow</code> on
+  the edge cases where C and Java disagree (<a href="https://github.com/apache/datafusion-comet/pull/5033">#5033</a>),
+  <code>percentile</code> matches Spark's interpolation precision
+  (<a href="https://github.com/apache/datafusion-comet/pull/4792">#4792</a>), <code>date_trunc</code> handles DST boundaries in
+  non-UTC sessions and no longer produces schema mismatches through shuffle and sort
+  (<a href="https://github.com/apache/datafusion-comet/pull/4761">#4761</a>), <code>flatten</code> handles null sub-arrays
+  (<a href="https://github.com/apache/datafusion-comet/pull/4822">#4822</a>), <code>ArrayInsert</code> handles null source arrays
+  (<a href="https://github.com/apache/datafusion-comet/pull/4726">#4726</a>), and the <code>array_filter</code> / <code>array_compact</code>
+  fast path is restricted to the lambda variable
+  (<a href="https://github.com/apache/datafusion-comet/pull/4848">#4848</a>).</li>
+<li><strong>Strings and encodings</strong>: <code>CAST(binary AS string)</code> now decodes exactly as the JVM's
+  <code>new String(bytes, UTF_8)</code> does, including the surrogate cases where Rust's lossy decoder diverges, instead
+  of reinterpreting bytes unchecked (<a href="https://github.com/apache/datafusion-comet/pull/4763">#4763</a>), and
+  shuffle tolerates non-UTF-8 bytes rather than failing
+  (<a href="https://github.com/apache/datafusion-comet/pull/4524">#4524</a>).</li>
+<li><strong>Timestamps</strong>: reading a Parquet timestamp-with-timezone column as <code>TimestampNTZ</code> is now rejected on Spark
+  3.x, matching Spark's own refusal, instead of silently returning the UTC instant
+  (<a href="https://github.com/apache/datafusion-comet/pull/4357">#4357</a>).</li>
+<li><strong>Deep expression trees</strong>: long chains of associative bitwise, <code>Add</code>, and <code>Multiply</code> operators are rebalanced
+  so plans no longer hit protobuf's recursion limit
+  (<a href="https://github.com/apache/datafusion-comet/pull/4588">#4588</a>).</li>
+<li><strong>Native shuffle</strong>: scalar subqueries used in partitioning expressions are now registered, fixing
+  "Subquery N not found" failures (<a href="https://github.com/apache/datafusion-comet/pull/4869">#4869</a>), and constant
+  column vectors are materialized on Comet's serialize and export paths
+  (<a href="https://github.com/apache/datafusion-comet/pull/4532">#4532</a>).</li>
+<li><strong>Collations</strong>: Comet falls back for predicates whose operands use non-default collations
+  (<a href="https://github.com/apache/datafusion-comet/pull/4948">#4948</a>), for Spark 4 datetime expressions under
+  non-default collations (<a href="https://github.com/apache/datafusion-comet/pull/4693">#4693</a>), and for
+  <code>str_to_map</code> (<a href="https://github.com/apache/datafusion-comet/pull/4701">#4701</a>).</li>
+<li><strong>Conservative fallbacks</strong> where native behavior could not be made to match: decimal <code>SUM</code> / <code>AVG</code> over
+  sliding window frames (<a href="https://github.com/apache/datafusion-comet/pull/4732">#4732</a>),
+  <code>FromUnixTime</code> with a non-default format (<a href="https://github.com/apache/datafusion-comet/pull/4847">#4847</a>),
+  <code>CreateArray</code> with struct-nullability-divergent children
+  (<a href="https://github.com/apache/datafusion-comet/pull/4533">#4533</a>), and native V1 scans on filesystem schemes
+  that <code>object_store</code> does not support (<a href="https://github.com/apache/datafusion-comet/pull/4525">#4525</a>).</li>
+<li><strong>Error reporting</strong>: native Parquet read failures now surface as Spark's <code>FAILED_READ_FILE</code>
+  (<a href="https://github.com/apache/datafusion-comet/pull/4536">#4536</a>), and a DataFusion 54.1.0 Parquet page-index
+  regression is worked around (<a href="https://github.com/apache/datafusion-comet/pull/5132">#5132</a>).</li>
+</ul>
+<h2 id="new-expression-and-aggregate-support">New Expression and Aggregate Support<a class="headerlink" href="#new-expression-and-aggregate-support" title="Permanent link">¶</a></h2>
+<p>This release expands the set of Spark expressions and aggregates that run natively:</p>
+<ul>
+<li><strong>Aggregates</strong>: <code>approx_percentile</code> / <code>percentile_approx</code>
+  (<a href="https://github.com/apache/datafusion-comet/pull/4801">#4801</a>), exact <code>percentile</code> / <code>median</code>
+  (<a href="https://github.com/apache/datafusion-comet/pull/4542">#4542</a>),
+  <code>approx_count_distinct</code> (<a href="https://github.com/apache/datafusion-comet/pull/4819">#4819</a>), and native
+  <code>collect_list</code> / <code>array_agg</code> (<a href="https://github.com/apache/datafusion-comet/pull/4720">#4720</a>).</li>
+<li><strong>Grouping</strong>: <code>grouping()</code> and <code>grouping_id()</code> indicator functions
+  (<a href="https://github.com/apache/datafusion-comet/pull/4815">#4815</a>).</li>
+<li><strong>Intervals</strong>: interval types with <code>make_ym_interval</code> and <code>make_dt_interval</code>
+  (<a href="https://github.com/apache/datafusion-comet/pull/4541">#4541</a>),
+  <code>CalendarIntervalType</code> support (<a href="https://github.com/apache/datafusion-comet/pull/4898">#4898</a>),
+  <code>multiply_dt_interval</code> via codegen dispatch
+  (<a href="https://github.com/apache/datafusion-comet/pull/4900">#4900</a>), and interval codegen dispatch for nested
+  values and native shuffle (<a href="https://github.com/apache/datafusion-comet/pull/4976">#4976</a>).</li>
+<li><strong>String</strong>: <code>base64</code> (<a href="https://github.com/apache/datafusion-comet/pull/4778">#4778</a>),
+  <code>split_part</code> via <code>StringSplitSQL</code> (<a href="https://github.com/apache/datafusion-comet/pull/4592">#4592</a>),
+  native <code>levenshtein</code> (<a href="https://github.com/apache/datafusion-comet/pull/4105">#4105</a>), and native
+  <code>randstr</code> (<a href="https://github.com/apache/datafusion-comet/pull/5035">#5035</a>) and <code>uuid</code>
+  (<a href="https://github.com/apache/datafusion-comet/pull/5034">#5034</a>), both bit-for-bit compatible with Spark for a
+  given seed.</li>
+<li><strong>Array / map</strong>: <code>array_prepend</code> (<a href="https://github.com/apache/datafusion-comet/pull/4716">#4716</a>),
+  the <code>shuffle()</code> array function (<a href="https://github.com/apache/datafusion-comet/pull/4797">#4797</a>),
+  <code>size()</code> for <code>MapType</code> (<a href="https://github.com/apache/datafusion-comet/pull/4580">#4580</a>), <code>ElementAt</code> over
+  <code>MapType</code> (<a href="https://github.com/apache/datafusion-comet/pull/4697">#4697</a>), and removal of the constraint on
+  arrays of nested elements (<a href="https://github.com/apache/datafusion-comet/pull/4714">#4714</a>).</li>
+<li><strong>Date/time</strong>: native <code>TimestampNTZ</code> inputs for <code>hour</code> / <code>minute</code> / <code>second</code>
+  (<a href="https://github.com/apache/datafusion-comet/pull/4753">#4753</a>) and
+  <code>PreciseTimestampConversion</code> for native time-window grouping
+  (<a href="https://github.com/apache/datafusion-comet/pull/4784">#4784</a>).</li>
+<li><strong>Windows</strong>: extended native window function support
+  (<a href="https://github.com/apache/datafusion-comet/pull/4209">#4209</a>) and Spark 4 decimal window average
+  (<a href="https://github.com/apache/datafusion-comet/pull/4749">#4749</a>).</li>
+<li><strong>Internal expressions</strong>: native <code>empty2null</code>
+  (<a href="https://github.com/apache/datafusion-comet/pull/4683">#4683</a>), which appears in write paths, and the
+  shuffle-side infrastructure for Spark's <code>TimeType</code>
+  (<a href="https://github.com/apache/datafusion-comet/pull/4398">#4398</a>).</li>
+</ul>
+<h2 id="native-sampling">Native Sampling<a class="headerlink" href="#native-sampling" title="Permanent link">¶</a></h2>
+<p>Spark's <code>SampleExec</code> now runs natively when sampling without replacement
+(<a href="https://github.com/apache/datafusion-comet/pull/5110">#5110</a>), covering <code>DataFrame.sample</code>, SQL
+<code>TABLESAMPLE</code>, and <code>DataFrame.randomSplit</code>. The native operator ports Spark's <code>BernoulliCellSampler</code> on top of
+<code>XorShiftRandom</code> and seeds per partition exactly as Spark does, so it selects the same rows for a given seed —
+sampling stays reproducible whether or not Comet is enabled. Sampling with replacement still falls back to
+Spark.</p>
+<h2 id="experimental-pyarrow-udf-support">Experimental PyArrow UDF Support<a class="headerlink" href="#experimental-pyarrow-udf-support" title="Permanent link">¶</a></h2>
+<p>This release adds experimental support for accelerated PyArrow UDFs
+(<a href="https://github.com/apache/datafusion-comet/pull/4234">#4234</a>), allowing PyArrow-based user-defined functions
+to participate in native execution instead of forcing a fallback to Spark. When the feature is disabled, Comet
+now hints at the native PyArrow UDF path in its fallback reasons
+(<a href="https://github.com/apache/datafusion-comet/pull/4892">#4892</a>) so users know the option exists. This is an
+early-stage feature and we welcome feedback from users experimenting with it.</p>
+<h2 id="iceberg">Iceberg<a class="headerlink" href="#iceberg" title="Permanent link">¶</a></h2>
+<ul>
+<li><strong>Iceberg 1.11 support</strong> (<a href="https://github.com/apache/datafusion-comet/pull/4840">#4840</a>): adds support for
+  Iceberg 1.11, audits the existing Iceberg diffs, bumps the iceberg-rust dependency, and adds a
+  <code>run-iceberg-tests</code> CI trigger.</li>
+<li><strong>Iceberg table format V3</strong> (<a href="https://github.com/apache/datafusion-comet/pull/4991">#4991</a>): native table
+  decryption for V3 tables, with fallback to Spark for other V3 features. Follow-up
+  <a href="https://github.com/apache/datafusion-comet/pull/5020">#5020</a> applies the same diff changes across other
+  Iceberg versions.</li>
+<li><strong>Metadata columns</strong> (<a href="https://github.com/apache/datafusion-comet/pull/4752">#4752</a>): the native Iceberg scan
+  now supports the <code>_pos</code>, <code>_spec</code>, <code>_file</code>, and <code>_partition</code> metadata columns.</li>
+<li><strong>Delete-file correctness</strong> (<a href="https://github.com/apache/datafusion-comet/pull/4760">#4760</a>): the native scan
+  now sizes Iceberg delete files correctly, avoiding dropped deletes.</li>
+<li><strong>Exchange-reuse correctness</strong> (<a href="https://github.com/apache/datafusion-comet/pull/4812">#4812</a>): fixed a case
+  where Iceberg native scan exchange reuse with different pushed filters could produce wrong results.</li>
+<li><strong>Scan disambiguation</strong> (<a href="https://github.com/apache/datafusion-comet/pull/5180">#5180</a>): Iceberg scans that
+  share a <code>metadata_location</code> are now told apart, rather than being conflated.</li>
+<li><strong>Native serde dedup</strong> (<a href="https://github.com/apache/datafusion-comet/pull/4982">#4982</a>): dedupes Iceberg
+  residuals and delete files in the native scan serde, reducing planning overhead.</li>
+</ul>
+<h2 id="native-parquet-io-and-cloud">Native Parquet I/O and Cloud<a class="headerlink" href="#native-parquet-io-and-cloud" title="Permanent link">¶</a></h2>
+<ul>
+<li><strong>gzip Parquet writes</strong> (<a href="https://github.com/apache/datafusion-comet/pull/4930">#4930</a>): native Parquet
+  writes now support gzip compression.</li>
+<li><strong>Azure authentication</strong> (<a href="https://github.com/apache/datafusion-comet/pull/4783">#4783</a>): the native
+  Parquet scan now supports Azure authentication, complementing the existing S3 credential support.</li>
+</ul>
+<h2 id="execution-and-fallback-improvements">Execution and Fallback Improvements<a class="headerlink" href="#execution-and-fallback-improvements" title="Permanent link">¶</a></h2>
+<ul>
+<li><strong>Mixed partial/final aggregation</strong> (<a href="https://github.com/apache/datafusion-comet/pull/4861">#4861</a>):
+  <code>sum</code> and non-decimal <code>avg</code> can now run with the partial and final aggregation stages split across Spark and
+  Comet, keeping more aggregation plans partially native.</li>
+<li><strong>Stage-based fallback</strong> (<a href="https://github.com/apache/datafusion-comet/pull/4519">#4519</a>): a more granular
+  fallback mechanism that operates at the stage level.</li>
+<li><strong>Codegen dispatch for opt-in serdes</strong> (<a href="https://github.com/apache/datafusion-comet/pull/4728">#4728</a>):
+  expressions reported as <code>Unsupported</code> can now route through JVM codegen dispatch for opt-in serdes, and
+  native opt-in expressions surface as compatible-by-default with a <code>COMET-INFO</code> plan hint
+  (<a href="https://github.com/apache/datafusion-comet/pull/4721">#4721</a>). Casts join this path
+  (<a href="https://github.com/apache/datafusion-comet/pull/5079">#5079</a>): an incompatible or unsupported cast now runs
+  Spark's own generated code inside the Comet pipeline instead of pulling the whole operator back to Spark, so
+  one awkward cast no longer de-accelerates a query. <code>sort_array</code> under strict floating-point mode
+  (<a href="https://github.com/apache/datafusion-comet/pull/4637">#4637</a>) and <code>concat</code> under non-<code>UTF8_BINARY</code>
+  collations (<a href="https://github.com/apache/datafusion-comet/pull/4640">#4640</a>) opt in the same way.</li>
+<li><strong>JVM columnar-to-row by default</strong> (<a href="https://github.com/apache/datafusion-comet/pull/5114">#5114</a>): isolated
+  benchmarking showed the native columnar-to-row converter is roughly 3.7x slower per row than the JVM
+  implementation at the default batch size — and up to 15.7x slower for small batches — because of a fixed
+  per-batch JNI and FFI cost, with no end-to-end benefit in TPC-DS runs. It is now disabled by default.</li>
+<li><strong>Clearer fallback reasons</strong>: unsupported scalar serde cases are reported in the support level
+  (<a href="https://github.com/apache/datafusion-comet/pull/4745">#4745</a>), mixed-execution fallback messages name the
+  incompatible aggregate functions (<a href="https://github.com/apache/datafusion-comet/pull/4750">#4750</a>), unsupported
+  metadata column names appear in fallback reasons
+  (<a href="https://github.com/apache/datafusion-comet/pull/4758">#4758</a>), the compatibility guide URLs in fallback
+  messages are corrected (<a href="https://github.com/apache/datafusion-comet/pull/4854">#4854</a>), and the spurious
+  "WriteFilesExec is not supported" message is suppressed
+  (<a href="https://github.com/apache/datafusion-comet/pull/4928">#4928</a>).</li>
+<li><strong>Expression coverage in extended explain</strong> (<a href="https://github.com/apache/datafusion-comet/pull/5201">#5201</a>):
+  the extended explain summary previously reported operator coverage but said nothing about expressions. It now
+  ends with a line such as <code>Comet accelerated 14 expressions (14 native, 1 codegen dispatch)</code>, so you can see
+  how much of a plan's expression evaluation runs in native DataFusion kernels versus Spark's generated code
+  inside the dispatcher. Operator counts also handle <code>ReusedSubquery</code> and <code>CometSubqueryBroadcast</code> correctly
+  (<a href="https://github.com/apache/datafusion-comet/pull/5206">#5206</a>).</li>
+<li><strong>Local scan nullability</strong> (<a href="https://github.com/apache/datafusion-comet/pull/4843">#4843</a>): local table scan
+  child nullability is now widened to match the native kernels, fixing a class of nullability mismatches.</li>
+<li><strong>Config aliases</strong> (<a href="https://github.com/apache/datafusion-comet/pull/4979">#4979</a>): a <code>withAlternative</code>
+  alias mechanism lets <code>CometConf</code> entries carry old names during renames without breaking existing
+  configurations.</li>
+<li><strong>Runtime cleanup</strong> (<a href="https://github.com/apache/datafusion-comet/pull/4734">#4734</a>): the Tokio runtime is
+  now released on driver and executor exit.</li>
+<li><strong>Quieter logs</strong> (<a href="https://github.com/apache/datafusion-comet/pull/5155">#5155</a>): logging levels on frequent
+  call sites have been lowered so Comet no longer floods executor logs at default settings.</li>
+<li><strong>Contrib scan SPI</strong> (<a href="https://github.com/apache/datafusion-comet/pull/4700">#4700</a>): a core SPI for
+  contrib leaf scans (<code>CometScanWithPlanData</code>), the first part of splitting the Delta integration into a
+  contrib module.</li>
+</ul>
+<h2 id="shuffle-improvements">Shuffle Improvements<a class="headerlink" href="#shuffle-improvements" title="Permanent link">¶</a></h2>
+<ul>
+<li><strong>Native shuffle memory cap</strong> (<a href="https://github.com/apache/datafusion-comet/pull/4989">#4989</a>): a new
+  <code>spark.comet.shuffle.maxBufferBytes</code> config caps native shuffle writer memory to bound worst-case usage.</li>
+<li><strong>Shuffle IPC schema encoding</strong> (<a href="https://github.com/apache/datafusion-comet/pull/5006">#5006</a>): the IPC
+  schema is now encoded once per writer instead of per block, cutting per-batch shuffle overhead.</li>
+<li><strong>BatchCoalescer bypass</strong> (<a href="https://github.com/apache/datafusion-comet/pull/5003">#5003</a>): shuffle bypasses
+  the <code>BatchCoalescer</code> for batches that are already appropriately sized.</li>
+<li><strong>Single-partition shuffle</strong> (<a href="https://github.com/apache/datafusion-comet/pull/5004">#5004</a>): a redundant
+  concatenation layer has been removed from the single-partition path.</li>
+</ul>
+<h2 id="configuration-changes">Configuration Changes<a class="headerlink" href="#configuration-changes" title="Permanent link">¶</a></h2>
+<p>Because configuration is Comet's primary API surface, 1.0 is the release where the naming gets cleaned up.
+Every rename below registers the old key as an alias, so existing configurations keep working and log a
+deprecation warning when an old key is read:</p>
+<ul>
+<li><strong>Unified shuffle prefix</strong> (<a href="https://github.com/apache/datafusion-comet/pull/4986">#4986</a>): shuffle configs
+  were spread across four disjoint prefixes (<code>spark.comet.exec.shuffle.*</code>, <code>spark.comet.columnar.shuffle.*</code>,
+  <code>spark.comet.native.shuffle.*</code>, <code>spark.comet.shuffle.*</code>). They now all live under <code>spark.comet.shuffle.*</code>,
+  with <code>.jvm.</code> and <code>.native.</code> sub-namespaces matching the <code>spark.comet.shuffle.mode</code> value you already set.</li>
+<li><strong>Grouped explain configs</strong> (<a href="https://github.com/apache/datafusion-comet/pull/5026">#5026</a>): the orphan
+  explain-related configs are collected under a single <code>spark.comet.explain.*</code> prefix, and the PyArrow UDF
+  config is renamed to <code>pyarrowUDF</code> for consistency
+  (<a href="https://github.com/apache/datafusion-comet/pull/5197">#5197</a>).</li>
+<li><strong><code>spark.comet.version</code></strong> (<a href="https://github.com/apache/datafusion-comet/pull/5049">#5049</a>): the loaded Comet
+  build version is now exposed as a runtime config, so you can confirm which Comet a cluster is actually
+  running with <code>spark.conf.get</code> or <code>SET</code>.</li>
+<li><strong>Removed dead configs</strong>: the Parquet parallel-IO knobs
+  (<a href="https://github.com/apache/datafusion-comet/pull/4981">#4981</a>),
+  <code>spark.comet.use.lazyMaterialization</code> (<a href="https://github.com/apache/datafusion-comet/pull/4998">#4998</a>), and
+  <code>spark.comet.exceptionOnDatetimeRebase</code> (<a href="https://github.com/apache/datafusion-comet/pull/5221">#5221</a>) had no
+  remaining effect and were misleading anyone tuning against them.</li>
+<li><strong>Removed async columnar shuffle</strong> (<a href="https://github.com/apache/datafusion-comet/pull/4985">#4985</a>): the
+  <code>spark.comet.columnar.shuffle.async.*</code> path was off by default and untested, and has been removed rather than
+  carried into a stable release line.</li>
+</ul>
+<h2 id="documentation">Documentation<a class="headerlink" href="#documentation" title="Permanent link">¶</a></h2>
+<p>The documentation received a substantial overhaul for 1.0:</p>
+<ul>
+<li>A <a href="https://github.com/apache/datafusion-comet/pull/4353">design refresh</a> of the docs site, with versioned
+  user guides gaining captioned sidebar sections
+  (<a href="https://github.com/apache/datafusion-comet/pull/4699">#4699</a>) and a set of accessibility and navigation
+  fixes (<a href="https://github.com/apache/datafusion-comet/pull/4858">#4858</a>).</li>
+<li>The supported-expressions page now shows how each expression is implemented — native, codegen dispatch, or
+  hybrid (<a href="https://github.com/apache/datafusion-comet/pull/5028">#5028</a>), generated from the planner itself
+  rather than maintained by hand.</li>
+<li>An expanded <a href="https://github.com/apache/datafusion-comet/pull/4908">tuning guide</a> covering the performance and
+  memory configs that matter in practice, plus guidance on <code>spark.sql.files.maxPartitionBytes</code>
+  (<a href="https://github.com/apache/datafusion-comet/pull/4931">#4931</a>).</li>
+<li>An <a href="https://github.com/apache/datafusion-comet/pull/5064">updated roadmap</a> for the post-1.0 work, and a new
+  <a href="https://github.com/apache/datafusion-comet/pull/5043">blog posts and talks page</a>.</li>
+</ul>
+<h2 id="deprecation-notice">Deprecation Notice<a class="headerlink" href="#deprecation-notice" title="Permanent link">¶</a></h2>
+<p>With the move to a stable 1.0 release line, Comet begins deprecating older platforms under semantic versioning
+(<a href="https://github.com/apache/datafusion-comet/pull/4857">#4857</a>):</p>
+<ul>
+<li><strong>JDK 11</strong> is deprecated and scheduled for removal in Comet 1.1.0.</li>
+<li><strong>Apache Spark 3.4</strong> is deprecated and scheduled for removal in Comet 1.1.0.</li>
+</ul>
+<p>Users on these platforms should plan to move to JDK 17+ and Spark 3.5 or later before upgrading to 1.1.0.</p>
+<h2 id="compatibility">Compatibility<a class="headerlink" href="#compatibility" title="Permanent link">¶</a></h2>
+<p>Supported platforms include:</p>
+<ul>
+<li><strong>Spark 3.4.3</strong> with Java 11/17 and Scala 2.12/2.13 (deprecated, removal in 1.1.0)</li>
+<li><strong>Spark 3.5.9</strong> with Java 11/17 and Scala 2.12/2.13</li>
+<li><strong>Spark 4.0.4</strong> with Java 17 and Scala 2.13</li>
+<li><strong>Spark 4.1.3</strong> with Java 17/21 and Scala 2.13</li>
+<li><strong>Spark 4.2</strong> with Java 17 and Scala 2.13 (experimental, for early evaluation only)</li>
+</ul>
+<p>See the <a href="https://datafusion.apache.org/comet/user-guide/latest/compatibility/spark-versions.html">Spark Version Compatibility</a> page for known limitations specific to each version.</p>
+<p>This release upgrades to <strong>DataFusion 54.1</strong> and <strong>Arrow 58.4</strong>.</p>
+<h2 id="get-started-with-comet-100">Get Started with Comet 1.0.0<a class="headerlink" href="#get-started-with-comet-100" title="Permanent link">¶</a></h2>
+<p>Ready to try it out? Follow the <a href="https://datafusion.apache.org/comet/user-guide/1.0/installation.html">Comet 1.0.0 Installation Guide</a>
+to get up and running, then point Comet at your existing Spark workloads and see the speedup for yourself.</p>
+
+<!--
+  Comments Section
+  Loaded only after explicit visitor consent to comply with ASF policy.
+-->
+
+<div>
+  <hr>
+  <h3 id="comments">Comments<a class="headerlink" href="#comments" title="Permanent link">&para;</a></h3>
+
+  <!-- Local loader script -->
+  <script src="/blog/js/giscus-consent.js" defer></script>
+
+  <!-- Consent UI -->
+  <div id="giscus-consent">
+    <p>
+        We use <a href="https://giscus.app/">Giscus</a> for comments, powered by GitHub Discussions.
+        To respect your privacy, Giscus and comments will load only if you click "Show Comments"
+    </p>
+
+    <div class="consent-actions">
+      <button id="giscus-load" type="button">Show Comments</button>
+      <button id="giscus-revoke" type="button" hidden>Hide Comments</button>
+    </div>
+
+    <noscript>JavaScript is required to load comments from Giscus.</noscript>
+  </div>
+
+  <!-- Container where Giscus will render -->
+  <div id="comment-thread"></div>
+</div>      </div>
+      <aside class="toc-container d-none d-md-block col-md-4 col-xl-3 ms-xl-2">
+        <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#what-10-means">What 1.0 Means</a></li>
+<li><a href="#native-expression-performance">Native Expression Performance</a></li>
+<li><a href="#correctness">Correctness</a></li>
+<li><a href="#new-expression-and-aggregate-support">New Expression and Aggregate Support</a></li>
+<li><a href="#native-sampling">Native Sampling</a></li>
+<li><a href="#experimental-pyarrow-udf-support">Experimental PyArrow UDF Support</a></li>
+<li><a href="#iceberg">Iceberg</a></li>
+<li><a href="#native-parquet-io-and-cloud">Native Parquet I/O and Cloud</a></li>
+<li><a href="#execution-and-fallback-improvements">Execution and Fallback Improvements</a></li>
+<li><a href="#shuffle-improvements">Shuffle Improvements</a></li>
+<li><a href="#configuration-changes">Configuration Changes</a></li>
+<li><a href="#documentation">Documentation</a></li>
+<li><a href="#deprecation-notice">Deprecation Notice</a></li>
+<li><a href="#compatibility">Compatibility</a></li>
+<li><a href="#get-started-with-comet-100">Get Started with Comet 1.0.0</a></li>
+</ul>
+</div>
+      </aside>
+    </div>
+  </div>
+</div>    
+    <!-- footer -->
+    <div class="row g-0">
+      <div class="col-12">
+        <p style="font-style: italic; font-size: 0.8rem; text-align: center;">
+          Copyright 2026, <a href="https://www.apache.org/">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a>.<br/>
+          Apache&reg; and the Apache logo are trademarks of The Apache Software Foundation.
+        </p>
+        <p style="font-size: 0.8rem; text-align: center;">
+          <a href="https://www.apache.org/">Foundation</a> |
+          <a href="https://www.apache.org/events/current-event.html">Events</a> |
+          <a href="https://www.apache.org/licenses/">License</a> |
+          <a href="https://www.apache.org/security/">Security</a> |
+          <a href="https://www.apache.org/foundation/sponsorship.html">Sponsorship</a> |
+          <a href="https://www.apache.org/foundation/thanks.html">Thanks</a> |
+          <a href="https://privacy.apache.org/policies/privacy-policy-public.html">Privacy</a>
+        </p>
+      </div>
+    </div>
+    <script src="/blog/js/bootstrap.bundle.min.js"></script>  </main>
+  </body>
+</html>

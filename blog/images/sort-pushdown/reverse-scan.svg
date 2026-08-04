@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 380">
+  <style>
+    text { font-family: 'Segoe UI', Arial, sans-serif; }
+    .title { font-size: 14px; font-weight: 700; fill: #222; }
+    .panel-title { font-size: 13px; font-weight: 700; }
+    .label { font-size: 11px; fill: #555; }
+    .small { font-size: 10px; fill: #444; }
+    .badge-good { font-size: 12px; font-weight: 700; fill: #27ae60; }
+    .badge-bad { font-size: 12px; font-weight: 700; fill: #c0392b; }
+    .arrow { fill: none; stroke: #c0392b; stroke-width: 1.8; marker-end: url(#arr3); }
+    .arrow-green { fill: none; stroke: #27ae60; stroke-width: 1.8; marker-end: url(#arr3g); }
+  </style>
+  <defs>
+    <marker id="arr3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#c0392b"/>
+    </marker>
+    <marker id="arr3g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#27ae60"/>
+    </marker>
+  </defs>
+
+  <text class="title" x="410" y="22" text-anchor="middle">ORDER BY ts DESC LIMIT 10 — row-group reverse vs page reverse</text>
+
+  <!-- row group reverse panel -->
+  <rect x="20" y="40" width="380" height="320" rx="8" fill="#fff8e1" stroke="#e67e22" stroke-width="1.5"/>
+  <text class="panel-title" x="210" y="62" text-anchor="middle" fill="#e67e22">Row-group reverse (today, merged)</text>
+
+  <!-- row group block with pages -->
+  <rect x="40" y="90" width="340" height="120" rx="6" fill="#fff" stroke="#bbb"/>
+  <text class="small" x="50" y="106">RowGroup (last, ~128 MB)</text>
+
+  <!-- pages inside the row group -->
+  <g>
+    <rect x="50"  y="115" width="38" height="80" fill="#bdc3c7"/>
+    <rect x="92"  y="115" width="38" height="80" fill="#bdc3c7"/>
+    <rect x="134" y="115" width="38" height="80" fill="#bdc3c7"/>
+    <rect x="176" y="115" width="38" height="80" fill="#bdc3c7"/>
+    <rect x="218" y="115" width="38" height="80" fill="#bdc3c7"/>
+    <rect x="260" y="115" width="38" height="80" fill="#bdc3c7"/>
+    <rect x="302" y="115" width="38" height="80" fill="#bdc3c7"/>
+    <rect x="344" y="115" width="36" height="80" fill="#bdc3c7"/>
+    <text class="small" x="69" y="160" text-anchor="middle">P0</text>
+    <text class="small" x="111" y="160" text-anchor="middle">P1</text>
+    <text class="small" x="153" y="160" text-anchor="middle">P2</text>
+    <text class="small" x="195" y="160" text-anchor="middle">P3</text>
+    <text class="small" x="237" y="160" text-anchor="middle">P4</text>
+    <text class="small" x="279" y="160" text-anchor="middle">P5</text>
+    <text class="small" x="321" y="160" text-anchor="middle">P6</text>
+    <text class="small" x="362" y="160" text-anchor="middle">P7</text>
+  </g>
+
+  <text class="label" x="210" y="235" text-anchor="middle">Decode the entire row group, reverse in memory, take 10.</text>
+  <text class="badge-bad" x="210" y="265" text-anchor="middle">Peak buffer: ~128 MB</text>
+  <text class="badge-bad" x="210" y="285" text-anchor="middle">Pages decoded: 8</text>
+  <text class="badge-bad" x="210" y="305" text-anchor="middle">Time-to-first-N: ~29 µs</text>
+
+  <!-- arrows: all pages read -->
+  <line class="arrow" x1="362" y1="80" x2="362" y2="115"/>
+  <line class="arrow" x1="69"  y1="80" x2="69"  y2="115"/>
+  <line class="arrow" x1="111" y1="80" x2="111" y2="115"/>
+  <line class="arrow" x1="153" y1="80" x2="153" y2="115"/>
+  <line class="arrow" x1="195" y1="80" x2="195" y2="115"/>
+  <line class="arrow" x1="237" y1="80" x2="237" y2="115"/>
+  <line class="arrow" x1="279" y1="80" x2="279" y2="115"/>
+  <line class="arrow" x1="321" y1="80" x2="321" y2="115"/>
+
+  <!-- PAGE REVERSE panel -->
+  <rect x="420" y="40" width="380" height="320" rx="8" fill="#e8f5e9" stroke="#27ae60" stroke-width="1.5"/>
+  <text class="panel-title" x="610" y="62" text-anchor="middle" fill="#27ae60">Page reverse (upstream POC, arrow-rs #9937)</text>
+
+  <rect x="440" y="90" width="340" height="120" rx="6" fill="#fff" stroke="#bbb"/>
+  <text class="small" x="450" y="106">RowGroup (last)</text>
+
+  <g>
+    <rect x="450" y="115" width="38" height="80" fill="#bdc3c7"/>
+    <rect x="492" y="115" width="38" height="80" fill="#bdc3c7"/>
+    <rect x="534" y="115" width="38" height="80" fill="#bdc3c7"/>
+    <rect x="576" y="115" width="38" height="80" fill="#bdc3c7"/>
+    <rect x="618" y="115" width="38" height="80" fill="#bdc3c7"/>
+    <rect x="660" y="115" width="38" height="80" fill="#bdc3c7"/>
+    <rect x="702" y="115" width="38" height="80" fill="#bdc3c7"/>
+    <rect x="744" y="115" width="36" height="80" fill="#27ae60"/>
+    <text class="small" x="469" y="160" text-anchor="middle">P0</text>
+    <text class="small" x="511" y="160" text-anchor="middle">P1</text>
+    <text class="small" x="553" y="160" text-anchor="middle">P2</text>
+    <text class="small" x="595" y="160" text-anchor="middle">P3</text>
+    <text class="small" x="637" y="160" text-anchor="middle">P4</text>
+    <text class="small" x="679" y="160" text-anchor="middle">P5</text>
+    <text class="small" x="721" y="160" text-anchor="middle">P6</text>
+    <text class="small" x="762" y="160" text-anchor="middle" fill="#fff">P7</text>
+  </g>
+
+  <!-- only one green arrow on last page -->
+  <line class="arrow-green" x1="762" y1="80" x2="762" y2="115"/>
+
+  <text class="label" x="610" y="235" text-anchor="middle">Seek to last page only via OffsetIndex, decode, reverse, return.</text>
+  <text class="badge-good" x="610" y="265" text-anchor="middle">Peak buffer: ~1 MB</text>
+  <text class="badge-good" x="610" y="285" text-anchor="middle">Pages decoded: 1</text>
+  <text class="badge-good" x="610" y="305" text-anchor="middle">Time-to-first-N: ~565 ns  (≈ 50× faster)</text>
+</svg>

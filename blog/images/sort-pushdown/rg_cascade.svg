@@ -1,0 +1,113 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1020 565">
+  <style>
+    text { font-family: 'Segoe UI', Arial, sans-serif; }
+    .title    { font-size: 20px; font-weight: 700; fill: #2c3e7a; }
+    .subtitle { font-size: 13px; fill: #666; font-family: 'Courier New', monospace; }
+    .callout  { font-size: 13px; font-weight: 700; }
+    .axis      { stroke: #999; stroke-width: 1.4; }
+    .axis-lbl  { font-size: 13px; font-style: italic; fill: #666; }
+    .thresh    { stroke: #c0392b; stroke-width: 2; }
+    .thresh-lbl{ font-size: 12px; font-weight: 700; fill: #c0392b; }
+    .rg        { font-size: 11px; font-weight: 700; paint-order: stroke; stroke: #fff; stroke-width: 3px; stroke-linejoin: round; }
+    .range     { font-size: 11px; font-family: 'Courier New', monospace; fill: #777; }
+    .x-mark    { stroke: #c0392b; stroke-width: 2.4; opacity: 0.7; }
+    .lead      { fill: none; stroke-width: 1.8; }
+    .sum-bold  { font-size: 14px; font-weight: 700; fill: #2c3e7a; }
+    .sum-sub   { font-size: 12px; font-style: italic; fill: #666; }
+  </style>
+  <defs>
+    <marker id="ar-o" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#e67e22"/></marker>
+    <marker id="ar-r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#c0392b"/></marker>
+    <marker id="ar-g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#27ae60"/></marker>
+  </defs>
+
+  <text class="title"    x="510" y="30" text-anchor="middle">Cascading prune &#183; how the heap prunes row groups</text>
+  <text class="subtitle" x="510" y="50" text-anchor="middle">ORDER BY x DESC LIMIT 10  &#183;  one parquet file, 10 row groups</text>
+
+  <!-- ===== callouts ===== -->
+  <rect x="70"  y="64" width="250" height="34" rx="6" fill="#fff3e0" stroke="#e67e22" stroke-width="1.5"/>
+  <text class="callout" x="195" y="86" text-anchor="middle" fill="#b9770e">&#9312; heap fills</text>
+  <rect x="350" y="64" width="290" height="34" rx="6" fill="#fdecea" stroke="#c0392b" stroke-width="1.5"/>
+  <text class="callout" x="495" y="86" text-anchor="middle" fill="#c0392b">&#9313; threshold climbs</text>
+  <rect x="670" y="64" width="320" height="34" rx="6" fill="#e8f5e9" stroke="#27ae60" stroke-width="1.5"/>
+  <text class="callout" x="830" y="86" text-anchor="middle" fill="#1b5e20">&#9314; cascading prune at next row-group boundary</text>
+
+  <!-- leader lines -->
+  <path class="lead" stroke="#e67e22" marker-end="url(#ar-o)" d="M180,98 L135,146"/>
+  <path class="lead" stroke="#c0392b" marker-end="url(#ar-r)" d="M495,98 L610,192"/>
+  <path class="lead" stroke="#27ae60" marker-end="url(#ar-g)" d="M810,98 L600,301"/>
+
+  <!-- ===== axes ===== -->
+  <line class="axis" x1="70" y1="110" x2="70" y2="490"/>
+  <line class="axis" x1="70" y1="490" x2="1000" y2="490"/>
+  <text class="axis-lbl" x="30" y="300" text-anchor="middle" transform="rotate(-90 30 300)">value range &#8593;</text>
+  <text class="axis-lbl" x="520" y="512" text-anchor="middle">scan time &#8594;</text>
+
+  <!-- ===== threshold line ===== -->
+  <line class="thresh" x1="70" y1="196" x2="938" y2="196"/>
+  <text class="thresh-lbl" x="944" y="200">threshold</text>
+
+  <!-- ===== row groups: RG 9 (kept) then RG 8..0 (pruned) ===== -->
+  <!-- RG 9 kept -->
+  <rect x="90" y="150" width="80" height="42" rx="4" fill="#e8f5e9" stroke="#27ae60" stroke-width="1.8"/>
+  <text class="rg" x="130" y="176" text-anchor="middle" fill="#1b5e20">Row group 9</text>
+  <text class="range" x="130" y="207" text-anchor="middle">[90..100)</text>
+
+  <!-- RG 8 -->
+  <rect x="182" y="181" width="80" height="42" rx="4" fill="#f4f4f4" stroke="#dddddd" stroke-width="1.5"/>
+  <line class="x-mark" x1="186" y1="185" x2="258" y2="219"/><line class="x-mark" x1="258" y1="185" x2="186" y2="219"/>
+  <text class="rg" x="222" y="207" text-anchor="middle" fill="#666">Row group 8</text>
+  <text class="range" x="222" y="238" text-anchor="middle">[80..90)</text>
+
+  <!-- RG 7 -->
+  <rect x="274" y="212" width="80" height="42" rx="4" fill="#f4f4f4" stroke="#dddddd" stroke-width="1.5"/>
+  <line class="x-mark" x1="278" y1="216" x2="350" y2="250"/><line class="x-mark" x1="350" y1="216" x2="278" y2="250"/>
+  <text class="rg" x="314" y="238" text-anchor="middle" fill="#666">Row group 7</text>
+  <text class="range" x="314" y="269" text-anchor="middle">[70..80)</text>
+
+  <!-- RG 6 -->
+  <rect x="366" y="243" width="80" height="42" rx="4" fill="#f4f4f4" stroke="#dddddd" stroke-width="1.5"/>
+  <line class="x-mark" x1="370" y1="247" x2="442" y2="281"/><line class="x-mark" x1="442" y1="247" x2="370" y2="281"/>
+  <text class="rg" x="406" y="269" text-anchor="middle" fill="#666">Row group 6</text>
+  <text class="range" x="406" y="300" text-anchor="middle">[60..70)</text>
+
+  <!-- RG 5 -->
+  <rect x="458" y="274" width="80" height="42" rx="4" fill="#f4f4f4" stroke="#dddddd" stroke-width="1.5"/>
+  <line class="x-mark" x1="462" y1="278" x2="534" y2="312"/><line class="x-mark" x1="534" y1="278" x2="462" y2="312"/>
+  <text class="rg" x="498" y="300" text-anchor="middle" fill="#666">Row group 5</text>
+  <text class="range" x="498" y="331" text-anchor="middle">[50..60)</text>
+
+  <!-- RG 4 -->
+  <rect x="550" y="305" width="80" height="42" rx="4" fill="#f4f4f4" stroke="#dddddd" stroke-width="1.5"/>
+  <line class="x-mark" x1="554" y1="309" x2="626" y2="343"/><line class="x-mark" x1="626" y1="309" x2="554" y2="343"/>
+  <text class="rg" x="590" y="331" text-anchor="middle" fill="#666">Row group 4</text>
+  <text class="range" x="590" y="362" text-anchor="middle">[40..50)</text>
+
+  <!-- RG 3 -->
+  <rect x="642" y="336" width="80" height="42" rx="4" fill="#f4f4f4" stroke="#dddddd" stroke-width="1.5"/>
+  <line class="x-mark" x1="646" y1="340" x2="718" y2="374"/><line class="x-mark" x1="718" y1="340" x2="646" y2="374"/>
+  <text class="rg" x="682" y="362" text-anchor="middle" fill="#666">Row group 3</text>
+  <text class="range" x="682" y="393" text-anchor="middle">[30..40)</text>
+
+  <!-- RG 2 -->
+  <rect x="734" y="367" width="80" height="42" rx="4" fill="#f4f4f4" stroke="#dddddd" stroke-width="1.5"/>
+  <line class="x-mark" x1="738" y1="371" x2="810" y2="405"/><line class="x-mark" x1="810" y1="371" x2="738" y2="405"/>
+  <text class="rg" x="774" y="393" text-anchor="middle" fill="#666">Row group 2</text>
+  <text class="range" x="774" y="424" text-anchor="middle">[20..30)</text>
+
+  <!-- RG 1 -->
+  <rect x="826" y="398" width="80" height="42" rx="4" fill="#f4f4f4" stroke="#dddddd" stroke-width="1.5"/>
+  <line class="x-mark" x1="830" y1="402" x2="902" y2="436"/><line class="x-mark" x1="902" y1="402" x2="830" y2="436"/>
+  <text class="rg" x="866" y="424" text-anchor="middle" fill="#666">Row group 1</text>
+  <text class="range" x="866" y="455" text-anchor="middle">[10..20)</text>
+
+  <!-- RG 0 -->
+  <rect x="918" y="429" width="80" height="42" rx="4" fill="#f4f4f4" stroke="#dddddd" stroke-width="1.5"/>
+  <line class="x-mark" x1="922" y1="433" x2="994" y2="467"/><line class="x-mark" x1="994" y1="433" x2="922" y2="467"/>
+  <text class="rg" x="958" y="455" text-anchor="middle" fill="#666">Row group 0</text>
+  <text class="range" x="958" y="486" text-anchor="middle">[0..10)</text>
+
+  <!-- ===== summary ===== -->
+  <text class="sum-bold" x="510" y="536" text-anchor="middle">Row group 9 alone fills the heap of size 10, so the threshold rises into its range (&#8805; 90).</text>
+  <text class="sum-sub"  x="510" y="556" text-anchor="middle">At the next row-group boundary, every remaining row group with max &lt; 90 is pruned in one pass — bytes never fetched.</text>
+</svg>
