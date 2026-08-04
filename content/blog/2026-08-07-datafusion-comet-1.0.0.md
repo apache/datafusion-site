@@ -37,13 +37,40 @@ contributors. See the [change log] for the full list of changes.
 
 [change log]: https://github.com/apache/datafusion-comet/blob/main/docs/source/changelog/1.0.0.md
 
-## What 1.0 Means
+## The Road to 1.0
 
-The 1.0.0 release is the culmination of more than two years of work since the project was [donated] as an
-Apache DataFusion subproject in March 2024, and is less about any single new feature than about the
-accumulated maturity of the project:
+Comet was [donated] to the Apache DataFusion project in March 2024 and cut its first release, 0.1.0, five
+months later with 15 data types, 13 operators, 106 expressions, and a "modest performance speedup." The
+nineteen releases between then and now cover a lot of ground:
 
 [donated]: https://datafusion.apache.org/blog/2024/03/06/comet-donation/
+
+- **Query coverage went from a handful of operators to the shape of a real Spark query.** Native
+  SortMergeJoin, HashJoin, and BroadcastHashJoin landed early; native columnar and native shuffle,
+  broadcast nested loop joins, native window functions, native sampling, and mixed partial/final aggregation
+  followed. Supported expressions grew from 106 at 0.1.0 to 404 in 1.0, and the introduction of the JVM
+  codegen dispatcher in 0.17.0 gave Comet a way to keep unsupported expressions Arrow-native by running
+  Spark's own generated code inside the pipeline rather than falling back to row-based execution.
+- **Spark support broadened.** The 0.1.0 release targeted Spark 3.3, 3.4, and 3.5, with experimental 4.0. The
+  1.0 line drops 3.3, adds 4.1, and ships an experimental 4.2 profile. ANSI semantics — on by default in
+  Spark 4 — moved from partial to a supported default across the natively implemented surface.
+- **The ecosystem story filled in.** Native Iceberg support arrived in 0.10.0 and has been extended through
+  1.11 and format V3, native Parquet writes and CSV reads landed as experimental features and matured,
+  Azure joined S3 on the native cloud path, and 1.0 adds experimental accelerated PyArrow UDFs alongside the
+  Java and Scala UDF support that shipped in 0.17.0.
+- **Correctness rigor grew alongside the surface area.** Early releases relied on fuzz testing to surface
+  divergences; later releases added a full Spark SQL test-suite run against every supported Spark version,
+  followed by AI-assisted expression audits comparing Comet's behavior against every supported Spark version
+  edge case by edge case. 1.0 ships with every known open correctness gap documented in the compatibility
+  guide.
+- **Performance moved from "modest speedup" to workload-level wins.** TPC-DS at 1TB has become the reference
+  workload, with successive releases removing FFI round trips, caching Parquet metadata, shrinking plan
+  serialization, and tightening the shuffle write path. 0.17.0 alone was ~9% faster than 0.16.0 on TPC-DS
+  1TB, and the per-expression optimization work in 1.0 continues that trajectory.
+
+## What 1.0 Means
+
+Beyond the accumulated features, 1.0 is where the project commits to being something you can build on:
 
 - **Broad Spark coverage.** Comet supports Apache Spark 3.4.3, 3.5.9, 4.0.4, and 4.1.3 out of the same
   codebase, with dedicated Maven profiles, shim sources, and CI matrices for each, plus an experimental
