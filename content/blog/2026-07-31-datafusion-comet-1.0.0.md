@@ -36,7 +36,7 @@ This is a major milestone. Comet began as a code donation in early 2024 and has 
 one release at a time. Version 1.0.0 marks the point where the project is mature enough to commit to a stable
 release line: broad Apache Spark coverage, ANSI SQL semantics, native Parquet and Iceberg scans, and a native
 shuffle, all validated continuously against Spark's own test suites. This release covers roughly six weeks of
-development since 0.17.0 and is the result of merging over 220 PRs from 21 contributors. See the
+development since 0.17.0 and consists of 244 commits from 23 contributors. See the
 [change log] for more information.
 
 [change log]: https://github.com/apache/datafusion-comet/blob/main/docs/source/changelog/1.0.0.md
@@ -45,7 +45,7 @@ development since 0.17.0 and is the result of merging over 220 PRs from 21 contr
 
 Reaching 1.0 is less about any single new feature than about the accumulated maturity of the project:
 
-- **Broad Spark coverage.** Comet supports Apache Spark 3.4.3, 3.5.8, 4.0.2, and 4.1.2 out of the same
+- **Broad Spark coverage.** Comet supports Apache Spark 3.4.3, 3.5.9, 4.0.4, and 4.1.3 out of the same
   codebase, with dedicated Maven profiles, shim sources, and CI matrices for each, plus an experimental
   Spark 4.2 profile for early evaluation. The
   [Spark version adoption and support-lifetime policy](https://github.com/apache/datafusion-comet/pull/4977)
@@ -68,7 +68,9 @@ Reaching 1.0 is less about any single new feature than about the accumulated mat
   [Deprecation Notice](#deprecation-notice) below).
 - **Documented limitations.** Every open correctness issue is now surfaced in the generated compatibility guide
   ([#5085](https://github.com/apache/datafusion-comet/pull/5085)), down to the expression level, so you can see
-  where Comet is known to diverge from Spark before you hit it in production rather than after.
+  where Comet is known to diverge from Spark before you hit it in production rather than after. Notes for bugs
+  that have since been fixed were removed in the same pass
+  ([#5154](https://github.com/apache/datafusion-comet/pull/5154)).
 
 The rest of this post covers what is new since 0.17.0.
 
@@ -117,17 +119,36 @@ size hint so a single read usually captures the footer, matching the Iceberg pat
 options from the session config so Parquet settings you already set take effect
 ([#5107](https://github.com/apache/datafusion-comet/pull/5107)).
 
-Two lower-level costs were also removed: Comet no longer makes excessive timer calls in the native execution
-loop ([#4739](https://github.com/apache/datafusion-comet/pull/4739)), and plan-data injection is now an O(1)
-lookup by operator kind rather than a scan ([#4535](https://github.com/apache/datafusion-comet/pull/4535)).
+Query planning and plan serialization also got cheaper. `QueryContext` SQL text is now interned into a per-plan
+pool ([#5204](https://github.com/apache/datafusion-comet/pull/5204)), which makes serialized plans up to 20x
+smaller on TPC-DS — every plan crosses the JNI boundary, so this shrinks per-query overhead across the board.
+Plan-data injection is now an O(1) lookup by operator kind
+([#4535](https://github.com/apache/datafusion-comet/pull/4535)) and no longer rebuilds operators it does not
+touch ([#5220](https://github.com/apache/datafusion-comet/pull/5220)). Comet also makes far fewer timer calls
+in the native execution loop ([#4739](https://github.com/apache/datafusion-comet/pull/4739)), and nested array
+equality now uses Arrow's comparator ([#5176](https://github.com/apache/datafusion-comet/pull/5176)).
 
 ## Correctness
 
 A 1.0 release is only as good as its results. This release fixes a broad set of divergences from Spark, most of
 them found by running Spark's own SQL test suites through Comet's native path:
 
-- **ANSI error semantics**: `round` on a `Long` with a large negative scale now overflows instead of silently
-  returning zero ([#5082](https://github.com/apache/datafusion-comet/pull/5082)), `Long.MinValue / -1` raises
+- **Casts**: casting a string to `boolean`, an integral type, `float`/`double`, or `decimal` now uses Spark's
+  exact whitespace-trimming rules ([#5150](https://github.com/apache/datafusion-comet/pull/5150)). Comet's
+  kernels had used four different trim sets, three of them wrong, so results diverged in both directions —
+  returning null where Spark parses a value, and returning a value where Spark returns null. Casting
+  `float`/`double` to `decimal` now rounds the shortest decimal string form as Spark does, rather than the
+  binary value ([#5136](https://github.com/apache/datafusion-comet/pull/5136)), which matters for values such
+  as `0.5153125` whose binary form sits just below the rounding tie the string form lands on; `NaN` and infinity
+  now return null even in ANSI mode, matching Spark. Decimal promotion also uses the per-expression eval mode
+  ([#5171](https://github.com/apache/datafusion-comet/pull/5171)).
+- **ANSI error semantics**: the codegen dispatcher's null short-circuit no longer swallows errors Spark raises
+  ([#5219](https://github.com/apache/datafusion-comet/pull/5219)) — Spark evaluates null-intolerant expressions
+  per node and left to right, so short-circuiting on the union of input ordinals skipped subtrees Spark would
+  have evaluated, losing their errors. Roughly 70 built-in expressions route through this dispatcher and ANSI is
+  on by default in Spark 4, so this affected a wide surface. Also: `round` on a `Long` with a large negative
+  scale now overflows instead of silently returning zero
+  ([#5082](https://github.com/apache/datafusion-comet/pull/5082)), `Long.MinValue / -1` raises
   `ARITHMETIC_OVERFLOW` ([#5084](https://github.com/apache/datafusion-comet/pull/5084)), floating-point
   `x % 0.0` raises `REMAINDER_BY_ZERO` instead of returning `NaN`
   ([#5081](https://github.com/apache/datafusion-comet/pull/5081)), `make_decimal` honors its
@@ -196,7 +217,9 @@ This release expands the set of Spark expressions and aggregates that run native
 - **String**: `base64` ([#4778](https://github.com/apache/datafusion-comet/pull/4778)),
   `split_part` via `StringSplitSQL` ([#4592](https://github.com/apache/datafusion-comet/pull/4592)),
   native `levenshtein` ([#4105](https://github.com/apache/datafusion-comet/pull/4105)), and native
-  `randstr` compatible with Spark ([#5035](https://github.com/apache/datafusion-comet/pull/5035)).
+  `randstr` ([#5035](https://github.com/apache/datafusion-comet/pull/5035)) and `uuid`
+  ([#5034](https://github.com/apache/datafusion-comet/pull/5034)), both bit-for-bit compatible with Spark for a
+  given seed.
 - **Array / map**: `array_prepend` ([#4716](https://github.com/apache/datafusion-comet/pull/4716)),
   the `shuffle()` array function ([#4797](https://github.com/apache/datafusion-comet/pull/4797)),
   `size()` for `MapType` ([#4580](https://github.com/apache/datafusion-comet/pull/4580)), `ElementAt` over
@@ -241,10 +264,14 @@ early-stage feature and we welcome feedback from users experimenting with it.
   decryption for V3 tables, with fallback to Spark for other V3 features. Follow-up
   [#5020](https://github.com/apache/datafusion-comet/pull/5020) applies the same diff changes across other
   Iceberg versions.
+- **Metadata columns** ([#4752](https://github.com/apache/datafusion-comet/pull/4752)): the native Iceberg scan
+  now supports the `_pos`, `_spec`, `_file`, and `_partition` metadata columns.
 - **Delete-file correctness** ([#4760](https://github.com/apache/datafusion-comet/pull/4760)): the native scan
   now sizes Iceberg delete files correctly, avoiding dropped deletes.
 - **Exchange-reuse correctness** ([#4812](https://github.com/apache/datafusion-comet/pull/4812)): fixed a case
   where Iceberg native scan exchange reuse with different pushed filters could produce wrong results.
+- **Scan disambiguation** ([#5180](https://github.com/apache/datafusion-comet/pull/5180)): Iceberg scans that
+  share a `metadata_location` are now told apart, rather than being conflated.
 - **Native serde dedup** ([#4982](https://github.com/apache/datafusion-comet/pull/4982)): dedupes Iceberg
   residuals and delete files in the native scan serde, reducing planning overhead.
 
@@ -283,6 +310,12 @@ early-stage feature and we welcome feedback from users experimenting with it.
   messages are corrected ([#4854](https://github.com/apache/datafusion-comet/pull/4854)), and the spurious
   "WriteFilesExec is not supported" message is suppressed
   ([#4928](https://github.com/apache/datafusion-comet/pull/4928)).
+- **Expression coverage in extended explain** ([#5201](https://github.com/apache/datafusion-comet/pull/5201)):
+  the extended explain summary previously reported operator coverage but said nothing about expressions. It now
+  ends with a line such as `Comet accelerated 14 expressions (14 native, 1 codegen dispatch)`, so you can see
+  how much of a plan's expression evaluation runs in native DataFusion kernels versus Spark's generated code
+  inside the dispatcher. Operator counts also handle `ReusedSubquery` and `CometSubqueryBroadcast` correctly
+  ([#5206](https://github.com/apache/datafusion-comet/pull/5206)).
 - **Local scan nullability** ([#4843](https://github.com/apache/datafusion-comet/pull/4843)): local table scan
   child nullability is now widened to match the native kernels, fixing a class of nullability mismatches.
 - **Config aliases** ([#4979](https://github.com/apache/datafusion-comet/pull/4979)): a `withAlternative`
@@ -318,13 +351,16 @@ deprecation warning when an old key is read:
   `spark.comet.native.shuffle.*`, `spark.comet.shuffle.*`). They now all live under `spark.comet.shuffle.*`,
   with `.jvm.` and `.native.` sub-namespaces matching the `spark.comet.shuffle.mode` value you already set.
 - **Grouped explain configs** ([#5026](https://github.com/apache/datafusion-comet/pull/5026)): the orphan
-  explain-related configs are collected under a single `spark.comet.explain.*` prefix.
+  explain-related configs are collected under a single `spark.comet.explain.*` prefix, and the PyArrow UDF
+  config is renamed to `pyarrowUDF` for consistency
+  ([#5197](https://github.com/apache/datafusion-comet/pull/5197)).
 - **`spark.comet.version`** ([#5049](https://github.com/apache/datafusion-comet/pull/5049)): the loaded Comet
   build version is now exposed as a runtime config, so you can confirm which Comet a cluster is actually
   running with `spark.conf.get` or `SET`.
 - **Removed dead configs**: the Parquet parallel-IO knobs
-  ([#4981](https://github.com/apache/datafusion-comet/pull/4981)) and
-  `spark.comet.use.lazyMaterialization` ([#4998](https://github.com/apache/datafusion-comet/pull/4998)) had no
+  ([#4981](https://github.com/apache/datafusion-comet/pull/4981)),
+  `spark.comet.use.lazyMaterialization` ([#4998](https://github.com/apache/datafusion-comet/pull/4998)), and
+  `spark.comet.exceptionOnDatetimeRebase` ([#5221](https://github.com/apache/datafusion-comet/pull/5221)) had no
   remaining effect and were misleading anyone tuning against them.
 - **Removed async columnar shuffle** ([#4985](https://github.com/apache/datafusion-comet/pull/4985)): the
   `spark.comet.columnar.shuffle.async.*` path was off by default and untested, and has been removed rather than
@@ -362,9 +398,9 @@ Users on these platforms should plan to move to JDK 17+ and Spark 3.5 or later b
 Supported platforms include:
 
 - **Spark 3.4.3** with Java 11/17 and Scala 2.12/2.13 (deprecated, removal in 1.1.0)
-- **Spark 3.5.8** with Java 11/17 and Scala 2.12/2.13
-- **Spark 4.0.2** with Java 17 and Scala 2.13
-- **Spark 4.1.2** with Java 17/21 and Scala 2.13
+- **Spark 3.5.9** with Java 11/17 and Scala 2.12/2.13
+- **Spark 4.0.4** with Java 17 and Scala 2.13
+- **Spark 4.1.3** with Java 17/21 and Scala 2.13
 - **Spark 4.2** with Java 17 and Scala 2.13 (experimental, for early evaluation only)
 
 See the [Spark Version Compatibility] page for known limitations specific to each version.
