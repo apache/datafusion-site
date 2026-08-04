@@ -102,39 +102,26 @@ the native execution loop.
 
 ## Correctness
 
-A 1.0 release is only as good as its results. This release fixes a broad set of divergences from Spark, most
-of them found by running extensive AI-assisted audit sweeps of the code base, comparing Comet's expression
-implementations with all supported versions of Spark. Highlights:
+A 1.0 release is only as good as its results. This release fixes roughly 30 divergences from Spark, spanning
+casts, ANSI error semantics, wrong-result bugs, string and encoding handling, collations, and error
+reporting. Most were found by running extensive AI-assisted audit sweeps of the code base, comparing Comet's
+expression implementations with all supported versions of Spark. See the [change log] for the full list; two
+representative fixes give a sense of the shape of the work:
 
-- **Casts** to `boolean`, integral types, `float`/`double`, and `decimal` now use Spark's exact
-  whitespace-trimming rules. Comet's kernels had used four different trim sets, three of them wrong, so
-  results diverged in both directions — returning null where Spark parses a value, and returning a value
-  where Spark returns null. Casts from `float`/`double` to `decimal` now round the shortest decimal string
-  form as Spark does, and return null for `NaN` and infinity even in ANSI mode.
-- **ANSI error semantics.** The codegen dispatcher's null short-circuit no longer swallows errors Spark
-  raises. Spark evaluates null-intolerant expressions per node and left to right, so short-circuiting on the
-  union of input ordinals skipped subtrees Spark would have evaluated, losing their errors. Roughly 70
-  built-in expressions route through this dispatcher and ANSI is on by default in Spark 4, so this affected a
-  wide surface. Other ANSI fixes cover overflow on `round` with a large negative scale, `Long.MinValue / -1`,
-  floating-point remainder by zero, `make_decimal` fail-on-error, invalid calendar dates, and errors from
-  nested casts.
-- **Wrong results** in `count` when the native scan is disabled, Spark's legacy `null IN ()` behavior, `pow`
-  edge cases where C and Java disagree, `percentile` interpolation precision, `date_trunc` across DST
-  boundaries, `flatten` and `ArrayInsert` with null inputs, and the `array_filter` / `array_compact` fast
-  path.
-- **Strings and encodings.** `CAST(binary AS string)` now decodes exactly as the JVM's
-  `new String(bytes, UTF_8)` does, including the surrogate cases where Rust's lossy decoder diverges, and
-  shuffle tolerates non-UTF-8 bytes rather than failing.
-- **Deep expression trees.** Long chains of associative bitwise, `Add`, and `Multiply` operators are
-  rebalanced so plans no longer hit protobuf's recursion limit.
-- **Collations.** Comet now falls back for predicates whose operands use non-default collations, for Spark 4
-  datetime expressions under non-default collations, and for `str_to_map`.
-- **Conservative fallbacks** where native behavior could not be made to match: decimal `SUM` / `AVG` over
-  sliding window frames, `FromUnixTime` with a non-default format, `CreateArray` with
-  struct-nullability-divergent children, and native V1 scans on filesystem schemes that `object_store` does
-  not support.
-- **Error reporting.** Native Parquet read failures now surface as Spark's `FAILED_READ_FILE`, and a
-  DataFusion 54.1.0 Parquet page-index regression is worked around.
+- **Whitespace trimming in string-to-numeric casts.** Casts to `boolean`, integral types, `float`/`double`,
+  and `decimal` now use Spark's exact trim rules. Comet's kernels had used four different trim sets, three of
+  them wrong, so results diverged in both directions — returning null where Spark parses a value, and
+  returning a value where Spark returns null.
+- **ANSI errors swallowed by null short-circuit.** The codegen dispatcher's null short-circuit no longer
+  swallows errors Spark raises. Spark evaluates null-intolerant expressions per node and left to right, so
+  short-circuiting on the union of input ordinals skipped subtrees Spark would have evaluated, losing their
+  errors. Roughly 70 built-in expressions route through this dispatcher and ANSI is on by default in Spark 4,
+  so this affected a wide surface.
+
+Alongside the bug fixes, Comet also adds conservative fallbacks where native behavior could not be made to
+match — decimal `SUM` / `AVG` over sliding window frames, `FromUnixTime` with a non-default format, and a
+handful of others — and falls back for predicates and datetime expressions under non-default collations
+rather than risking a wrong result.
 
 ## New Expression and Aggregate Support
 
