@@ -40,61 +40,43 @@ contributors. See the [change log] for the full list of changes.
 ## The Road to 1.0
 
 Comet was [donated] to the Apache DataFusion project in March 2024 and cut its first release, 0.1.0, five
-months later with 15 data types, 13 operators, 106 expressions, and a "modest performance speedup." The
-sixteen major releases between then and now cover a lot of ground:
+months later with support for 13 operators, and 106 expressions.
 
 [donated]: https://datafusion.apache.org/blog/2024/03/06/comet-donation/
 
-- **Query coverage went from a handful of operators to the shape of a real Spark query.** Native
-  SortMergeJoin, HashJoin, and BroadcastHashJoin landed early; native columnar and native shuffle,
-  broadcast nested loop joins, native window functions, native sampling, and mixed partial/final aggregation
-  followed. Supported expressions grew from 106 at 0.1.0 to more than 400 in 1.0.0, and the introduction of the JVM
-  codegen dispatcher in 0.17.0 gave Comet a way to keep unsupported expressions Arrow-native by running
-  Spark's own generated code inside the pipeline rather than falling back to row-based execution.
-- **Spark support broadened.** The 0.1.0 release targeted Spark 3.3, 3.4, and 3.5, with experimental 4.0. The
-  1.0 line drops 3.3, adds 4.1, and ships an experimental 4.2 profile. ANSI semantics — on by default in
-  Spark 4 — moved from partial to a supported default across the natively implemented surface.
-- **The ecosystem story filled in.** Native Iceberg support arrived in 0.10.0 and has been extended through
-  1.11 and format V3, native Parquet writes and CSV reads landed as experimental features and matured,
-  Azure joined S3 on the native cloud path, and 1.0.0 adds experimental accelerated PyArrow UDFs alongside the
-  Java and Scala UDF support that shipped in 0.17.0.
-- **Correctness rigor grew alongside the surface area.** Early releases relied on fuzz testing to surface
-  divergences; later releases added a full Spark SQL test-suite run against every supported Spark version,
-  followed by AI-assisted expression audits comparing Comet's behavior against every supported Spark version
-  edge case by edge case. 1.0 ships with every known open correctness gap documented in the compatibility
-  guide.
-- **Performance moved from "modest speedup" to workload-level wins.** TPC-DS at 1TB has become the reference
-  workload, with successive releases removing FFI round trips, caching Parquet metadata, shrinking plan
-  serialization, and tightening the shuffle write path. 0.17.0 alone was ~9% faster than 0.16.0 on TPC-DS
-  1TB, and the per-expression optimization work in 1.0 continues that trajectory.
+Comet 1.0.0 now supports more than 400 expressions, but that isn't the only way the project has grown over this time.
 
-## What 1.0 Means
+Here's a recap of some of the main advances over the past two years
 
-Beyond the accumulated features, 1.0 is where the project commits to being something you can build on:
+### Correctness Testing
 
-- **Broad Spark coverage.** Comet supports Apache Spark 3.4.3, 3.5.9, 4.0.4, and 4.1.3 out of the same
-  codebase, with dedicated Maven profiles, shim sources, and CI matrices for each, plus an experimental
-  Spark 4.2 profile for early evaluation. A published Spark version adoption and support-lifetime policy
-  now states how long each Spark minor stays supported.
-- **ANSI SQL by default.** Spark 4 enables ANSI semantics by default. Comet implements ANSI behavior for the
-  expressions it supports natively, including arithmetic overflow checks, ANSI cast behavior, and `try_*`
-  variants, so ANSI workloads keep accelerating rather than falling back.
-- **A correctness harness, not just unit tests.** Comet runs the full Apache Spark SQL test suite through its
-  native execution path against every supported Spark version. Running Spark's own correctness tests is what
-  surfaces semantic shifts before they reach user workloads, and it is the foundation of the confidence behind
-  a 1.0 release.
-- **A stable release line going forward.** With 1.0, the project commits to semantic versioning. Because Comet
-  is a plugin rather than a library, its configuration is its primary API surface, so `spark.comet.*` keys, an
-  explicitly enumerated public Java and Scala API, and query results documented as Compatible are all part of
-  the compatibility surface. Behavior changes in a minor release now require a `spark.comet.legacy.*` key that
-  restores the previous behavior, and each release records its behavior changes in a user-facing upgrade
-  guide. Correctness fixes are exempt from being treated as breaking changes. The first deprecations under
-  that policy are announced in this release (see [Deprecation Notice](#deprecation-notice) below).
-- **Documented limitations.** Every open correctness issue is now surfaced in the generated compatibility
-  guide, down to the expression level, so you can see where Comet is known to diverge from Spark before you
-  hit it in production rather than after.
+It is important that queries accelerated by Comet produce the same results as Spark. Correctness checking has always been a large effort in Comet development, but the approach has evolved over time.
 
-The rest of this post covers what is new since 0.17.0.
+- Comet has always run Spark's own test suite with Comet enabled, providing more than 24,000 unit tests effectively for free. These tests run in Comet's CI for all supported Spark versions.
+- Scala tests: Comet has Scala tests that run queries end to end with Comet enabled vs disabled and ensure that the results match
+- Fuzz testing: Many of the scala tests use a fuzz testing approach to generate randomized data that queries run against, helping to catch regressions around edge cases such as nulls, NaN, Infinity, and timezone issues
+- Comet SQL Tests: In an effort to make it easier to write tests, Comet now provides a SQL-based testing approach that is inspired by sqllogictest
+- Generative AI: More recently, Comet has taken advantage of agentic skills to perform audit sweeps of ll expressions, comapring the implementation to Spark's souce code and ensuring that Comet has tests covering all important edge cases
+
+### Performance
+
+The early Comet releases provided a very modest speedup and the published benchmark results were based on running TPC workloads at small scale factors on a single node. There are now independent benchmark results published by AWS Labs that show significant speedups for TPC-DS @ 3TB running in EKS.
+
+### Codegen Dispatch
+
+Matt TBD
+
+### Iceberg Support
+
+
+## Improvements since 0.17.1
+
+The rest of this post covers what is new since the 0.17.1 release.
+
+
+
+# OLD AI CONTENT BELOW - NEEDS TO BE REVIEWED AND/OR REWRITTEN
+
 
 ## Native Expression Performance
 
