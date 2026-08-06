@@ -40,13 +40,18 @@ contributors. See the [change log] for the full list of changes.
 ## The Road to 1.0
 
 Comet was [donated] to the Apache DataFusion project in March 2024 and cut its first release, 0.1.0, five
-months later with support for 13 operators and 106 expressions.
+months later with support for 13 operators and 106 expressions. Since then, the project has shipped 20
+releases and drawn contributions from more than 120 developers, and the codebase now recognizes over 400
+Spark expressions.
 
 [donated]: https://datafusion.apache.org/blog/2024/03/06/comet-donation/
 
-Comet 1.0.0 now supports more than 400 expressions, but that isn't the only way the project has grown over this time.
+The 1.0 release marks the point at which Comet begins following semantic versioning. Users upgrading within
+the 1.x line can expect backward-compatible changes only; features slated for removal will be deprecated in
+a minor release before being dropped in the next major version. This is why the deprecations of JDK 11 and
+Spark 3.4 announced below are scheduled for 1.1 rather than landing in 1.0 itself.
 
-Here's a recap of some of the main advances over the past two years.
+The rest of this section is a recap of the main advances since donation.
 
 ### Support for Spark 4.0+ with ANSI mode
 
