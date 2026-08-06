@@ -40,17 +40,17 @@ contributors. See the [change log] for the full list of changes.
 ## The Road to 1.0
 
 Comet was [donated] to the Apache DataFusion project in March 2024 and cut its first release, 0.1.0, five
-months later with support for 13 operators, and 106 expressions.
+months later with support for 13 operators and 106 expressions.
 
 [donated]: https://datafusion.apache.org/blog/2024/03/06/comet-donation/
 
 Comet 1.0.0 now supports more than 400 expressions, but that isn't the only way the project has grown over this time.
 
-Here's a recap of some of the main advances over the past two years
+Here's a recap of some of the main advances over the past two years.
 
 ### Support for Spark 4.0+ with ANSI mode
 
-Comet 1.0.0 supports Spark versions 3.4 though 4.1, with experimental support for 4.2. Comet fully supports Spark's ANSI mode, which is enabled by default starting with Spark 4.0
+Comet 1.0.0 supports Spark versions 3.4 though 4.1, with experimental support for 4.2. Comet fully supports Spark's ANSI mode, which is enabled by default starting with Spark 4.0.
 
 ### Correctness Testing
 
@@ -60,19 +60,17 @@ It is important that queries accelerated by Comet produce the same results as Sp
 - Scala tests: Comet has Scala tests that run queries end to end with Comet enabled vs disabled and ensure that the results match
 - Fuzz testing: Many of the scala tests use a fuzz testing approach to generate randomized data that queries run against, helping to catch regressions around edge cases such as nulls, NaN, Infinity, and timezone issues
 - Comet SQL Tests: In an effort to make it easier to write tests, Comet now provides a SQL-based testing approach that is inspired by sqllogictest
-- Generative AI: More recently, Comet has taken advantage of agentic skills to perform audit sweeps of ll expressions, comapring the implementation to Spark's souce code and ensuring that Comet has tests covering all important edge cases
+- Generative AI: More recently, Comet has taken advantage of agentic skills to perform audit sweeps of all expressions, comparing the implementation to Spark's source code and ensuring that Comet has tests covering all important edge cases
 
 ### Performance
 
 The early Comet releases provided a very modest speedup and the published benchmark results were based on running TPC workloads at small scale factors on a single node. There are now independent benchmark results published by AWS Labs that show significant speedups for [TPC-DS @ 3TB running in EKS](https://awslabs.github.io/data-on-eks/docs/benchmarks/spark-datafusion-comet-benchmark).
 
-AWS Labs also published performance results [comparing Comet with Apache Gluten](https://awslabs.github.io/data-on-eks/docs/benchmarks/spark-gluten-velox-comet-benchmark), concluding that "Gluten + Velox v1.6.0 and DataFusion Comet v0.16.0 deliver similar overall runtime". Comet's documentation also has a guide explaining how [Comet compares to Gluten](https://datafusion.apache.org/comet/about/gluten_comparison.html).
-
 ### Codegen Dispatch
 
 A significant innovation that landed in 0.17.0 was to change the approach to "native" acceleration. Rather than falling back to Spark row-based execution whenever Comet lacked a native Rust implementation of an expression, Comet is now able to execute Spark's own expression evaluation logic directly against Arrow data in the Comet pipeline. This immediately expanded the number of expressions that Comet could support without an expensive transition from columnar to row-based data.
 
-Another advantage of this approch is that Comet can support certain categories of expression, such as regular expressions, with 100% compatibility with Spark, which is not practical when delegating to native code due to the many differences between Java's regular expression engine and those available in Rust or C++.
+Another advantage of this approach is that Comet can support certain categories of expression, such as regular expressions, with 100% compatibility with Spark, which is not practical when delegating to native code due to the many differences between Java's regular expression engine and those available in Rust or C++.
 
 ## Scala and Java UDF Support
 
@@ -95,7 +93,7 @@ This release expands the set of Spark expressions and aggregates that are accele
 
 - **Aggregates**: `approx_percentile` / `percentile_approx`, exact `percentile` / `median`,
   `approx_count_distinct`, and native `collect_list` / `array_agg`.
-  **Cast**: Cast expressions where the native implementation is marked as incompatible or unsupported 
+- **Cast**: Cast expressions where the native implementation is marked as incompatible or unsupported
   are now routed through codegen dispatch.
 - **Grouping**: `grouping()` and `grouping_id()`.
 - **Intervals**: interval types via `make_ym_interval` and `make_dt_interval`, `CalendarIntervalType`,
@@ -124,7 +122,7 @@ fallback to Spark for other V3 features). The native Iceberg scan supports the `
 share a `metadata_location`, and dedupes residuals and delete files in the native scan serde. A prior case
 where Iceberg native scan exchange reuse with different pushed filters could produce wrong results is also
 
-### Native Expression Performance 
+### Native Expression Performance
 
 Many native expression implementations have been optimized to more efficiently leverage Arrow kernels or to avoid per-row builders.
 
@@ -136,7 +134,7 @@ Many native expression implementations have been optimized to more efficiently l
 - **Date/time and decimal kernels**: `date_trunc`, `spark_ceil`, and a vectorized `spark_unscaled_value`.
 - **String and array kernels**: `lpad`, `unhex`, `size`, `arrays_overlap`, `escape_string`, and the `try_*`
   arithmetic kernel.
-  
+
 ## Deprecation Notice
 
 With the move to a stable 1.0 release line, Comet begins deprecating older platforms under semantic
