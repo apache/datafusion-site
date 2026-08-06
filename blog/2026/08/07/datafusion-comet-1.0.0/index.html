@@ -55,23 +55,30 @@
         <aside class="toc-container d-md-none mb-2">
           <div class="toc"><span class="toctitle">Contents</span><ul>
 <li><a href="#the-road-to-10">The Road to 1.0</a><ul>
-<li><a href="#support-for-spark-40-with-ansi-mode">Support for Spark 4.0+ with ANSI mode</a></li>
 <li><a href="#correctness-testing">Correctness Testing</a></li>
 <li><a href="#performance">Performance</a></li>
 <li><a href="#codegen-dispatch">Codegen Dispatch</a></li>
+<li><a href="#iceberg-support">Iceberg Support</a></li>
 </ul>
 </li>
-<li><a href="#improvements-since-0171">Improvements since 0.17.1</a><ul>
-<li><a href="#experimental-pyarrow-udf-support">Experimental PyArrow UDF Support</a></li>
-<li><a href="#new-expression-and-aggregate-support">New Expression and Aggregate Support</a></li>
-<li><a href="#faster-parquet-scans">Faster Parquet Scans</a></li>
-<li><a href="#iceberg-table-format-v3">Iceberg Table Format V3</a></li>
+<li><a href="#improvements-since-0171">Improvements since 0.17.1</a></li>
+<li><a href="#old-ai-content-below-needs-to-be-reviewed-andor-rewritten">OLD AI CONTENT BELOW - NEEDS TO BE REVIEWED AND/OR REWRITTEN</a><ul>
 <li><a href="#native-expression-performance">Native Expression Performance</a></li>
-</ul>
-</li>
+<li><a href="#correctness">Correctness</a></li>
+<li><a href="#new-expression-and-aggregate-support">New Expression and Aggregate Support</a></li>
+<li><a href="#native-sampling">Native Sampling</a></li>
+<li><a href="#experimental-pyarrow-udf-support">Experimental PyArrow UDF Support</a></li>
+<li><a href="#iceberg">Iceberg</a></li>
+<li><a href="#native-parquet-io-and-cloud">Native Parquet I/O and Cloud</a></li>
+<li><a href="#execution-and-fallback-improvements">Execution and Fallback Improvements</a></li>
+<li><a href="#shuffle-improvements">Shuffle Improvements</a></li>
+<li><a href="#configuration-changes">Configuration Changes</a></li>
+<li><a href="#documentation">Documentation</a></li>
 <li><a href="#deprecation-notice">Deprecation Notice</a></li>
 <li><a href="#compatibility">Compatibility</a></li>
 <li><a href="#get-started-with-comet-100">Get Started with Comet 1.0.0</a></li>
+</ul>
+</li>
 </ul>
 </div>
         </aside>
@@ -102,16 +109,9 @@ improved performance and efficiency without requiring any code changes.</p>
 contributors. See the <a href="https://github.com/apache/datafusion-comet/blob/main/docs/source/changelog/1.0.0.md">change log</a> for the full list of changes.</p>
 <h2 id="the-road-to-10">The Road to 1.0<a class="headerlink" href="#the-road-to-10" title="Permanent link">¶</a></h2>
 <p>Comet was <a href="https://datafusion.apache.org/blog/2024/03/06/comet-donation/">donated</a> to the Apache DataFusion project in March 2024 and cut its first release, 0.1.0, five
-months later with support for 13 operators and 106 expressions. Since then, the project has shipped 20
-releases and drawn contributions from more than 120 developers, and the codebase now recognizes over 400
-Spark expressions.</p>
-<p>The 1.0 release marks the point at which Comet begins following semantic versioning. Users upgrading within
-the 1.x line can expect backward-compatible changes only; features slated for removal will be deprecated in
-a minor release before being dropped in the next major version. This is why the deprecations of JDK 11 and
-Spark 3.4 announced below are scheduled for 1.1 rather than landing in 1.0 itself.</p>
-<p>The rest of this section is a recap of the main advances since donation.</p>
-<h3 id="support-for-spark-40-with-ansi-mode">Support for Spark 4.0+ with ANSI mode<a class="headerlink" href="#support-for-spark-40-with-ansi-mode" title="Permanent link">¶</a></h3>
-<p>Comet 1.0.0 supports Spark versions 3.4 though 4.1, with experimental support for 4.2. Comet fully supports Spark's ANSI mode, which is enabled by default starting with Spark 4.0.</p>
+months later with support for 13 operators, and 106 expressions.</p>
+<p>Comet 1.0.0 now supports more than 400 expressions, but that isn't the only way the project has grown over this time.</p>
+<p>Here's a recap of some of the main advances over the past two years</p>
 <h3 id="correctness-testing">Correctness Testing<a class="headerlink" href="#correctness-testing" title="Permanent link">¶</a></h3>
 <p>It is important that queries accelerated by Comet produce the same results as Spark. Correctness checking has always been a large effort in Comet development, but the approach has evolved over time.</p>
 <ul>
@@ -119,46 +119,70 @@ Spark 3.4 announced below are scheduled for 1.1 rather than landing in 1.0 itsel
 <li>Scala tests: Comet has Scala tests that run queries end to end with Comet enabled vs disabled and ensure that the results match</li>
 <li>Fuzz testing: Many of the scala tests use a fuzz testing approach to generate randomized data that queries run against, helping to catch regressions around edge cases such as nulls, NaN, Infinity, and timezone issues</li>
 <li>Comet SQL Tests: In an effort to make it easier to write tests, Comet now provides a SQL-based testing approach that is inspired by sqllogictest</li>
-<li>Generative AI: More recently, Comet has taken advantage of agentic skills to perform audit sweeps of all expressions, comparing the implementation to Spark's source code and ensuring that Comet has tests covering all important edge cases</li>
+<li>Generative AI: More recently, Comet has taken advantage of agentic skills to perform audit sweeps of ll expressions, comapring the implementation to Spark's souce code and ensuring that Comet has tests covering all important edge cases</li>
 </ul>
 <h3 id="performance">Performance<a class="headerlink" href="#performance" title="Permanent link">¶</a></h3>
-<p>The early Comet releases provided a very modest speedup and the published benchmark results were based on running TPC workloads at small scale factors on a single node. There are now independent benchmark results published by AWS Labs that show significant speedups for <a href="https://awslabs.github.io/data-on-eks/docs/benchmarks/spark-datafusion-comet-benchmark">TPC-DS @ 3TB running in EKS</a>.</p>
+<p>The early Comet releases provided a very modest speedup and the published benchmark results were based on running TPC workloads at small scale factors on a single node. There are now independent benchmark results published by AWS Labs that show significant speedups for TPC-DS @ 3TB running in EKS.</p>
 <h3 id="codegen-dispatch">Codegen Dispatch<a class="headerlink" href="#codegen-dispatch" title="Permanent link">¶</a></h3>
-<p>Comet 0.17.0 introduced a new approach to filling gaps in expression coverage. In earlier releases,
-whenever Comet's planner encountered an expression that lacked a native Rust implementation, it fell back
-to executing an entire subtree of the plan in Spark. That required converting Arrow columns back to Spark
-rows before the expression ran and back to Arrow after, and the cost was often enough to erase the speedup
-Comet had bought elsewhere in the plan.</p>
-<p>Codegen dispatch scopes that fallback down to the expression itself: the batch stays in the Comet pipeline
-and Comet invokes Spark's own generated code for just the missing expression, leaving the rest of the query
-running natively. Three consequences are worth calling out.</p>
-<ul>
-<li><strong>Coverage.</strong> Expressions that would previously have blocked native execution of a whole subtree are
-  now supported immediately, without a Rust port. In 1.0, this pathway also handles cast fallbacks,
-  several interval expressions, and additional string and timestamp functions.</li>
-<li><strong>Compatibility.</strong> For categories where a native reimplementation would inevitably diverge from Spark's
-  semantics — regular expressions being the canonical case, given the gap between Java's regex engine and
-  any Rust or C++ equivalent — codegen dispatch delivers bit-for-bit Spark parity because it <em>is</em> Spark's
-  implementation.</li>
-<li><strong>Scala and Java UDFs.</strong> User-defined functions are compiled to the same codegen surface as built-in
-  expressions, so they can flow through codegen dispatch without any change from the user. Queries that
-  were previously disqualified from acceleration only because they contained a UDF can now benefit as
-  long as the surrounding operators are supported. See the <a href="https://datafusion.apache.org/comet/user-guide/latest/scala_java_udfs.html">Scala and Java UDF guide</a> for details.</li>
-</ul>
+<p>Matt TBD</p>
+<h3 id="iceberg-support">Iceberg Support<a class="headerlink" href="#iceberg-support" title="Permanent link">¶</a></h3>
 <h2 id="improvements-since-0171">Improvements since 0.17.1<a class="headerlink" href="#improvements-since-0171" title="Permanent link">¶</a></h2>
 <p>The rest of this post covers what is new since the 0.17.1 release.</p>
-<h3 id="experimental-pyarrow-udf-support">Experimental PyArrow UDF Support<a class="headerlink" href="#experimental-pyarrow-udf-support" title="Permanent link">¶</a></h3>
-<p>This release adds experimental support for accelerated PyArrow UDFs, allowing PyArrow-based user-defined
-functions to participate in native execution instead of forcing a fallback to Spark. When the feature is
-disabled, Comet now hints at the native PyArrow UDF path in its fallback reasons so users know the option
-exists. This is an early-stage feature and we welcome feedback from users experimenting with it.</p>
-<h3 id="new-expression-and-aggregate-support">New Expression and Aggregate Support<a class="headerlink" href="#new-expression-and-aggregate-support" title="Permanent link">¶</a></h3>
-<p>This release expands the set of Spark expressions and aggregates that are accelerated by Comet:</p>
+<h1 id="old-ai-content-below-needs-to-be-reviewed-andor-rewritten">OLD AI CONTENT BELOW - NEEDS TO BE REVIEWED AND/OR REWRITTEN<a class="headerlink" href="#old-ai-content-below-needs-to-be-reviewed-andor-rewritten" title="Permanent link">¶</a></h1>
+<h2 id="native-expression-performance">Native Expression Performance<a class="headerlink" href="#native-expression-performance" title="Permanent link">¶</a></h2>
+<p>A large share of this release is dedicated to making Comet's native scalar expressions faster. These kernels
+run per-row or per-batch, so improvements here compound across every query that uses them. Expressions with
+optimized implementations in this release include:</p>
+<ul>
+<li><strong>Casts</strong> between numeric, string, decimal, and date types, including a faster float-to-decimal cast, an
+  optimized integer-to-integer cast, shared no-overflow fast paths in <code>CheckOverflow</code> and
+  <code>DecimalRescaleCheckOverflow</code>, and a <code>cast_binary_to_string</code> that is up to 27x faster on binary-format
+  styles.</li>
+<li><strong>JSON, regex, and URL parsing</strong>: <code>get_json_object</code>, <code>regexp_extract</code>, and <code>parse_url</code>.</li>
+<li><strong>Date/time and decimal kernels</strong>: <code>date_trunc</code>, <code>spark_ceil</code>, and a vectorized <code>spark_unscaled_value</code>.</li>
+<li><strong>String and array kernels</strong>: <code>lpad</code>, <code>unhex</code>, <code>size</code>, <code>arrays_overlap</code>, <code>escape_string</code>, and the <code>try_*</code>
+  arithmetic kernel.</li>
+</ul>
+<p>To make this kind of work repeatable, the release also adds a scalar expression optimization guide
+documenting how to benchmark a kernel, keep its output bit-identical to Spark, and gate changes on a
+no-regression check.</p>
+<p>Parquet reads pick up several improvements as well. Full Parquet metadata, including the page index, is now
+cached via DataFusion's <code>CachedParquetFileReaderFactory</code>; identity casts are unwrapped in the schema adapter
+so Parquet statistics pruning can engage; filter pushdown configuration has been revised; the native scan
+passes a metadata size hint so a single read usually captures the footer; and the native Parquet scan seeds
+its reader options from the session config so Parquet settings you already set take effect.</p>
+<p>Query planning and plan serialization also got cheaper. <code>QueryContext</code> SQL text is now interned into a
+per-plan pool, which makes serialized plans up to 20x smaller on TPC-DS — every plan crosses the JNI
+boundary, so this shrinks per-query overhead across the board. Plan-data injection is now an O(1) lookup by
+operator kind and no longer rebuilds operators it does not touch. Comet also makes far fewer timer calls in
+the native execution loop.</p>
+<h2 id="correctness">Correctness<a class="headerlink" href="#correctness" title="Permanent link">¶</a></h2>
+<p>Correctness fixes have been a regular part of every Comet release, but for 1.0 we made an extra push to
+clear out the bulk of the known issues before drawing a line under the stable release. This release fixes
+roughly 30 divergences from Spark, spanning casts, ANSI error semantics, wrong-result bugs, string and
+encoding handling, collations, and error reporting. Most were found by running extensive AI-assisted audit
+sweeps of the code base, comparing Comet's expression implementations with all supported versions of Spark.
+See the <a href="https://github.com/apache/datafusion-comet/blob/main/docs/source/changelog/1.0.0.md">change log</a> for the full list; two representative fixes give a sense of the shape of the work:</p>
+<ul>
+<li><strong>Whitespace trimming in string-to-numeric casts.</strong> Casts to <code>boolean</code>, integral types, <code>float</code>/<code>double</code>,
+  and <code>decimal</code> now use Spark's exact trim rules. Comet's kernels had used four different trim sets, three of
+  them wrong, so results diverged in both directions — returning null where Spark parses a value, and
+  returning a value where Spark returns null.</li>
+<li><strong>ANSI errors swallowed by null short-circuit.</strong> The codegen dispatcher's null short-circuit no longer
+  swallows errors Spark raises. Spark evaluates null-intolerant expressions per node and left to right, so
+  short-circuiting on the union of input ordinals skipped subtrees Spark would have evaluated, losing their
+  errors. Roughly 70 built-in expressions route through this dispatcher and ANSI is on by default in Spark 4,
+  so this affected a wide surface.</li>
+</ul>
+<p>Alongside the bug fixes, Comet also adds conservative fallbacks where native behavior could not be made to
+match — decimal <code>SUM</code> / <code>AVG</code> over sliding window frames, <code>FromUnixTime</code> with a non-default format, and a
+handful of others — and falls back for predicates and datetime expressions under non-default collations
+rather than risking a wrong result.</p>
+<h2 id="new-expression-and-aggregate-support">New Expression and Aggregate Support<a class="headerlink" href="#new-expression-and-aggregate-support" title="Permanent link">¶</a></h2>
+<p>This release expands the set of Spark expressions and aggregates that run natively:</p>
 <ul>
 <li><strong>Aggregates</strong>: <code>approx_percentile</code> / <code>percentile_approx</code>, exact <code>percentile</code> / <code>median</code>,
   <code>approx_count_distinct</code>, and native <code>collect_list</code> / <code>array_agg</code>.</li>
-<li><strong>Cast</strong>: Cast expressions where the native implementation is marked as incompatible or unsupported
-  are now routed through codegen dispatch.</li>
 <li><strong>Grouping</strong>: <code>grouping()</code> and <code>grouping_id()</code>.</li>
 <li><strong>Intervals</strong>: interval types via <code>make_ym_interval</code> and <code>make_dt_interval</code>, <code>CalendarIntervalType</code>,
   <code>multiply_dt_interval</code>, and interval codegen dispatch for nested values and native shuffle.</li>
@@ -170,30 +194,89 @@ exists. This is an early-stage feature and we welcome feedback from users experi
   <code>PreciseTimestampConversion</code> for native time-window grouping.</li>
 <li><strong>Windows</strong>: extended native window function support and Spark 4 decimal window average.</li>
 </ul>
-<h3 id="faster-parquet-scans">Faster Parquet Scans<a class="headerlink" href="#faster-parquet-scans" title="Permanent link">¶</a></h3>
-<p>Parquet reads pick up several improvements as well. Full Parquet metadata, including the page index, is now
-cached via DataFusion's <code>CachedParquetFileReaderFactory</code>; identity casts are unwrapped in the schema adapter
-so Parquet statistics pruning can engage; filter pushdown configuration has been revised; the native scan
-passes a metadata size hint so a single read usually captures the footer; and the native Parquet scan seeds
-its reader options from the session config so Parquet settings you already set take effect.</p>
-<h3 id="iceberg-table-format-v3">Iceberg Table Format V3<a class="headerlink" href="#iceberg-table-format-v3" title="Permanent link">¶</a></h3>
+<h2 id="native-sampling">Native Sampling<a class="headerlink" href="#native-sampling" title="Permanent link">¶</a></h2>
+<p>Spark's <code>SampleExec</code> now runs natively when sampling without replacement, covering <code>DataFrame.sample</code>, SQL
+<code>TABLESAMPLE</code>, and <code>DataFrame.randomSplit</code>. The native operator ports Spark's <code>BernoulliCellSampler</code> on top of
+<code>XorShiftRandom</code> and seeds per partition exactly as Spark does, so it selects the same rows for a given seed —
+sampling stays reproducible whether or not Comet is enabled. Sampling with replacement still falls back to
+Spark.</p>
+<h2 id="experimental-pyarrow-udf-support">Experimental PyArrow UDF Support<a class="headerlink" href="#experimental-pyarrow-udf-support" title="Permanent link">¶</a></h2>
+<p>This release adds experimental support for accelerated PyArrow UDFs, allowing PyArrow-based user-defined
+functions to participate in native execution instead of forcing a fallback to Spark. When the feature is
+disabled, Comet now hints at the native PyArrow UDF path in its fallback reasons so users know the option
+exists. This is an early-stage feature and we welcome feedback from users experimenting with it.</p>
+<h2 id="iceberg">Iceberg<a class="headerlink" href="#iceberg" title="Permanent link">¶</a></h2>
 <p>Comet now supports Iceberg 1.11 and Iceberg table format V3 (with native table decryption for V3 tables and
 fallback to Spark for other V3 features). The native Iceberg scan supports the <code>_pos</code>, <code>_spec</code>, <code>_file</code>, and
 <code>_partition</code> metadata columns, sizes delete files correctly to avoid dropped deletes, disambiguates scans that
 share a <code>metadata_location</code>, and dedupes residuals and delete files in the native scan serde. A prior case
-where Iceberg native scan exchange reuse with different pushed filters could produce wrong results is also</p>
-<h3 id="native-expression-performance">Native Expression Performance<a class="headerlink" href="#native-expression-performance" title="Permanent link">¶</a></h3>
-<p>Many native expression implementations have been optimized to more efficiently leverage Arrow kernels or to avoid per-row builders.</p>
+where Iceberg native scan exchange reuse with different pushed filters could produce wrong results is also
+fixed.</p>
+<h2 id="native-parquet-io-and-cloud">Native Parquet I/O and Cloud<a class="headerlink" href="#native-parquet-io-and-cloud" title="Permanent link">¶</a></h2>
+<p>Native Parquet writes now support gzip compression, and the native Parquet scan supports Azure authentication,
+complementing the existing S3 credential support.</p>
+<h2 id="execution-and-fallback-improvements">Execution and Fallback Improvements<a class="headerlink" href="#execution-and-fallback-improvements" title="Permanent link">¶</a></h2>
 <ul>
-<li><strong>Casts</strong> between numeric, string, decimal, and date types, including a faster float-to-decimal cast, an
-  optimized integer-to-integer cast, shared no-overflow fast paths in <code>CheckOverflow</code> and
-  <code>DecimalRescaleCheckOverflow</code>, and a <code>cast_binary_to_string</code> that is up to 27x faster on binary-format
-  styles.</li>
-<li><strong>JSON, regex, and URL parsing</strong>: <code>get_json_object</code>, <code>regexp_extract</code>, and <code>parse_url</code>.</li>
-<li><strong>Date/time and decimal kernels</strong>: <code>date_trunc</code>, <code>spark_ceil</code>, and a vectorized <code>spark_unscaled_value</code>.</li>
-<li><strong>String and array kernels</strong>: <code>lpad</code>, <code>unhex</code>, <code>size</code>, <code>arrays_overlap</code>, <code>escape_string</code>, and the <code>try_*</code>
-  arithmetic kernel.</li>
+<li><strong>Mixed partial/final aggregation.</strong> <code>sum</code> and non-decimal <code>avg</code> can now run with the partial and final
+  aggregation stages split across Spark and Comet, keeping more aggregation plans partially native.</li>
+<li><strong>Codegen dispatch for opt-in serdes.</strong> Expressions reported as <code>Unsupported</code> can now route through JVM
+  codegen dispatch for opt-in serdes, and native opt-in expressions surface as compatible-by-default with a
+  <code>COMET-INFO</code> plan hint. Casts join this path: an incompatible or unsupported cast now runs Spark's own
+  generated code inside the Comet pipeline instead of pulling the whole operator back to Spark, so one
+  awkward cast no longer de-accelerates a query. <code>sort_array</code> under strict floating-point mode and <code>concat</code>
+  under non-<code>UTF8_BINARY</code> collations opt in the same way.</li>
+<li><strong>JVM columnar-to-row by default.</strong> Isolated benchmarking showed the native columnar-to-row converter is
+  roughly 3.7x slower per row than the JVM implementation at the default batch size — and up to 15.7x slower
+  for small batches — because of a fixed per-batch JNI and FFI cost, with no end-to-end benefit in TPC-DS
+  runs. It is now disabled by default.</li>
+<li><strong>Clearer fallback reasons.</strong> Unsupported scalar serde cases are reported in the support level,
+  mixed-execution fallback messages name the incompatible aggregate functions, unsupported metadata column
+  names appear in fallback reasons, and the spurious "WriteFilesExec is not supported" message is suppressed.</li>
+<li><strong>Expression coverage in extended explain.</strong> The extended explain summary previously reported operator
+  coverage but said nothing about expressions. It now ends with a line such as <code>Comet accelerated 14
+  expressions (14 native, 1 codegen dispatch)</code>, so you can see how much of a plan's expression evaluation
+  runs in native DataFusion kernels versus Spark's generated code inside the dispatcher.</li>
+<li><strong>Quieter logs and runtime cleanup.</strong> Logging levels on frequent call sites have been lowered so Comet no
+  longer floods executor logs at default settings, and the Tokio runtime is now released on driver and
+  executor exit.</li>
 </ul>
+<h2 id="shuffle-improvements">Shuffle Improvements<a class="headerlink" href="#shuffle-improvements" title="Permanent link">¶</a></h2>
+<ul>
+<li><strong>Native shuffle memory cap.</strong> A new <code>spark.comet.shuffle.maxBufferBytes</code> config caps native shuffle writer
+  memory to bound worst-case usage.</li>
+<li><strong>Shuffle IPC schema encoding.</strong> The IPC schema is now encoded once per writer instead of per block,
+  cutting per-batch shuffle overhead.</li>
+<li><strong>BatchCoalescer bypass.</strong> Shuffle bypasses the <code>BatchCoalescer</code> for batches that are already appropriately
+  sized.</li>
+<li><strong>Single-partition shuffle.</strong> A redundant concatenation layer has been removed from the single-partition
+  path.</li>
+</ul>
+<h2 id="configuration-changes">Configuration Changes<a class="headerlink" href="#configuration-changes" title="Permanent link">¶</a></h2>
+<p>Because configuration is Comet's primary API surface, 1.0 is the release where the naming gets cleaned up.
+Every rename below registers the old key as an alias, so existing configurations keep working and log a
+deprecation warning when an old key is read:</p>
+<ul>
+<li><strong>Unified shuffle prefix.</strong> Shuffle configs were spread across four disjoint prefixes
+  (<code>spark.comet.exec.shuffle.*</code>, <code>spark.comet.columnar.shuffle.*</code>, <code>spark.comet.native.shuffle.*</code>,
+  <code>spark.comet.shuffle.*</code>). They now all live under <code>spark.comet.shuffle.*</code>, with <code>.jvm.</code> and <code>.native.</code>
+  sub-namespaces matching the <code>spark.comet.shuffle.mode</code> value you already set.</li>
+<li><strong>Grouped explain configs.</strong> The orphan explain-related configs are collected under a single
+  <code>spark.comet.explain.*</code> prefix, and the PyArrow UDF config is renamed to <code>pyarrowUDF</code> for consistency.</li>
+<li><strong><code>spark.comet.version</code>.</strong> The loaded Comet build version is now exposed as a runtime config, so you can
+  confirm which Comet a cluster is actually running with <code>spark.conf.get</code> or <code>SET</code>.</li>
+<li><strong>Removed dead configs.</strong> The Parquet parallel-IO knobs, <code>spark.comet.use.lazyMaterialization</code>, and
+  <code>spark.comet.exceptionOnDatetimeRebase</code> had no remaining effect and were misleading anyone tuning against
+  them.</li>
+<li><strong>Removed async columnar shuffle.</strong> The <code>spark.comet.columnar.shuffle.async.*</code> path was off by default and
+  untested, and has been removed rather than carried into a stable release line.</li>
+</ul>
+<h2 id="documentation">Documentation<a class="headerlink" href="#documentation" title="Permanent link">¶</a></h2>
+<p>The documentation received a substantial overhaul for 1.0: a design refresh of the docs site, versioned user
+guides with captioned sidebar sections, and a set of accessibility and navigation fixes. The
+supported-expressions page now shows how each expression is implemented — native, codegen dispatch, or hybrid
+— generated from the planner itself rather than maintained by hand. An expanded tuning guide covers the
+performance and memory configs that matter in practice, and there is an updated post-1.0 roadmap and a new
+blog posts and talks page.</p>
 <h2 id="deprecation-notice">Deprecation Notice<a class="headerlink" href="#deprecation-notice" title="Permanent link">¶</a></h2>
 <p>With the move to a stable 1.0 release line, Comet begins deprecating older platforms under semantic
 versioning:</p>
@@ -250,23 +333,30 @@ to get up and running, then point Comet at your existing Spark workloads and see
       <aside class="toc-container d-none d-md-block col-md-4 col-xl-3 ms-xl-2">
         <div class="toc"><span class="toctitle">Contents</span><ul>
 <li><a href="#the-road-to-10">The Road to 1.0</a><ul>
-<li><a href="#support-for-spark-40-with-ansi-mode">Support for Spark 4.0+ with ANSI mode</a></li>
 <li><a href="#correctness-testing">Correctness Testing</a></li>
 <li><a href="#performance">Performance</a></li>
 <li><a href="#codegen-dispatch">Codegen Dispatch</a></li>
+<li><a href="#iceberg-support">Iceberg Support</a></li>
 </ul>
 </li>
-<li><a href="#improvements-since-0171">Improvements since 0.17.1</a><ul>
-<li><a href="#experimental-pyarrow-udf-support">Experimental PyArrow UDF Support</a></li>
-<li><a href="#new-expression-and-aggregate-support">New Expression and Aggregate Support</a></li>
-<li><a href="#faster-parquet-scans">Faster Parquet Scans</a></li>
-<li><a href="#iceberg-table-format-v3">Iceberg Table Format V3</a></li>
+<li><a href="#improvements-since-0171">Improvements since 0.17.1</a></li>
+<li><a href="#old-ai-content-below-needs-to-be-reviewed-andor-rewritten">OLD AI CONTENT BELOW - NEEDS TO BE REVIEWED AND/OR REWRITTEN</a><ul>
 <li><a href="#native-expression-performance">Native Expression Performance</a></li>
-</ul>
-</li>
+<li><a href="#correctness">Correctness</a></li>
+<li><a href="#new-expression-and-aggregate-support">New Expression and Aggregate Support</a></li>
+<li><a href="#native-sampling">Native Sampling</a></li>
+<li><a href="#experimental-pyarrow-udf-support">Experimental PyArrow UDF Support</a></li>
+<li><a href="#iceberg">Iceberg</a></li>
+<li><a href="#native-parquet-io-and-cloud">Native Parquet I/O and Cloud</a></li>
+<li><a href="#execution-and-fallback-improvements">Execution and Fallback Improvements</a></li>
+<li><a href="#shuffle-improvements">Shuffle Improvements</a></li>
+<li><a href="#configuration-changes">Configuration Changes</a></li>
+<li><a href="#documentation">Documentation</a></li>
 <li><a href="#deprecation-notice">Deprecation Notice</a></li>
 <li><a href="#compatibility">Compatibility</a></li>
 <li><a href="#get-started-with-comet-100">Get Started with Comet 1.0.0</a></li>
+</ul>
+</li>
 </ul>
 </div>
       </aside>
