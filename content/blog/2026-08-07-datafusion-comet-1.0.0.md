@@ -73,13 +73,29 @@ The early Comet releases provided a very modest speedup and the published benchm
 
 ### Codegen Dispatch
 
-A significant innovation that landed in 0.17.0 was to change the approach to "native" acceleration. Rather than falling back to Spark row-based execution whenever Comet lacked a native Rust implementation of an expression, Comet is now able to execute Spark's own expression evaluation logic directly against Arrow data in the Comet pipeline. This immediately expanded the number of expressions that Comet could support without an expensive transition from columnar to row-based data.
+Comet 0.17.0 introduced a new approach to filling gaps in expression coverage. In earlier releases,
+whenever Comet's planner encountered an expression that lacked a native Rust implementation, it fell back
+to executing an entire subtree of the plan in Spark. That required converting Arrow columns back to Spark
+rows before the expression ran and back to Arrow after, and the cost was often enough to erase the speedup
+Comet had bought elsewhere in the plan.
 
-Another advantage of this approach is that Comet can support certain categories of expression, such as regular expressions, with 100% compatibility with Spark, which is not practical when delegating to native code due to the many differences between Java's regular expression engine and those available in Rust or C++.
+Codegen dispatch scopes that fallback down to the expression itself: the batch stays in the Comet pipeline
+and Comet invokes Spark's own generated code for just the missing expression, leaving the rest of the query
+running natively. Three consequences are worth calling out.
 
-## Scala and Java UDF Support
+- **Coverage.** Expressions that would previously have blocked native execution of a whole subtree are
+  now supported immediately, without a Rust port. In 1.0, this pathway also handles cast fallbacks,
+  several interval expressions, and additional string and timestamp functions.
+- **Compatibility.** For categories where a native reimplementation would inevitably diverge from Spark's
+  semantics — regular expressions being the canonical case, given the gap between Java's regex engine and
+  any Rust or C++ equivalent — codegen dispatch delivers bit-for-bit Spark parity because it *is* Spark's
+  implementation.
+- **Scala and Java UDFs.** User-defined functions are compiled to the same codegen surface as built-in
+  expressions, so they can flow through codegen dispatch without any change from the user. Queries that
+  were previously disqualified from acceleration only because they contained a UDF can now benefit as
+  long as the surrounding operators are supported. See the [Scala and Java UDF guide] for details.
 
-The codegen dispatch approach described in the previous chapter
+[Scala and Java UDF guide]: https://datafusion.apache.org/comet/user-guide/latest/scala_java_udfs.html
 
 ## Improvements since 0.17.1
 
