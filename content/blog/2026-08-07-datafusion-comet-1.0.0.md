@@ -60,11 +60,13 @@ It is important that queries accelerated by Comet produce the same results as Sp
 
 ### Performance
 
-The early Comet releases provided a very modest speedup and the published benchmark results were based on running TPC workloads at small scale factors on a single node. There are now independent benchmark results published by AWS Labs that show significant speedups for TPC-DS @ 3TB running in EKS.
+The early Comet releases provided a very modest speedup and the published benchmark results were based on running TPC workloads at small scale factors on a single node. There are now independent benchmark results published by AWS Labs that show significant speedups for [TPC-DS @ 3TB running in EKS](https://awslabs.github.io/data-on-eks/docs/benchmarks/spark-datafusion-comet-benchmark).
+
+AWS Labs also published performance results [comparing Comet with Apache Gluten](https://awslabs.github.io/data-on-eks/docs/benchmarks/spark-gluten-velox-comet-benchmark), concluding that "Gluten + Velox v1.6.0 and DataFusion Comet v0.16.0 deliver similar overall runtime".
 
 ### Codegen Dispatch
 
-Matt TBD
+A significant innovation that landed in 0.17.0 was to change the approach to "native" acceleration. Rather than falling back to Spark row-based execution whenever Comet lacked a native Rust implementation of an expression, Comet is now able to execute Spark's own expression evaluation logic directly against Arrow data in the Comet pipeline. This immediately expanded the number of expressions that Comet could support without an expensive transition from columnar to row-based data.
 
 ## Improvements since 0.17.1
 
