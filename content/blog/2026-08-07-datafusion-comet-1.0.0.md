@@ -48,6 +48,10 @@ Comet 1.0.0 now supports more than 400 expressions, but that isn't the only way 
 
 Here's a recap of some of the main advances over the past two years
 
+### Support for Spark 4.0+ with ANSI mode
+
+Comet 1.0.0 supports Spark versions 3.4 though 4.1, with experimental support for 4.2. Comet fully supports Spark's ANSI mode, which is enabled by default starting with Spark 4.0
+
 ### Correctness Testing
 
 It is important that queries accelerated by Comet produce the same results as Spark. Correctness checking has always been a large effort in Comet development, but the approach has evolved over time.
@@ -62,11 +66,17 @@ It is important that queries accelerated by Comet produce the same results as Sp
 
 The early Comet releases provided a very modest speedup and the published benchmark results were based on running TPC workloads at small scale factors on a single node. There are now independent benchmark results published by AWS Labs that show significant speedups for [TPC-DS @ 3TB running in EKS](https://awslabs.github.io/data-on-eks/docs/benchmarks/spark-datafusion-comet-benchmark).
 
-AWS Labs also published performance results [comparing Comet with Apache Gluten](https://awslabs.github.io/data-on-eks/docs/benchmarks/spark-gluten-velox-comet-benchmark), concluding that "Gluten + Velox v1.6.0 and DataFusion Comet v0.16.0 deliver similar overall runtime".
+AWS Labs also published performance results [comparing Comet with Apache Gluten](https://awslabs.github.io/data-on-eks/docs/benchmarks/spark-gluten-velox-comet-benchmark), concluding that "Gluten + Velox v1.6.0 and DataFusion Comet v0.16.0 deliver similar overall runtime". Comet's documentation also has a guide explaining how [Comet compares to Gluten](https://datafusion.apache.org/comet/about/gluten_comparison.html).
 
 ### Codegen Dispatch
 
 A significant innovation that landed in 0.17.0 was to change the approach to "native" acceleration. Rather than falling back to Spark row-based execution whenever Comet lacked a native Rust implementation of an expression, Comet is now able to execute Spark's own expression evaluation logic directly against Arrow data in the Comet pipeline. This immediately expanded the number of expressions that Comet could support without an expensive transition from columnar to row-based data.
+
+Another advantage of this approch is that Comet can support certain categories of expression, such as regular expressions, with 100% compatibility with Spark, which is not practical when delegating to native code due to the many differences between Java's regular expression engine and those available in Rust or C++.
+
+## Scala and Java UDF Support
+
+The codegen dispatch approach described in the previous chapter
 
 ## Improvements since 0.17.1
 
