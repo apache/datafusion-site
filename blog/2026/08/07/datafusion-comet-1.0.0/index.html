@@ -61,7 +61,6 @@
 <li><a href="#codegen-dispatch">Codegen Dispatch</a></li>
 </ul>
 </li>
-<li><a href="#scala-and-java-udf-support">Scala and Java UDF Support</a></li>
 <li><a href="#improvements-since-0171">Improvements since 0.17.1</a><ul>
 <li><a href="#experimental-pyarrow-udf-support">Experimental PyArrow UDF Support</a></li>
 <li><a href="#new-expression-and-aggregate-support">New Expression and Aggregate Support</a></li>
@@ -125,10 +124,27 @@ Spark 3.4 announced below are scheduled for 1.1 rather than landing in 1.0 itsel
 <h3 id="performance">Performance<a class="headerlink" href="#performance" title="Permanent link">¶</a></h3>
 <p>The early Comet releases provided a very modest speedup and the published benchmark results were based on running TPC workloads at small scale factors on a single node. There are now independent benchmark results published by AWS Labs that show significant speedups for <a href="https://awslabs.github.io/data-on-eks/docs/benchmarks/spark-datafusion-comet-benchmark">TPC-DS @ 3TB running in EKS</a>.</p>
 <h3 id="codegen-dispatch">Codegen Dispatch<a class="headerlink" href="#codegen-dispatch" title="Permanent link">¶</a></h3>
-<p>A significant innovation that landed in 0.17.0 was to change the approach to "native" acceleration. Rather than falling back to Spark row-based execution whenever Comet lacked a native Rust implementation of an expression, Comet is now able to execute Spark's own expression evaluation logic directly against Arrow data in the Comet pipeline. This immediately expanded the number of expressions that Comet could support without an expensive transition from columnar to row-based data.</p>
-<p>Another advantage of this approach is that Comet can support certain categories of expression, such as regular expressions, with 100% compatibility with Spark, which is not practical when delegating to native code due to the many differences between Java's regular expression engine and those available in Rust or C++.</p>
-<h2 id="scala-and-java-udf-support">Scala and Java UDF Support<a class="headerlink" href="#scala-and-java-udf-support" title="Permanent link">¶</a></h2>
-<p>The codegen dispatch approach described in the previous chapter</p>
+<p>Comet 0.17.0 introduced a new approach to filling gaps in expression coverage. In earlier releases,
+whenever Comet's planner encountered an expression that lacked a native Rust implementation, it fell back
+to executing an entire subtree of the plan in Spark. That required converting Arrow columns back to Spark
+rows before the expression ran and back to Arrow after, and the cost was often enough to erase the speedup
+Comet had bought elsewhere in the plan.</p>
+<p>Codegen dispatch scopes that fallback down to the expression itself: the batch stays in the Comet pipeline
+and Comet invokes Spark's own generated code for just the missing expression, leaving the rest of the query
+running natively. Three consequences are worth calling out.</p>
+<ul>
+<li><strong>Coverage.</strong> Expressions that would previously have blocked native execution of a whole subtree are
+  now supported immediately, without a Rust port. In 1.0, this pathway also handles cast fallbacks,
+  several interval expressions, and additional string and timestamp functions.</li>
+<li><strong>Compatibility.</strong> For categories where a native reimplementation would inevitably diverge from Spark's
+  semantics — regular expressions being the canonical case, given the gap between Java's regex engine and
+  any Rust or C++ equivalent — codegen dispatch delivers bit-for-bit Spark parity because it <em>is</em> Spark's
+  implementation.</li>
+<li><strong>Scala and Java UDFs.</strong> User-defined functions are compiled to the same codegen surface as built-in
+  expressions, so they can flow through codegen dispatch without any change from the user. Queries that
+  were previously disqualified from acceleration only because they contained a UDF can now benefit as
+  long as the surrounding operators are supported. See the <a href="https://datafusion.apache.org/comet/user-guide/latest/scala_java_udfs.html">Scala and Java UDF guide</a> for details.</li>
+</ul>
 <h2 id="improvements-since-0171">Improvements since 0.17.1<a class="headerlink" href="#improvements-since-0171" title="Permanent link">¶</a></h2>
 <p>The rest of this post covers what is new since the 0.17.1 release.</p>
 <h3 id="experimental-pyarrow-udf-support">Experimental PyArrow UDF Support<a class="headerlink" href="#experimental-pyarrow-udf-support" title="Permanent link">¶</a></h3>
@@ -240,7 +256,6 @@ to get up and running, then point Comet at your existing Spark workloads and see
 <li><a href="#codegen-dispatch">Codegen Dispatch</a></li>
 </ul>
 </li>
-<li><a href="#scala-and-java-udf-support">Scala and Java UDF Support</a></li>
 <li><a href="#improvements-since-0171">Improvements since 0.17.1</a><ul>
 <li><a href="#experimental-pyarrow-udf-support">Experimental PyArrow UDF Support</a></li>
 <li><a href="#new-expression-and-aggregate-support">New Expression and Aggregate Support</a></li>
