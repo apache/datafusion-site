@@ -46,26 +46,26 @@ Spark expressions.
 
 [donated]: https://datafusion.apache.org/blog/2024/03/06/comet-donation/
 
-The 1.0 release marks the point at which Comet begins following semantic versioning. Users upgrading within
-the 1.x line can expect backward-compatible changes only; features slated for removal will be deprecated in
-a minor release before being dropped in the next major version. This is why the deprecations of JDK 11 and
-Spark 3.4 announced below are scheduled for 1.1 rather than landing in 1.0 itself.
+The 1.0 release marks the point at which Comet begins following [semantic versioning]. Users upgrading
+within the 1.x line can expect backward-compatible changes only; features slated for removal will be
+deprecated in a minor release before being dropped in the next major version. This is why the deprecations
+of JDK 11 and Spark 3.4 announced below are scheduled for 1.1 rather than landing in 1.0 itself.
 
-The rest of this section is a recap of the main advances since donation.
+[semantic versioning]: https://datafusion.apache.org/comet/about/versioning_policy.html
 
 ### Support for Spark 4.0+ with ANSI mode
 
-Comet 1.0.0 supports Spark versions 3.4 though 4.1, with experimental support for 4.2. Comet fully supports Spark's ANSI mode, which is enabled by default starting with Spark 4.0.
+Comet 1.0.0 supports Spark versions 3.4 through 4.1, with experimental support for 4.2. Comet fully supports Spark's ANSI mode, which is enabled by default starting with Spark 4.0.
 
 ### Correctness Testing
 
 It is important that queries accelerated by Comet produce the same results as Spark. Correctness checking has always been a large effort in Comet development, but the approach has evolved over time.
 
-- Comet has always run Spark's own test suite with Comet enabled, providing more than 24,000 unit tests effectively for free. These tests run in Comet's CI for all supported Spark versions.
-- Scala tests: Comet has Scala tests that run queries end to end with Comet enabled vs disabled and ensure that the results match
-- Fuzz testing: Many of the scala tests use a fuzz testing approach to generate randomized data that queries run against, helping to catch regressions around edge cases such as nulls, NaN, Infinity, and timezone issues
-- Comet SQL Tests: In an effort to make it easier to write tests, Comet now provides a SQL-based testing approach that is inspired by sqllogictest
-- Generative AI: More recently, Comet has taken advantage of agentic skills to perform audit sweeps of all expressions, comparing the implementation to Spark's source code and ensuring that Comet has tests covering all important edge cases
+- **Upstream Spark tests**: Comet runs Spark's own test suite with Comet enabled, providing more than 24,000 unit tests effectively for free. These tests run in Comet's CI for all supported Spark versions.
+- **Scala tests**: end-to-end queries that run with Comet enabled versus disabled, checking that results match.
+- **Fuzz testing**: many of the Scala tests generate randomized data to catch regressions around edge cases such as nulls, NaN, Infinity, and timezone issues.
+- **Comet SQL tests**: a sqllogictest-inspired approach that makes end-to-end tests easier to write.
+- **Generative AI audits**: agentic skills sweep every expression, comparing Comet's implementation to Spark's source and ensuring tests cover important edge cases.
 
 ### Performance
 
@@ -79,7 +79,7 @@ to executing an entire subtree of the plan in Spark. That required converting Ar
 rows before the expression ran and back to Arrow after, and the cost was often enough to erase the speedup
 Comet had bought elsewhere in the plan.
 
-Codegen dispatch scopes that fallback down to the expression itself: the batch stays in the Comet pipeline
+Codegen dispatch narrows that fallback to the expression itself: the batch stays in the Comet pipeline
 and Comet invokes Spark's own generated code for just the missing expression, leaving the rest of the query
 running natively. Three consequences are worth calling out.
 
@@ -97,9 +97,9 @@ running natively. Three consequences are worth calling out.
 
 [Scala and Java UDF guide]: https://datafusion.apache.org/comet/user-guide/latest/scala_java_udfs.html
 
-## Improvements since 0.17.1
+## Improvements since 0.17.0
 
-The rest of this post covers what is new since the 0.17.1 release.
+The rest of this post covers what is new since the 0.17.0 release.
 
 ### Experimental PyArrow UDF Support
 
@@ -142,6 +142,7 @@ fallback to Spark for other V3 features). The native Iceberg scan supports the `
 `_partition` metadata columns, sizes delete files correctly to avoid dropped deletes, disambiguates scans that
 share a `metadata_location`, and dedupes residuals and delete files in the native scan serde. A prior case
 where Iceberg native scan exchange reuse with different pushed filters could produce wrong results is also
+fixed.
 
 ### Native Expression Performance
 
@@ -158,13 +159,15 @@ Many native expression implementations have been optimized to more efficiently l
 
 ## Deprecation Notice
 
-With the move to a stable 1.0 release line, Comet begins deprecating older platforms under semantic
-versioning:
+With the move to a stable 1.0 release line, Comet begins deprecating older platforms under its
+[versioning policy]:
 
 - **JDK 11** is deprecated and scheduled for removal in Comet 1.1.0.
 - **Apache Spark 3.4** is deprecated and scheduled for removal in Comet 1.1.0.
 
 Users on these platforms should plan to move to JDK 17+ and Spark 3.5 or later before upgrading to 1.1.0.
+
+[versioning policy]: https://datafusion.apache.org/comet/about/versioning_policy.html
 
 ## Compatibility
 
