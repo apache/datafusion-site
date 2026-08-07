@@ -91,7 +91,7 @@ running natively. Four consequences are worth calling out.
   semantics — regular expressions being the canonical case, given the gap between Java's regex engine and
   any Rust or C++ equivalent — codegen dispatch delivers bit-for-bit Spark parity because it *is* Spark's
   implementation.
-- **Expression fusion.** A dispatched expression tree is compiled into a single method, so the Arrow
+- **Expression fusion.** A dispatched expression tree (_i.e._, nested expressions) is compiled into a single method, so the Arrow
   input reads, the expression evaluation, and the Arrow output writes are fused together. The compiler
   is free to optimize across the whole tree, and no intermediate Arrow `RecordBatch` is materialized
   between one expression and the next.
