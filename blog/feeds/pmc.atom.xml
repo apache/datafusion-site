@@ -80,8 +80,7 @@ and Comet invokes Spark's own generated code for just the missing expression, le
 running natively. Four consequences are worth calling out.&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;&lt;strong&gt;Coverage.&lt;/strong&gt; Expressions that would previously have blocked native execution of a whole subtree are
-  now supported immediately, without a Rust port. In 1.0, this pathway also handles cast fallbacks,
-  several interval expressions, and additional string and timestamp functions.&lt;/li&gt;
+  now supported immediately, without a Rust port.&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;Compatibility.&lt;/strong&gt; For categories where a native reimplementation would inevitably diverge from Spark's
   semantics — regular expressions being the canonical case, given the gap between Java's regex engine and
   any Rust or C++ equivalent — codegen dispatch delivers bit-for-bit Spark parity because it &lt;em&gt;is&lt;/em&gt; Spark's
@@ -95,6 +94,21 @@ running natively. Four consequences are worth calling out.&lt;/p&gt;
   were previously disqualified from acceleration only because they contained a UDF can now benefit as
   long as the surrounding operators are supported. See the &lt;a href="https://datafusion.apache.org/comet/user-guide/latest/scala_java_udfs.html"&gt;Scala and Java UDF guide&lt;/a&gt; for details.&lt;/li&gt;
 &lt;/ul&gt;
+&lt;p&gt;Comet 1.0 widens the mechanism in three ways.&lt;/p&gt;
+&lt;p&gt;The first is the biggest. An expression that opts into codegen dispatch previously reached the dispatcher
+only when Comet reported it as &lt;em&gt;incompatible&lt;/em&gt; for the given input; an &lt;em&gt;unsupported&lt;/em&gt; report still sent the
+whole subtree back to Spark. In 1.0 both support levels route through the dispatcher, so an input that
+Spark handles and Comet's native code does not now stays inside the Comet pipeline. This covers &lt;code&gt;concat&lt;/code&gt;
+over non-string children, &lt;code&gt;sort_array&lt;/code&gt; over nested arrays with struct or null children, &lt;code&gt;array_intersect&lt;/code&gt;
+over collated strings, and &lt;code&gt;trunc&lt;/code&gt; / &lt;code&gt;date_trunc&lt;/code&gt; formats outside the native set.&lt;/p&gt;
+&lt;p&gt;Second, casts join the same path. Cast expressions that Comet declines to run natively — including legacy
+configuration variants such as &lt;code&gt;spark.sql.legacy.castComplexTypesToString.enabled&lt;/code&gt; — are now dispatched
+rather than falling back. More expressions were opted in as well: &lt;code&gt;concat&lt;/code&gt; under non-&lt;code&gt;UTF8_BINARY&lt;/code&gt;
+collations, &lt;code&gt;sort_array&lt;/code&gt; under strict floating-point mode, &lt;code&gt;multiply_dt_interval&lt;/code&gt;, and interval dispatch
+for nested values and native shuffle.&lt;/p&gt;
+&lt;p&gt;Third, the path is now visible. Comet's extended explain output reports native versus codegen-dispatch
+coverage for a plan, so you can see which path each expression actually took rather than inferring it from
+the absence of a fallback reason.&lt;/p&gt;
 &lt;h2 id="improvements-since-0170"&gt;Improvements since 0.17.0&lt;a class="headerlink" href="#improvements-since-0170" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;The rest of this post covers what is new since the 0.17.0 release.&lt;/p&gt;
 &lt;h3 id="experimental-pyarrow-udf-support"&gt;Experimental PyArrow UDF Support&lt;a class="headerlink" href="#experimental-pyarrow-udf-support" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
