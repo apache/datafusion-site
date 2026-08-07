@@ -157,8 +157,7 @@ its reader options from the session config so Parquet settings you already set t
 
 ### Iceberg Table Format V3
 
-Comet now supports Iceberg 1.11 and Iceberg table format V3 (with native table decryption for V3 tables and
-fallback to Spark for other V3 features). The native Iceberg scan supports the `_pos`, `_spec`, `_file`, and
+Comet now supports Iceberg 1.11 and its first Iceberg table format V3 feature: full table encryption. Other V3 features like deletion vectors and new data types (_e.g._, `VARIANT`) fall back gracefully. The native Iceberg scan supports the `_pos`, `_spec`, `_file`, and
 `_partition` metadata columns, sizes delete files correctly to avoid dropped deletes, disambiguates scans that
 share a `metadata_location`, and dedupes residuals and delete files in the native scan serde. A prior case
 where Iceberg native scan exchange reuse with different pushed filters could produce wrong results is also
