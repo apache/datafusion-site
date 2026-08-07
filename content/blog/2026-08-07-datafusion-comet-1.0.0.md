@@ -109,9 +109,7 @@ Spark handles and Comet's native code does not now stays inside the Comet pipeli
 
 Second, casts join the same path. Cast expressions that Comet declines to run natively — including legacy
 configuration variants such as `spark.sql.legacy.castComplexTypesToString.enabled` — are now dispatched
-rather than falling back. More expressions were opted in as well: `concat` under non-`UTF8_BINARY`
-collations, `sort_array` under strict floating-point mode, `multiply_dt_interval`, and interval dispatch
-for nested values and native shuffle.
+rather than falling back, and more string, array, and interval expressions were opted in as well.
 
 Third, the path is now visible. Comet's extended explain output reports native versus codegen-dispatch
 coverage for a plan, so you can see which path each expression actually took rather than inferring it from
