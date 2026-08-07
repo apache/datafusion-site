@@ -105,9 +105,7 @@ Comet 1.0 widens the mechanism in three ways.
 The first is the biggest. An expression that opts into codegen dispatch previously reached the dispatcher
 only when Comet reported it as *incompatible* for the given input; an *unsupported* report still sent the
 whole subtree back to Spark. In 1.0 both support levels route through the dispatcher, so an input that
-Spark handles and Comet's native code does not now stays inside the Comet pipeline. This covers `concat`
-over non-string children, `sort_array` over nested arrays with struct or null children, `array_intersect`
-over collated strings, and `trunc` / `date_trunc` formats outside the native set.
+Spark handles and Comet's native code does not now stays inside the Comet pipeline.
 
 Second, casts join the same path. Cast expressions that Comet declines to run natively — including legacy
 configuration variants such as `spark.sql.legacy.castComplexTypesToString.enabled` — are now dispatched
