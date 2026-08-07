@@ -86,8 +86,7 @@ and Comet invokes Spark's own generated code for just the missing expression, le
 running natively. Four consequences are worth calling out.
 
 - **Coverage.** Expressions that would previously have blocked native execution of a whole subtree are
-  now supported immediately, without a Rust port. In 1.0, this pathway also handles cast fallbacks,
-  several interval expressions, and additional string and timestamp functions.
+  now supported immediately, without a Rust port.
 - **Compatibility.** For categories where a native reimplementation would inevitably diverge from Spark's
   semantics — regular expressions being the canonical case, given the gap between Java's regex engine and
   any Rust or C++ equivalent — codegen dispatch delivers bit-for-bit Spark parity because it *is* Spark's
@@ -100,6 +99,25 @@ running natively. Four consequences are worth calling out.
   expressions, so they can flow through codegen dispatch without any change from the user. Queries that
   were previously disqualified from acceleration only because they contained a UDF can now benefit as
   long as the surrounding operators are supported. See the [Scala and Java UDF guide] for details.
+
+Comet 1.0 widens the mechanism in three ways.
+
+The first is the biggest. An expression that opts into codegen dispatch previously reached the dispatcher
+only when Comet reported it as *incompatible* for the given input; an *unsupported* report still sent the
+whole subtree back to Spark. In 1.0 both support levels route through the dispatcher, so an input that
+Spark handles and Comet's native code does not now stays inside the Comet pipeline. This covers `concat`
+over non-string children, `sort_array` over nested arrays with struct or null children, `array_intersect`
+over collated strings, and `trunc` / `date_trunc` formats outside the native set.
+
+Second, casts join the same path. Cast expressions that Comet declines to run natively — including legacy
+configuration variants such as `spark.sql.legacy.castComplexTypesToString.enabled` — are now dispatched
+rather than falling back. More expressions were opted in as well: `concat` under non-`UTF8_BINARY`
+collations, `sort_array` under strict floating-point mode, `multiply_dt_interval`, and interval dispatch
+for nested values and native shuffle.
+
+Third, the path is now visible. Comet's extended explain output reports native versus codegen-dispatch
+coverage for a plan, so you can see which path each expression actually took rather than inferring it from
+the absence of a fallback reason.
 
 [Scala and Java UDF guide]: https://datafusion.apache.org/comet/user-guide/latest/scala_java_udfs.html
 
