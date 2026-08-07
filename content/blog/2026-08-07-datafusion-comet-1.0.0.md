@@ -42,7 +42,9 @@ contributors. See the [change log] for the full list of changes.
 Comet was [donated] to the Apache DataFusion project in March 2024 and cut its first release, 0.1.0, five
 months later with support for 13 operators and 106 expressions. Since then, the project has shipped 20
 releases and drawn contributions from more than 120 developers, and the codebase now recognizes over 400
-Spark expressions.
+Spark expressions. Operator coverage has grown alongside it: 1.0 accelerates each of Spark's four join
+operators, window functions, generators (`explode`, `explode_outer`, `posexplode`, and `posexplode_outer`
+over arrays), sampling, in-memory table scans, and a fully native shuffle.
 
 [donated]: https://datafusion.apache.org/blog/2024/03/06/comet-donation/
 
@@ -81,7 +83,7 @@ Comet had bought elsewhere in the plan.
 
 Codegen dispatch narrows that fallback to the expression itself: the batch stays in the Comet pipeline
 and Comet invokes Spark's own generated code for just the missing expression, leaving the rest of the query
-running natively. Three consequences are worth calling out.
+running natively. Four consequences are worth calling out.
 
 - **Coverage.** Expressions that would previously have blocked native execution of a whole subtree are
   now supported immediately, without a Rust port. In 1.0, this pathway also handles cast fallbacks,
@@ -90,6 +92,10 @@ running natively. Three consequences are worth calling out.
   semantics — regular expressions being the canonical case, given the gap between Java's regex engine and
   any Rust or C++ equivalent — codegen dispatch delivers bit-for-bit Spark parity because it *is* Spark's
   implementation.
+- **Expression fusion.** A dispatched expression tree is compiled into a single method, so the Arrow
+  input reads, the expression evaluation, and the Arrow output writes are fused together. The compiler
+  is free to optimize across the whole tree, and no intermediate Arrow `RecordBatch` is materialized
+  between one expression and the next.
 - **Scala and Java UDFs.** User-defined functions are compiled to the same codegen surface as built-in
   expressions, so they can flow through codegen dispatch without any change from the user. Queries that
   were previously disqualified from acceleration only because they contained a UDF can now benefit as
@@ -157,6 +163,12 @@ Many native expression implementations have been optimized to more efficiently l
 - **String and array kernels**: `lpad`, `unhex`, `size`, `arrays_overlap`, `escape_string`, and the `try_*`
   arithmetic kernel.
 
+To make this kind of work repeatable, the release also adds a [scalar expression optimization guide]
+documenting how to benchmark a kernel, keep its output bit-identical to Spark, and gate changes on a
+no-regression check.
+
+[scalar expression optimization guide]: https://datafusion.apache.org/comet/contributor-guide/optimizing_expressions.html
+
 ## Deprecation Notice
 
 With the move to a stable 1.0 release line, Comet begins deprecating older platforms under its
@@ -164,6 +176,11 @@ With the move to a stable 1.0 release line, Comet begins deprecating older platf
 
 - **JDK 11** is deprecated and scheduled for removal in Comet 1.1.0.
 - **Apache Spark 3.4** is deprecated and scheduled for removal in Comet 1.1.0.
+
+Comet aligns its Spark support window with upstream Apache Spark maintenance. Spark 3.4 is no longer
+maintained upstream, so under the versioning policy it is deprecated in the first Comet minor release
+after that point and removed in the following one. Comet 1.0.0 still builds and publishes Spark 3.4
+binaries.
 
 Users on these platforms should plan to move to JDK 17+ and Spark 3.5 or later before upgrading to 1.1.0.
 
