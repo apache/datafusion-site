@@ -1,5 +1,97 @@
 <?xml version="1.0" encoding="utf-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - pmc</title><link href="https://datafusion.apache.org/blog/" rel="alternate"/><link href="https://datafusion.apache.org/blog/feeds/pmc.atom.xml" rel="self"/><id>https://datafusion.apache.org/blog/</id><updated>2026-08-07T00:00:00+00:00</updated><entry><title>Apache DataFusion Comet 1.0.0 Release</title><link href="https://datafusion.apache.org/blog/2026/08/07/datafusion-comet-1.0.0" rel="alternate"/><published>2026-08-07T00:00:00+00:00</published><updated>2026-08-07T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2026-08-07:/blog/2026/08/07/datafusion-comet-1.0.0</id><summary type="html">&lt;!--
+<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - pmc</title><link href="https://datafusion.apache.org/blog/" rel="alternate"/><link href="https://datafusion.apache.org/blog/feeds/pmc.atom.xml" rel="self"/><id>https://datafusion.apache.org/blog/</id><updated>2026-08-09T00:00:00+00:00</updated><entry><title>Apache DataFusion Ballista 54.1.0 Released</title><link href="https://datafusion.apache.org/blog/2026/08/09/datafusion-ballista-54.1.0" rel="alternate"/><published>2026-08-09T00:00:00+00:00</published><updated>2026-08-09T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2026-08-09:/blog/2026/08/09/datafusion-ballista-54.1.0</id><summary type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+
+&lt;p&gt;We are pleased to announce version &lt;a href="https://github.com/apache/datafusion-ballista/blob/54.1.0/docs/source/changelog/54.1.0.md"&gt;54.1.0&lt;/a&gt; of &lt;a href="https://datafusion.apache.org/ballista/"&gt;Apache DataFusion Ballista&lt;/a&gt;. Ballista is a distributed query
+execution engine that enhances &lt;a href="https://datafusion.apache.org"&gt;Apache DataFusion&lt;/a&gt; by enabling parallel execution of workloads across multiple
+nodes.&lt;/p&gt;
+&lt;p&gt;This is a patch release, consisting of 10 commits from 3 contributors. It follows &lt;a href="/blog/2026/07/12/datafusion-ballista-54.0.0/"&gt;54.0.0 …&lt;/a&gt;&lt;/p&gt;</summary><content type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+
+&lt;p&gt;We are pleased to announce version &lt;a href="https://github.com/apache/datafusion-ballista/blob/54.1.0/docs/source/changelog/54.1.0.md"&gt;54.1.0&lt;/a&gt; of &lt;a href="https://datafusion.apache.org/ballista/"&gt;Apache DataFusion Ballista&lt;/a&gt;. Ballista is a distributed query
+execution engine that enhances &lt;a href="https://datafusion.apache.org"&gt;Apache DataFusion&lt;/a&gt; by enabling parallel execution of workloads across multiple
+nodes.&lt;/p&gt;
+&lt;p&gt;This is a patch release, consisting of 10 commits from 3 contributors. It follows &lt;a href="/blog/2026/07/12/datafusion-ballista-54.0.0/"&gt;54.0.0&lt;/a&gt; and contains no
+new features and no breaking changes — only an upgrade to DataFusion 54.1.0 and a set of bug fixes
+backported from &lt;code&gt;main&lt;/code&gt;. Users running 54.0.0 are encouraged to upgrade.&lt;/p&gt;
+&lt;h2 id="upgrade-to-datafusion-5410"&gt;Upgrade to DataFusion 54.1.0&lt;a class="headerlink" href="#upgrade-to-datafusion-5410" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Ballista 54.1.0 is built on DataFusion 54.1.0, picking up the fixes in that patch release. No API changes
+were required, so the &lt;a href="https://datafusion.apache.org/ballista/upgrading/54.0.0.html"&gt;54.0.0 upgrade guide&lt;/a&gt; still applies for anyone moving from an earlier release.&lt;/p&gt;
+&lt;h2 id="cluster-stability-fixes"&gt;Cluster stability fixes&lt;a class="headerlink" href="#cluster-stability-fixes" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Three fixes address problems that only appear in a real multi-node deployment:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Executor client pool enabled by default.&lt;/strong&gt; The executor's &lt;code&gt;client_ttl&lt;/code&gt; defaulted to &lt;code&gt;0&lt;/code&gt;, which disabled
+  the gRPC client pool entirely. Without a pool, the shuffle-read path opened and discarded a TCP connection
+  per fetch, so a single shuffle-heavy query could exhaust the host's ephemeral ports and fail with
+  &lt;code&gt;AddrNotAvailable&lt;/code&gt; — as would every query after it, until those sockets left &lt;code&gt;TIME_WAIT&lt;/code&gt;. A single-executor
+  cluster never showed this, because shuffle reads are served from local files. &lt;code&gt;client_ttl&lt;/code&gt; now defaults to
+  30 seconds, so the pool is on unless explicitly disabled.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Executor startup race.&lt;/strong&gt; The executor spawned its gRPC server and registered with the scheduler
+  immediately afterwards, but the socket was not bound yet when the scheduler dialed back. Losing that race
+  produced &lt;code&gt;ECONNREFUSED&lt;/code&gt;, a failed registration, and an executor that died at startup. The listener is now
+  bound before registration can run.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Executor shutdown.&lt;/strong&gt; The shutdown notification is now sent before the notifier is dropped, so a graceful
+  shutdown is actually observed by the components waiting on it.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id="task-retry-and-shuffle-memory"&gt;Task retry and shuffle memory&lt;a class="headerlink" href="#task-retry-and-shuffle-memory" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Retryable IO errors on a join's build side.&lt;/strong&gt; A retryable IO error raised on a join's shared build side
+  arrives at the failed-task classifier wrapped in &lt;code&gt;DataFusionError::Shared&lt;/code&gt;, so a match on the outermost
+  variant never saw the underlying &lt;code&gt;IoError&lt;/code&gt; and the task was marked non-retryable. Classification now
+  operates on the root error, regardless of wrapping.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Sort shuffle writer respects memory pool pressure.&lt;/strong&gt; The sort shuffle writer discarded the result of
+  &lt;code&gt;try_grow&lt;/code&gt; on its memory reservation, so a rejected grow produced no spill: the batch stayed buffered while
+  the shared &lt;code&gt;MemoryPool&lt;/code&gt; had not accounted for it, and other consumers saw memory as free that was not. A
+  rejected grow is now treated as a spill trigger alongside the existing per-task budget.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id="planning-correctness"&gt;Planning correctness&lt;a class="headerlink" href="#planning-correctness" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;&lt;code&gt;GROUP BY&lt;/code&gt;-less aggregates are preserved&lt;/strong&gt; when the scheduler propagates empty stages, so a query whose
+  input produces no rows still returns the correct single-row aggregate result rather than nothing.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;&lt;code&gt;EmptyExec&lt;/code&gt; partition counts survive stage serialization&lt;/strong&gt;, fixing plans whose partitioning changed as a
+  stage was sent to an executor.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Task partitions are mapped through &lt;code&gt;UnionExec&lt;/code&gt;&lt;/strong&gt; when restricting file scans, so each task scans the
+  files it was assigned.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;&lt;code&gt;SortMergeJoinExec&lt;/code&gt; broadcast conversion is now disabled by default.&lt;/strong&gt; The static-planner optimization
+  that broadcasts the small build side of a sort-merge join, added in 54.0.0, is opt-in in this release while
+  outstanding issues are resolved.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id="thank-you"&gt;Thank You&lt;a class="headerlink" href="#thank-you" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Thanks to Andy Grove, Alexander Domenti, and goingforstudying-ctrl for the commits in this release, and to
+everyone who contributed by filing issues, reviewing PRs, and providing feedback. Full details are in the
+&lt;a href="https://github.com/apache/datafusion-ballista/blob/54.1.0/docs/source/changelog/54.1.0.md"&gt;changelog&lt;/a&gt;.&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Apache DataFusion Comet 1.0.0 Release</title><link href="https://datafusion.apache.org/blog/2026/08/07/datafusion-comet-1.0.0" rel="alternate"/><published>2026-08-07T00:00:00+00:00</published><updated>2026-08-07T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2026-08-07:/blog/2026/08/07/datafusion-comet-1.0.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
