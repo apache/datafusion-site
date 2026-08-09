@@ -1,0 +1,201 @@
+<!doctype html>
+<html class="no-js" lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apache DataFusion Ballista 54.1.0 Released - Apache DataFusion Blog</title>
+<link href="/blog/favicon.ico" rel="icon" type="image/x-icon">
+<link href="/blog/favicon.ico" rel="shortcut icon" type="image/x-icon">
+<link href="/blog/css/bootstrap.min.css" rel="stylesheet">
+<link href="/blog/css/fontawesome.all.min.css" rel="stylesheet">
+<link href="/blog/css/headerlink.css" rel="stylesheet">
+<link href="/blog/highlight/default.min.css" rel="stylesheet">
+<link href="/blog/css/app.css" rel="stylesheet">
+<link href="/blog/css/dark-mode.css" rel="stylesheet">
+<script src="/blog/js/dark-mode.js"></script>
+<script src="/blog/highlight/highlight.js"></script>
+<script>hljs.highlightAll();</script>  </head>
+  <body class="d-flex flex-column h-100">
+  <main class="flex-shrink-0">
+<!-- nav bar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark" aria-label="Fifth navbar example">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/blog/"><img src="/blog/images/logo_original4x.png" style="height: 32px;"/> Apache DataFusion Blog</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarADP" aria-controls="navbarADP" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarADP">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/about.html">About</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/feed.xml">RSS</a>
+                </li>
+            </ul>
+            <button id="dark-mode-toggle" type="button" class="dark-mode-toggle" aria-label="Toggle dark mode" aria-pressed="false" title="Toggle dark mode">
+                <span class="sun-icon" aria-hidden="true">☀</span>
+                <span class="moon-icon" aria-hidden="true">☾</span>
+            </button>
+        </div>
+    </div>
+</nav>    
+<!-- article contents -->
+<div id="contents">
+  <div class="bg-white p-4 p-md-5 rounded">
+    <div class="row justify-content-center">
+      <div class="col-12 col-md-8 main-content">
+        <h1>
+          Apache DataFusion Ballista 54.1.0 Released
+        </h1>
+        <p>Posted on: Sun 09 August 2026 by pmc</p>
+
+        <aside class="toc-container d-md-none mb-2">
+          <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#upgrade-to-datafusion-5410">Upgrade to DataFusion 54.1.0</a></li>
+<li><a href="#cluster-stability-fixes">Cluster stability fixes</a></li>
+<li><a href="#task-retry-and-shuffle-memory">Task retry and shuffle memory</a></li>
+<li><a href="#planning-correctness">Planning correctness</a></li>
+<li><a href="#thank-you">Thank You</a></li>
+</ul>
+</div>
+        </aside>
+
+        <!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+-->
+
+<p>We are pleased to announce version <a href="https://github.com/apache/datafusion-ballista/blob/54.1.0/docs/source/changelog/54.1.0.md">54.1.0</a> of <a href="https://datafusion.apache.org/ballista/">Apache DataFusion Ballista</a>. Ballista is a distributed query
+execution engine that enhances <a href="https://datafusion.apache.org">Apache DataFusion</a> by enabling parallel execution of workloads across multiple
+nodes.</p>
+<p>This is a patch release, consisting of 10 commits from 3 contributors. It follows <a href="/blog/2026/07/12/datafusion-ballista-54.0.0/">54.0.0</a> and contains no
+new features and no breaking changes — only an upgrade to DataFusion 54.1.0 and a set of bug fixes
+backported from <code>main</code>. Users running 54.0.0 are encouraged to upgrade.</p>
+<h2 id="upgrade-to-datafusion-5410">Upgrade to DataFusion 54.1.0<a class="headerlink" href="#upgrade-to-datafusion-5410" title="Permanent link">¶</a></h2>
+<p>Ballista 54.1.0 is built on DataFusion 54.1.0, picking up the fixes in that patch release. No API changes
+were required, so the <a href="https://datafusion.apache.org/ballista/upgrading/54.0.0.html">54.0.0 upgrade guide</a> still applies for anyone moving from an earlier release.</p>
+<h2 id="cluster-stability-fixes">Cluster stability fixes<a class="headerlink" href="#cluster-stability-fixes" title="Permanent link">¶</a></h2>
+<p>Three fixes address problems that only appear in a real multi-node deployment:</p>
+<ul>
+<li><strong>Executor client pool enabled by default.</strong> The executor's <code>client_ttl</code> defaulted to <code>0</code>, which disabled
+  the gRPC client pool entirely. Without a pool, the shuffle-read path opened and discarded a TCP connection
+  per fetch, so a single shuffle-heavy query could exhaust the host's ephemeral ports and fail with
+  <code>AddrNotAvailable</code> — as would every query after it, until those sockets left <code>TIME_WAIT</code>. A single-executor
+  cluster never showed this, because shuffle reads are served from local files. <code>client_ttl</code> now defaults to
+  30 seconds, so the pool is on unless explicitly disabled.</li>
+<li><strong>Executor startup race.</strong> The executor spawned its gRPC server and registered with the scheduler
+  immediately afterwards, but the socket was not bound yet when the scheduler dialed back. Losing that race
+  produced <code>ECONNREFUSED</code>, a failed registration, and an executor that died at startup. The listener is now
+  bound before registration can run.</li>
+<li><strong>Executor shutdown.</strong> The shutdown notification is now sent before the notifier is dropped, so a graceful
+  shutdown is actually observed by the components waiting on it.</li>
+</ul>
+<h2 id="task-retry-and-shuffle-memory">Task retry and shuffle memory<a class="headerlink" href="#task-retry-and-shuffle-memory" title="Permanent link">¶</a></h2>
+<ul>
+<li><strong>Retryable IO errors on a join's build side.</strong> A retryable IO error raised on a join's shared build side
+  arrives at the failed-task classifier wrapped in <code>DataFusionError::Shared</code>, so a match on the outermost
+  variant never saw the underlying <code>IoError</code> and the task was marked non-retryable. Classification now
+  operates on the root error, regardless of wrapping.</li>
+<li><strong>Sort shuffle writer respects memory pool pressure.</strong> The sort shuffle writer discarded the result of
+  <code>try_grow</code> on its memory reservation, so a rejected grow produced no spill: the batch stayed buffered while
+  the shared <code>MemoryPool</code> had not accounted for it, and other consumers saw memory as free that was not. A
+  rejected grow is now treated as a spill trigger alongside the existing per-task budget.</li>
+</ul>
+<h2 id="planning-correctness">Planning correctness<a class="headerlink" href="#planning-correctness" title="Permanent link">¶</a></h2>
+<ul>
+<li><strong><code>GROUP BY</code>-less aggregates are preserved</strong> when the scheduler propagates empty stages, so a query whose
+  input produces no rows still returns the correct single-row aggregate result rather than nothing.</li>
+<li><strong><code>EmptyExec</code> partition counts survive stage serialization</strong>, fixing plans whose partitioning changed as a
+  stage was sent to an executor.</li>
+<li><strong>Task partitions are mapped through <code>UnionExec</code></strong> when restricting file scans, so each task scans the
+  files it was assigned.</li>
+<li><strong><code>SortMergeJoinExec</code> broadcast conversion is now disabled by default.</strong> The static-planner optimization
+  that broadcasts the small build side of a sort-merge join, added in 54.0.0, is opt-in in this release while
+  outstanding issues are resolved.</li>
+</ul>
+<h2 id="thank-you">Thank You<a class="headerlink" href="#thank-you" title="Permanent link">¶</a></h2>
+<p>Thanks to Andy Grove, Alexander Domenti, and goingforstudying-ctrl for the commits in this release, and to
+everyone who contributed by filing issues, reviewing PRs, and providing feedback. Full details are in the
+<a href="https://github.com/apache/datafusion-ballista/blob/54.1.0/docs/source/changelog/54.1.0.md">changelog</a>.</p>
+
+<!--
+  Comments Section
+  Loaded only after explicit visitor consent to comply with ASF policy.
+-->
+
+<div>
+  <hr>
+  <h3 id="comments">Comments<a class="headerlink" href="#comments" title="Permanent link">&para;</a></h3>
+
+  <!-- Local loader script -->
+  <script src="/blog/js/giscus-consent.js" defer></script>
+
+  <!-- Consent UI -->
+  <div id="giscus-consent">
+    <p>
+        We use <a href="https://giscus.app/">Giscus</a> for comments, powered by GitHub Discussions.
+        To respect your privacy, Giscus and comments will load only if you click "Show Comments"
+    </p>
+
+    <div class="consent-actions">
+      <button id="giscus-load" type="button">Show Comments</button>
+      <button id="giscus-revoke" type="button" hidden>Hide Comments</button>
+    </div>
+
+    <noscript>JavaScript is required to load comments from Giscus.</noscript>
+  </div>
+
+  <!-- Container where Giscus will render -->
+  <div id="comment-thread"></div>
+</div>      </div>
+      <aside class="toc-container d-none d-md-block col-md-4 col-xl-3 ms-xl-2">
+        <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#upgrade-to-datafusion-5410">Upgrade to DataFusion 54.1.0</a></li>
+<li><a href="#cluster-stability-fixes">Cluster stability fixes</a></li>
+<li><a href="#task-retry-and-shuffle-memory">Task retry and shuffle memory</a></li>
+<li><a href="#planning-correctness">Planning correctness</a></li>
+<li><a href="#thank-you">Thank You</a></li>
+</ul>
+</div>
+      </aside>
+    </div>
+  </div>
+</div>    
+    <!-- footer -->
+    <div class="row g-0">
+      <div class="col-12">
+        <p style="font-style: italic; font-size: 0.8rem; text-align: center;">
+          Copyright 2026, <a href="https://www.apache.org/">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a>.<br/>
+          Apache&reg; and the Apache logo are trademarks of The Apache Software Foundation.
+        </p>
+        <p style="font-size: 0.8rem; text-align: center;">
+          <a href="https://www.apache.org/">Foundation</a> |
+          <a href="https://www.apache.org/events/current-event.html">Events</a> |
+          <a href="https://www.apache.org/licenses/">License</a> |
+          <a href="https://www.apache.org/security/">Security</a> |
+          <a href="https://www.apache.org/foundation/sponsorship.html">Sponsorship</a> |
+          <a href="https://www.apache.org/foundation/thanks.html">Thanks</a> |
+          <a href="https://privacy.apache.org/policies/privacy-policy-public.html">Privacy</a>
+        </p>
+      </div>
+    </div>
+    <script src="/blog/js/bootstrap.bundle.min.js"></script>  </main>
+  </body>
+</html>
