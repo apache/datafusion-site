@@ -1,0 +1,849 @@
+<!doctype html>
+<html class="no-js" lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apache DataFusion 55.0.0 Released - Apache DataFusion Blog</title>
+<link href="/blog/favicon.ico" rel="icon" type="image/x-icon">
+<link href="/blog/favicon.ico" rel="shortcut icon" type="image/x-icon">
+<link href="/blog/css/bootstrap.min.css" rel="stylesheet">
+<link href="/blog/css/fontawesome.all.min.css" rel="stylesheet">
+<link href="/blog/css/headerlink.css" rel="stylesheet">
+<link href="/blog/highlight/default.min.css" rel="stylesheet">
+<link href="/blog/css/app.css" rel="stylesheet">
+<link href="/blog/css/dark-mode.css" rel="stylesheet">
+<script src="/blog/js/dark-mode.js"></script>
+<script src="/blog/highlight/highlight.js"></script>
+<script>hljs.highlightAll();</script>  </head>
+  <body class="d-flex flex-column h-100">
+  <main class="flex-shrink-0">
+<!-- nav bar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark" aria-label="Fifth navbar example">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/blog/"><img src="/blog/images/logo_original4x.png" style="height: 32px;"/> Apache DataFusion Blog</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarADP" aria-controls="navbarADP" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarADP">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/about.html">About</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/feed.xml">RSS</a>
+                </li>
+            </ul>
+            <button id="dark-mode-toggle" type="button" class="dark-mode-toggle" aria-label="Toggle dark mode" aria-pressed="false" title="Toggle dark mode">
+                <span class="sun-icon" aria-hidden="true">☀</span>
+                <span class="moon-icon" aria-hidden="true">☾</span>
+            </button>
+        </div>
+    </div>
+</nav>    
+<!-- article contents -->
+<div id="contents">
+  <div class="bg-white p-4 p-md-5 rounded">
+    <div class="row justify-content-center">
+      <div class="col-12 col-md-8 main-content">
+        <h1>
+          Apache DataFusion 55.0.0 Released
+        </h1>
+        <p>Posted on: Tue 25 August 2026 by pmc</p>
+
+        <aside class="toc-container d-md-none mb-2">
+          <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#performance-improvements">Performance Improvements 🚀</a><ul>
+<li><a href="#sort-pushdown-topk-pruning">Sort Pushdown + TopK Pruning</a></li>
+<li><a href="#aggregation-improvements">Aggregation Improvements</a></li>
+<li><a href="#faster-functions">Faster Functions</a></li>
+<li><a href="#planner-improvements">Planner Improvements</a></li>
+<li><a href="#scan-improvements">Scan Improvements</a></li>
+</ul>
+</li>
+<li><a href="#stability-improvements">Stability Improvements 🛡️</a></li>
+<li><a href="#new-features">New Features ✨</a><ul>
+<li><a href="#file_row_index-and-input_file_name">file_row_index() and input_file_name()</a></li>
+<li><a href="#range-partitioning">Range Partitioning</a></li>
+<li><a href="#merge-into-planner-support">MERGE INTO Planner Support</a></li>
+<li><a href="#pluggable-spill-backends">Pluggable Spill Backends</a></li>
+<li><a href="#extensibility-for-distributed-engines">Extensibility for Distributed Engines</a></li>
+<li><a href="#explain-improvements">EXPLAIN Improvements</a></li>
+<li><a href="#new-functions">New Functions</a></li>
+</ul>
+</li>
+<li><a href="#upgrade-guide-and-changelog">Upgrade Guide and Changelog 📖</a></li>
+<li><a href="#about-datafusion">About DataFusion</a></li>
+<li><a href="#how-to-get-involved">How to Get Involved</a></li>
+<li><a href="#appendix-clickbench-results">Appendix: ClickBench Results</a></li>
+<li><a href="#appendix-full-list-of-performance-improvements">Appendix: Full List of Performance Improvements</a><ul>
+<li><a href="#sort-topk">Sort / TopK</a></li>
+<li><a href="#window-functions">Window Functions</a></li>
+<li><a href="#aggregation">Aggregation</a></li>
+<li><a href="#expressions-and-functions">Expressions and Functions</a></li>
+<li><a href="#planning">Planning</a></li>
+<li><a href="#scan-io">Scan / IO</a></li>
+</ul>
+</li>
+</ul>
+</div>
+        </aside>
+
+        <!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+-->
+
+<p>We are proud to announce the release of <a href="https://crates.io/crates/datafusion/55.0.0">DataFusion 55.0.0</a>. This post
+highlights some of the many improvements since <a href="https://datafusion.apache.org/blog/2026/06/12/datafusion-54.0.0/">DataFusion 54.0.0</a>, such as
+significant performance increases, range partitioning, <code>MERGE INTO</code> support, and
+runtime row-group pruning. The complete list of changes is available in the
+<a href="https://github.com/apache/datafusion/blob/branch-55/dev/changelog/55.0.0.md">changelog</a>. This release represents roughly 10 weeks of development and 877
+commits. Thanks to the <a href="https://github.com/apache/datafusion/blob/branch-55/dev/changelog/55.0.0.md#credits">175 contributors</a> (a new record!) for making it
+possible.</p>
+<p><img alt="Bar charts showing total commits, commits per day, and unique contributors for DataFusion releases 53.0.0, 54.0.0, and 55.0.0." class="img-fluid" src="/blog/images/datafusion-55.0.0/commits_contributors.svg" width="100%"/></p>
+<p><strong>Figure 1</strong>: Development activity over the last three DataFusion releases:
+total commits, commits per day, and unique contributors, computed from each
+release's <a href="https://github.com/apache/datafusion/blob/branch-55/dev/changelog/55.0.0.md">changelog</a> and release dates.</p>
+<h2 id="performance-improvements">Performance Improvements 🚀<a class="headerlink" href="#performance-improvements" title="Permanent link">¶</a></h2>
+<p>In this release, we focused our optimizations on making DataFusion faster across
+the board rather than further optimizing our very satisfying ClickBench numbers
+(DataFusion is already the fastest in some cases — see the
+<a href="#appendix-clickbench-results">appendix</a>), as ClickBench represents only a tiny fraction of what our actual users
+do (e.g. its files have no page index and contain only integer and string columns).</p>
+<p>Here is a representative sample of the performance improvements in this release;
+see the <a href="#appendix-full-list-of-performance-improvements">full list in the appendix</a>.</p>
+<table class="table">
+<thead>
+<tr>
+<th>Improvement</th>
+<th>Representative Result</th>
+<th>Area</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Runtime row-group pruning for TopK</td>
+<td><a href="https://github.com/apache/datafusion/pull/22450#issuecomment-4720594338">4.2x faster <code>topk_tpch</code> Q8</a></td>
+<td>Sort / TopK</td>
+</tr>
+<tr>
+<td>Faster <code>IN</code> list evaluation</td>
+<td><a href="https://github.com/apache/datafusion/pull/23014">up to 14.7x faster for small primitive lists</a>, <a href="https://github.com/apache/datafusion/pull/23011">9.7x faster for <code>UInt8</code></a></td>
+<td>Expressions</td>
+</tr>
+<tr>
+<td>Prune unread Parquet leaves for nested columns</td>
+<td><a href="https://github.com/apache/datafusion/pull/24090">Reduces reads from 1.35 TB to 30.9 GB in a production Comet query</a></td>
+<td>Scan / IO</td>
+</tr>
+<tr>
+<td>Fewer object store requests for CSV</td>
+<td><a href="https://github.com/apache/datafusion/pull/22962#issuecomment-4721729807">70% faster TPC-H CSV with simulated latency</a></td>
+<td>Scan / IO</td>
+</tr>
+<tr>
+<td>Faster <code>SortPreservingMerge</code> tie-breaker</td>
+<td><a href="https://github.com/apache/datafusion/pull/23107#issuecomment-4776877963">8% faster <code>sort_tpch</code> Q6</a></td>
+<td>Sorting</td>
+</tr>
+<tr>
+<td>Native <code>GROUP BY</code> on <code>FixedSizeBinary</code> (e.g. UUIDs)</td>
+<td><a href="https://github.com/apache/datafusion/pull/23646#pullrequestreview-4900163566">~5% faster grouping 200M UUIDs</a>, <a href="https://github.com/apache/datafusion/pull/23646#issuecomment-4996436765">much less memory</a></td>
+<td>Aggregation</td>
+</tr>
+</tbody>
+</table>
+<h3 id="sort-pushdown-topk-pruning">Sort Pushdown + TopK Pruning<a class="headerlink" href="#sort-pushdown-topk-pruning" title="Permanent link">¶</a></h3>
+<p>The multi-release <a href="https://github.com/apache/datafusion/issues/23036">Sort Pushdown effort</a> continues to optimize <code>ORDER BY</code> and
+<code>ORDER BY ... LIMIT</code> (TopK) queries. In DataFusion 55, as a dynamic filter
+threshold tightens, the Parquet reader re-evaluates the threshold against the
+remaining row groups and drops those that can no longer contribute (<a href="https://github.com/apache/datafusion/pull/22450">#22450</a>),
+and compound <code>ORDER BY</code> queries are now supported. Together these reduce the
+total <code>topk_tpch</code> suite runtime by ~43%; see our
+<a href="https://datafusion.apache.org/blog/2026/07/20/sort-pushdown/">Optimizing for Almost Sorted Data</a> blog post for more details. Thanks to
+<a href="https://github.com/zhuqi-lucas">@zhuqi-lucas</a> for driving this work, with reviews from <a href="https://github.com/adriangb">@adriangb</a>.</p>
+<h3 id="aggregation-improvements">Aggregation Improvements<a class="headerlink" href="#aggregation-improvements" title="Permanent link">¶</a></h3>
+<p><strong>Complete Multi-Column <code>GROUP BY</code> Type Coverage</strong>:
+DataFusion's column-wise <code>GROUP BY</code> storage (<code>GroupValuesColumn</code>) has
+type-specific fast paths, but previously any unsupported column type forced
+the entire grouping onto a slower row-encoded fallback. For example, this
+query to deduplicate a table of UUIDs used to hit the slow path:</p>
+<pre><code class="language-sql">SELECT count(*) FROM (SELECT uuid, id FROM 'uuids.parquet' GROUP BY uuid, id);
+</code></pre>
+<p>DataFusion 55 completes the type coverage (<a href="https://github.com/apache/datafusion/issues/22715">#22715</a>), so the query above now runs about 5%
+faster on 200M UUIDs, and uses much less memory (see <a href="https://github.com/apache/datafusion/issues/23645">#23645</a>). Thanks to
+<a href="https://github.com/zhuqi-lucas">@zhuqi-lucas</a>, <a href="https://github.com/tohuya6">@tohuya6</a>, and <a href="https://github.com/maxburke">@maxburke</a> for this work.</p>
+<h3 id="faster-functions">Faster Functions<a class="headerlink" href="#faster-functions" title="Permanent link">¶</a></h3>
+<p>DataFusion ships hundreds of built-in functions, so speeding them up improves performance
+for many workloads. This release optimizes dozens of functions — up to 24x faster
+for <a href="https://github.com/apache/datafusion/pull/23460"><code>find_in_set</code></a> and 100x for <a href="https://github.com/apache/datafusion/pull/22768"><code>approx_distinct</code></a>
+with low-cardinality inputs and many groups (<a href="https://github.com/apache/datafusion/pull/22768">#22768</a>). It also includes
+dictionary-encoding preservation for many string functions (<a href="https://github.com/apache/datafusion/pull/23743">#23743</a>,
+<a href="https://github.com/apache/datafusion/pull/23930">#23930</a>, <a href="https://github.com/apache/datafusion/pull/24100">#24100</a>) and new <code>IN</code> list specializations, such as bitmap filters for small integer types (<a href="https://github.com/apache/datafusion/issues/19241">#19241</a>). See the
+<a href="#appendix-full-list-of-performance-improvements">full list in the appendix</a>.
+Thanks to the many contributors who drove this work, especially
+<a href="https://github.com/andygrove">@andygrove</a>, <a href="https://github.com/geoffreyclaude">@geoffreyclaude</a>, <a href="https://github.com/neilconway">@neilconway</a>, <a href="https://github.com/lyne7-sc">@lyne7-sc</a>, <a href="https://github.com/theirix">@theirix</a>, and
+<a href="https://github.com/haohuaijin">@haohuaijin</a>.</p>
+<h3 id="planner-improvements">Planner Improvements<a class="headerlink" href="#planner-improvements" title="Permanent link">¶</a></h3>
+<p><strong>Unified Distribution and Sorting Enforcement</strong>:
+The <a href="https://docs.rs/datafusion/54.0.0/datafusion/physical_optimizer/enforce_distribution/struct.EnforceDistribution.html"><code>EnforceDistribution</code></a> and
+<a href="https://docs.rs/datafusion/54.0.0/datafusion/physical_optimizer/enforce_sorting/struct.EnforceSorting.html"><code>EnforceSorting</code></a> physical optimizer passes are
+now merged into a single <a href="https://docs.rs/datafusion/55.0.0/datafusion/physical_optimizer/ensure_requirements/struct.EnsureRequirements.html"><code>EnsureRequirements</code></a> pass with idempotent sort
+pushdown (<a href="https://github.com/apache/datafusion/pull/21976">#21976</a>), fixing longstanding ordering issues between the two passes
+and enabling the sort pushdown work described above.
+Thanks to <a href="https://github.com/zhuqi-lucas">@zhuqi-lucas</a> for this work, with reviews from <a href="https://github.com/2010YOUY01">@2010YOUY01</a> and
+<a href="https://github.com/alamb">@alamb</a>.</p>
+<p><strong>Smarter Join Planning</strong>:
+DataFusion 55 now converts inner joins to more efficient semi joins when equivalent (<a href="https://github.com/apache/datafusion/pull/22652">#22652</a>),
+eliminates <code>LEFT</code>/<code>RIGHT</code> joins with redundant sides (<a href="https://github.com/apache/datafusion/pull/23566">#23566</a>), handles
+intermediate projections in outer join elimination (<a href="https://github.com/apache/datafusion/pull/22534">#22534</a>), and reorders
+predicates in conjunctions using a cost heuristic (<a href="https://github.com/apache/datafusion/pull/22343">#22343</a>).
+Thanks to <a href="https://github.com/neilconway">@neilconway</a> and <a href="https://github.com/simonvandel">@simonvandel</a> for driving this work.</p>
+<p><strong>Better Scalar UDF Metadata APIs</strong>:
+Scalar UDFs can now declare that they are <em>strict</em> (they return <code>NULL</code> when any
+input is <code>NULL</code>) (<a href="https://github.com/apache/datafusion/pull/23148">#23148</a>), letting the optimizer eliminate outer joins for
+queries that filter on a function result, and <em>strictly order preserving</em>
+(sorted input yields identically sorted output) (<a href="https://github.com/apache/datafusion/pull/23807">#23807</a>), letting the
+optimizer eliminate redundant sorts on expressions such as custom casts.
+Thanks to <a href="https://github.com/lyne7-sc">@lyne7-sc</a> and <a href="https://github.com/rluvaton">@rluvaton</a> for this work, with reviews from
+<a href="https://github.com/alamb">@alamb</a>, <a href="https://github.com/kosiew">@kosiew</a>, and <a href="https://github.com/getChan">@getChan</a>.</p>
+<p><strong>Faster Optimizer</strong>:
+The optimizer continues to get faster, with improvements such as selective
+subquery traversal and in-place rewrites (<a href="https://github.com/apache/datafusion/pull/22298">#22298</a>), collapsing chained
+projections (<a href="https://github.com/apache/datafusion/pull/22389">#22389</a>), avoiding re-inlining expensive common subexpressions
+(<a href="https://github.com/apache/datafusion/pull/23459">#23459</a>), and a faster <code>PushDownFilter</code> rule that modifies plans in place
+rather than copying them (<a href="https://github.com/apache/datafusion/issues/20002">#20002</a>, <a href="https://github.com/apache/datafusion/pull/21668">#21668</a>).
+Thanks to <a href="https://github.com/adriangb">@adriangb</a>, <a href="https://github.com/Dandandan">@Dandandan</a>, <a href="https://github.com/fordN">@fordN</a>, and <a href="https://github.com/joroKr21">@joroKr21</a> for this work.</p>
+<h3 id="scan-improvements">Scan Improvements<a class="headerlink" href="#scan-improvements" title="Permanent link">¶</a></h3>
+<p><strong>Pruning Unread Parquet Leaves for Nested Columns</strong>:</p>
+<p>Systems that embed DataFusion — such as <a href="https://datafusion.apache.org/comet/">DataFusion Comet</a>, <a href="https://github.com/delta-io/delta-rs">delta-rs</a>, and
+Iceberg integrations — often hand DataFusion a table schema that includes only the nested
+subfields the query needs. For example, given a file whose <code>events</code> column
+physically holds four subfields, a table might declare only two of them:</p>
+<pre><code class="language-sql">-- events column is ARRAY&lt;STRUCT&lt;id BIGINT, name VARCHAR, payload VARCHAR, trace VARCHAR&gt;&gt;
+-- Table definition only refers to the first two subfields, id and name
+CREATE EXTERNAL TABLE events (
+  events ARRAY&lt;STRUCT&lt;id BIGINT, name VARCHAR&gt;&gt;
+)
+STORED AS PARQUET LOCATION 'events.parquet';
+</code></pre>
+<p>DataFusion correctly reconciles these schemas, but prior to DataFusion 55, all
+four leaves were read from the file and decoded, including the large <code>payload</code>
+and <code>trace</code> subfields, which were then thrown away. The Comet project reported
+a production query where this extra decoding caused 1.35 TB of reads, whereas
+plain Spark read only 30.9 GB for the same pruned schema. DataFusion 55 closes
+that gap by not reading the undeclared <code>payload</code> and <code>trace</code> leaves from the
+file at all (<a href="https://github.com/apache/datafusion/pull/24090">#24090</a>). Thanks to <a href="https://github.com/mbutrovich">@mbutrovich</a> for this work, with reviews from
+<a href="https://github.com/adriangb">@adriangb</a>.</p>
+<p><strong>Other Scan Improvements</strong>:
+DataFusion 55 also skips loading the page index (and an expensive
+<a href="https://docs.rs/parquet/latest/parquet/file/metadata/struct.ParquetMetaData.html"><code>ParquetMetaData</code></a> clone) when a file has no page index (<a href="https://github.com/apache/datafusion/pull/24150">#24150</a>), supports
+file-level Parquet row selections (<a href="https://github.com/apache/datafusion/pull/22940">#22940</a>), and lowers the default
+<code>repartition_file_min_size</code> from 10 MiB to 1 MiB for better parallelism on
+small files (<a href="https://github.com/apache/datafusion/pull/22439">#22439</a>).
+Thanks to <a href="https://github.com/alamb">@alamb</a>, <a href="https://github.com/haohuaijin">@haohuaijin</a>, and <a href="https://github.com/adriangb">@adriangb</a>.</p>
+<h2 id="stability-improvements">Stability Improvements 🛡️<a class="headerlink" href="#stability-improvements" title="Permanent link">¶</a></h2>
+<p>The community also improved DataFusion's handling of larger-than-memory
+aggregate workloads (e.g. <a href="https://github.com/apache/datafusion/pull/23657">#23657</a>, <a href="https://github.com/apache/datafusion/pull/23965">#23965</a>, <a href="https://github.com/apache/datafusion/pull/24061">#24061</a>), building on a
+refactoring of the aggregation path into dedicated streams (epic <a href="https://github.com/apache/datafusion/issues/22710">#22710</a>).
+Sorts under memory pressure are more resilient: when a spill
+merge cannot reserve enough memory, DataFusion now re-spills the largest stream
+in smaller batches rather than failing (<a href="https://github.com/apache/datafusion/pull/22945">#22945</a>), and caps the merge fan-in to
+bound memory use (<a href="https://github.com/apache/datafusion/pull/23066">#23066</a>). Thanks to <a href="https://github.com/2010YOUY01">@2010YOUY01</a>, <a href="https://github.com/EmilyMatt">@EmilyMatt</a>,
+<a href="https://github.com/yinli-systems">@yinli-systems</a>, <a href="https://github.com/Rachelint">@Rachelint</a>, and <a href="https://github.com/pepijnve">@pepijnve</a> (who fixed a subtle lost-wakeup
+bug in the spill pool, <a href="https://github.com/apache/datafusion/pull/23522">#23522</a>) for this work.</p>
+<h2 id="new-features">New Features ✨<a class="headerlink" href="#new-features" title="Permanent link">¶</a></h2>
+<h3 id="file_row_index-and-input_file_name"><code>file_row_index()</code> and <code>input_file_name()</code><a class="headerlink" href="#file_row_index-and-input_file_name" title="Permanent link">¶</a></h3>
+<p>DataFusion 55 adds <a href="https://datafusion.apache.org/user-guide/sql/scalar_functions.html#file-row-index"><code>file_row_index</code></a> (<a href="https://github.com/apache/datafusion/pull/22604">#22604</a>) and <a href="https://datafusion.apache.org/user-guide/sql/scalar_functions.html#input-file-name"><code>input_file_name</code></a> (<a href="https://github.com/apache/datafusion/pull/22978">#22978</a>) functions
+to expose Parquet virtual columns:</p>
+<pre><code class="language-sql">&gt; select *, input_file_name(), file_row_index() from '/tmp/foo.parquet';
++---------+-------------------+------------------+
+| column1 | input_file_name() | file_row_index() |
++---------+-------------------+------------------+
+| 100     | tmp/foo.parquet   | 0                |
+| 200     | tmp/foo.parquet   | 1                |
++---------+-------------------+------------------+
+</code></pre>
+<p>Such functions are useful for change data capture, debugging, and
+Spark-compatible workloads. Thanks to <a href="https://github.com/mbutrovich">@mbutrovich</a> and <a href="https://github.com/AdamGS">@AdamGS</a> for this work
+(reviving earlier work from <a href="https://github.com/jkylling">@jkylling</a>), with reviews from <a href="https://github.com/adriangb">@adriangb</a>,
+<a href="https://github.com/comphead">@comphead</a>, and <a href="https://github.com/niebayes">@niebayes</a>.</p>
+<h3 id="range-partitioning">Range Partitioning<a class="headerlink" href="#range-partitioning" title="Permanent link">¶</a></h3>
+<p>DataFusion 55 adds native <em>range partitioning</em> support, which maps rows to partitions by key ranges (rather than hash
+values). Query inputs are often range partitioned in real-world scenarios, such as time-series data
+written as one file per day or hour. DataFusion uses range partitioning information to
+avoid expensive repartitioning operations and push more specific dynamic filters
+to scans.</p>
+<p>Data that is range partitioned declares an ordering and a list of split
+points. Partition <code>i</code> holds the keys that fall between split point <code>i-1</code> and
+split point <code>i</code>:</p>
+<pre><code class="language-text">ordering     = [date ASC NULLS LAST]
+split_points = [(2022-01-01), (2023-01-01)]
+
+partition 0: date &lt; 2022-01-01
+partition 1: 2022-01-01 &lt;= date &lt; 2023-01-01
+partition 2: date &gt;= 2023-01-01
+</code></pre>
+<p>For more details, please see the documentation for
+<a href="https://docs.rs/datafusion/55.0.0/datafusion/physical_expr/struct.RangePartitioning.html"><code>Partitioning::Range</code></a>, the planning epic (<a href="https://github.com/apache/datafusion/issues/22395">#22395</a>), and
+the design discussion (<a href="https://github.com/apache/datafusion/issues/21992">#21992</a>). Thanks to <a href="https://github.com/gene-bordegaray">@gene-bordegaray</a>, <a href="https://github.com/saadtajwar">@saadtajwar</a>, <a href="https://github.com/peterxcli">@peterxcli</a>, <a href="https://github.com/stuhood">@stuhood</a>,
+<a href="https://github.com/gmhelmold">@gmhelmold</a>, <a href="https://github.com/mattp5657">@mattp5657</a>, <a href="https://github.com/mithuncy">@mithuncy</a>, <a href="https://github.com/JSOD11">@JSOD11</a>, <a href="https://github.com/EdsonPetry">@EdsonPetry</a>,
+<a href="https://github.com/Rich-T-kid">@Rich-T-kid</a>, and <a href="https://github.com/blinding-pixels">@blinding-pixels</a> for driving this substantial community
+effort.</p>
+<h3 id="merge-into-planner-support"><code>MERGE INTO</code> Planner Support<a class="headerlink" href="#merge-into-planner-support" title="Permanent link">¶</a></h3>
+<p><code>MERGE INTO</code> (SQL:2003) is a widely used DML statement for upsert and
+conditional update workloads, and a key building block for table formats such
+as Apache Iceberg and Delta Lake. DataFusion 55 adds the logical plan types
+(<a href="https://github.com/apache/datafusion/pull/20763">#20763</a>) along with SQL planner and physical planner support, and a new
+<a href="https://docs.rs/datafusion/55.0.0/datafusion/catalog/trait.TableProvider.html#method.merge_into"><code>TableProvider::merge_into</code></a> hook (<a href="https://github.com/apache/datafusion/pull/22988">#22988</a>) so table implementations can
+execute merge operations:</p>
+<pre><code class="language-sql">MERGE INTO target t
+USING source s
+ON t.id = s.id
+WHEN MATCHED AND s.deleted THEN DELETE
+WHEN MATCHED THEN UPDATE SET name = s.name
+WHEN NOT MATCHED THEN INSERT (id, name) VALUES (s.id, s.name);
+</code></pre>
+<p>Built-in table providers do not yet implement the hook, but custom
+<a href="https://docs.rs/datafusion/55.0.0/datafusion/catalog/trait.TableProvider.html"><code>TableProvider</code></a> implementations (such as lakehouse table formats) can now plug
+in their own merge execution. More <code>MERGE INTO</code> improvements are planned for
+upcoming releases; see <a href="https://github.com/apache/datafusion/issues/20746">#20746</a> for details.
+Thanks to <a href="https://github.com/wirybeaver">@wirybeaver</a> for implementing this feature, with reviews from
+<a href="https://github.com/alamb">@alamb</a> and <a href="https://github.com/kosiew">@kosiew</a>.</p>
+<h3 id="pluggable-spill-backends">Pluggable Spill Backends<a class="headerlink" href="#pluggable-spill-backends" title="Permanent link">¶</a></h3>
+<p>DataFusion spills to disk when a query exceeds its memory budget, but the spill
+infrastructure was previously hardwired to OS-level temporary files. DataFusion
+55 introduces a pluggable <a href="https://docs.rs/datafusion/55.0.0/datafusion/execution/spill_file/trait.SpillFile.html"><code>SpillFile</code></a> trait and
+<a href="https://docs.rs/datafusion/55.0.0/datafusion/execution/spill_file/trait.TempFileFactory.html"><code>TempFileFactory</code></a> (<a href="https://github.com/apache/datafusion/pull/21882">#21882</a>,
+<a href="https://github.com/apache/datafusion/pull/22230">#22230</a>) so hosts can route spill data through their own storage layers — for
+example, extensions like ParadeDB can now integrate spilling into the
+Postgres buffer pool. Implement <a href="https://docs.rs/datafusion/55.0.0/datafusion/execution/spill_file/trait.TempFileFactory.html"><code>TempFileFactory</code></a> and install
+it on the <a href="https://docs.rs/datafusion/55.0.0/datafusion/execution/runtime_env/struct.RuntimeEnv.html"><code>RuntimeEnv</code></a>:</p>
+<pre><code class="language-rust">let runtime = RuntimeEnvBuilder::new()
+    .with_disk_manager_builder(
+        // register a custom TempFileFactory
+        DiskManagerBuilder::default()
+            .with_temp_file_factory(Arc::new(MyTempFileFactory::new())),
+    )
+    .build_arc()?;
+let ctx = SessionContext::new_with_config_rt(SessionConfig::new(), runtime);
+</code></pre>
+<p>See the <a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/data_io/object_store_spill.rs"><code>object_store_spill.rs</code></a> example for a complete implementation that
+spills to an <a href="https://docs.rs/object_store/latest/object_store/trait.ObjectStore.html"><code>ObjectStore</code></a> such as S3. Thanks to <a href="https://github.com/pantShrey">@pantShrey</a> for this work,
+with reviews from <a href="https://github.com/alamb">@alamb</a>.</p>
+<h3 id="extensibility-for-distributed-engines">Extensibility for Distributed Engines<a class="headerlink" href="#extensibility-for-distributed-engines" title="Permanent link">¶</a></h3>
+<p>Several new APIs make it easier to build distributed systems such as
+<a href="https://github.com/datafusion-contrib/datafusion-distributed">datafusion-distributed</a>, <a href="https://datafusion.apache.org/ballista/">DataFusion Ballista</a>, and <a href="https://datafusion.apache.org/python/">DataFusion Python</a> on
+top of DataFusion:</p>
+<ul>
+<li><strong>Dynamic filter propagation across network boundaries</strong>: new
+  <a href="https://docs.rs/datafusion/55.0.0/datafusion/physical_plan/trait.ExecutionPlan.html#tymethod.apply_expressions"><code>ExecutionPlan::apply_expressions</code></a> and
+  <a href="https://docs.rs/datafusion/55.0.0/datafusion/physical_plan/trait.ExecutionPlan.html#method.dynamic_expressions_produced"><code>ExecutionPlan::dynamic_expressions_produced</code></a> methods let engines discover
+  which plan nodes produce dynamic filters and re-wire them across stage
+  boundaries (<a href="https://github.com/apache/datafusion/pull/24018">#24018</a>, <a href="https://github.com/apache/datafusion/pull/24068">#24068</a>). Thanks to <a href="https://github.com/jayshrivastava">@jayshrivastava</a>.</li>
+<li><strong><code>FFI_QueryPlanner</code></strong>: foreign libraries can now provide a custom query
+  planner over the FFI boundary — for example, connecting a distributed
+  planner to a <a href="https://docs.rs/datafusion/55.0.0/datafusion/execution/context/struct.SessionContext.html"><code>SessionContext</code></a> in Python (<a href="https://github.com/apache/datafusion/pull/24028">#24028</a>). Thanks to <a href="https://github.com/timsaucer">@timsaucer</a>.</li>
+<li><strong>Self-serializing execution plans</strong>: built-in <a href="https://docs.rs/datafusion/55.0.0/datafusion/physical_plan/trait.ExecutionPlan.html"><code>ExecutionPlan</code></a>s were ported
+  to per-type <a href="https://docs.rs/datafusion-physical-plan/55.0.0/datafusion_physical_plan/filter/struct.FilterExec.html#method.try_to_proto"><code>try_to_proto</code></a> / <a href="https://docs.rs/datafusion-physical-plan/55.0.0/datafusion_physical_plan/filter/struct.FilterExec.html#method.try_from_proto"><code>try_from_proto</code></a> hooks (<a href="https://github.com/apache/datafusion/issues/23494">#23494</a>), putting built-in and
+  third-party plans on the same code path. Thanks to <a href="https://github.com/adriangb">@adriangb</a>.</li>
+<li><strong>Window accumulator state access</strong>: <a href="https://docs.rs/datafusion/55.0.0/datafusion/physical_plan/windows/struct.BoundedWindowAggExec.html"><code>BoundedWindowAggExec</code></a> can now expose
+  finalized accumulator state to an observer callback, enabling incremental /
+  prefix-scan use cases (<a href="https://github.com/apache/datafusion/pull/24035">#24035</a>; see <a href="https://github.com/apache/datafusion-ballista/pull/2211">how it is used in Ballista</a>). Thanks to
+  <a href="https://github.com/avantgardnerio">@avantgardnerio</a>, with reviews from <a href="https://github.com/alamb">@alamb</a> and <a href="https://github.com/timsaucer">@timsaucer</a>.</li>
+</ul>
+<h3 id="explain-improvements"><code>EXPLAIN</code> Improvements<a class="headerlink" href="#explain-improvements" title="Permanent link">¶</a></h3>
+<p>DataFusion 55 adds a Postgres-style <code>EXPLAIN (...)</code> option list (<a href="https://github.com/apache/datafusion/pull/21768">#21768</a>) and
+a <code>pgjson</code> output format for <a href="https://datafusion.apache.org/user-guide/explain-usage.html#execution-counters-explain-analyze"><code>EXPLAIN ANALYZE</code></a> (<a href="https://github.com/apache/datafusion/pull/21767">#21767</a>), making plan output
+easier to consume with existing Postgres tooling such as plan visualizers.</p>
+<p><code>EXPLAIN ANALYZE</code> can produce many metrics, and you can narrow them down
+explicitly with the <code>METRICS</code> option. For example, to see only row counts for
+each plan node, use this:</p>
+<pre><code class="language-sql">&gt; EXPLAIN (ANALYZE, METRICS 'rows', LEVEL summary)
+  SELECT region_id, sum(amount) FROM orders GROUP BY region_id;
+
+AggregateExec: mode=Single, gby=[region_id@0 as region_id], aggr=[sum(orders.amount)], metrics=[output_rows=5]
+  DataSourceExec: file_groups={1 group: [[orders.parquet]]}, projection=[region_id, amount], file_type=parquet, metrics=[output_rows=100.0 K, row_groups_pruned_statistics=1 total → 1 matched, scan_efficiency_ratio=7.83% (28.30 K/361.5 K), ...]
+</code></pre>
+<p>Adding <code>FORMAT pgjson</code> renders the same physical plan and its live metrics as
+Postgres-compatible JSON, which can be pasted straight into plan visualizers
+such as <a href="https://explain.dalibo.com/">Dalibo</a>:</p>
+<pre><code class="language-sql">&gt; EXPLAIN (ANALYZE, FORMAT pgjson, METRICS 'rows', LEVEL summary)
+  SELECT region_id, sum(amount) FROM orders GROUP BY region_id;
+</code></pre>
+<pre><code class="language-json">[
+  {
+    "Plan": {
+      "Node Type": "AggregateExec",
+      "Actual Rows": 5,
+      "Plans": [
+        { "Node Type": "DataSourceExec", "Actual Rows": 100000, ... }
+      ]
+    }
+  }
+]
+</code></pre>
+<p>See the <a href="https://datafusion.apache.org/user-guide/explain-usage.html">EXPLAIN usage guide</a> for the full option list. Thanks to <a href="https://github.com/adriangb">@adriangb</a>
+for this work.</p>
+<h3 id="new-functions">New Functions<a class="headerlink" href="#new-functions" title="Permanent link">¶</a></h3>
+<p><strong>SQL and Scalar Functions</strong>:
+DataFusion 55 adds new array math functions <a href="https://github.com/apache/datafusion/pull/22466"><code>array_scale</code></a>, <a href="https://github.com/apache/datafusion/pull/22459"><code>array_add</code></a>,
+<a href="https://github.com/apache/datafusion/pull/22556"><code>array_subtract</code></a>, <a href="https://github.com/apache/datafusion/pull/22542"><code>array_sum</code></a>, and <a href="https://github.com/apache/datafusion/pull/23168"><code>array_avg</code></a>, plus the higher-order
+<a href="https://github.com/apache/datafusion/pull/23267"><code>array_first</code></a> function. It also includes the new
+<a href="https://github.com/apache/datafusion/pull/22100"><code>unnest_outer</code></a> function (<a href="https://github.com/apache/datafusion/pull/22100">#22100</a>), which preserves
+empty inputs as <code>NULL</code>s rather than dropping them, and
+<a href="https://github.com/apache/datafusion/pull/22768"><code>approx_distinct</code></a> now supports more types.
+Thanks to <a href="https://github.com/crm26">@crm26</a>, <a href="https://github.com/SubhamSinghal">@SubhamSinghal</a>, <a href="https://github.com/EdsonPetry">@EdsonPetry</a>, <a href="https://github.com/athlcode">@athlcode</a>, and
+<a href="https://github.com/mkleen">@mkleen</a> for these contributions.</p>
+<p><strong>Spark-Compatible Functions</strong>:
+The <a href="https://docs.rs/datafusion-spark/latest/datafusion_spark/index.html">datafusion-spark crate</a> gains new or improved Spark-compatible functions,
+including <a href="https://github.com/apache/datafusion/pull/23774"><code>hypot</code></a>, <a href="https://github.com/apache/datafusion/pull/23962"><code>atan2</code></a>, <a href="https://github.com/apache/datafusion/pull/22740"><code>weekday</code></a>, <a href="https://github.com/apache/datafusion/pull/21639"><code>monthname</code></a>, and <a href="https://github.com/apache/datafusion/pull/20928"><code>concat_ws</code></a> with array
+support, plus a new Spark SQL parser dialect config (<a href="https://github.com/apache/datafusion/pull/22529">#22529</a>).
+Thanks to the contributors who drove this work, especially
+<a href="https://github.com/KarpagamKarthikeyan">@KarpagamKarthikeyan</a>, <a href="https://github.com/sjhddh">@sjhddh</a>, <a href="https://github.com/JeelRajodiya">@JeelRajodiya</a>, <a href="https://github.com/davidlghellin">@davidlghellin</a>, and
+<a href="https://github.com/kumarUjjawal">@kumarUjjawal</a>.</p>
+<h2 id="upgrade-guide-and-changelog">Upgrade Guide and Changelog 📖<a class="headerlink" href="#upgrade-guide-and-changelog" title="Permanent link">¶</a></h2>
+<p>Upgrading to 55.0.0 should be straightforward for most users, though there are
+some breaking changes. See the <a href="https://datafusion.apache.org/library-user-guide/upgrading/55.0.0.html">Upgrade Guide</a> for details and
+migration snippets, and the <a href="https://github.com/apache/datafusion/blob/branch-55/dev/changelog/55.0.0.md">changelog</a> for the full list of changes.</p>
+<h2 id="about-datafusion">About DataFusion<a class="headerlink" href="#about-datafusion" title="Permanent link">¶</a></h2>
+<p><a href="https://datafusion.apache.org/">Apache DataFusion</a> is an extensible query engine, written in <a href="https://www.rust-lang.org/">Rust</a>, that uses
+<a href="https://arrow.apache.org">Apache Arrow</a> as its in-memory format. DataFusion is used by developers to
+create new, fast, data-centric systems such as databases, dataframe libraries,
+and machine learning and streaming applications. While <a href="https://datafusion.apache.org/user-guide/introduction.html#project-goals">DataFusion's primary
+design goal</a> is to accelerate the creation of other data-centric systems, it
+provides a reasonable experience directly out of the box as a <a href="https://datafusion.apache.org/user-guide/dataframe.html">dataframe
+library</a>, <a href="https://datafusion.apache.org/python/">Python library</a>, and <a href="https://datafusion.apache.org/user-guide/cli/">command-line SQL tool</a>.</p>
+<p>DataFusion's core thesis is that, as a community, together we can build much
+more advanced technology than any of us as individuals or companies could build
+alone. Without DataFusion, highly performant vectorized query engines would
+remain the domain of a few large companies and world-class research
+institutions. With DataFusion, we can all build on top of a shared foundation
+and focus on what makes our projects unique.</p>
+<h2 id="how-to-get-involved">How to Get Involved<a class="headerlink" href="#how-to-get-involved" title="Permanent link">¶</a></h2>
+<p>DataFusion is not a project built or driven by a single person, company, or
+foundation. Rather, our community of users and contributors works together to
+build a shared technology that none of us could have built alone.</p>
+<p>If you are interested in joining us, we would love to have you. You can try out
+DataFusion on some of your own data and projects and let us know how it goes,
+contribute suggestions, documentation, bug reports, or a PR with documentation,
+tests, or code. A list of open issues suitable for beginners is <a href="https://github.com/apache/datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22">here</a>, and you
+can find out how to reach us on the <a href="https://datafusion.apache.org/contributor-guide/communication.html">communication doc</a>.</p>
+<h2 id="appendix-clickbench-results">Appendix: ClickBench Results<a class="headerlink" href="#appendix-clickbench-results" title="Permanent link">¶</a></h2>
+<p>We try not to get too excited by benchmarks, though it is hard not to get caught up
+in Benchmaxxing. As noted
+above, ClickBench covers only a tiny fraction of what our users actually do, and
+reads local files rather than object storage. Even so, DataFusion now sits at
+the top of the ClickBench leaderboard for processing partitioned Parquet files,
+as measured by ClickBench's combined metric. Results vary
+slightly by engine and instance type, but DataFusion matches other
+state-of-the-art engines on local files and often significantly exceeds them on
+object storage. Plenty left to optimize, of course.</p>
+<p><img alt="DataFusion ClickBench performance on c7a.metal-48xlarge" class="img-fluid" src="/blog/images/datafusion-55.0.0/clickbench.c7a.metal-48xlarge.2026_08_24.png" width="100%"/>
+<strong>Figure 2</strong>: <a href="https://benchmark.clickhouse.com/#system=+hqa|curp|ti%20rud|Distt|kBP%20t|rsoP%20t|Sili|feeid|traan|Tutt&amp;type=-&amp;machine=+ae-&amp;cluster_size=-&amp;opensource=-&amp;hardware=+c&amp;tuned=+n&amp;metric=combined&amp;queries=-">ClickBench results for c7a.metal-48xlarge as of 2026-08-24</a>; DataFusion is the fastest engine for
+processing partitioned Parquet files, by ClickBench's combined metric. See the <a href="https://benchmark.clickhouse.com/">ClickBench results page</a> for the latest results.</p>
+<p><img alt="DataFusion ClickBench performance on c6a.4xlarge" class="img-fluid" src="/blog/images/datafusion-55.0.0/clickbench.c6a.4xlarge.2026_08_24.png" width="100%"/>
+<strong>Figure 3</strong>: <a href="https://benchmark.clickhouse.com/#system=+hqa|curp|ti%20rud|Distt|kBP%20t|rsoP%20t|Sili|feeid|traan|Tutt&amp;type=-&amp;machine=+ca4e&amp;cluster_size=-&amp;opensource=-&amp;hardware=+c&amp;tuned=+n&amp;metric=combined&amp;queries=-">ClickBench results for c6a.4xlarge as of 2026-08-24</a>; DataFusion is the second
+fastest engine for processing partitioned Parquet files (combined metric) on this VM type. See the <a href="https://benchmark.clickhouse.com/">ClickBench results page</a> for the latest results.</p>
+<p><img alt="DataFusion Performance over time" class="img-fluid" src="/blog/images/datafusion-55.0.0/performance_over_time_clickbench.png" width="100%"/></p>
+<p><strong>Figure 4</strong>: Average and median normalized execution times for DataFusion 55.0.0 on ClickBench queries, compared to previous releases.
+Query times are normalized using the ClickBench definition. See the
+<a href="https://alamb.github.io/datafusion-benchmarking/">DataFusion Benchmarking Page</a>
+for more details.</p>
+<h2 id="appendix-full-list-of-performance-improvements">Appendix: Full List of Performance Improvements<a class="headerlink" href="#appendix-full-list-of-performance-improvements" title="Permanent link">¶</a></h2>
+<p>The tables below list the performance improvements in this release along with a
+representative measurement for each. Results marked <em>(micro)</em> come from
+Criterion microbenchmarks and are not expected to translate directly into
+end-to-end query speedups. Speedups are reported as ratios of old to new
+runtime: "n% faster" means the old runtime was (100+n)% of the new, and
+speedups of 2x or more are reported as a multiple.</p>
+<h3 id="sort-topk">Sort / TopK<a class="headerlink" href="#sort-topk" title="Permanent link">¶</a></h3>
+<table class="table">
+<thead>
+<tr>
+<th>Improvement</th>
+<th>Issue / PR</th>
+<th>Representative Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Runtime row-group pruning for TopK</td>
+<td><a href="https://github.com/apache/datafusion/issues/23036">#23036</a>, <a href="https://github.com/apache/datafusion/pull/22450">#22450</a></td>
+<td><a href="https://github.com/apache/datafusion/pull/22450#issuecomment-4720594338">4.2x faster on <code>topk_tpch</code> Q8; 5 of 11 queries 3.6-4.2x faster</a></td>
+</tr>
+<tr>
+<td>Faster <code>SortPreservingMerge</code> tie-breaker</td>
+<td><a href="https://github.com/apache/datafusion/pull/23107">#23107</a></td>
+<td><a href="https://github.com/apache/datafusion/pull/23107#issuecomment-4776877963">8% faster on <code>sort_tpch</code> Q6</a></td>
+</tr>
+</tbody>
+</table>
+<h3 id="window-functions">Window Functions<a class="headerlink" href="#window-functions" title="Permanent link">¶</a></h3>
+<table class="table">
+<thead>
+<tr>
+<th>Improvement</th>
+<th>Issue / PR</th>
+<th>Representative Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>LEAD</code> / <code>LAG</code> with <code>IGNORE NULLS</code></td>
+<td><a href="https://github.com/apache/datafusion/pull/23711">#23711</a></td>
+<td><a href="https://github.com/apache/datafusion/pull/23711">21.7x faster for <code>List</code>, 10.5x for <code>Utf8View</code></a> <em>(micro)</em></td>
+</tr>
+<tr>
+<td>Sliding-window <code>MIN</code> / <code>MAX</code> monotonic deques</td>
+<td><a href="https://github.com/apache/datafusion/pull/23827">#23827</a></td>
+<td><a href="https://github.com/apache/datafusion/pull/23827#issuecomment-5067789139">up to 3.5x faster (strings; ~2x for numerics)</a> <em>(micro)</em></td>
+</tr>
+<tr>
+<td>Skip fully calculated window partitions</td>
+<td><a href="https://github.com/apache/datafusion/pull/24127">#24127</a></td>
+<td><a href="https://github.com/apache/datafusion/pull/24127">49% faster with 32,768 sparse partitions: 161ms → 108ms</a></td>
+</tr>
+<tr>
+<td>Skip re-slicing quiet window partitions</td>
+<td><a href="https://github.com/apache/datafusion/pull/24047">#24047</a></td>
+<td><a href="https://github.com/apache/datafusion/pull/24047">26% faster with 32,768 sparse partitions: 209ms → 166ms</a></td>
+</tr>
+</tbody>
+</table>
+<h3 id="aggregation">Aggregation<a class="headerlink" href="#aggregation" title="Permanent link">¶</a></h3>
+<table class="table">
+<thead>
+<tr>
+<th>Improvement</th>
+<th>Issue / PR</th>
+<th>Representative Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>approx_distinct</code> with many groups</td>
+<td><a href="https://github.com/apache/datafusion/pull/22768">#22768</a></td>
+<td><a href="https://github.com/apache/datafusion/pull/22768#issuecomment-4627539820">101x faster: 1723ms → 17ms (Int64, 50K groups)</a></td>
+</tr>
+<tr>
+<td><code>array_agg(DISTINCT ...)</code></td>
+<td><a href="https://github.com/apache/datafusion/pull/23716">#23716</a></td>
+<td><a href="https://github.com/apache/datafusion/pull/23716">4.0x faster at high cardinality</a> <em>(micro)</em></td>
+</tr>
+<tr>
+<td><code>percentile_cont</code> / <code>median</code></td>
+<td><a href="https://github.com/apache/datafusion/pull/23954">#23954</a></td>
+<td><a href="https://github.com/apache/datafusion/pull/23954">2.7x faster: 247µs → 92µs (<code>median</code>, window=256)</a> <em>(micro)</em></td>
+</tr>
+<tr>
+<td>Multi-column <code>GROUP BY</code> type coverage</td>
+<td><a href="https://github.com/apache/datafusion/issues/22715">#22715</a>, <a href="https://github.com/apache/datafusion/pull/23523">#23523</a></td>
+<td><a href="https://github.com/apache/datafusion/pull/23523">46% less memory for mixed-schema keys: 1096KB → 594KB</a></td>
+</tr>
+<tr>
+<td>Native <code>GROUP BY</code> on <code>FixedSizeBinary</code> (e.g. UUIDs)</td>
+<td><a href="https://github.com/apache/datafusion/issues/23645">#23645</a>, <a href="https://github.com/apache/datafusion/pull/23646">#23646</a></td>
+<td><a href="https://github.com/apache/datafusion/pull/23646#pullrequestreview-4900163566">~5% faster: 1.13s → 1.07s grouping 200M UUIDs</a>, addressing a <a href="https://github.com/apache/datafusion/pull/23646#issuecomment-4996436765">reported out-of-memory crash</a></td>
+</tr>
+<tr>
+<td>Semi / anti join index alignment</td>
+<td><a href="https://github.com/apache/datafusion/pull/22794">#22794</a></td>
+<td><a href="https://github.com/apache/datafusion/pull/22794#issuecomment-4640131159">TPC-DS Q15 16% faster</a></td>
+</tr>
+</tbody>
+</table>
+<h3 id="expressions-and-functions">Expressions and Functions<a class="headerlink" href="#expressions-and-functions" title="Permanent link">¶</a></h3>
+<table class="table">
+<thead>
+<tr>
+<th>Improvement</th>
+<th>Issue / PR</th>
+<th>Representative Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Faster <code>IN</code> list evaluation</td>
+<td><a href="https://github.com/apache/datafusion/issues/19241">#19241</a>, <a href="https://github.com/apache/datafusion/pull/23014">#23014</a></td>
+<td><a href="https://github.com/apache/datafusion/pull/23014">up to 14.7x faster for small primitive lists</a> <em>(micro)</em></td>
+</tr>
+<tr>
+<td>Faster <code>IN</code> list (<code>UInt8</code> bitmap)</td>
+<td><a href="https://github.com/apache/datafusion/pull/23011">#23011</a></td>
+<td><a href="https://github.com/apache/datafusion/pull/23011">9.7x faster: 38.4µs → 4.0µs</a> <em>(micro)</em></td>
+</tr>
+<tr>
+<td>Faster <code>IN</code> list (<code>Int8</code> / <code>Int16</code>)</td>
+<td><a href="https://github.com/apache/datafusion/pull/23299">#23299</a></td>
+<td><a href="https://github.com/apache/datafusion/pull/23299#issuecomment-4875954295">4.4x faster for <code>i16</code>, 4-element list</a> <em>(micro)</em></td>
+</tr>
+<tr>
+<td>Preserve dictionary encoding for string functions</td>
+<td><a href="https://github.com/apache/datafusion/pull/23930">#23930</a></td>
+<td><a href="https://github.com/apache/datafusion/pull/23930">360x faster <code>initcap</code> on cardinality-10 dictionaries</a> <em>(micro)</em></td>
+</tr>
+<tr>
+<td>Preserve dictionary encoding for trim family</td>
+<td><a href="https://github.com/apache/datafusion/pull/24100">#24100</a></td>
+<td><a href="https://github.com/apache/datafusion/pull/24100">151x faster <code>ltrim</code> on cardinality-10 dictionaries</a> <em>(micro)</em></td>
+</tr>
+<tr>
+<td>Preserve dictionary encoding for (<code>ascii</code>, <code>bit_length</code>, <code>octet_length</code>)</td>
+<td><a href="https://github.com/apache/datafusion/pull/23743">#23743</a></td>
+<td><a href="https://github.com/apache/datafusion/pull/23743">28.7x faster <code>ascii</code></a> <em>(micro)</em></td>
+</tr>
+<tr>
+<td><code>find_in_set</code></td>
+<td><a href="https://github.com/apache/datafusion/pull/23460">#23460</a></td>
+<td><a href="https://github.com/apache/datafusion/pull/23460">24x faster: 1.25ms → 52µs</a> <em>(micro)</em></td>
+</tr>
+<tr>
+<td><code>array_has</code> with array needle</td>
+<td><a href="https://github.com/apache/datafusion/pull/23337">#23337</a></td>
+<td><a href="https://github.com/apache/datafusion/pull/23337">15.1x faster; join query 0.95s → 0.059s</a></td>
+</tr>
+<tr>
+<td><code>trunc</code> with scalar precision</td>
+<td><a href="https://github.com/apache/datafusion/pull/23593">#23593</a></td>
+<td><a href="https://github.com/apache/datafusion/pull/23593">12.9x faster: 9.5µs → 735ns</a> <em>(micro)</em></td>
+</tr>
+<tr>
+<td><code>encode</code> / hex</td>
+<td><a href="https://github.com/apache/datafusion/pull/23456">#23456</a></td>
+<td><a href="https://github.com/apache/datafusion/pull/23456">5.1x faster: 200µs → 39.5µs</a> <em>(micro)</em></td>
+</tr>
+<tr>
+<td><code>arrays_zip</code> perfect-list fast path</td>
+<td><a href="https://github.com/apache/datafusion/pull/22285">#22285</a></td>
+<td><a href="https://github.com/apache/datafusion/pull/22285#issuecomment-4537748133">4.2x faster</a> <em>(micro)</em></td>
+</tr>
+<tr>
+<td><code>overlay</code></td>
+<td><a href="https://github.com/apache/datafusion/pull/22182">#22182</a></td>
+<td><a href="https://github.com/apache/datafusion/pull/22182">5.3x faster on high-null input: 401µs → 75µs</a> <em>(micro)</em></td>
+</tr>
+<tr>
+<td><code>translate</code></td>
+<td><a href="https://github.com/apache/datafusion/pull/22171">#22171</a></td>
+<td><a href="https://github.com/apache/datafusion/pull/22171">4.4x faster: 265µs → 60µs</a> <em>(micro)</em></td>
+</tr>
+<tr>
+<td><code>date_trunc</code></td>
+<td><a href="https://github.com/apache/datafusion/pull/23542">#23542</a></td>
+<td><a href="https://github.com/apache/datafusion/pull/23542">4.2x faster for <code>week</code>: 23.3µs → 5.6µs</a> <em>(micro)</em></td>
+</tr>
+<tr>
+<td><code>replace</code></td>
+<td><a href="https://github.com/apache/datafusion/pull/23589">#23589</a></td>
+<td><a href="https://github.com/apache/datafusion/pull/23589">2.5x faster: 228µs → 91µs</a> <em>(micro)</em></td>
+</tr>
+<tr>
+<td><code>regexp_instr</code></td>
+<td><a href="https://github.com/apache/datafusion/pull/23540">#23540</a></td>
+<td><a href="https://github.com/apache/datafusion/pull/23540">90% faster: 49.2µs → 26.0µs</a> <em>(micro)</em></td>
+</tr>
+<tr>
+<td><code>left</code> / <code>right</code></td>
+<td><a href="https://github.com/apache/datafusion/pull/23762">#23762</a></td>
+<td><a href="https://github.com/apache/datafusion/pull/23762">81% faster on <code>string_view</code> long results: 94µs → 52µs</a> <em>(micro)</em></td>
+</tr>
+<tr>
+<td><code>round</code></td>
+<td><a href="https://github.com/apache/datafusion/pull/23471">#23471</a></td>
+<td><a href="https://github.com/apache/datafusion/pull/23471">79% faster: 1486ns → 831ns</a> <em>(micro)</em></td>
+</tr>
+<tr>
+<td><code>regexp_match</code> with literal pattern</td>
+<td><a href="https://github.com/apache/datafusion/pull/23547">#23547</a></td>
+<td><a href="https://github.com/apache/datafusion/pull/23547">59% faster with literal pattern and flags: 280µs → 176µs</a> <em>(micro)</em></td>
+</tr>
+<tr>
+<td><code>date_part</code> <code>isodow</code></td>
+<td><a href="https://github.com/apache/datafusion/pull/23491">#23491</a></td>
+<td><a href="https://github.com/apache/datafusion/pull/23491#issuecomment-4962484527">reported 38% improvement</a> <em>(micro)</em></td>
+</tr>
+</tbody>
+</table>
+<h3 id="planning">Planning<a class="headerlink" href="#planning" title="Permanent link">¶</a></h3>
+<table class="table">
+<thead>
+<tr>
+<th>Improvement</th>
+<th>Issue / PR</th>
+<th>Representative Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Collapse chained projections</td>
+<td><a href="https://github.com/apache/datafusion/pull/22389">#22389</a></td>
+<td><a href="https://github.com/apache/datafusion/pull/22389">4.0x faster planning: 623ms → 155ms</a></td>
+</tr>
+<tr>
+<td>Skip subquery traversal, rewrite in place</td>
+<td><a href="https://github.com/apache/datafusion/pull/22298">#22298</a></td>
+<td><a href="https://github.com/apache/datafusion/pull/22298">29% faster TPC-DS optimization: 220ms → 170ms</a></td>
+</tr>
+<tr>
+<td>Don't re-inline CSE'd expensive expressions</td>
+<td><a href="https://github.com/apache/datafusion/pull/23459">#23459</a></td>
+<td><a href="https://github.com/apache/datafusion/pull/23459">67% faster on repeated <code>power(a, 2)</code></a></td>
+</tr>
+<tr>
+<td>Skip <code>ensure_distribution</code> rebuild for unchanged children</td>
+<td><a href="https://github.com/apache/datafusion/pull/22521">#22521</a></td>
+<td><a href="https://github.com/apache/datafusion/pull/22521">2.9x faster per call: 171µs → 59µs</a></td>
+</tr>
+<tr>
+<td>Unified <code>EnsureRequirements</code> pass</td>
+<td><a href="https://github.com/apache/datafusion/pull/21976">#21976</a></td>
+<td><a href="https://github.com/apache/datafusion/pull/21976#issuecomment-4521276189">TPC-H: 8 queries faster, 0 slower</a></td>
+</tr>
+<tr>
+<td>Predicate reordering heuristic</td>
+<td><a href="https://github.com/apache/datafusion/pull/22343">#22343</a></td>
+<td><a href="https://github.com/apache/datafusion/pull/22343#issuecomment-4483681627">ClickBench Q21 10-13% faster</a></td>
+</tr>
+</tbody>
+</table>
+<h3 id="scan-io">Scan / IO<a class="headerlink" href="#scan-io" title="Permanent link">¶</a></h3>
+<table class="table">
+<thead>
+<tr>
+<th>Improvement</th>
+<th>Issue / PR</th>
+<th>Representative Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Prune unread Parquet leaves for nested columns</td>
+<td><a href="https://github.com/apache/datafusion/pull/24090">#24090</a></td>
+<td><a href="https://github.com/apache/datafusion/pull/24090">Reduces reads from 1.35 TB to 30.9 GB in a production Comet query</a></td>
+</tr>
+<tr>
+<td>Fewer object store requests for CSV</td>
+<td><a href="https://github.com/apache/datafusion/pull/22962">#22962</a></td>
+<td><a href="https://github.com/apache/datafusion/pull/22962#issuecomment-4721729807">70% faster on TPC-H CSV with simulated latency</a></td>
+</tr>
+<tr>
+<td>Lower <code>repartition_file_min_size</code> to 1 MiB</td>
+<td><a href="https://github.com/apache/datafusion/pull/22439">#22439</a></td>
+<td><a href="https://github.com/apache/datafusion/pull/22439#issuecomment-4511995613">TPC-H Q22 68% faster</a></td>
+</tr>
+<tr>
+<td>Skip page index load when the file has none</td>
+<td><a href="https://github.com/apache/datafusion/issues/24149">#24149</a>, <a href="https://github.com/apache/datafusion/pull/24150">#24150</a></td>
+<td><a href="https://github.com/apache/datafusion/pull/24150#issuecomment-5226213508">ClickBench (single file) Q1 38% faster</a></td>
+</tr>
+</tbody>
+</table>
+
+<!--
+  Comments Section
+  Loaded only after explicit visitor consent to comply with ASF policy.
+-->
+
+<div>
+  <hr>
+  <h3 id="comments">Comments<a class="headerlink" href="#comments" title="Permanent link">&para;</a></h3>
+
+  <!-- Local loader script -->
+  <script src="/blog/js/giscus-consent.js" defer></script>
+
+  <!-- Consent UI -->
+  <div id="giscus-consent">
+    <p>
+        We use <a href="https://giscus.app/">Giscus</a> for comments, powered by GitHub Discussions.
+        To respect your privacy, Giscus and comments will load only if you click "Show Comments"
+    </p>
+
+    <div class="consent-actions">
+      <button id="giscus-load" type="button">Show Comments</button>
+      <button id="giscus-revoke" type="button" hidden>Hide Comments</button>
+    </div>
+
+    <noscript>JavaScript is required to load comments from Giscus.</noscript>
+  </div>
+
+  <!-- Container where Giscus will render -->
+  <div id="comment-thread"></div>
+</div>      </div>
+      <aside class="toc-container d-none d-md-block col-md-4 col-xl-3 ms-xl-2">
+        <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#performance-improvements">Performance Improvements 🚀</a><ul>
+<li><a href="#sort-pushdown-topk-pruning">Sort Pushdown + TopK Pruning</a></li>
+<li><a href="#aggregation-improvements">Aggregation Improvements</a></li>
+<li><a href="#faster-functions">Faster Functions</a></li>
+<li><a href="#planner-improvements">Planner Improvements</a></li>
+<li><a href="#scan-improvements">Scan Improvements</a></li>
+</ul>
+</li>
+<li><a href="#stability-improvements">Stability Improvements 🛡️</a></li>
+<li><a href="#new-features">New Features ✨</a><ul>
+<li><a href="#file_row_index-and-input_file_name">file_row_index() and input_file_name()</a></li>
+<li><a href="#range-partitioning">Range Partitioning</a></li>
+<li><a href="#merge-into-planner-support">MERGE INTO Planner Support</a></li>
+<li><a href="#pluggable-spill-backends">Pluggable Spill Backends</a></li>
+<li><a href="#extensibility-for-distributed-engines">Extensibility for Distributed Engines</a></li>
+<li><a href="#explain-improvements">EXPLAIN Improvements</a></li>
+<li><a href="#new-functions">New Functions</a></li>
+</ul>
+</li>
+<li><a href="#upgrade-guide-and-changelog">Upgrade Guide and Changelog 📖</a></li>
+<li><a href="#about-datafusion">About DataFusion</a></li>
+<li><a href="#how-to-get-involved">How to Get Involved</a></li>
+<li><a href="#appendix-clickbench-results">Appendix: ClickBench Results</a></li>
+<li><a href="#appendix-full-list-of-performance-improvements">Appendix: Full List of Performance Improvements</a><ul>
+<li><a href="#sort-topk">Sort / TopK</a></li>
+<li><a href="#window-functions">Window Functions</a></li>
+<li><a href="#aggregation">Aggregation</a></li>
+<li><a href="#expressions-and-functions">Expressions and Functions</a></li>
+<li><a href="#planning">Planning</a></li>
+<li><a href="#scan-io">Scan / IO</a></li>
+</ul>
+</li>
+</ul>
+</div>
+      </aside>
+    </div>
+  </div>
+</div>    
+    <!-- footer -->
+    <div class="row g-0">
+      <div class="col-12">
+        <p style="font-style: italic; font-size: 0.8rem; text-align: center;">
+          Copyright 2026, <a href="https://www.apache.org/">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a>.<br/>
+          Apache&reg; and the Apache logo are trademarks of The Apache Software Foundation.
+        </p>
+        <p style="font-size: 0.8rem; text-align: center;">
+          <a href="https://www.apache.org/">Foundation</a> |
+          <a href="https://www.apache.org/events/current-event.html">Events</a> |
+          <a href="https://www.apache.org/licenses/">License</a> |
+          <a href="https://www.apache.org/security/">Security</a> |
+          <a href="https://www.apache.org/foundation/sponsorship.html">Sponsorship</a> |
+          <a href="https://www.apache.org/foundation/thanks.html">Thanks</a> |
+          <a href="https://privacy.apache.org/policies/privacy-policy-public.html">Privacy</a>
+        </p>
+      </div>
+    </div>
+    <script src="/blog/js/bootstrap.bundle.min.js"></script>  </main>
+  </body>
+</html>
