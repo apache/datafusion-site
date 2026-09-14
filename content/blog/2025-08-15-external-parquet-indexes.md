@@ -380,7 +380,7 @@ called `value` along with the file name. Then it runs the following query:
 SELECT file_name, value FROM index_table WHERE value = 150
 ```
 
-[parquet_index.rs]: https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/parquet_index.rs
+[parquet_index.rs]: https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/data_io/parquet_index.rs
 
 The custom `IndexTableProvider`'s `scan` method uses the index to find files
 that may contain data matching the predicate as shown below:
