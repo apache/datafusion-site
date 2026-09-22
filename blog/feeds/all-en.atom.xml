@@ -1,5 +1,920 @@
 <?xml version="1.0" encoding="utf-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog</title><link href="https://datafusion.apache.org/blog/" rel="alternate"/><link href="https://datafusion.apache.org/blog/feeds/all-en.atom.xml" rel="self"/><id>https://datafusion.apache.org/blog/</id><updated>2026-08-09T00:00:00+00:00</updated><entry><title>Apache DataFusion Ballista 54.1.0 Released</title><link href="https://datafusion.apache.org/blog/2026/08/09/datafusion-ballista-54.1.0" rel="alternate"/><published>2026-08-09T00:00:00+00:00</published><updated>2026-08-09T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2026-08-09:/blog/2026/08/09/datafusion-ballista-54.1.0</id><summary type="html">&lt;!--
+<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog</title><link href="https://datafusion.apache.org/blog/" rel="alternate"/><link href="https://datafusion.apache.org/blog/feeds/all-en.atom.xml" rel="self"/><id>https://datafusion.apache.org/blog/</id><updated>2026-09-25T00:00:00+00:00</updated><entry><title>Apache DataFusion Comet 1.1.0 Release</title><link href="https://datafusion.apache.org/blog/2026/09/25/datafusion-comet-1.1.0" rel="alternate"/><published>2026-09-25T00:00:00+00:00</published><updated>2026-09-25T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2026-09-25:/blog/2026/09/25/datafusion-comet-1.1.0</id><summary type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+
+&lt;p&gt;The Apache DataFusion PMC is pleased to announce version 1.1.0 of the &lt;a href="https://datafusion.apache.org/comet/"&gt;Comet&lt;/a&gt; subproject.&lt;/p&gt;
+&lt;p&gt;Comet is an accelerator for Apache Spark that translates Spark physical plans to DataFusion physical plans for
+improved performance and efficiency without requiring any code changes.&lt;/p&gt;
+&lt;p&gt;This release covers roughly seven weeks of development …&lt;/p&gt;</summary><content type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+
+&lt;p&gt;The Apache DataFusion PMC is pleased to announce version 1.1.0 of the &lt;a href="https://datafusion.apache.org/comet/"&gt;Comet&lt;/a&gt; subproject.&lt;/p&gt;
+&lt;p&gt;Comet is an accelerator for Apache Spark that translates Spark physical plans to DataFusion physical plans for
+improved performance and efficiency without requiring any code changes.&lt;/p&gt;
+&lt;p&gt;This release covers roughly seven weeks of development since 1.0.0 and consists of 333 commits from 37
+contributors. See the &lt;a href="https://github.com/apache/datafusion-comet/blob/main/docs/source/changelog/1.1.0.md"&gt;change log&lt;/a&gt; for the full list of changes.&lt;/p&gt;
+&lt;h2 id="native-iceberg-writes-experimental"&gt;Native Iceberg Writes (Experimental)&lt;a class="headerlink" href="#native-iceberg-writes-experimental" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Every Comet release up to now has accelerated the read side of an Iceberg workload while leaving writes
+entirely to the JVM. 1.1.0 changes that: Comet can now write Iceberg data files natively, through
+&lt;a href="https://github.com/apache/iceberg-rust"&gt;iceberg-rust&lt;/a&gt;, inside its existing native execution pipeline. The
+feature is &lt;strong&gt;experimental and disabled by default&lt;/strong&gt;, and the rest of this section explains both what it does
+and the fairly strict conditions under which it will engage.&lt;/p&gt;
+&lt;h3 id="the-problem-one-operator-no-aqe"&gt;The problem: one operator, no AQE&lt;a class="headerlink" href="#the-problem-one-operator-no-aqe" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Spark writes an Iceberg table through a single physical operator that combines data-file writing with
+metadata writing, committing, and catalog validation. Because that operator sits outside Spark's Adaptive
+Query Execution, the sub-query feeding the write — the scans, projects, sorts, and exchanges producing the
+rows — cannot be re-planned at runtime. It is also opaque to Comet's columnar rules, so the write itself was
+never a candidate for native execution.&lt;/p&gt;
+&lt;h3 id="step-one-split-the-write-operator"&gt;Step one: split the write operator&lt;a class="headerlink" href="#step-one-split-the-write-operator" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;The first half of the work splits that operator in two. With
+&lt;code&gt;spark.comet.write.iceberg.splitOperator.enabled=true&lt;/code&gt;, Comet rewrites eligible Iceberg writes into:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;&lt;code&gt;IcebergWrite&lt;/code&gt;&lt;/strong&gt; — writes the data files on the executors and returns each task's serialized commit
+   message. This operator, and the sub-query feeding it, run inside AQE.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;&lt;code&gt;IcebergCommit&lt;/code&gt;&lt;/strong&gt; — collects the commit messages on the driver and performs the normal Iceberg commit,
+   including commit-time validation, outside AQE, exactly once.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;On its own this toggle changes nothing about who writes the bytes — data files are still written by
+iceberg-java. What it buys is that the write's input becomes visible to AQE and to Comet's columnar rules,
+and it creates the seam that the native writer plugs into.&lt;/p&gt;
+&lt;p&gt;The split plan covers &lt;code&gt;INSERT INTO&lt;/code&gt; / DataFrame &lt;code&gt;append&lt;/code&gt;, static and dynamic &lt;code&gt;INSERT OVERWRITE&lt;/code&gt;, and
+copy-on-write &lt;code&gt;DELETE&lt;/code&gt; / &lt;code&gt;UPDATE&lt;/code&gt; / &lt;code&gt;MERGE&lt;/code&gt;, on every Spark version Comet supports. Merge-on-read delta
+writes are not intercepted. When the rewrite is skipped — an unrecognized write class, a CTAS on Spark 3.4,
+a write requiring Spark's commit coordinator — the write is planned exactly as if Comet were absent.&lt;/p&gt;
+&lt;h3 id="step-two-write-the-parquet-files-natively"&gt;Step two: write the Parquet files natively&lt;a class="headerlink" href="#step-two-write-the-parquet-files-natively" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;With &lt;code&gt;spark.comet.iceberg.write.enabled=true&lt;/code&gt;, the &lt;code&gt;IcebergWrite&lt;/code&gt; operator's per-task Parquet write is
+delegated to iceberg-rust. The JVM-side planner marshals everything the native writer needs into the
+serialized plan: the write schema and partition spec as JSON, the data location, resolved Parquet writer
+settings, the writer mode (unpartitioned, fanout, or clustered, mirroring &lt;code&gt;SparkWrite&lt;/code&gt;'s own choice),
+object-store configuration, and per-task IDs. On each task, iceberg-rust writes the Parquet files and returns
+its &lt;code&gt;DataFile&lt;/code&gt; metadata packed as a single in-memory Iceberg V2 data manifest.&lt;/p&gt;
+&lt;p&gt;Everything after that point is deliberately left to iceberg-java. The JVM decodes the manifest bytes with
+Iceberg's own &lt;code&gt;ManifestFiles.read&lt;/code&gt;, re-derives each file's manifest metrics from the written Parquet footer
+using Iceberg's &lt;code&gt;MetricsConfig&lt;/code&gt; logic, and wraps the result in the same &lt;code&gt;TaskCommit&lt;/code&gt; message the JVM writer
+would have produced. Snapshot assignment, manifest-list aggregation, commit validation, and retries are
+untouched.&lt;/p&gt;
+&lt;h3 id="fidelity-as-a-design-constraint"&gt;Fidelity as a design constraint&lt;a class="headerlink" href="#fidelity-as-a-design-constraint" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;The native writer has to produce the same outcome as iceberg-java, not merely a valid Iceberg table, and the
+design leans hard in that direction.&lt;/p&gt;
+&lt;p&gt;Manifest metrics drive partition- and file-level pruning for every future reader of the table, so a
+divergence there would outlive the write. Rather than trusting what the native writer reports, Comet
+re-derives metrics on the JVM from each file's Parquet footer through iceberg-java's own
+&lt;code&gt;ParquetUtil.footerMetrics&lt;/code&gt; and &lt;code&gt;MetricsConfig.forTable&lt;/code&gt;. Metrics modes, bound truncation, the inferred-column
+cap, and list/map bounds suppression are therefore iceberg-java's code making iceberg-java's decisions, and
+the parity suite compares committed manifests byte-for-byte against JVM-written ones. The cost is one
+footer-sized ranged read per written file.&lt;/p&gt;
+&lt;p&gt;Eligibility detection is an allowlist, not a denylist. A write is eligible only when its entire effective
+configuration matches a documented table of supported settings — and anything else, including any
+write-affecting property added by a future Iceberg version, any value outside the supported set, or any
+reflection failure while inspecting the write, falls back to iceberg-java with the reason reported in Comet's
+extended &lt;code&gt;EXPLAIN&lt;/code&gt; output. Encryption keys, object-storage layout, custom location providers, bloom filters,
+and unvetted &lt;code&gt;parquet.*&lt;/code&gt; properties all decline the native path. The plan feeding the write must also be
+fully Comet-native, which for a partitioned table includes the hash distribution and local sort Iceberg
+requests on its partition transforms — those stay native because the Iceberg system functions now have native
+implementations (see below).&lt;/p&gt;
+&lt;p&gt;Eligibility is decided entirely at plan time, including the reflection surface: every iceberg-java class and
+method the executor-side commit assembly needs is eagerly resolved on the driver, so an Iceberg release that
+moves any of them declines the native path rather than failing tasks mid-write.&lt;/p&gt;
+&lt;h3 id="failures-never-commit-partial-results"&gt;Failures never commit partial results&lt;a class="headerlink" href="#failures-never-commit-partial-results" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;The commit set is exactly the commit messages returned by successful tasks. A failed task contributes none
+and deletes the data files it created, as iceberg-java's writer abort does; ownership of those files is
+handed from the native side to a JVM task-failure listener at a well-defined point, so a failure on either
+side of the boundary still cleans up. If the job fails, the driver-side commit operator aborts without
+committing anything and deletes the completed tasks' files through the table &lt;code&gt;FileIO&lt;/code&gt;. Task retries cannot
+collide, because each attempt's task attempt id is embedded in its data file names. Anything a best-effort
+deletion misses is invisible to readers, which resolve files through committed manifests only, and is
+reclaimed by Iceberg's normal &lt;code&gt;remove_orphan_files&lt;/code&gt; maintenance.&lt;/p&gt;
+&lt;h3 id="accepted-divergences"&gt;Accepted divergences&lt;a class="headerlink" href="#accepted-divergences" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;A handful of differences between parquet-mr and parquet-rs are unconditional, and enabling the toggle accepts
+them. They are almost entirely cosmetic — footer key-value metadata, the root schema element name,
+&lt;code&gt;created_by&lt;/code&gt;, absent page CRCs and page-header statistics, &lt;code&gt;RLE_DICTIONARY&lt;/code&gt; labeling, compressed page bytes —
+and none change what a reader computes. Two are worth knowing about operationally:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;File rolling lands on the same 1000-row grid as iceberg-java, but not necessarily on the same row.&lt;/strong&gt; Both
+  writers re-check file size against &lt;code&gt;write.target-file-size-bytes&lt;/code&gt; every 1000 rows, but they compare
+  different size estimates, so nothing bounds how far apart their roll points are. Do not rely on file-layout
+  parity between the two writers.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Float and double partition directory names&lt;/strong&gt; are rendered with Rust's shortest representation rather than
+  &lt;code&gt;Float.toString&lt;/code&gt; (&lt;code&gt;f=1&lt;/code&gt; where iceberg-java writes &lt;code&gt;f=1.0&lt;/code&gt;). Distinct values still get distinct directories,
+  and no reader parses these names. Iceberg deprecated float and double partitioning in 1.3.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;The &lt;a href="https://datafusion.apache.org/comet/user-guide/latest/iceberg-writes.html"&gt;Iceberg Writes guide&lt;/a&gt; documents the full eligibility table and every accepted divergence. Please try it
+on a non-production table and tell us what you find — feedback from real workloads is exactly what this
+feature needs before it can lose the experimental label.&lt;/p&gt;
+&lt;h2 id="more-iceberg-improvements"&gt;More Iceberg Improvements&lt;a class="headerlink" href="#more-iceberg-improvements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;The read side gained several things in this release too:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Iceberg V3 deletion vectors&lt;/strong&gt; are now applied on native scans.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Iceberg system functions&lt;/strong&gt; — &lt;code&gt;bucket&lt;/code&gt;, &lt;code&gt;truncate&lt;/code&gt;, &lt;code&gt;years&lt;/code&gt;, &lt;code&gt;months&lt;/code&gt;, &lt;code&gt;days&lt;/code&gt;, and &lt;code&gt;hours&lt;/code&gt; — have native
+  implementations. Besides being faster, this is what keeps a partitioned table's write plan fully native and
+  therefore eligible for the native writer.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Scan planning metrics and scan time&lt;/strong&gt; are reported in the Spark UI for the native Iceberg scan.&lt;/li&gt;
+&lt;li&gt;Fixes for tables partitioned by an unknown transform, complex null checks on native scans, and Iceberg
+  system functions wrapped as &lt;code&gt;ApplyFunctionExpression&lt;/code&gt;.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id="native-parquet-writes-on-spark-40"&gt;Native Parquet Writes on Spark 4.0+&lt;a class="headerlink" href="#native-parquet-writes-on-spark-40" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Separately from Iceberg, 1.1.0 hooks native Parquet writes into Spark's &lt;code&gt;WriteFilesExec&lt;/code&gt; seam on Spark 4.0 and
+later, behind &lt;code&gt;spark.comet.parquet.write.enabled&lt;/code&gt;. This release also preserves Catalyst nullability and field
+IDs in native Parquet writes.&lt;/p&gt;
+&lt;h2 id="remote-shuffle-with-celeborn"&gt;Remote Shuffle with Celeborn&lt;a class="headerlink" href="#remote-shuffle-with-celeborn" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Applications using Apache Celeborn can now use Comet's composite shuffle manager to run Comet's &lt;strong&gt;native&lt;/strong&gt;
+shuffle over Celeborn, rather than falling back to ordinary Spark/Celeborn shuffle for every exchange. This
+landed as a series of changes adding an RSS partition writer, task-owned JNI callbacks, destination-aware
+native shuffle execution, the map-side push lifecycle, a raw native shuffle reader, and native-only planning.&lt;/p&gt;
+&lt;p&gt;Native shuffle over Celeborn requires an explicit &lt;code&gt;spark.comet.shuffle.mode=native&lt;/code&gt;; the default &lt;code&gt;auto&lt;/code&gt; mode
+retains ordinary Spark/Celeborn shuffle. It also requires a Celeborn client that provides a safe
+push-completion API — released 0.6.0 and 0.7.0 clients do not, and those versions retain ordinary shuffle even
+in native mode. Native RSS does not support &lt;code&gt;spark.io.encryption.enabled=true&lt;/code&gt;. Celeborn is an optional
+application dependency and is not bundled with Comet. See the &lt;a href="https://datafusion.apache.org/comet/user-guide/latest/tuning.html"&gt;tuning guide&lt;/a&gt; for the full set of
+requirements and the frame-size and in-flight-bytes knobs.&lt;/p&gt;
+&lt;h2 id="performance"&gt;Performance&lt;a class="headerlink" href="#performance" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;h3 id="shuffle"&gt;Shuffle&lt;a class="headerlink" href="#shuffle" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Several changes target shuffle, which dominates many TPC-DS-shaped workloads:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;A task now spills &lt;strong&gt;every shuffle partition into one file&lt;/strong&gt; instead of one file per partition.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Zstd compression contexts and Arrow IPC contexts are reused&lt;/strong&gt; across shuffle blocks instead of being
+  rebuilt per block.&lt;/li&gt;
+&lt;li&gt;Shuffle blocks are &lt;strong&gt;decoded against a cached schema&lt;/strong&gt; rather than re-parsing the schema per block, and
+  expected schemas are cached for remote shuffle decoding.&lt;/li&gt;
+&lt;li&gt;Per-partition scratch buffers are reused in the shuffle write path.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;ArrowWriter&lt;/code&gt; bulk-copies fixed-width columns.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id="planning-and-execution"&gt;Planning and Execution&lt;a class="headerlink" href="#planning-and-execution" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Native dynamic filter pushdown&lt;/strong&gt; from hash joins into Parquet scans.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Adaptive partial aggregation&lt;/strong&gt; is enabled for eligible native shuffle plans.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Parsed plan data is cached across the tasks of a stage&lt;/strong&gt;, avoiding repeated deserialization work.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Native Parquet scan I/O and read-amplification metrics&lt;/strong&gt; are exposed, alongside native aggregate spill and
+  memory metrics.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id="expression-kernels"&gt;Expression Kernels&lt;a class="headerlink" href="#expression-kernels" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Ongoing kernel-level work continued across the expression library: &lt;code&gt;map_sort&lt;/code&gt; is up to 3x faster for
+multi-entry string maps and 18x faster on singleton normalization; the native map lookup behind &lt;code&gt;element_at&lt;/code&gt;
+and &lt;code&gt;GetMapValue&lt;/code&gt; is vectorized; &lt;code&gt;collect_list&lt;/code&gt; and &lt;code&gt;collect_set&lt;/code&gt; gained a native &lt;code&gt;GroupsAccumulator&lt;/code&gt;; user
+regex patterns are compiled once per planned expression; &lt;code&gt;hour&lt;/code&gt;/&lt;code&gt;minute&lt;/code&gt;/&lt;code&gt;second&lt;/code&gt; and &lt;code&gt;dayofweek&lt;/code&gt;/&lt;code&gt;weekday&lt;/code&gt;
+skip calendar reconstruction; &lt;code&gt;posexplode&lt;/code&gt; array expressions are evaluated once per batch; unnesting slices
+the child rather than gathering it; and the nested-element list hash is batched for flat struct elements.&lt;/p&gt;
+&lt;h2 id="memory-observability"&gt;Memory Observability&lt;a class="headerlink" href="#memory-observability" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Two features make Comet's memory use easier to reason about: &lt;strong&gt;native allocation accounting&lt;/strong&gt;, and &lt;strong&gt;tracing
+of Arrow memory held on the JVM side&lt;/strong&gt;. Together they close a long-standing gap where memory held by the
+native engine and by Arrow buffers on the JVM was hard to attribute when diagnosing executor OOMs.&lt;/p&gt;
+&lt;h2 id="expanded-coverage"&gt;Expanded Coverage&lt;a class="headerlink" href="#expanded-coverage" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;New expression and operator support in this release includes the &lt;code&gt;mode&lt;/code&gt; aggregate, &lt;code&gt;max_by&lt;/code&gt; / &lt;code&gt;min_by&lt;/code&gt;, the
+&lt;code&gt;regr_slope&lt;/code&gt; / &lt;code&gt;regr_intercept&lt;/code&gt; / &lt;code&gt;regr_r2&lt;/code&gt; / &lt;code&gt;regr_sxx&lt;/code&gt; / &lt;code&gt;regr_syy&lt;/code&gt; / &lt;code&gt;regr_sxy&lt;/code&gt; regression aggregates,
+&lt;code&gt;WindowGroupLimitExec&lt;/code&gt;, &lt;code&gt;explode_outer&lt;/code&gt;, &lt;code&gt;make_interval&lt;/code&gt;, a native &lt;code&gt;spark_sequence&lt;/code&gt; kernel for integral
+element types, a native &lt;code&gt;spark_unbase64&lt;/code&gt; kernel, &lt;code&gt;_metadata&lt;/code&gt; constant columns in the native Parquet scan,
+nested types as native shuffle hash partitioning keys, &lt;code&gt;BinaryType&lt;/code&gt; for sort-merge join, and Spark 4's
+&lt;code&gt;EmptyRelationExec&lt;/code&gt; as a native input. Several more expressions — &lt;code&gt;translate&lt;/code&gt;, &lt;code&gt;to_csv&lt;/code&gt;, &lt;code&gt;encode&lt;/code&gt;, &lt;code&gt;lpad&lt;/code&gt; /
+&lt;code&gt;rpad&lt;/code&gt;, &lt;code&gt;round&lt;/code&gt; on float/double, &lt;code&gt;abs&lt;/code&gt; on intervals, &lt;code&gt;timestampadd&lt;/code&gt; / &lt;code&gt;timestampdiff&lt;/code&gt;, &lt;code&gt;next_day&lt;/code&gt; and
+&lt;code&gt;levenshtein&lt;/code&gt; on collated input, and unrecognized &lt;code&gt;StaticInvoke&lt;/code&gt; / &lt;code&gt;Invoke&lt;/code&gt; — are now routed through codegen
+dispatch by default, and &lt;code&gt;rlike&lt;/code&gt; runs natively by default for Java-equivalent literal patterns.&lt;/p&gt;
+&lt;p&gt;Spark 4 &lt;strong&gt;Variant&lt;/strong&gt; support advanced as well, with Parquet storage adapted for Variant projection, Variant
+arrays normalized at the native Parquet boundary, and &lt;code&gt;VariantType&lt;/code&gt; identity carried through schema
+serialization.&lt;/p&gt;
+&lt;p&gt;This release also adds &lt;strong&gt;experimental native support for an in-memory cache&lt;/strong&gt;
+(&lt;code&gt;spark.comet.exec.inMemoryCache.enabled&lt;/code&gt;, disabled by default), support for &lt;strong&gt;S3-compliant filesystems&lt;/strong&gt;, and
+build gates for contrib &lt;strong&gt;Delta&lt;/strong&gt; and &lt;strong&gt;Lance&lt;/strong&gt; scans.&lt;/p&gt;
+&lt;h2 id="deprecations-and-removals"&gt;Deprecations and Removals&lt;a class="headerlink" href="#deprecations-and-removals" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;JDK 11 support has been removed&lt;/strong&gt;, as announced in the 1.0.0 release. Comet 1.1.0 requires JDK 17 or
+  later.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Apache Spark 3.4 remains deprecated.&lt;/strong&gt; Comet continues to build and publish Spark 3.4 binaries, but
+  Spark's own SQL test suite no longer runs against Spark 3.4 on every change, so Spark 3.4-specific
+  regressions are more likely to reach a release. We recommend moving to Spark 3.5 or later.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id="compatibility"&gt;Compatibility&lt;a class="headerlink" href="#compatibility" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Supported platforms include:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Spark 3.4.3&lt;/strong&gt; with Java 17 and Scala 2.12/2.13 (deprecated)&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Spark 3.5.9&lt;/strong&gt; with Java 17 and Scala 2.12/2.13&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Spark 4.0.4&lt;/strong&gt; with Java 17 and Scala 2.13&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Spark 4.1.3&lt;/strong&gt; with Java 17/21 and Scala 2.13&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Spark 4.2.0&lt;/strong&gt; with Java 17 and Scala 2.13 (experimental, for early evaluation only)&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;See the &lt;a href="https://datafusion.apache.org/comet/user-guide/latest/compatibility/spark-versions.html"&gt;Spark Version Compatibility&lt;/a&gt; page for known limitations specific to each version.&lt;/p&gt;
+&lt;p&gt;This release builds on &lt;strong&gt;DataFusion 55.1&lt;/strong&gt; and &lt;strong&gt;Arrow 59.2&lt;/strong&gt;.&lt;/p&gt;
+&lt;h2 id="get-started-with-comet-110"&gt;Get Started with Comet 1.1.0&lt;a class="headerlink" href="#get-started-with-comet-110" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Ready to try it out? Follow the &lt;a href="https://datafusion.apache.org/comet/user-guide/1.1/installation.html"&gt;Comet 1.1.0 Installation Guide&lt;/a&gt;
+to get up and running, then point Comet at your existing Spark workloads and see the speedup for yourself.&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Apache DataFusion 55.0.0 Released</title><link href="https://datafusion.apache.org/blog/2026/08/25/datafusion-55.0.0" rel="alternate"/><published>2026-08-25T00:00:00+00:00</published><updated>2026-08-25T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2026-08-25:/blog/2026/08/25/datafusion-55.0.0</id><summary type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+
+&lt;p&gt;We are proud to announce the release of &lt;a href="https://crates.io/crates/datafusion/55.0.0"&gt;DataFusion 55.0.0&lt;/a&gt;. This post
+highlights some of the many improvements since &lt;a href="https://datafusion.apache.org/blog/2026/06/12/datafusion-54.0.0/"&gt;DataFusion 54.0.0&lt;/a&gt;, such as
+significant performance increases, range partitioning, &lt;code&gt;MERGE INTO&lt;/code&gt; support, and
+runtime row-group pruning. The complete list of changes is available in the
+&lt;a href="https://github.com/apache/datafusion/blob/branch-55/dev/changelog/55.0.0.md"&gt;changelog&lt;/a&gt;. This …&lt;/p&gt;</summary><content type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+
+&lt;p&gt;We are proud to announce the release of &lt;a href="https://crates.io/crates/datafusion/55.0.0"&gt;DataFusion 55.0.0&lt;/a&gt;. This post
+highlights some of the many improvements since &lt;a href="https://datafusion.apache.org/blog/2026/06/12/datafusion-54.0.0/"&gt;DataFusion 54.0.0&lt;/a&gt;, such as
+significant performance increases, range partitioning, &lt;code&gt;MERGE INTO&lt;/code&gt; support, and
+runtime row-group pruning. The complete list of changes is available in the
+&lt;a href="https://github.com/apache/datafusion/blob/branch-55/dev/changelog/55.0.0.md"&gt;changelog&lt;/a&gt;. This release represents roughly 10 weeks of development and 877
+commits. Thanks to the &lt;a href="https://github.com/apache/datafusion/blob/branch-55/dev/changelog/55.0.0.md#credits"&gt;175 contributors&lt;/a&gt; (a new record!) for making it
+possible.&lt;/p&gt;
+&lt;p&gt;&lt;img alt="Bar charts showing total commits, commits per day, and unique contributors for DataFusion releases 53.0.0, 54.0.0, and 55.0.0." class="img-fluid" src="/blog/images/datafusion-55.0.0/commits_contributors.svg" width="100%"/&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Figure 1&lt;/strong&gt;: Development activity over the last three DataFusion releases:
+total commits, commits per day, and unique contributors, computed from each
+release's &lt;a href="https://github.com/apache/datafusion/blob/branch-55/dev/changelog/55.0.0.md"&gt;changelog&lt;/a&gt; and release dates.&lt;/p&gt;
+&lt;h2 id="performance-improvements"&gt;Performance Improvements 🚀&lt;a class="headerlink" href="#performance-improvements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;In this release, we focused our optimizations on making DataFusion faster across
+the board rather than further optimizing our very satisfying ClickBench numbers
+(DataFusion is already the fastest in some cases — see the
+&lt;a href="#appendix-clickbench-results"&gt;appendix&lt;/a&gt;), as ClickBench represents only a tiny fraction of what our actual users
+do (e.g. its files have no page index and contain only integer and string columns).&lt;/p&gt;
+&lt;p&gt;Here is a representative sample of the performance improvements in this release;
+see the &lt;a href="#appendix-full-list-of-performance-improvements"&gt;full list in the appendix&lt;/a&gt;.&lt;/p&gt;
+&lt;table class="table"&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Improvement&lt;/th&gt;
+&lt;th&gt;Representative Result&lt;/th&gt;
+&lt;th&gt;Area&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;Runtime row-group pruning for TopK&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/22450#issuecomment-4720594338"&gt;4.2x faster &lt;code&gt;topk_tpch&lt;/code&gt; Q8&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;Sort / TopK&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Faster &lt;code&gt;IN&lt;/code&gt; list evaluation&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23014"&gt;up to 14.7x faster for small primitive lists&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/23011"&gt;9.7x faster for &lt;code&gt;UInt8&lt;/code&gt;&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;Expressions&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Prune unread Parquet leaves for nested columns&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/24090"&gt;Reduces reads from 1.35 TB to 30.9 GB in a production Comet query&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;Scan / IO&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Fewer object store requests for CSV&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/22962#issuecomment-4721729807"&gt;70% faster TPC-H CSV with simulated latency&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;Scan / IO&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Faster &lt;code&gt;SortPreservingMerge&lt;/code&gt; tie-breaker&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23107#issuecomment-4776877963"&gt;8% faster &lt;code&gt;sort_tpch&lt;/code&gt; Q6&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;Sorting&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Native &lt;code&gt;GROUP BY&lt;/code&gt; on &lt;code&gt;FixedSizeBinary&lt;/code&gt; (e.g. UUIDs)&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23646#pullrequestreview-4900163566"&gt;~5% faster grouping 200M UUIDs&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/23646#issuecomment-4996436765"&gt;much less memory&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;Aggregation&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id="sort-pushdown-topk-pruning"&gt;Sort Pushdown + TopK Pruning&lt;a class="headerlink" href="#sort-pushdown-topk-pruning" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;The multi-release &lt;a href="https://github.com/apache/datafusion/issues/23036"&gt;Sort Pushdown effort&lt;/a&gt; continues to optimize &lt;code&gt;ORDER BY&lt;/code&gt; and
+&lt;code&gt;ORDER BY ... LIMIT&lt;/code&gt; (TopK) queries. In DataFusion 55, as a dynamic filter
+threshold tightens, the Parquet reader re-evaluates the threshold against the
+remaining row groups and drops those that can no longer contribute (&lt;a href="https://github.com/apache/datafusion/pull/22450"&gt;#22450&lt;/a&gt;),
+and compound &lt;code&gt;ORDER BY&lt;/code&gt; queries are now supported. Together these reduce the
+total &lt;code&gt;topk_tpch&lt;/code&gt; suite runtime by ~43%; see our
+&lt;a href="https://datafusion.apache.org/blog/2026/07/20/sort-pushdown/"&gt;Optimizing for Almost Sorted Data&lt;/a&gt; blog post for more details. Thanks to
+&lt;a href="https://github.com/zhuqi-lucas"&gt;@zhuqi-lucas&lt;/a&gt; for driving this work, with reviews from &lt;a href="https://github.com/adriangb"&gt;@adriangb&lt;/a&gt;.&lt;/p&gt;
+&lt;h3 id="aggregation-improvements"&gt;Aggregation Improvements&lt;a class="headerlink" href="#aggregation-improvements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;&lt;strong&gt;Complete Multi-Column &lt;code&gt;GROUP BY&lt;/code&gt; Type Coverage&lt;/strong&gt;:
+DataFusion's column-wise &lt;code&gt;GROUP BY&lt;/code&gt; storage (&lt;code&gt;GroupValuesColumn&lt;/code&gt;) has
+type-specific fast paths, but previously any unsupported column type forced
+the entire grouping onto a slower row-encoded fallback. For example, this
+query to deduplicate a table of UUIDs used to hit the slow path:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;SELECT count(*) FROM (SELECT uuid, id FROM 'uuids.parquet' GROUP BY uuid, id);
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;DataFusion 55 completes the type coverage (&lt;a href="https://github.com/apache/datafusion/issues/22715"&gt;#22715&lt;/a&gt;), so the query above now runs about 5%
+faster on 200M UUIDs, and uses much less memory (see &lt;a href="https://github.com/apache/datafusion/issues/23645"&gt;#23645&lt;/a&gt;). Thanks to
+&lt;a href="https://github.com/zhuqi-lucas"&gt;@zhuqi-lucas&lt;/a&gt;, &lt;a href="https://github.com/tohuya6"&gt;@tohuya6&lt;/a&gt;, and &lt;a href="https://github.com/maxburke"&gt;@maxburke&lt;/a&gt; for this work.&lt;/p&gt;
+&lt;h3 id="faster-functions"&gt;Faster Functions&lt;a class="headerlink" href="#faster-functions" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;DataFusion ships hundreds of built-in functions, so speeding them up improves performance
+for many workloads. This release optimizes dozens of functions — up to 24x faster
+for &lt;a href="https://github.com/apache/datafusion/pull/23460"&gt;&lt;code&gt;find_in_set&lt;/code&gt;&lt;/a&gt; and 100x for &lt;a href="https://github.com/apache/datafusion/pull/22768"&gt;&lt;code&gt;approx_distinct&lt;/code&gt;&lt;/a&gt;
+with low-cardinality inputs and many groups (&lt;a href="https://github.com/apache/datafusion/pull/22768"&gt;#22768&lt;/a&gt;). It also includes
+dictionary-encoding preservation for many string functions (&lt;a href="https://github.com/apache/datafusion/pull/23743"&gt;#23743&lt;/a&gt;,
+&lt;a href="https://github.com/apache/datafusion/pull/23930"&gt;#23930&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/24100"&gt;#24100&lt;/a&gt;) and new &lt;code&gt;IN&lt;/code&gt; list specializations, such as bitmap filters for small integer types (&lt;a href="https://github.com/apache/datafusion/issues/19241"&gt;#19241&lt;/a&gt;). See the
+&lt;a href="#appendix-full-list-of-performance-improvements"&gt;full list in the appendix&lt;/a&gt;.
+Thanks to the many contributors who drove this work, especially
+&lt;a href="https://github.com/andygrove"&gt;@andygrove&lt;/a&gt;, &lt;a href="https://github.com/geoffreyclaude"&gt;@geoffreyclaude&lt;/a&gt;, &lt;a href="https://github.com/neilconway"&gt;@neilconway&lt;/a&gt;, &lt;a href="https://github.com/lyne7-sc"&gt;@lyne7-sc&lt;/a&gt;, &lt;a href="https://github.com/theirix"&gt;@theirix&lt;/a&gt;, and
+&lt;a href="https://github.com/haohuaijin"&gt;@haohuaijin&lt;/a&gt;.&lt;/p&gt;
+&lt;h3 id="planner-improvements"&gt;Planner Improvements&lt;a class="headerlink" href="#planner-improvements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;&lt;strong&gt;Unified Distribution and Sorting Enforcement&lt;/strong&gt;:
+The &lt;a href="https://docs.rs/datafusion/54.0.0/datafusion/physical_optimizer/enforce_distribution/struct.EnforceDistribution.html"&gt;&lt;code&gt;EnforceDistribution&lt;/code&gt;&lt;/a&gt; and
+&lt;a href="https://docs.rs/datafusion/54.0.0/datafusion/physical_optimizer/enforce_sorting/struct.EnforceSorting.html"&gt;&lt;code&gt;EnforceSorting&lt;/code&gt;&lt;/a&gt; physical optimizer passes are
+now merged into a single &lt;a href="https://docs.rs/datafusion/55.0.0/datafusion/physical_optimizer/ensure_requirements/struct.EnsureRequirements.html"&gt;&lt;code&gt;EnsureRequirements&lt;/code&gt;&lt;/a&gt; pass with idempotent sort
+pushdown (&lt;a href="https://github.com/apache/datafusion/pull/21976"&gt;#21976&lt;/a&gt;), fixing longstanding ordering issues between the two passes
+and enabling the sort pushdown work described above.
+Thanks to &lt;a href="https://github.com/zhuqi-lucas"&gt;@zhuqi-lucas&lt;/a&gt; for this work, with reviews from &lt;a href="https://github.com/2010YOUY01"&gt;@2010YOUY01&lt;/a&gt; and
+&lt;a href="https://github.com/alamb"&gt;@alamb&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Smarter Join Planning&lt;/strong&gt;:
+DataFusion 55 now converts inner joins to more efficient semi joins when equivalent (&lt;a href="https://github.com/apache/datafusion/pull/22652"&gt;#22652&lt;/a&gt;),
+eliminates &lt;code&gt;LEFT&lt;/code&gt;/&lt;code&gt;RIGHT&lt;/code&gt; joins with redundant sides (&lt;a href="https://github.com/apache/datafusion/pull/23566"&gt;#23566&lt;/a&gt;), handles
+intermediate projections in outer join elimination (&lt;a href="https://github.com/apache/datafusion/pull/22534"&gt;#22534&lt;/a&gt;), and reorders
+predicates in conjunctions using a cost heuristic (&lt;a href="https://github.com/apache/datafusion/pull/22343"&gt;#22343&lt;/a&gt;).
+Thanks to &lt;a href="https://github.com/neilconway"&gt;@neilconway&lt;/a&gt; and &lt;a href="https://github.com/simonvandel"&gt;@simonvandel&lt;/a&gt; for driving this work.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Better Scalar UDF Metadata APIs&lt;/strong&gt;:
+Scalar UDFs can now declare that they are &lt;em&gt;strict&lt;/em&gt; (they return &lt;code&gt;NULL&lt;/code&gt; when any
+input is &lt;code&gt;NULL&lt;/code&gt;) (&lt;a href="https://github.com/apache/datafusion/pull/23148"&gt;#23148&lt;/a&gt;), letting the optimizer eliminate outer joins for
+queries that filter on a function result, and &lt;em&gt;strictly order preserving&lt;/em&gt;
+(sorted input yields identically sorted output) (&lt;a href="https://github.com/apache/datafusion/pull/23807"&gt;#23807&lt;/a&gt;), letting the
+optimizer eliminate redundant sorts on expressions such as custom casts.
+Thanks to &lt;a href="https://github.com/lyne7-sc"&gt;@lyne7-sc&lt;/a&gt; and &lt;a href="https://github.com/rluvaton"&gt;@rluvaton&lt;/a&gt; for this work, with reviews from
+&lt;a href="https://github.com/alamb"&gt;@alamb&lt;/a&gt;, &lt;a href="https://github.com/kosiew"&gt;@kosiew&lt;/a&gt;, and &lt;a href="https://github.com/getChan"&gt;@getChan&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Faster Optimizer&lt;/strong&gt;:
+The optimizer continues to get faster, with improvements such as selective
+subquery traversal and in-place rewrites (&lt;a href="https://github.com/apache/datafusion/pull/22298"&gt;#22298&lt;/a&gt;), collapsing chained
+projections (&lt;a href="https://github.com/apache/datafusion/pull/22389"&gt;#22389&lt;/a&gt;), avoiding re-inlining expensive common subexpressions
+(&lt;a href="https://github.com/apache/datafusion/pull/23459"&gt;#23459&lt;/a&gt;), and a faster &lt;code&gt;PushDownFilter&lt;/code&gt; rule that modifies plans in place
+rather than copying them (&lt;a href="https://github.com/apache/datafusion/issues/20002"&gt;#20002&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/21668"&gt;#21668&lt;/a&gt;).
+Thanks to &lt;a href="https://github.com/adriangb"&gt;@adriangb&lt;/a&gt;, &lt;a href="https://github.com/Dandandan"&gt;@Dandandan&lt;/a&gt;, &lt;a href="https://github.com/fordN"&gt;@fordN&lt;/a&gt;, and &lt;a href="https://github.com/joroKr21"&gt;@joroKr21&lt;/a&gt; for this work.&lt;/p&gt;
+&lt;h3 id="scan-improvements"&gt;Scan Improvements&lt;a class="headerlink" href="#scan-improvements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;&lt;strong&gt;Pruning Unread Parquet Leaves for Nested Columns&lt;/strong&gt;:&lt;/p&gt;
+&lt;p&gt;Systems that embed DataFusion — such as &lt;a href="https://datafusion.apache.org/comet/"&gt;DataFusion Comet&lt;/a&gt;, &lt;a href="https://github.com/delta-io/delta-rs"&gt;delta-rs&lt;/a&gt;, and
+Iceberg integrations — often hand DataFusion a table schema that includes only the nested
+subfields the query needs. For example, given a file whose &lt;code&gt;events&lt;/code&gt; column
+physically holds four subfields, a table might declare only two of them:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;-- events column is ARRAY&amp;lt;STRUCT&amp;lt;id BIGINT, name VARCHAR, payload VARCHAR, trace VARCHAR&amp;gt;&amp;gt;
+-- Table definition only refers to the first two subfields, id and name
+CREATE EXTERNAL TABLE events (
+  events ARRAY&amp;lt;STRUCT&amp;lt;id BIGINT, name VARCHAR&amp;gt;&amp;gt;
+)
+STORED AS PARQUET LOCATION 'events.parquet';
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;DataFusion correctly reconciles these schemas, but prior to DataFusion 55, all
+four leaves were read from the file and decoded, including the large &lt;code&gt;payload&lt;/code&gt;
+and &lt;code&gt;trace&lt;/code&gt; subfields, which were then thrown away. The Comet project reported
+a production query where this extra decoding caused 1.35 TB of reads, whereas
+plain Spark read only 30.9 GB for the same pruned schema. DataFusion 55 closes
+that gap by not reading the undeclared &lt;code&gt;payload&lt;/code&gt; and &lt;code&gt;trace&lt;/code&gt; leaves from the
+file at all (&lt;a href="https://github.com/apache/datafusion/pull/24090"&gt;#24090&lt;/a&gt;). Thanks to &lt;a href="https://github.com/mbutrovich"&gt;@mbutrovich&lt;/a&gt; for this work, with reviews from
+&lt;a href="https://github.com/adriangb"&gt;@adriangb&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Other Scan Improvements&lt;/strong&gt;:
+DataFusion 55 also skips loading the page index (and an expensive
+&lt;a href="https://docs.rs/parquet/latest/parquet/file/metadata/struct.ParquetMetaData.html"&gt;&lt;code&gt;ParquetMetaData&lt;/code&gt;&lt;/a&gt; clone) when a file has no page index (&lt;a href="https://github.com/apache/datafusion/pull/24150"&gt;#24150&lt;/a&gt;), supports
+file-level Parquet row selections (&lt;a href="https://github.com/apache/datafusion/pull/22940"&gt;#22940&lt;/a&gt;), and lowers the default
+&lt;code&gt;repartition_file_min_size&lt;/code&gt; from 10 MiB to 1 MiB for better parallelism on
+small files (&lt;a href="https://github.com/apache/datafusion/pull/22439"&gt;#22439&lt;/a&gt;).
+Thanks to &lt;a href="https://github.com/alamb"&gt;@alamb&lt;/a&gt;, &lt;a href="https://github.com/haohuaijin"&gt;@haohuaijin&lt;/a&gt;, and &lt;a href="https://github.com/adriangb"&gt;@adriangb&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id="stability-improvements"&gt;Stability Improvements 🛡️&lt;a class="headerlink" href="#stability-improvements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;The community also improved DataFusion's handling of larger-than-memory
+aggregate workloads (e.g. &lt;a href="https://github.com/apache/datafusion/pull/23657"&gt;#23657&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/23965"&gt;#23965&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/24061"&gt;#24061&lt;/a&gt;), building on a
+refactoring of the aggregation path into dedicated streams (epic &lt;a href="https://github.com/apache/datafusion/issues/22710"&gt;#22710&lt;/a&gt;).
+Sorts under memory pressure are more resilient: when a spill
+merge cannot reserve enough memory, DataFusion now re-spills the largest stream
+in smaller batches rather than failing (&lt;a href="https://github.com/apache/datafusion/pull/22945"&gt;#22945&lt;/a&gt;), and caps the merge fan-in to
+bound memory use (&lt;a href="https://github.com/apache/datafusion/pull/23066"&gt;#23066&lt;/a&gt;). Thanks to &lt;a href="https://github.com/2010YOUY01"&gt;@2010YOUY01&lt;/a&gt;, &lt;a href="https://github.com/EmilyMatt"&gt;@EmilyMatt&lt;/a&gt;,
+&lt;a href="https://github.com/yinli-systems"&gt;@yinli-systems&lt;/a&gt;, &lt;a href="https://github.com/Rachelint"&gt;@Rachelint&lt;/a&gt;, and &lt;a href="https://github.com/pepijnve"&gt;@pepijnve&lt;/a&gt; (who fixed a subtle lost-wakeup
+bug in the spill pool, &lt;a href="https://github.com/apache/datafusion/pull/23522"&gt;#23522&lt;/a&gt;) for this work.&lt;/p&gt;
+&lt;h2 id="new-features"&gt;New Features ✨&lt;a class="headerlink" href="#new-features" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;h3 id="file_row_index-and-input_file_name"&gt;&lt;code&gt;file_row_index()&lt;/code&gt; and &lt;code&gt;input_file_name()&lt;/code&gt;&lt;a class="headerlink" href="#file_row_index-and-input_file_name" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;DataFusion 55 adds &lt;a href="https://datafusion.apache.org/user-guide/sql/scalar_functions.html#file-row-index"&gt;&lt;code&gt;file_row_index&lt;/code&gt;&lt;/a&gt; (&lt;a href="https://github.com/apache/datafusion/pull/22604"&gt;#22604&lt;/a&gt;) and &lt;a href="https://datafusion.apache.org/user-guide/sql/scalar_functions.html#input-file-name"&gt;&lt;code&gt;input_file_name&lt;/code&gt;&lt;/a&gt; (&lt;a href="https://github.com/apache/datafusion/pull/22978"&gt;#22978&lt;/a&gt;) functions
+to expose Parquet virtual columns:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;&amp;gt; select *, input_file_name(), file_row_index() from '/tmp/foo.parquet';
++---------+-------------------+------------------+
+| column1 | input_file_name() | file_row_index() |
++---------+-------------------+------------------+
+| 100     | tmp/foo.parquet   | 0                |
+| 200     | tmp/foo.parquet   | 1                |
++---------+-------------------+------------------+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Such functions are useful for change data capture, debugging, and
+Spark-compatible workloads. Thanks to &lt;a href="https://github.com/mbutrovich"&gt;@mbutrovich&lt;/a&gt; and &lt;a href="https://github.com/AdamGS"&gt;@AdamGS&lt;/a&gt; for this work
+(reviving earlier work from &lt;a href="https://github.com/jkylling"&gt;@jkylling&lt;/a&gt;), with reviews from &lt;a href="https://github.com/adriangb"&gt;@adriangb&lt;/a&gt;,
+&lt;a href="https://github.com/comphead"&gt;@comphead&lt;/a&gt;, and &lt;a href="https://github.com/niebayes"&gt;@niebayes&lt;/a&gt;.&lt;/p&gt;
+&lt;h3 id="range-partitioning"&gt;Range Partitioning&lt;a class="headerlink" href="#range-partitioning" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;DataFusion 55 adds native &lt;em&gt;range partitioning&lt;/em&gt; support, which maps rows to partitions by key ranges (rather than hash
+values). Query inputs are often range partitioned in real-world scenarios, such as time-series data
+written as one file per day or hour. DataFusion uses range partitioning information to
+avoid expensive repartitioning operations and push more specific dynamic filters
+to scans.&lt;/p&gt;
+&lt;p&gt;Data that is range partitioned declares an ordering and a list of split
+points. Partition &lt;code&gt;i&lt;/code&gt; holds the keys that fall between split point &lt;code&gt;i-1&lt;/code&gt; and
+split point &lt;code&gt;i&lt;/code&gt;:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-text"&gt;ordering     = [date ASC NULLS LAST]
+split_points = [(2022-01-01), (2023-01-01)]
+
+partition 0: date &amp;lt; 2022-01-01
+partition 1: 2022-01-01 &amp;lt;= date &amp;lt; 2023-01-01
+partition 2: date &amp;gt;= 2023-01-01
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;For more details, please see the documentation for
+&lt;a href="https://docs.rs/datafusion/55.0.0/datafusion/physical_expr/struct.RangePartitioning.html"&gt;&lt;code&gt;Partitioning::Range&lt;/code&gt;&lt;/a&gt;, the planning epic (&lt;a href="https://github.com/apache/datafusion/issues/22395"&gt;#22395&lt;/a&gt;), and
+the design discussion (&lt;a href="https://github.com/apache/datafusion/issues/21992"&gt;#21992&lt;/a&gt;). Thanks to &lt;a href="https://github.com/gene-bordegaray"&gt;@gene-bordegaray&lt;/a&gt;, &lt;a href="https://github.com/saadtajwar"&gt;@saadtajwar&lt;/a&gt;, &lt;a href="https://github.com/peterxcli"&gt;@peterxcli&lt;/a&gt;, &lt;a href="https://github.com/stuhood"&gt;@stuhood&lt;/a&gt;,
+&lt;a href="https://github.com/gmhelmold"&gt;@gmhelmold&lt;/a&gt;, &lt;a href="https://github.com/mattp5657"&gt;@mattp5657&lt;/a&gt;, &lt;a href="https://github.com/mithuncy"&gt;@mithuncy&lt;/a&gt;, &lt;a href="https://github.com/JSOD11"&gt;@JSOD11&lt;/a&gt;, &lt;a href="https://github.com/EdsonPetry"&gt;@EdsonPetry&lt;/a&gt;,
+&lt;a href="https://github.com/Rich-T-kid"&gt;@Rich-T-kid&lt;/a&gt;, and &lt;a href="https://github.com/blinding-pixels"&gt;@blinding-pixels&lt;/a&gt; for driving this substantial community
+effort.&lt;/p&gt;
+&lt;h3 id="merge-into-planner-support"&gt;&lt;code&gt;MERGE INTO&lt;/code&gt; Planner Support&lt;a class="headerlink" href="#merge-into-planner-support" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;&lt;code&gt;MERGE INTO&lt;/code&gt; (SQL:2003) is a widely used DML statement for upsert and
+conditional update workloads, and a key building block for table formats such
+as Apache Iceberg and Delta Lake. DataFusion 55 adds the logical plan types
+(&lt;a href="https://github.com/apache/datafusion/pull/20763"&gt;#20763&lt;/a&gt;) along with SQL planner and physical planner support, and a new
+&lt;a href="https://docs.rs/datafusion/55.0.0/datafusion/catalog/trait.TableProvider.html#method.merge_into"&gt;&lt;code&gt;TableProvider::merge_into&lt;/code&gt;&lt;/a&gt; hook (&lt;a href="https://github.com/apache/datafusion/pull/22988"&gt;#22988&lt;/a&gt;) so table implementations can
+execute merge operations:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;MERGE INTO target t
+USING source s
+ON t.id = s.id
+WHEN MATCHED AND s.deleted THEN DELETE
+WHEN MATCHED THEN UPDATE SET name = s.name
+WHEN NOT MATCHED THEN INSERT (id, name) VALUES (s.id, s.name);
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Built-in table providers do not yet implement the hook, but custom
+&lt;a href="https://docs.rs/datafusion/55.0.0/datafusion/catalog/trait.TableProvider.html"&gt;&lt;code&gt;TableProvider&lt;/code&gt;&lt;/a&gt; implementations (such as lakehouse table formats) can now plug
+in their own merge execution. More &lt;code&gt;MERGE INTO&lt;/code&gt; improvements are planned for
+upcoming releases; see &lt;a href="https://github.com/apache/datafusion/issues/20746"&gt;#20746&lt;/a&gt; for details.
+Thanks to &lt;a href="https://github.com/wirybeaver"&gt;@wirybeaver&lt;/a&gt; for implementing this feature, with reviews from
+&lt;a href="https://github.com/alamb"&gt;@alamb&lt;/a&gt; and &lt;a href="https://github.com/kosiew"&gt;@kosiew&lt;/a&gt;.&lt;/p&gt;
+&lt;h3 id="pluggable-spill-backends"&gt;Pluggable Spill Backends&lt;a class="headerlink" href="#pluggable-spill-backends" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;DataFusion spills to disk when a query exceeds its memory budget, but the spill
+infrastructure was previously hardwired to OS-level temporary files. DataFusion
+55 introduces a pluggable &lt;a href="https://docs.rs/datafusion/55.0.0/datafusion/execution/spill_file/trait.SpillFile.html"&gt;&lt;code&gt;SpillFile&lt;/code&gt;&lt;/a&gt; trait and
+&lt;a href="https://docs.rs/datafusion/55.0.0/datafusion/execution/spill_file/trait.TempFileFactory.html"&gt;&lt;code&gt;TempFileFactory&lt;/code&gt;&lt;/a&gt; (&lt;a href="https://github.com/apache/datafusion/pull/21882"&gt;#21882&lt;/a&gt;,
+&lt;a href="https://github.com/apache/datafusion/pull/22230"&gt;#22230&lt;/a&gt;) so hosts can route spill data through their own storage layers — for
+example, extensions like ParadeDB can now integrate spilling into the
+Postgres buffer pool. Implement &lt;a href="https://docs.rs/datafusion/55.0.0/datafusion/execution/spill_file/trait.TempFileFactory.html"&gt;&lt;code&gt;TempFileFactory&lt;/code&gt;&lt;/a&gt; and install
+it on the &lt;a href="https://docs.rs/datafusion/55.0.0/datafusion/execution/runtime_env/struct.RuntimeEnv.html"&gt;&lt;code&gt;RuntimeEnv&lt;/code&gt;&lt;/a&gt;:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-rust"&gt;let runtime = RuntimeEnvBuilder::new()
+    .with_disk_manager_builder(
+        // register a custom TempFileFactory
+        DiskManagerBuilder::default()
+            .with_temp_file_factory(Arc::new(MyTempFileFactory::new())),
+    )
+    .build_arc()?;
+let ctx = SessionContext::new_with_config_rt(SessionConfig::new(), runtime);
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;See the &lt;a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/data_io/object_store_spill.rs"&gt;&lt;code&gt;object_store_spill.rs&lt;/code&gt;&lt;/a&gt; example for a complete implementation that
+spills to an &lt;a href="https://docs.rs/object_store/latest/object_store/trait.ObjectStore.html"&gt;&lt;code&gt;ObjectStore&lt;/code&gt;&lt;/a&gt; such as S3. Thanks to &lt;a href="https://github.com/pantShrey"&gt;@pantShrey&lt;/a&gt; for this work,
+with reviews from &lt;a href="https://github.com/alamb"&gt;@alamb&lt;/a&gt;.&lt;/p&gt;
+&lt;h3 id="extensibility-for-distributed-engines"&gt;Extensibility for Distributed Engines&lt;a class="headerlink" href="#extensibility-for-distributed-engines" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Several new APIs make it easier to build distributed systems such as
+&lt;a href="https://github.com/datafusion-contrib/datafusion-distributed"&gt;datafusion-distributed&lt;/a&gt;, &lt;a href="https://datafusion.apache.org/ballista/"&gt;DataFusion Ballista&lt;/a&gt;, and &lt;a href="https://datafusion.apache.org/python/"&gt;DataFusion Python&lt;/a&gt; on
+top of DataFusion:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Dynamic filter propagation across network boundaries&lt;/strong&gt;: new
+  &lt;a href="https://docs.rs/datafusion/55.0.0/datafusion/physical_plan/trait.ExecutionPlan.html#tymethod.apply_expressions"&gt;&lt;code&gt;ExecutionPlan::apply_expressions&lt;/code&gt;&lt;/a&gt; and
+  &lt;a href="https://docs.rs/datafusion/55.0.0/datafusion/physical_plan/trait.ExecutionPlan.html#method.dynamic_expressions_produced"&gt;&lt;code&gt;ExecutionPlan::dynamic_expressions_produced&lt;/code&gt;&lt;/a&gt; methods let engines discover
+  which plan nodes produce dynamic filters and re-wire them across stage
+  boundaries (&lt;a href="https://github.com/apache/datafusion/pull/24018"&gt;#24018&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/24068"&gt;#24068&lt;/a&gt;). Thanks to &lt;a href="https://github.com/jayshrivastava"&gt;@jayshrivastava&lt;/a&gt;.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;&lt;code&gt;FFI_QueryPlanner&lt;/code&gt;&lt;/strong&gt;: foreign libraries can now provide a custom query
+  planner over the FFI boundary — for example, connecting a distributed
+  planner to a &lt;a href="https://docs.rs/datafusion/55.0.0/datafusion/execution/context/struct.SessionContext.html"&gt;&lt;code&gt;SessionContext&lt;/code&gt;&lt;/a&gt; in Python (&lt;a href="https://github.com/apache/datafusion/pull/24028"&gt;#24028&lt;/a&gt;). Thanks to &lt;a href="https://github.com/timsaucer"&gt;@timsaucer&lt;/a&gt;.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Self-serializing execution plans&lt;/strong&gt;: built-in &lt;a href="https://docs.rs/datafusion/55.0.0/datafusion/physical_plan/trait.ExecutionPlan.html"&gt;&lt;code&gt;ExecutionPlan&lt;/code&gt;&lt;/a&gt;s were ported
+  to per-type &lt;a href="https://docs.rs/datafusion-physical-plan/55.0.0/datafusion_physical_plan/filter/struct.FilterExec.html#method.try_to_proto"&gt;&lt;code&gt;try_to_proto&lt;/code&gt;&lt;/a&gt; / &lt;a href="https://docs.rs/datafusion-physical-plan/55.0.0/datafusion_physical_plan/filter/struct.FilterExec.html#method.try_from_proto"&gt;&lt;code&gt;try_from_proto&lt;/code&gt;&lt;/a&gt; hooks (&lt;a href="https://github.com/apache/datafusion/issues/23494"&gt;#23494&lt;/a&gt;), putting built-in and
+  third-party plans on the same code path. Thanks to &lt;a href="https://github.com/adriangb"&gt;@adriangb&lt;/a&gt;.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Window accumulator state access&lt;/strong&gt;: &lt;a href="https://docs.rs/datafusion/55.0.0/datafusion/physical_plan/windows/struct.BoundedWindowAggExec.html"&gt;&lt;code&gt;BoundedWindowAggExec&lt;/code&gt;&lt;/a&gt; can now expose
+  finalized accumulator state to an observer callback, enabling incremental /
+  prefix-scan use cases (&lt;a href="https://github.com/apache/datafusion/pull/24035"&gt;#24035&lt;/a&gt;; see &lt;a href="https://github.com/apache/datafusion-ballista/pull/2211"&gt;how it is used in Ballista&lt;/a&gt;). Thanks to
+  &lt;a href="https://github.com/avantgardnerio"&gt;@avantgardnerio&lt;/a&gt;, with reviews from &lt;a href="https://github.com/alamb"&gt;@alamb&lt;/a&gt; and &lt;a href="https://github.com/timsaucer"&gt;@timsaucer&lt;/a&gt;.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id="explain-improvements"&gt;&lt;code&gt;EXPLAIN&lt;/code&gt; Improvements&lt;a class="headerlink" href="#explain-improvements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;DataFusion 55 adds a Postgres-style &lt;code&gt;EXPLAIN (...)&lt;/code&gt; option list (&lt;a href="https://github.com/apache/datafusion/pull/21768"&gt;#21768&lt;/a&gt;) and
+a &lt;code&gt;pgjson&lt;/code&gt; output format for &lt;a href="https://datafusion.apache.org/user-guide/explain-usage.html#execution-counters-explain-analyze"&gt;&lt;code&gt;EXPLAIN ANALYZE&lt;/code&gt;&lt;/a&gt; (&lt;a href="https://github.com/apache/datafusion/pull/21767"&gt;#21767&lt;/a&gt;), making plan output
+easier to consume with existing Postgres tooling such as plan visualizers.&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;EXPLAIN ANALYZE&lt;/code&gt; can produce many metrics, and you can narrow them down
+explicitly with the &lt;code&gt;METRICS&lt;/code&gt; option. For example, to see only row counts for
+each plan node, use this:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;&amp;gt; EXPLAIN (ANALYZE, METRICS 'rows', LEVEL summary)
+  SELECT region_id, sum(amount) FROM orders GROUP BY region_id;
+
+AggregateExec: mode=Single, gby=[region_id@0 as region_id], aggr=[sum(orders.amount)], metrics=[output_rows=5]
+  DataSourceExec: file_groups={1 group: [[orders.parquet]]}, projection=[region_id, amount], file_type=parquet, metrics=[output_rows=100.0 K, row_groups_pruned_statistics=1 total → 1 matched, scan_efficiency_ratio=7.83% (28.30 K/361.5 K), ...]
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Adding &lt;code&gt;FORMAT pgjson&lt;/code&gt; renders the same physical plan and its live metrics as
+Postgres-compatible JSON, which can be pasted straight into plan visualizers
+such as &lt;a href="https://explain.dalibo.com/"&gt;Dalibo&lt;/a&gt;:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;&amp;gt; EXPLAIN (ANALYZE, FORMAT pgjson, METRICS 'rows', LEVEL summary)
+  SELECT region_id, sum(amount) FROM orders GROUP BY region_id;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;pre&gt;&lt;code class="language-json"&gt;[
+  {
+    "Plan": {
+      "Node Type": "AggregateExec",
+      "Actual Rows": 5,
+      "Plans": [
+        { "Node Type": "DataSourceExec", "Actual Rows": 100000, ... }
+      ]
+    }
+  }
+]
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;See the &lt;a href="https://datafusion.apache.org/user-guide/explain-usage.html"&gt;EXPLAIN usage guide&lt;/a&gt; for the full option list. Thanks to &lt;a href="https://github.com/adriangb"&gt;@adriangb&lt;/a&gt;
+for this work.&lt;/p&gt;
+&lt;h3 id="new-functions"&gt;New Functions&lt;a class="headerlink" href="#new-functions" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;&lt;strong&gt;SQL and Scalar Functions&lt;/strong&gt;:
+DataFusion 55 adds new array math functions &lt;a href="https://github.com/apache/datafusion/pull/22466"&gt;&lt;code&gt;array_scale&lt;/code&gt;&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/22459"&gt;&lt;code&gt;array_add&lt;/code&gt;&lt;/a&gt;,
+&lt;a href="https://github.com/apache/datafusion/pull/22556"&gt;&lt;code&gt;array_subtract&lt;/code&gt;&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/22542"&gt;&lt;code&gt;array_sum&lt;/code&gt;&lt;/a&gt;, and &lt;a href="https://github.com/apache/datafusion/pull/23168"&gt;&lt;code&gt;array_avg&lt;/code&gt;&lt;/a&gt;, plus the higher-order
+&lt;a href="https://github.com/apache/datafusion/pull/23267"&gt;&lt;code&gt;array_first&lt;/code&gt;&lt;/a&gt; function. It also includes the new
+&lt;a href="https://github.com/apache/datafusion/pull/22100"&gt;&lt;code&gt;unnest_outer&lt;/code&gt;&lt;/a&gt; function (&lt;a href="https://github.com/apache/datafusion/pull/22100"&gt;#22100&lt;/a&gt;), which preserves
+empty inputs as &lt;code&gt;NULL&lt;/code&gt;s rather than dropping them, and
+&lt;a href="https://github.com/apache/datafusion/pull/22768"&gt;&lt;code&gt;approx_distinct&lt;/code&gt;&lt;/a&gt; now supports more types.
+Thanks to &lt;a href="https://github.com/crm26"&gt;@crm26&lt;/a&gt;, &lt;a href="https://github.com/SubhamSinghal"&gt;@SubhamSinghal&lt;/a&gt;, &lt;a href="https://github.com/EdsonPetry"&gt;@EdsonPetry&lt;/a&gt;, &lt;a href="https://github.com/athlcode"&gt;@athlcode&lt;/a&gt;, and
+&lt;a href="https://github.com/mkleen"&gt;@mkleen&lt;/a&gt; for these contributions.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Spark-Compatible Functions&lt;/strong&gt;:
+The &lt;a href="https://docs.rs/datafusion-spark/latest/datafusion_spark/index.html"&gt;datafusion-spark crate&lt;/a&gt; gains new or improved Spark-compatible functions,
+including &lt;a href="https://github.com/apache/datafusion/pull/23774"&gt;&lt;code&gt;hypot&lt;/code&gt;&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/23962"&gt;&lt;code&gt;atan2&lt;/code&gt;&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/22740"&gt;&lt;code&gt;weekday&lt;/code&gt;&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/21639"&gt;&lt;code&gt;monthname&lt;/code&gt;&lt;/a&gt;, and &lt;a href="https://github.com/apache/datafusion/pull/20928"&gt;&lt;code&gt;concat_ws&lt;/code&gt;&lt;/a&gt; with array
+support, plus a new Spark SQL parser dialect config (&lt;a href="https://github.com/apache/datafusion/pull/22529"&gt;#22529&lt;/a&gt;).
+Thanks to the contributors who drove this work, especially
+&lt;a href="https://github.com/KarpagamKarthikeyan"&gt;@KarpagamKarthikeyan&lt;/a&gt;, &lt;a href="https://github.com/sjhddh"&gt;@sjhddh&lt;/a&gt;, &lt;a href="https://github.com/JeelRajodiya"&gt;@JeelRajodiya&lt;/a&gt;, &lt;a href="https://github.com/davidlghellin"&gt;@davidlghellin&lt;/a&gt;, and
+&lt;a href="https://github.com/kumarUjjawal"&gt;@kumarUjjawal&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id="upgrade-guide-and-changelog"&gt;Upgrade Guide and Changelog 📖&lt;a class="headerlink" href="#upgrade-guide-and-changelog" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Upgrading to 55.0.0 should be straightforward for most users, though there are
+some breaking changes. See the &lt;a href="https://datafusion.apache.org/library-user-guide/upgrading/55.0.0.html"&gt;Upgrade Guide&lt;/a&gt; for details and
+migration snippets, and the &lt;a href="https://github.com/apache/datafusion/blob/branch-55/dev/changelog/55.0.0.md"&gt;changelog&lt;/a&gt; for the full list of changes.&lt;/p&gt;
+&lt;h2 id="about-datafusion"&gt;About DataFusion&lt;a class="headerlink" href="#about-datafusion" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;&lt;a href="https://datafusion.apache.org/"&gt;Apache DataFusion&lt;/a&gt; is an extensible query engine, written in &lt;a href="https://www.rust-lang.org/"&gt;Rust&lt;/a&gt;, that uses
+&lt;a href="https://arrow.apache.org"&gt;Apache Arrow&lt;/a&gt; as its in-memory format. DataFusion is used by developers to
+create new, fast, data-centric systems such as databases, dataframe libraries,
+and machine learning and streaming applications. While &lt;a href="https://datafusion.apache.org/user-guide/introduction.html#project-goals"&gt;DataFusion's primary
+design goal&lt;/a&gt; is to accelerate the creation of other data-centric systems, it
+provides a reasonable experience directly out of the box as a &lt;a href="https://datafusion.apache.org/user-guide/dataframe.html"&gt;dataframe
+library&lt;/a&gt;, &lt;a href="https://datafusion.apache.org/python/"&gt;Python library&lt;/a&gt;, and &lt;a href="https://datafusion.apache.org/user-guide/cli/"&gt;command-line SQL tool&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;DataFusion's core thesis is that, as a community, together we can build much
+more advanced technology than any of us as individuals or companies could build
+alone. Without DataFusion, highly performant vectorized query engines would
+remain the domain of a few large companies and world-class research
+institutions. With DataFusion, we can all build on top of a shared foundation
+and focus on what makes our projects unique.&lt;/p&gt;
+&lt;h2 id="how-to-get-involved"&gt;How to Get Involved&lt;a class="headerlink" href="#how-to-get-involved" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;DataFusion is not a project built or driven by a single person, company, or
+foundation. Rather, our community of users and contributors works together to
+build a shared technology that none of us could have built alone.&lt;/p&gt;
+&lt;p&gt;If you are interested in joining us, we would love to have you. You can try out
+DataFusion on some of your own data and projects and let us know how it goes,
+contribute suggestions, documentation, bug reports, or a PR with documentation,
+tests, or code. A list of open issues suitable for beginners is &lt;a href="https://github.com/apache/datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22"&gt;here&lt;/a&gt;, and you
+can find out how to reach us on the &lt;a href="https://datafusion.apache.org/contributor-guide/communication.html"&gt;communication doc&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id="appendix-clickbench-results"&gt;Appendix: ClickBench Results&lt;a class="headerlink" href="#appendix-clickbench-results" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;We try not to get too excited by benchmarks, though it is hard not to get caught up
+in Benchmaxxing. As noted
+above, ClickBench covers only a tiny fraction of what our users actually do, and
+reads local files rather than object storage. Even so, DataFusion now sits at
+the top of the ClickBench leaderboard for processing partitioned Parquet files,
+as measured by ClickBench's combined metric. Results vary
+slightly by engine and instance type, but DataFusion matches other
+state-of-the-art engines on local files and often significantly exceeds them on
+object storage. Plenty left to optimize, of course.&lt;/p&gt;
+&lt;p&gt;&lt;img alt="DataFusion ClickBench performance on c7a.metal-48xlarge" class="img-fluid" src="/blog/images/datafusion-55.0.0/clickbench.c7a.metal-48xlarge.2026_08_24.png" width="100%"/&gt;
+&lt;strong&gt;Figure 2&lt;/strong&gt;: &lt;a href="https://benchmark.clickhouse.com/#system=+hqa|curp|ti%20rud|Distt|kBP%20t|rsoP%20t|Sili|feeid|traan|Tutt&amp;amp;type=-&amp;amp;machine=+ae-&amp;amp;cluster_size=-&amp;amp;opensource=-&amp;amp;hardware=+c&amp;amp;tuned=+n&amp;amp;metric=combined&amp;amp;queries=-"&gt;ClickBench results for c7a.metal-48xlarge as of 2026-08-24&lt;/a&gt;; DataFusion is the fastest engine for
+processing partitioned Parquet files, by ClickBench's combined metric. See the &lt;a href="https://benchmark.clickhouse.com/"&gt;ClickBench results page&lt;/a&gt; for the latest results.&lt;/p&gt;
+&lt;p&gt;&lt;img alt="DataFusion ClickBench performance on c6a.4xlarge" class="img-fluid" src="/blog/images/datafusion-55.0.0/clickbench.c6a.4xlarge.2026_08_24.png" width="100%"/&gt;
+&lt;strong&gt;Figure 3&lt;/strong&gt;: &lt;a href="https://benchmark.clickhouse.com/#system=+hqa|curp|ti%20rud|Distt|kBP%20t|rsoP%20t|Sili|feeid|traan|Tutt&amp;amp;type=-&amp;amp;machine=+ca4e&amp;amp;cluster_size=-&amp;amp;opensource=-&amp;amp;hardware=+c&amp;amp;tuned=+n&amp;amp;metric=combined&amp;amp;queries=-"&gt;ClickBench results for c6a.4xlarge as of 2026-08-24&lt;/a&gt;; DataFusion is the second
+fastest engine for processing partitioned Parquet files (combined metric) on this VM type. See the &lt;a href="https://benchmark.clickhouse.com/"&gt;ClickBench results page&lt;/a&gt; for the latest results.&lt;/p&gt;
+&lt;p&gt;&lt;img alt="DataFusion Performance over time" class="img-fluid" src="/blog/images/datafusion-55.0.0/performance_over_time_clickbench.png" width="100%"/&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Figure 4&lt;/strong&gt;: Average and median normalized execution times for DataFusion 55.0.0 on ClickBench queries, compared to previous releases.
+Query times are normalized using the ClickBench definition. See the
+&lt;a href="https://alamb.github.io/datafusion-benchmarking/"&gt;DataFusion Benchmarking Page&lt;/a&gt;
+for more details.&lt;/p&gt;
+&lt;h2 id="appendix-full-list-of-performance-improvements"&gt;Appendix: Full List of Performance Improvements&lt;a class="headerlink" href="#appendix-full-list-of-performance-improvements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;The tables below list the performance improvements in this release along with a
+representative measurement for each. Results marked &lt;em&gt;(micro)&lt;/em&gt; come from
+Criterion microbenchmarks and are not expected to translate directly into
+end-to-end query speedups. Speedups are reported as ratios of old to new
+runtime: "n% faster" means the old runtime was (100+n)% of the new, and
+speedups of 2x or more are reported as a multiple.&lt;/p&gt;
+&lt;h3 id="sort-topk"&gt;Sort / TopK&lt;a class="headerlink" href="#sort-topk" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;table class="table"&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Improvement&lt;/th&gt;
+&lt;th&gt;Issue / PR&lt;/th&gt;
+&lt;th&gt;Representative Result&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;Runtime row-group pruning for TopK&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/issues/23036"&gt;#23036&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/22450"&gt;#22450&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/22450#issuecomment-4720594338"&gt;4.2x faster on &lt;code&gt;topk_tpch&lt;/code&gt; Q8; 5 of 11 queries 3.6-4.2x faster&lt;/a&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Faster &lt;code&gt;SortPreservingMerge&lt;/code&gt; tie-breaker&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23107"&gt;#23107&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23107#issuecomment-4776877963"&gt;8% faster on &lt;code&gt;sort_tpch&lt;/code&gt; Q6&lt;/a&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id="window-functions"&gt;Window Functions&lt;a class="headerlink" href="#window-functions" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;table class="table"&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Improvement&lt;/th&gt;
+&lt;th&gt;Issue / PR&lt;/th&gt;
+&lt;th&gt;Representative Result&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;code&gt;LEAD&lt;/code&gt; / &lt;code&gt;LAG&lt;/code&gt; with &lt;code&gt;IGNORE NULLS&lt;/code&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23711"&gt;#23711&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23711"&gt;21.7x faster for &lt;code&gt;List&lt;/code&gt;, 10.5x for &lt;code&gt;Utf8View&lt;/code&gt;&lt;/a&gt; &lt;em&gt;(micro)&lt;/em&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Sliding-window &lt;code&gt;MIN&lt;/code&gt; / &lt;code&gt;MAX&lt;/code&gt; monotonic deques&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23827"&gt;#23827&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23827#issuecomment-5067789139"&gt;up to 3.5x faster (strings; ~2x for numerics)&lt;/a&gt; &lt;em&gt;(micro)&lt;/em&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Skip fully calculated window partitions&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/24127"&gt;#24127&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/24127"&gt;49% faster with 32,768 sparse partitions: 161ms → 108ms&lt;/a&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Skip re-slicing quiet window partitions&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/24047"&gt;#24047&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/24047"&gt;26% faster with 32,768 sparse partitions: 209ms → 166ms&lt;/a&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id="aggregation"&gt;Aggregation&lt;a class="headerlink" href="#aggregation" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;table class="table"&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Improvement&lt;/th&gt;
+&lt;th&gt;Issue / PR&lt;/th&gt;
+&lt;th&gt;Representative Result&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;code&gt;approx_distinct&lt;/code&gt; with many groups&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/22768"&gt;#22768&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/22768#issuecomment-4627539820"&gt;101x faster: 1723ms → 17ms (Int64, 50K groups)&lt;/a&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;code&gt;array_agg(DISTINCT ...)&lt;/code&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23716"&gt;#23716&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23716"&gt;4.0x faster at high cardinality&lt;/a&gt; &lt;em&gt;(micro)&lt;/em&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;code&gt;percentile_cont&lt;/code&gt; / &lt;code&gt;median&lt;/code&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23954"&gt;#23954&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23954"&gt;2.7x faster: 247µs → 92µs (&lt;code&gt;median&lt;/code&gt;, window=256)&lt;/a&gt; &lt;em&gt;(micro)&lt;/em&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Multi-column &lt;code&gt;GROUP BY&lt;/code&gt; type coverage&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/issues/22715"&gt;#22715&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/23523"&gt;#23523&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23523"&gt;46% less memory for mixed-schema keys: 1096KB → 594KB&lt;/a&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Native &lt;code&gt;GROUP BY&lt;/code&gt; on &lt;code&gt;FixedSizeBinary&lt;/code&gt; (e.g. UUIDs)&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/issues/23645"&gt;#23645&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/23646"&gt;#23646&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23646#pullrequestreview-4900163566"&gt;~5% faster: 1.13s → 1.07s grouping 200M UUIDs&lt;/a&gt;, addressing a &lt;a href="https://github.com/apache/datafusion/pull/23646#issuecomment-4996436765"&gt;reported out-of-memory crash&lt;/a&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Semi / anti join index alignment&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/22794"&gt;#22794&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/22794#issuecomment-4640131159"&gt;TPC-DS Q15 16% faster&lt;/a&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id="expressions-and-functions"&gt;Expressions and Functions&lt;a class="headerlink" href="#expressions-and-functions" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;table class="table"&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Improvement&lt;/th&gt;
+&lt;th&gt;Issue / PR&lt;/th&gt;
+&lt;th&gt;Representative Result&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;Faster &lt;code&gt;IN&lt;/code&gt; list evaluation&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/issues/19241"&gt;#19241&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/23014"&gt;#23014&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23014"&gt;up to 14.7x faster for small primitive lists&lt;/a&gt; &lt;em&gt;(micro)&lt;/em&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Faster &lt;code&gt;IN&lt;/code&gt; list (&lt;code&gt;UInt8&lt;/code&gt; bitmap)&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23011"&gt;#23011&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23011"&gt;9.7x faster: 38.4µs → 4.0µs&lt;/a&gt; &lt;em&gt;(micro)&lt;/em&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Faster &lt;code&gt;IN&lt;/code&gt; list (&lt;code&gt;Int8&lt;/code&gt; / &lt;code&gt;Int16&lt;/code&gt;)&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23299"&gt;#23299&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23299#issuecomment-4875954295"&gt;4.4x faster for &lt;code&gt;i16&lt;/code&gt;, 4-element list&lt;/a&gt; &lt;em&gt;(micro)&lt;/em&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Preserve dictionary encoding for string functions&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23930"&gt;#23930&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23930"&gt;360x faster &lt;code&gt;initcap&lt;/code&gt; on cardinality-10 dictionaries&lt;/a&gt; &lt;em&gt;(micro)&lt;/em&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Preserve dictionary encoding for trim family&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/24100"&gt;#24100&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/24100"&gt;151x faster &lt;code&gt;ltrim&lt;/code&gt; on cardinality-10 dictionaries&lt;/a&gt; &lt;em&gt;(micro)&lt;/em&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Preserve dictionary encoding for (&lt;code&gt;ascii&lt;/code&gt;, &lt;code&gt;bit_length&lt;/code&gt;, &lt;code&gt;octet_length&lt;/code&gt;)&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23743"&gt;#23743&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23743"&gt;28.7x faster &lt;code&gt;ascii&lt;/code&gt;&lt;/a&gt; &lt;em&gt;(micro)&lt;/em&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;code&gt;find_in_set&lt;/code&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23460"&gt;#23460&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23460"&gt;24x faster: 1.25ms → 52µs&lt;/a&gt; &lt;em&gt;(micro)&lt;/em&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;code&gt;array_has&lt;/code&gt; with array needle&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23337"&gt;#23337&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23337"&gt;15.1x faster; join query 0.95s → 0.059s&lt;/a&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;code&gt;trunc&lt;/code&gt; with scalar precision&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23593"&gt;#23593&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23593"&gt;12.9x faster: 9.5µs → 735ns&lt;/a&gt; &lt;em&gt;(micro)&lt;/em&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;code&gt;encode&lt;/code&gt; / hex&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23456"&gt;#23456&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23456"&gt;5.1x faster: 200µs → 39.5µs&lt;/a&gt; &lt;em&gt;(micro)&lt;/em&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;code&gt;arrays_zip&lt;/code&gt; perfect-list fast path&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/22285"&gt;#22285&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/22285#issuecomment-4537748133"&gt;4.2x faster&lt;/a&gt; &lt;em&gt;(micro)&lt;/em&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;code&gt;overlay&lt;/code&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/22182"&gt;#22182&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/22182"&gt;5.3x faster on high-null input: 401µs → 75µs&lt;/a&gt; &lt;em&gt;(micro)&lt;/em&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;code&gt;translate&lt;/code&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/22171"&gt;#22171&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/22171"&gt;4.4x faster: 265µs → 60µs&lt;/a&gt; &lt;em&gt;(micro)&lt;/em&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;code&gt;date_trunc&lt;/code&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23542"&gt;#23542&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23542"&gt;4.2x faster for &lt;code&gt;week&lt;/code&gt;: 23.3µs → 5.6µs&lt;/a&gt; &lt;em&gt;(micro)&lt;/em&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;code&gt;replace&lt;/code&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23589"&gt;#23589&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23589"&gt;2.5x faster: 228µs → 91µs&lt;/a&gt; &lt;em&gt;(micro)&lt;/em&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;code&gt;regexp_instr&lt;/code&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23540"&gt;#23540&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23540"&gt;90% faster: 49.2µs → 26.0µs&lt;/a&gt; &lt;em&gt;(micro)&lt;/em&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;code&gt;left&lt;/code&gt; / &lt;code&gt;right&lt;/code&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23762"&gt;#23762&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23762"&gt;81% faster on &lt;code&gt;string_view&lt;/code&gt; long results: 94µs → 52µs&lt;/a&gt; &lt;em&gt;(micro)&lt;/em&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;code&gt;round&lt;/code&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23471"&gt;#23471&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23471"&gt;79% faster: 1486ns → 831ns&lt;/a&gt; &lt;em&gt;(micro)&lt;/em&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;code&gt;regexp_match&lt;/code&gt; with literal pattern&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23547"&gt;#23547&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23547"&gt;59% faster with literal pattern and flags: 280µs → 176µs&lt;/a&gt; &lt;em&gt;(micro)&lt;/em&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;code&gt;date_part&lt;/code&gt; &lt;code&gt;isodow&lt;/code&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23491"&gt;#23491&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23491#issuecomment-4962484527"&gt;reported 38% improvement&lt;/a&gt; &lt;em&gt;(micro)&lt;/em&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id="planning"&gt;Planning&lt;a class="headerlink" href="#planning" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;table class="table"&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Improvement&lt;/th&gt;
+&lt;th&gt;Issue / PR&lt;/th&gt;
+&lt;th&gt;Representative Result&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;Collapse chained projections&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/22389"&gt;#22389&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/22389"&gt;4.0x faster planning: 623ms → 155ms&lt;/a&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Skip subquery traversal, rewrite in place&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/22298"&gt;#22298&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/22298"&gt;29% faster TPC-DS optimization: 220ms → 170ms&lt;/a&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Don't re-inline CSE'd expensive expressions&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23459"&gt;#23459&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/23459"&gt;67% faster on repeated &lt;code&gt;power(a, 2)&lt;/code&gt;&lt;/a&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Skip &lt;code&gt;ensure_distribution&lt;/code&gt; rebuild for unchanged children&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/22521"&gt;#22521&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/22521"&gt;2.9x faster per call: 171µs → 59µs&lt;/a&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Unified &lt;code&gt;EnsureRequirements&lt;/code&gt; pass&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/21976"&gt;#21976&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/21976#issuecomment-4521276189"&gt;TPC-H: 8 queries faster, 0 slower&lt;/a&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Predicate reordering heuristic&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/22343"&gt;#22343&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/22343#issuecomment-4483681627"&gt;ClickBench Q21 10-13% faster&lt;/a&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id="scan-io"&gt;Scan / IO&lt;a class="headerlink" href="#scan-io" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;table class="table"&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Improvement&lt;/th&gt;
+&lt;th&gt;Issue / PR&lt;/th&gt;
+&lt;th&gt;Representative Result&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;Prune unread Parquet leaves for nested columns&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/24090"&gt;#24090&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/24090"&gt;Reduces reads from 1.35 TB to 30.9 GB in a production Comet query&lt;/a&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Fewer object store requests for CSV&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/22962"&gt;#22962&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/22962#issuecomment-4721729807"&gt;70% faster on TPC-H CSV with simulated latency&lt;/a&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Lower &lt;code&gt;repartition_file_min_size&lt;/code&gt; to 1 MiB&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/22439"&gt;#22439&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/22439#issuecomment-4511995613"&gt;TPC-H Q22 68% faster&lt;/a&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Skip page index load when the file has none&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/issues/24149"&gt;#24149&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion/pull/24150"&gt;#24150&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;&lt;a href="https://github.com/apache/datafusion/pull/24150#issuecomment-5226213508"&gt;ClickBench (single file) Q1 38% faster&lt;/a&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;</content><category term="blog"/></entry><entry><title>Apache DataFusion Ballista 54.1.0 Released</title><link href="https://datafusion.apache.org/blog/2026/08/09/datafusion-ballista-54.1.0" rel="alternate"/><published>2026-08-09T00:00:00+00:00</published><updated>2026-08-09T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2026-08-09:/blog/2026/08/09/datafusion-ballista-54.1.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -91,7 +1006,190 @@ were required, so the &lt;a href="https://datafusion.apache.org/ballista/upgradi
 &lt;h2 id="thank-you"&gt;Thank You&lt;a class="headerlink" href="#thank-you" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;Thanks to Andy Grove, Alexander Domenti, and goingforstudying-ctrl for the commits in this release, and to
 everyone who contributed by filing issues, reviewing PRs, and providing feedback. Full details are in the
-&lt;a href="https://github.com/apache/datafusion-ballista/blob/54.1.0/docs/source/changelog/54.1.0.md"&gt;changelog&lt;/a&gt;.&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Optimizing for Almost Sorted Data: Sort Pushdown in Apache DataFusion</title><link href="https://datafusion.apache.org/blog/2026/07/20/sort-pushdown" rel="alternate"/><published>2026-07-20T00:00:00+00:00</published><updated>2026-07-20T00:00:00+00:00</updated><author><name>Qi Zhu and Andrew Lamb</name></author><id>tag:datafusion.apache.org,2026-07-20:/blog/2026/07/20/sort-pushdown</id><summary type="html">&lt;!--
+&lt;a href="https://github.com/apache/datafusion-ballista/blob/54.1.0/docs/source/changelog/54.1.0.md"&gt;changelog&lt;/a&gt;.&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Apache DataFusion Comet 1.0.0 Release</title><link href="https://datafusion.apache.org/blog/2026/08/07/datafusion-comet-1.0.0" rel="alternate"/><published>2026-08-07T00:00:00+00:00</published><updated>2026-08-07T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2026-08-07:/blog/2026/08/07/datafusion-comet-1.0.0</id><summary type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+
+&lt;p&gt;The Apache DataFusion PMC is pleased to announce version 1.0.0 of the &lt;a href="https://datafusion.apache.org/comet/"&gt;Comet&lt;/a&gt; subproject.&lt;/p&gt;
+&lt;p&gt;Comet is an accelerator for Apache Spark that translates Spark physical plans to DataFusion physical plans for
+improved performance and efficiency without requiring any code changes.&lt;/p&gt;
+&lt;p&gt;This release covers roughly six weeks of development …&lt;/p&gt;</summary><content type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+
+&lt;p&gt;The Apache DataFusion PMC is pleased to announce version 1.0.0 of the &lt;a href="https://datafusion.apache.org/comet/"&gt;Comet&lt;/a&gt; subproject.&lt;/p&gt;
+&lt;p&gt;Comet is an accelerator for Apache Spark that translates Spark physical plans to DataFusion physical plans for
+improved performance and efficiency without requiring any code changes.&lt;/p&gt;
+&lt;p&gt;This release covers roughly six weeks of development since 0.17.0 and consists of 244 commits from 23
+contributors. See the &lt;a href="https://github.com/apache/datafusion-comet/blob/main/docs/source/changelog/1.0.0.md"&gt;change log&lt;/a&gt; for the full list of changes.&lt;/p&gt;
+&lt;h2 id="the-road-to-10"&gt;The Road to 1.0&lt;a class="headerlink" href="#the-road-to-10" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Comet was &lt;a href="https://datafusion.apache.org/blog/2024/03/06/comet-donation/"&gt;donated&lt;/a&gt; to the Apache DataFusion project in March 2024 and cut its first release, 0.1.0, five
+months later with support for 13 operators and 106 expressions. Since then, the project has shipped 20
+releases and drawn contributions from more than 120 developers, and the codebase now recognizes over 400
+Spark expressions. Operator coverage has grown alongside it: 1.0 accelerates each of Spark's four join
+operators, window functions, generators (&lt;code&gt;explode&lt;/code&gt;, &lt;code&gt;explode_outer&lt;/code&gt;, &lt;code&gt;posexplode&lt;/code&gt;, and &lt;code&gt;posexplode_outer&lt;/code&gt;
+over arrays), sampling, in-memory table scans, and a fully native shuffle.&lt;/p&gt;
+&lt;p&gt;The 1.0 release marks the point at which Comet begins following &lt;a href="https://datafusion.apache.org/comet/about/versioning_policy.html"&gt;semantic versioning&lt;/a&gt;. Users upgrading
+within the 1.x line can expect backward-compatible changes only; features slated for removal will be
+deprecated in a minor release before being dropped in the next major version. This is why the deprecations
+of JDK 11 and Spark 3.4 announced below are scheduled for 1.1 rather than landing in 1.0 itself.&lt;/p&gt;
+&lt;h3 id="support-for-spark-40-with-ansi-mode"&gt;Support for Spark 4.0+ with ANSI mode&lt;a class="headerlink" href="#support-for-spark-40-with-ansi-mode" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Comet 1.0.0 supports Spark versions 3.4 through 4.1, with experimental support for 4.2. Comet fully supports Spark's ANSI mode, which is enabled by default starting with Spark 4.0.&lt;/p&gt;
+&lt;h3 id="correctness-testing"&gt;Correctness Testing&lt;a class="headerlink" href="#correctness-testing" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;It is important that queries accelerated by Comet produce the same results as Spark. Correctness checking has always been a large effort in Comet development, but the approach has evolved over time.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Upstream Spark tests&lt;/strong&gt;: Comet runs Spark's own test suite with Comet enabled, providing more than 24,000 unit tests effectively for free. These tests run in Comet's CI for all supported Spark versions.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Scala tests&lt;/strong&gt;: end-to-end queries that run with Comet enabled versus disabled, checking that results match.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Fuzz testing&lt;/strong&gt;: many of the Scala tests generate randomized data to catch regressions around edge cases such as nulls, NaN, Infinity, and timezone issues.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Comet SQL tests&lt;/strong&gt;: a sqllogictest-inspired approach that makes end-to-end tests easier to write.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Generative AI audits&lt;/strong&gt;: agentic skills sweep every expression, comparing Comet's implementation to Spark's source and ensuring tests cover important edge cases.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id="performance"&gt;Performance&lt;a class="headerlink" href="#performance" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;The early Comet releases provided a very modest speedup and the published benchmark results were based on running TPC workloads at small scale factors on a single node. There are now independent benchmark results published by AWS Labs that show significant speedups for &lt;a href="https://awslabs.github.io/data-on-eks/docs/benchmarks/spark-datafusion-comet-benchmark"&gt;TPC-DS @ 3TB running in EKS&lt;/a&gt;.&lt;/p&gt;
+&lt;h3 id="codegen-dispatch"&gt;Codegen Dispatch&lt;a class="headerlink" href="#codegen-dispatch" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Comet 0.17.0 introduced a new approach to filling gaps in expression coverage. In earlier releases,
+whenever Comet's planner encountered an expression that lacked a native Rust implementation, it fell back
+to executing an entire subtree of the plan in Spark. That required converting Arrow columns back to Spark
+rows before the expression ran and back to Arrow after, and the cost was often enough to erase the speedup
+Comet had bought elsewhere in the plan.&lt;/p&gt;
+&lt;p&gt;Codegen dispatch narrows that fallback to the expression itself: the batch stays in the Comet pipeline
+and Comet invokes Spark's own generated code for just the missing expression, leaving the rest of the query
+running natively. Four consequences are worth calling out.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Coverage.&lt;/strong&gt; Expressions that would previously have blocked native execution of a whole subtree are
+  now supported immediately, without a Rust port.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Compatibility.&lt;/strong&gt; For categories where a native reimplementation would inevitably diverge from Spark's
+  semantics — regular expressions being the canonical case, given the gap between Java's regex engine and
+  any Rust or C++ equivalent — codegen dispatch delivers bit-for-bit Spark parity because it &lt;em&gt;is&lt;/em&gt; Spark's
+  implementation.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Expression fusion.&lt;/strong&gt; A dispatched expression tree (&lt;em&gt;i.e.&lt;/em&gt;, nested expressions) is compiled into a single method, so the Arrow
+  input reads, the expression evaluation, and the Arrow output writes are fused together. The compiler
+  is free to optimize across the whole tree, and no intermediate Arrow &lt;code&gt;RecordBatch&lt;/code&gt; is materialized
+  between one expression and the next.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Scala and Java UDFs.&lt;/strong&gt; User-defined functions are compiled to the same codegen surface as built-in
+  expressions, so they can flow through codegen dispatch without any change from the user. Queries that
+  were previously disqualified from acceleration only because they contained a UDF can now benefit as
+  long as the surrounding operators are supported. See the &lt;a href="https://datafusion.apache.org/comet/user-guide/latest/scala_java_udfs.html"&gt;Scala and Java UDF guide&lt;/a&gt; for details.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Comet 1.0 widens the mechanism in three ways.&lt;/p&gt;
+&lt;p&gt;The first is the biggest. An expression that opts into codegen dispatch previously reached the dispatcher
+only when Comet reported it as &lt;em&gt;incompatible&lt;/em&gt; for the given input; an &lt;em&gt;unsupported&lt;/em&gt; report still sent the
+whole subtree back to Spark. In 1.0 both support levels route through the dispatcher, so an input that
+Spark handles and Comet's native code does not now stays inside the Comet pipeline.&lt;/p&gt;
+&lt;p&gt;Second, casts join the same path. Cast expressions that Comet declines to run natively — including legacy
+configuration variants such as &lt;code&gt;spark.sql.legacy.castComplexTypesToString.enabled&lt;/code&gt; — are now dispatched
+rather than falling back, and more string, array, and interval expressions were opted in as well.&lt;/p&gt;
+&lt;p&gt;Third, the path is now visible. Comet's extended explain output reports native versus codegen-dispatch
+coverage for a plan, so you can see which path each expression actually took rather than inferring it from
+the absence of a fallback reason.&lt;/p&gt;
+&lt;h2 id="improvements-since-0170"&gt;Improvements since 0.17.0&lt;a class="headerlink" href="#improvements-since-0170" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;The rest of this post covers what is new since the 0.17.0 release.&lt;/p&gt;
+&lt;h3 id="experimental-pyarrow-udf-support"&gt;Experimental PyArrow UDF Support&lt;a class="headerlink" href="#experimental-pyarrow-udf-support" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;This release adds experimental support for accelerated PyArrow UDFs, allowing PyArrow-based user-defined
+functions to participate in native execution instead of forcing a fallback to Spark. When the feature is
+disabled, Comet now hints at the native PyArrow UDF path in its fallback reasons so users know the option
+exists. This is an early-stage feature and we welcome feedback from users experimenting with it.&lt;/p&gt;
+&lt;h3 id="new-expression-and-aggregate-support"&gt;New Expression and Aggregate Support&lt;a class="headerlink" href="#new-expression-and-aggregate-support" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;This release expands the set of Spark expressions and aggregates that are accelerated by Comet:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Aggregates&lt;/strong&gt;: &lt;code&gt;approx_percentile&lt;/code&gt; / &lt;code&gt;percentile_approx&lt;/code&gt;, exact &lt;code&gt;percentile&lt;/code&gt; / &lt;code&gt;median&lt;/code&gt;,
+  &lt;code&gt;approx_count_distinct&lt;/code&gt;, and native &lt;code&gt;collect_list&lt;/code&gt; / &lt;code&gt;array_agg&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Cast&lt;/strong&gt;: Cast expressions where the native implementation is marked as incompatible or unsupported
+  are now routed through codegen dispatch.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Grouping&lt;/strong&gt;: &lt;code&gt;grouping()&lt;/code&gt; and &lt;code&gt;grouping_id()&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Intervals&lt;/strong&gt;: interval types via &lt;code&gt;make_ym_interval&lt;/code&gt; and &lt;code&gt;make_dt_interval&lt;/code&gt;, &lt;code&gt;CalendarIntervalType&lt;/code&gt;,
+  &lt;code&gt;multiply_dt_interval&lt;/code&gt;, and interval codegen dispatch for nested values and native shuffle.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;String&lt;/strong&gt;: &lt;code&gt;base64&lt;/code&gt;, &lt;code&gt;split_part&lt;/code&gt; via &lt;code&gt;StringSplitSQL&lt;/code&gt;, native &lt;code&gt;levenshtein&lt;/code&gt;, and native &lt;code&gt;randstr&lt;/code&gt; and
+  &lt;code&gt;uuid&lt;/code&gt; — both bit-for-bit compatible with Spark for a given seed.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Array / map&lt;/strong&gt;: &lt;code&gt;array_prepend&lt;/code&gt;, the &lt;code&gt;shuffle()&lt;/code&gt; array function, &lt;code&gt;size()&lt;/code&gt; for &lt;code&gt;MapType&lt;/code&gt;, and &lt;code&gt;ElementAt&lt;/code&gt;
+  over &lt;code&gt;MapType&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Date/time&lt;/strong&gt;: native &lt;code&gt;TimestampNTZ&lt;/code&gt; inputs for &lt;code&gt;hour&lt;/code&gt; / &lt;code&gt;minute&lt;/code&gt; / &lt;code&gt;second&lt;/code&gt; and
+  &lt;code&gt;PreciseTimestampConversion&lt;/code&gt; for native time-window grouping.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Windows&lt;/strong&gt;: extended native window function support and Spark 4 decimal window average.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id="faster-parquet-scans"&gt;Faster Parquet Scans&lt;a class="headerlink" href="#faster-parquet-scans" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Parquet reads pick up several improvements as well. Full Parquet metadata, including the page index, is now
+cached via DataFusion's &lt;code&gt;CachedParquetFileReaderFactory&lt;/code&gt;; identity casts are unwrapped in the schema adapter
+so Parquet statistics pruning can engage; filter pushdown configuration has been revised; the native scan
+passes a metadata size hint so a single read usually captures the footer; and the native Parquet scan seeds
+its reader options from the session config so Parquet settings you already set take effect.&lt;/p&gt;
+&lt;h3 id="iceberg-table-format-v3"&gt;Iceberg Table Format V3&lt;a class="headerlink" href="#iceberg-table-format-v3" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Comet now supports Iceberg 1.11 and its first Iceberg table format V3 feature: full table encryption. Other V3 features like deletion vectors and new data types (&lt;em&gt;e.g.&lt;/em&gt;, &lt;code&gt;VARIANT&lt;/code&gt;) fall back gracefully. The native Iceberg scan supports the &lt;code&gt;_pos&lt;/code&gt;, &lt;code&gt;_spec&lt;/code&gt;, &lt;code&gt;_file&lt;/code&gt;, and
+&lt;code&gt;_partition&lt;/code&gt; metadata columns, sizes delete files correctly to avoid dropped deletes, disambiguates scans that
+share a &lt;code&gt;metadata_location&lt;/code&gt;, and dedupes residuals and delete files in the native scan serde. A prior case
+where Iceberg native scan exchange reuse with different pushed filters could produce wrong results is also
+fixed.&lt;/p&gt;
+&lt;h3 id="native-expression-performance"&gt;Native Expression Performance&lt;a class="headerlink" href="#native-expression-performance" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Many native expression implementations have been optimized to more efficiently leverage Arrow kernels or to avoid per-row builders.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Casts&lt;/strong&gt; between numeric, string, decimal, and date types, including a faster float-to-decimal cast, an
+  optimized integer-to-integer cast, shared no-overflow fast paths in &lt;code&gt;CheckOverflow&lt;/code&gt; and
+  &lt;code&gt;DecimalRescaleCheckOverflow&lt;/code&gt;, and a &lt;code&gt;cast_binary_to_string&lt;/code&gt; that is up to 27x faster on binary-format
+  styles.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;JSON, regex, and URL parsing&lt;/strong&gt;: &lt;code&gt;get_json_object&lt;/code&gt;, &lt;code&gt;regexp_extract&lt;/code&gt;, and &lt;code&gt;parse_url&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Date/time and decimal kernels&lt;/strong&gt;: &lt;code&gt;date_trunc&lt;/code&gt;, &lt;code&gt;spark_ceil&lt;/code&gt;, and a vectorized &lt;code&gt;spark_unscaled_value&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;String and array kernels&lt;/strong&gt;: &lt;code&gt;lpad&lt;/code&gt;, &lt;code&gt;unhex&lt;/code&gt;, &lt;code&gt;size&lt;/code&gt;, &lt;code&gt;arrays_overlap&lt;/code&gt;, &lt;code&gt;escape_string&lt;/code&gt;, and the &lt;code&gt;try_*&lt;/code&gt;
+  arithmetic kernel.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;To make this kind of work repeatable, the release also adds a &lt;a href="https://datafusion.apache.org/comet/contributor-guide/optimizing_expressions.html"&gt;scalar expression optimization guide&lt;/a&gt;
+documenting how to benchmark a kernel, keep its output bit-identical to Spark, and gate changes on a
+no-regression check.&lt;/p&gt;
+&lt;h2 id="deprecation-notice"&gt;Deprecation Notice&lt;a class="headerlink" href="#deprecation-notice" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;With the move to a stable 1.0 release line, Comet begins deprecating older platforms under its
+&lt;a href="https://datafusion.apache.org/comet/about/versioning_policy.html"&gt;versioning policy&lt;/a&gt;:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;JDK 11&lt;/strong&gt; is deprecated and scheduled for removal in Comet 1.1.0.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Apache Spark 3.4&lt;/strong&gt; is deprecated and scheduled for removal in Comet 1.1.0.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Comet aligns its Spark support window with upstream Apache Spark maintenance. Spark 3.4 is no longer
+maintained upstream, so under the versioning policy it is deprecated in the first Comet minor release
+after that point and removed in the following one. Comet 1.0.0 still builds and publishes Spark 3.4
+binaries.&lt;/p&gt;
+&lt;p&gt;Users on these platforms should plan to move to JDK 17+ and Spark 3.5 or later before upgrading to 1.1.0.&lt;/p&gt;
+&lt;h2 id="compatibility"&gt;Compatibility&lt;a class="headerlink" href="#compatibility" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Supported platforms include:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Spark 3.4.3&lt;/strong&gt; with Java 11/17 and Scala 2.12/2.13 (deprecated, removal in 1.1.0)&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Spark 3.5.9&lt;/strong&gt; with Java 11/17 and Scala 2.12/2.13&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Spark 4.0.4&lt;/strong&gt; with Java 17 and Scala 2.13&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Spark 4.1.3&lt;/strong&gt; with Java 17/21 and Scala 2.13&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Spark 4.2&lt;/strong&gt; with Java 17 and Scala 2.13 (experimental, for early evaluation only)&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;See the &lt;a href="https://datafusion.apache.org/comet/user-guide/latest/compatibility/spark-versions.html"&gt;Spark Version Compatibility&lt;/a&gt; page for known limitations specific to each version.&lt;/p&gt;
+&lt;p&gt;This release upgrades to &lt;strong&gt;DataFusion 54.1&lt;/strong&gt; and &lt;strong&gt;Arrow 58.4&lt;/strong&gt;.&lt;/p&gt;
+&lt;h2 id="get-started-with-comet-100"&gt;Get Started with Comet 1.0.0&lt;a class="headerlink" href="#get-started-with-comet-100" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Ready to try it out? Follow the &lt;a href="https://datafusion.apache.org/comet/user-guide/1.0/installation.html"&gt;Comet 1.0.0 Installation Guide&lt;/a&gt;
+to get up and running, then point Comet at your existing Spark workloads and see the speedup for yourself.&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Optimizing for Almost Sorted Data: Sort Pushdown in Apache DataFusion</title><link href="https://datafusion.apache.org/blog/2026/07/20/sort-pushdown" rel="alternate"/><published>2026-07-20T00:00:00+00:00</published><updated>2026-07-20T00:00:00+00:00</updated><author><name>Qi Zhu and Andrew Lamb</name></author><id>tag:datafusion.apache.org,2026-07-20:/blog/2026/07/20/sort-pushdown</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
@@ -7578,7 +8676,7 @@ with the &lt;a href="https://docs.rs/datafusion/latest/datafusion/datasource/tra
 and the &lt;code&gt;scan&lt;/code&gt; method uses those predicates with the
 external index to find the files that may contain data that matches the query.&lt;/p&gt;
 &lt;p&gt;The DataFusion repository contains a fully working and well-commented example,
-&lt;a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/parquet_index.rs"&gt;parquet_index.rs&lt;/a&gt;, of this technique that you can use as a starting point. 
+&lt;a href="https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/data_io/parquet_index.rs"&gt;parquet_index.rs&lt;/a&gt;, of this technique that you can use as a starting point. 
 The example creates a simple index that stores the min/max values for a column
 called &lt;code&gt;value&lt;/code&gt; along with the file name. Then it runs the following query:&lt;/p&gt;
 &lt;pre&gt;&lt;code class="language-sql"&gt;SELECT file_name, value FROM index_table WHERE value = 150
