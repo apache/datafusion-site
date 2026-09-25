@@ -190,10 +190,8 @@ It is observability only: it never rejects an allocation and never touches the m
 are batched and flushed into the shared counter every 64 KiB, so the common path is a thread-local add rather
 than an atomic operation.
 
-The accounting layer is always on, so its cost was measured carefully. Because `libcomet` is loaded with
-`dlopen`, every thread-local access goes through the dynamic loader, and the first version made several per
-allocation, costing 4.8% on TPC-H SF100 Q21. Reducing that to a single thread-local access per allocation
-brought the cost down to 2.1% on the same query, and further reduction is tracked in
+The accounting layer is always on. It makes a single thread-local access per allocation and free, and costs
+about 2% on TPC-H SF100 Q21, an allocation-heavy query. Further reduction is tracked in
 [#6213](https://github.com/apache/datafusion-comet/issues/6213).
 
 The JVM side got the same treatment. Arrow buffers that Comet imports from native code are now held in a
@@ -225,7 +223,7 @@ the container. For large executors, raising the factor is usually the better cho
 
 [tuning guide]: https://datafusion.apache.org/comet/user-guide/latest/tuning.html#memory-tuning
 
-The driver plugin previously tried to raise `spark.executor.memoryOverhead` on the user's behalf, but that
+In 1.0.0, the driver plugin tried to raise `spark.executor.memoryOverhead` on the user's behalf, but that
 adjustment could not reach the container on most supported Spark versions and has been removed. The driver now
 warns when neither `spark.executor.memoryOverhead` nor `spark.executor.memoryOverheadFactor` is set, except in
 local mode.
@@ -283,9 +281,11 @@ The read side gained several things in this release too:
   implementations. Besides being faster, this is what keeps a partitioned table's write plan fully native and
   therefore eligible for the native writer.
 - **Scan planning metrics and scan time** are reported in the Spark UI for the native Iceberg scan.
-- Fixes for tables partitioned by an unknown transform, complex null checks on native scans, Iceberg system
-  functions wrapped as `ApplyFunctionExpression`, and transform residuals that were previously pushed down as
-  filters on their source column.
+- **A wrong-results fix for transform residuals.** A residual such as `bucket(4, id) = 2` combined with another
+  predicate under `AND`, `OR`, or `NOT` was pushed to the native scan as `id = 2`, returning too few rows. Such
+  residuals are no longer pushed down.
+- Tables partitioned by an unknown transform can now be read natively, and `IS NULL` / `IS NOT NULL` checks on
+  list and map columns no longer force the scan back to Spark.
 
 ## Native Parquet Writes on Spark 4.0+
 
@@ -296,9 +296,9 @@ IDs in native Parquet writes.
 ## Remote Shuffle with Celeborn
 
 Applications using Apache Celeborn can now use Comet's composite shuffle manager to run Comet's **native**
-shuffle over Celeborn, rather than falling back to ordinary Spark/Celeborn shuffle for every exchange. This
-landed as a series of changes adding an RSS partition writer, task-owned JNI callbacks, destination-aware
-native shuffle execution, the map-side push lifecycle, a raw native shuffle reader, and native-only planning.
+shuffle over Celeborn, where 1.0.0 retained ordinary Spark/Celeborn shuffle for every exchange. Map-side
+tasks push Comet's Arrow frames directly to Celeborn, and the reduce side reads them back through a native
+shuffle reader.
 
 Native shuffle over Celeborn requires an explicit `spark.comet.shuffle.mode=native`; the default `auto` mode
 retains ordinary Spark/Celeborn shuffle. It also requires a Celeborn client that provides a safe
@@ -315,7 +315,7 @@ full set of requirements and the frame-size and in-flight-bytes knobs.
 
 Several changes target shuffle, which dominates many TPC-DS-shaped workloads:
 
-- The native shuffle writer had been running with a **1-byte write buffer** by default, because its 1 MiB
+- In 1.0.0, the native shuffle writer ran with a **1-byte write buffer** by default, because its 1 MiB
   default was declared in MiB but sent to native code as a byte count. It now uses the intended 1 MiB.
 - **Round-robin repartitioning** is now positional, placing rows by row ordinal the way Spark does, instead of
   hashing every column of every row. Besides being much cheaper on wide nested schemas, this spreads a column of
