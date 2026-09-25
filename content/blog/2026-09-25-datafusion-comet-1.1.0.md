@@ -159,6 +159,11 @@ The [Iceberg Writes guide] documents the full eligibility table and every accept
 on a non-production table and tell us what you find — feedback from real workloads is exactly what this
 feature needs before it can lose the experimental label.
 
+Thanks to [@jordepic] for designing and implementing the split-operator plan, write detection, and the native
+writer, and to [@andygrove] for the fidelity and failure-handling work, with contributions from
+[@zhangfengcdt], [@snmvaughan], and [@0lai0], and reviews from [@sunchao], [@comphead], [@unikdahal], and
+[@mbutrovich]. Related PRs: [#4658], [#5298], [#5361], [#5663], [#5780].
+
 [Iceberg Writes guide]: https://datafusion.apache.org/comet/user-guide/latest/iceberg-writes.html
 
 ## Memory Management
@@ -270,6 +275,11 @@ rather than through the plugin.
 For contributors, a new [memory management guide] describes where Comet allocates memory, which allocations
 are tracked, and the allocator hazards to watch for when adding operators.
 
+Thanks to [@andygrove] for driving this work, [@peterxcli] for the memory pool lifecycle and shuffle spill
+accounting fixes, [@ywskycn] for reporting native memory usage to Spark, [@1fanwang] for the Arrow import leak
+fix, and [@sunchao] for the native aggregate spill and memory metrics, with reviews from [@sunchao],
+[@comphead], and [@mbutrovich]. Related PRs: [#5934], [#6162], [#6048], [#6128], [#6205], [#6066], [#5494].
+
 [memory management guide]: https://datafusion.apache.org/comet/contributor-guide/memory_management.html
 
 ## More Iceberg Improvements
@@ -287,11 +297,18 @@ The read side gained several things in this release too:
 - Tables partitioned by an unknown transform can now be read natively, and `IS NULL` / `IS NOT NULL` checks on
   list and map columns no longer force the scan back to Spark.
 
+Thanks to [@mbutrovich] for deletion vector support, [@parthchandra] for the scan metrics, [@ErikBPF] for the
+null-check fix, and [@andygrove] for the native system functions and residual fix, with reviews from
+[@sunchao], [@rich7420], [@unikdahal], and [@jordepic]. Related PRs: [#5853], [#5638], [#6027], [#6154].
+
 ## Native Parquet Writes on Spark 4.0+
 
 Separately from Iceberg, 1.1.0 hooks native Parquet writes into Spark's `WriteFilesExec` seam on Spark 4.0 and
 later, behind `spark.comet.parquet.write.enabled`. This release also preserves Catalyst nullability and field
 IDs in native Parquet writes.
+
+Thanks to [@andygrove] and [@sunchao] for this work, with reviews from [@comphead], [@peterxcli],
+[@rich7420], and [@parthchandra]. Related PRs: [#5763], [#5369].
 
 ## Remote Shuffle with Celeborn
 
@@ -306,6 +323,9 @@ push-completion API — released 0.6.0 and 0.7.0 clients do not, and those versi
 in native mode. Native RSS does not support `spark.io.encryption.enabled=true`. Celeborn is an optional
 application dependency and is not bundled with Comet. See the [Celeborn section of the tuning guide] for the
 full set of requirements and the frame-size and in-flight-bytes knobs.
+
+Thanks to [@pingzh] for this work, with reviews from [@sunchao], [@ziting-openai], and [@andygrove]. Related
+PRs: [#5473], [#5481], [#5513], [#5531], [#5537].
 
 [Celeborn section of the tuning guide]: https://datafusion.apache.org/comet/user-guide/latest/tuning.html
 
@@ -327,6 +347,9 @@ Several changes target shuffle, which dominates many TPC-DS-shaped workloads:
   expected schemas are cached for remote shuffle decoding.
 - Per-partition scratch buffers are reused in the shuffle write path, and `ArrowWriter` bulk-copies fixed-width
   columns.
+
+Thanks to the contributors who drove this work, especially [@peterxcli], [@dwsmith1983], [@pingzh], and
+[@andygrove], with reviews from [@sunchao] and [@mbutrovich].
 
 ### Planning and Execution
 
@@ -361,6 +384,9 @@ Spark 4 **Variant** support advanced as well: native Parquet scans can now proje
 with Parquet storage adapted for Variant projection, Variant arrays normalized at the native Parquet boundary,
 and `VariantType` identity carried through schema serialization.
 
+Thanks to [@peterxcli] for driving Variant support, with reviews from [@sunchao]. Related PRs: [#5868],
+[#5794].
+
 This release also adds **experimental native support for an in-memory cache**
 (`spark.comet.exec.inMemoryCache.enabled`, disabled by default), support for **S3-compliant filesystems**, and
 build gates for contrib **Delta** and **Lance** scans.
@@ -370,6 +396,9 @@ build gates for contrib **Delta** and **Lance** scans.
 A new `spark.comet.explain.planOnly.enabled` setting builds the plan Comet would have executed, logs it to the
 driver log, and then lets Spark run the query unchanged. This makes it possible to see how much of a production
 workload Comet would accelerate, and why anything falls back, without running any of it through Comet.
+
+Thanks to [@andygrove] for this feature, with reviews from [@coderfender] and [@sunchao]. Related PRs:
+[#5394].
 
 ## Upgrading to 1.1.0
 
@@ -411,3 +440,50 @@ This release builds on **DataFusion 55.1** and **Arrow 59.2**.
 
 Ready to try it out? Follow the [Comet 1.1.0 Installation Guide](https://datafusion.apache.org/comet/user-guide/1.1/installation.html)
 to get up and running, then point Comet at your existing Spark workloads and see the speedup for yourself.
+
+[@jordepic]: https://github.com/jordepic
+[@andygrove]: https://github.com/andygrove
+[@zhangfengcdt]: https://github.com/zhangfengcdt
+[@snmvaughan]: https://github.com/snmvaughan
+[@0lai0]: https://github.com/0lai0
+[@sunchao]: https://github.com/sunchao
+[@comphead]: https://github.com/comphead
+[@unikdahal]: https://github.com/unikdahal
+[@mbutrovich]: https://github.com/mbutrovich
+[@peterxcli]: https://github.com/peterxcli
+[@ywskycn]: https://github.com/ywskycn
+[@1fanwang]: https://github.com/1fanwang
+[@parthchandra]: https://github.com/parthchandra
+[@ErikBPF]: https://github.com/ErikBPF
+[@rich7420]: https://github.com/rich7420
+[@pingzh]: https://github.com/pingzh
+[@ziting-openai]: https://github.com/ziting-openai
+[@dwsmith1983]: https://github.com/dwsmith1983
+[@coderfender]: https://github.com/coderfender
+
+[#4658]: https://github.com/apache/datafusion-comet/pull/4658
+[#5298]: https://github.com/apache/datafusion-comet/pull/5298
+[#5361]: https://github.com/apache/datafusion-comet/pull/5361
+[#5663]: https://github.com/apache/datafusion-comet/pull/5663
+[#5780]: https://github.com/apache/datafusion-comet/pull/5780
+[#5934]: https://github.com/apache/datafusion-comet/pull/5934
+[#6162]: https://github.com/apache/datafusion-comet/pull/6162
+[#6048]: https://github.com/apache/datafusion-comet/pull/6048
+[#6128]: https://github.com/apache/datafusion-comet/pull/6128
+[#6205]: https://github.com/apache/datafusion-comet/pull/6205
+[#6066]: https://github.com/apache/datafusion-comet/pull/6066
+[#5494]: https://github.com/apache/datafusion-comet/pull/5494
+[#5853]: https://github.com/apache/datafusion-comet/pull/5853
+[#5638]: https://github.com/apache/datafusion-comet/pull/5638
+[#6027]: https://github.com/apache/datafusion-comet/pull/6027
+[#6154]: https://github.com/apache/datafusion-comet/pull/6154
+[#5763]: https://github.com/apache/datafusion-comet/pull/5763
+[#5369]: https://github.com/apache/datafusion-comet/pull/5369
+[#5473]: https://github.com/apache/datafusion-comet/pull/5473
+[#5481]: https://github.com/apache/datafusion-comet/pull/5481
+[#5513]: https://github.com/apache/datafusion-comet/pull/5513
+[#5531]: https://github.com/apache/datafusion-comet/pull/5531
+[#5537]: https://github.com/apache/datafusion-comet/pull/5537
+[#5868]: https://github.com/apache/datafusion-comet/pull/5868
+[#5794]: https://github.com/apache/datafusion-comet/pull/5794
+[#5394]: https://github.com/apache/datafusion-comet/pull/5394
