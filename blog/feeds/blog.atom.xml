@@ -43,8 +43,12 @@ limitations under the License.
 &lt;p&gt;The Apache DataFusion PMC is pleased to announce version 1.1.0 of the &lt;a href="https://datafusion.apache.org/comet/"&gt;Comet&lt;/a&gt; subproject.&lt;/p&gt;
 &lt;p&gt;Comet is an accelerator for Apache Spark that translates Spark physical plans to DataFusion physical plans for
 improved performance and efficiency without requiring any code changes.&lt;/p&gt;
-&lt;p&gt;This release covers roughly seven weeks of development since 1.0.0 and consists of 333 commits from 37
+&lt;p&gt;This release covers roughly seven weeks of development since 1.0.0 and consists of 379 commits from 40
 contributors. See the &lt;a href="https://github.com/apache/datafusion-comet/blob/main/docs/source/changelog/1.1.0.md"&gt;change log&lt;/a&gt; for the full list of changes.&lt;/p&gt;
+&lt;p&gt;Two themes dominate this release. The first is &lt;strong&gt;native Iceberg writes&lt;/strong&gt;, an experimental feature that lets
+Comet write Iceberg data files through iceberg-rust instead of iceberg-java. The second is a thorough rework of
+&lt;strong&gt;memory management&lt;/strong&gt;: Comet can now measure the native memory its pools never see, reports it on every
+executor, and fixes several long-standing bugs in how its pools account for what they do see.&lt;/p&gt;
 &lt;h2 id="native-iceberg-writes-experimental"&gt;Native Iceberg Writes (Experimental)&lt;a class="headerlink" href="#native-iceberg-writes-experimental" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;Every Comet release up to now has accelerated the read side of an Iceberg workload while leaving writes
 entirely to the JVM. 1.1.0 changes that: Comet can now write Iceberg data files natively, through
@@ -85,6 +89,10 @@ Iceberg's own &lt;code&gt;ManifestFiles.read&lt;/code&gt;, re-derives each file'
 using Iceberg's &lt;code&gt;MetricsConfig&lt;/code&gt; logic, and wraps the result in the same &lt;code&gt;TaskCommit&lt;/code&gt; message the JVM writer
 would have produced. Snapshot assignment, manifest-list aggregation, commit validation, and retries are
 untouched.&lt;/p&gt;
+&lt;p&gt;The native writer reads its input as Arrow batches from a Comet operator, so the write's input must itself
+run in Comet. Writes fed by a local relation, such as &lt;code&gt;INSERT ... VALUES&lt;/code&gt; or a DataFrame built from local data,
+also need &lt;code&gt;spark.comet.exec.localTableScan.enabled=true&lt;/code&gt;; without it they run through iceberg-java even with
+both write flags on.&lt;/p&gt;
 &lt;h3 id="fidelity-as-a-design-constraint"&gt;Fidelity as a design constraint&lt;a class="headerlink" href="#fidelity-as-a-design-constraint" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;The native writer has to produce the same outcome as iceberg-java, not merely a valid Iceberg table, and the
 design leans hard in that direction.&lt;/p&gt;
@@ -92,9 +100,9 @@ design leans hard in that direction.&lt;/p&gt;
 divergence there would outlive the write. Rather than trusting what the native writer reports, Comet
 re-derives metrics on the JVM from each file's Parquet footer through iceberg-java's own
 &lt;code&gt;ParquetUtil.footerMetrics&lt;/code&gt; and &lt;code&gt;MetricsConfig.forTable&lt;/code&gt;. Metrics modes, bound truncation, the inferred-column
-cap, and list/map bounds suppression are therefore iceberg-java's code making iceberg-java's decisions, and
-the parity suite compares committed manifests byte-for-byte against JVM-written ones. The cost is one
-footer-sized ranged read per written file.&lt;/p&gt;
+cap, and list/map bounds suppression are therefore iceberg-java's code making iceberg-java's decisions. Parity
+tests write the same rows through both writers and compare the committed value, null, and NaN counts and the
+lower and upper bounds. The cost is one footer-sized ranged read per written file.&lt;/p&gt;
 &lt;p&gt;Eligibility detection is an allowlist, not a denylist. A write is eligible only when its entire effective
 configuration matches a documented table of supported settings — and anything else, including any
 write-affecting property added by a future Iceberg version, any value outside the supported set, or any
@@ -107,6 +115,8 @@ implementations (see below).&lt;/p&gt;
 &lt;p&gt;Eligibility is decided entirely at plan time, including the reflection surface: every iceberg-java class and
 method the executor-side commit assembly needs is eagerly resolved on the driver, so an Iceberg release that
 moves any of them declines the native path rather than failing tasks mid-write.&lt;/p&gt;
+&lt;p&gt;Beyond Comet's own suites, CI now runs Apache Iceberg's Spark test suites, for Iceberg 1.8.1 through 1.11.0,
+with the native writer enabled in every Comet-configured session.&lt;/p&gt;
 &lt;h3 id="failures-never-commit-partial-results"&gt;Failures never commit partial results&lt;a class="headerlink" href="#failures-never-commit-partial-results" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;The commit set is exactly the commit messages returned by successful tasks. A failed task contributes none
 and deletes the data files it created, as iceberg-java's writer abort does; ownership of those files is
@@ -118,21 +128,111 @@ deletion misses is invisible to readers, which resolve files through committed m
 reclaimed by Iceberg's normal &lt;code&gt;remove_orphan_files&lt;/code&gt; maintenance.&lt;/p&gt;
 &lt;h3 id="accepted-divergences"&gt;Accepted divergences&lt;a class="headerlink" href="#accepted-divergences" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;A handful of differences between parquet-mr and parquet-rs are unconditional, and enabling the toggle accepts
-them. They are almost entirely cosmetic — footer key-value metadata, the root schema element name,
-&lt;code&gt;created_by&lt;/code&gt;, absent page CRCs and page-header statistics, &lt;code&gt;RLE_DICTIONARY&lt;/code&gt; labeling, compressed page bytes —
-and none change what a reader computes. Two are worth knowing about operationally:&lt;/p&gt;
+them. Most are cosmetic — footer key-value metadata, the root schema element name, &lt;code&gt;created_by&lt;/code&gt;, absent page
+CRCs and page-header statistics, &lt;code&gt;RLE_DICTIONARY&lt;/code&gt; labeling, compressed page bytes — and none change what a
+reader computes. Two are worth knowing about operationally:&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;&lt;strong&gt;File rolling lands on the same 1000-row grid as iceberg-java, but not necessarily on the same row.&lt;/strong&gt; Both
   writers re-check file size against &lt;code&gt;write.target-file-size-bytes&lt;/code&gt; every 1000 rows, but they compare
   different size estimates, so nothing bounds how far apart their roll points are. Do not rely on file-layout
   parity between the two writers.&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;Float and double partition directory names&lt;/strong&gt; are rendered with Rust's shortest representation rather than
-  &lt;code&gt;Float.toString&lt;/code&gt; (&lt;code&gt;f=1&lt;/code&gt; where iceberg-java writes &lt;code&gt;f=1.0&lt;/code&gt;). Distinct values still get distinct directories,
-  and no reader parses these names. Iceberg deprecated float and double partitioning in 1.3.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;High-cardinality columns keep a dictionary page.&lt;/strong&gt; parquet-mr abandons dictionary encoding for a column
+  chunk early when the dictionary is not saving space; parquet-rs keeps it until the dictionary reaches
+  &lt;code&gt;write.parquet.dict-size-bytes&lt;/code&gt; and then switches to plain encoding. Results are identical, but a selective
+  read of a native-written file fetches that dictionary page for every column chunk it touches
+  (&lt;a href="https://github.com/apache/datafusion-comet/issues/6114"&gt;#6114&lt;/a&gt;).&lt;/li&gt;
 &lt;/ul&gt;
 &lt;p&gt;The &lt;a href="https://datafusion.apache.org/comet/user-guide/latest/iceberg-writes.html"&gt;Iceberg Writes guide&lt;/a&gt; documents the full eligibility table and every accepted divergence. Please try it
 on a non-production table and tell us what you find — feedback from real workloads is exactly what this
 feature needs before it can lose the experimental label.&lt;/p&gt;
+&lt;h2 id="memory-management"&gt;Memory Management&lt;a class="headerlink" href="#memory-management" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;A recurring operational problem for Comet users has been executors killed by the cluster manager
+(on Kubernetes, &lt;code&gt;ExecutorLostFailure&lt;/code&gt; with exit code 137) even though Comet stayed within its configured memory
+pool. 1.1.0 explains why that happens, gives every executor a way to measure it, and fixes the pool bugs that
+made it worse.&lt;/p&gt;
+&lt;h3 id="reserved-memory-is-a-lower-bound"&gt;Reserved memory is a lower bound&lt;a class="headerlink" href="#reserved-memory-is-a-lower-bound" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Comet's native operators allocate from the Rust heap, but every reservation they make is charged against
+Spark's off-heap pool, sized by &lt;code&gt;spark.memory.offHeap.size&lt;/code&gt;. The pool only tracks memory that an operator
+explicitly reserves, which in practice means the batches an operator deliberately accumulates: the sort
+buffer, the build side of a hash join, hash aggregation state, and the shuffle writer's buffered partitions.&lt;/p&gt;
+&lt;p&gt;A great deal of allocation never goes through a reservation: per-batch working memory in expression kernels
+and Arrow builders, decompression buffers, Parquet reader structures, object store request buffers, the async
+runtime, Arrow buffers allocated on the JVM side, and allocator overhead such as fragmentation and retained
+pages. Reserved memory is therefore a lower bound on what Comet really uses, and that untracked remainder has
+to fit in &lt;code&gt;spark.executor.memoryOverhead&lt;/code&gt;. Until now there was no way to see how large it was, so sizing the
+overhead meant guessing.&lt;/p&gt;
+&lt;h3 id="measuring-the-gap-native-allocation-accounting"&gt;Measuring the gap: native allocation accounting&lt;a class="headerlink" href="#measuring-the-gap-native-allocation-accounting" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;1.1.0 wraps Comet's global allocator — jemalloc, mimalloc, or the system allocator, whichever the build selects —
+in an accounting layer that maintains a single process-wide count of native bytes allocated and not yet freed.
+It is observability only: it never rejects an allocation and never touches the memory pool. Per-thread deltas
+are batched and flushed into the shared counter every 64 KiB, so the common path is a thread-local add rather
+than an atomic operation.&lt;/p&gt;
+&lt;p&gt;The accounting layer is always on, so its cost was measured carefully. Because &lt;code&gt;libcomet&lt;/code&gt; is loaded with
+&lt;code&gt;dlopen&lt;/code&gt;, every thread-local access goes through the dynamic loader, and the first version made several per
+allocation, costing 4.8% on TPC-H SF100 Q21. Reducing that to a single thread-local access per allocation
+brought the cost down to 2.1% on the same query, and further reduction is tracked in
+&lt;a href="https://github.com/apache/datafusion-comet/issues/6213"&gt;#6213&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;The JVM side got the same treatment. Arrow buffers that Comet imports from native code are now held in a
+dedicated child allocator, so tracing can separate Arrow memory the JVM allocated itself from native memory
+that is merely referenced from the JVM and already counted by the accounting layer.&lt;/p&gt;
+&lt;h3 id="an-executor-memory-log-for-sizing-overhead"&gt;An executor memory log for sizing overhead&lt;a class="headerlink" href="#an-executor-memory-log-for-sizing-overhead" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;With the allocation count available, each executor now logs its native memory usage at INFO level, one line
+every 10 seconds for the whole executor while Comet native plans run:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;Comet native memory usage: allocated 5412.3 MiB, reserved 3890.0 MiB (16 native plans, 8 memory pools)
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;code&gt;reserved&lt;/code&gt; is what Comet's pools track, and it already has room in the container because it is charged
+against &lt;code&gt;spark.memory.offHeap.size&lt;/code&gt;. &lt;code&gt;allocated&lt;/code&gt; is everything Comet's native code holds. The difference is the
+untracked native memory that has to fit in &lt;code&gt;spark.executor.memoryOverhead&lt;/code&gt;, alongside the JVM's own non-heap
+memory. To size the overhead, run a representative workload, find the line with the largest difference, add it
+to the overhead the executors had before Comet was enabled, and add a margin. The interval is controlled by
+&lt;code&gt;spark.comet.memory.logInterval&lt;/code&gt;, and setting it to &lt;code&gt;1s&lt;/code&gt; for a sizing run makes a short-lived peak less likely
+to fall between samples.&lt;/p&gt;
+&lt;p&gt;The executor also logs a warning when its native memory looks larger than its container allows, and the
+&lt;a href="https://datafusion.apache.org/comet/user-guide/latest/tuning.html#memory-tuning"&gt;tuning guide&lt;/a&gt; walks through the sizing procedure with worked examples for small and large executors. One
+detail there is worth repeating: setting &lt;code&gt;spark.executor.memoryOverhead&lt;/code&gt; &lt;em&gt;replaces&lt;/em&gt; the value Spark derives from
+&lt;code&gt;spark.executor.memoryOverheadFactor&lt;/code&gt; rather than adding to it, so on a large executor a fixed value can shrink
+the container. For large executors, raising the factor is usually the better choice.&lt;/p&gt;
+&lt;p&gt;The driver plugin previously tried to raise &lt;code&gt;spark.executor.memoryOverhead&lt;/code&gt; on the user's behalf, but that
+adjustment could not reach the container on most supported Spark versions and has been removed. The driver now
+warns when neither &lt;code&gt;spark.executor.memoryOverhead&lt;/code&gt; nor &lt;code&gt;spark.executor.memoryOverheadFactor&lt;/code&gt; is set, except in
+local mode.&lt;/p&gt;
+&lt;h3 id="memory-pool-fixes"&gt;Memory pool fixes&lt;a class="headerlink" href="#memory-pool-fixes" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Several bugs in the pools themselves are fixed in this release:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;&lt;code&gt;fair_unified&lt;/code&gt; capped a whole task at one consumer's share.&lt;/strong&gt; Since Comet 0.15.0, the pool compared the
+  task's total reservations against &lt;code&gt;pool_size / num_consumers&lt;/code&gt;, so every operator in a task shared what should
+  have been one operator's allowance, and each new consumer tightened the limit on the ones already running.
+  Each consumer is now checked against its own share, with sibling reservations from one operator charged to
+  that operator's share, and the pool total is still bounded by the pool size. Tasks with several operators can
+  now reserve more memory before spilling than they could in 0.15.0 through 1.0.0 — see the upgrade notes below.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;A partial grant from Spark no longer panics the task.&lt;/strong&gt; DataFusion's &lt;code&gt;MemoryPool::grow&lt;/code&gt; must always succeed,
+  because it is called for memory that already exists, such as a spilled batch that a sort-merge join reads
+  back. Both Comet pools implemented it as &lt;code&gt;try_grow().unwrap()&lt;/code&gt;. They now record the ungranted part as
+  overcommit and repay it before releasing anything back to Spark, so Spark is never handed back more than it
+  granted.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Leaks on failure paths.&lt;/strong&gt; The per-task shared memory pool is now reference-counted and removes itself from
+  the registry when the last plan using it is dropped, so a plan that fails during setup or teardown no longer
+  leaks its pool. A failed Arrow vector import now releases the vectors already imported for that batch.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Configuration units.&lt;/strong&gt; &lt;code&gt;spark.memory.offHeap.size&lt;/code&gt; was read as MiB when given as a bare number, where Spark
+  reads bytes, and &lt;code&gt;spark.comet.maxTempDirectorySize&lt;/code&gt; silently fell back to its default when given a unit.
+  Every config that native code reads is now resolved on the JVM before crossing JNI.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Metrics.&lt;/strong&gt; Native memory usage is now reported to Spark, and native aggregate spill and memory metrics,
+  native child spill metrics in shuffle tasks, and native operator spill metrics in non-shuffle stages all appear
+  in Spark's task metrics.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;code&gt;spark.comet.exec.memoryPool.fraction&lt;/code&gt; is now deprecated. It was meant to leave room in the off-heap pool for
+untracked memory, but Spark hands out the whole pool regardless, so it never did. Size
+&lt;code&gt;spark.executor.memoryOverhead&lt;/code&gt; for that memory instead.&lt;/p&gt;
+&lt;h3 id="a-simpler-on-heap-mode"&gt;A simpler on-heap mode&lt;a class="headerlink" href="#a-simpler-on-heap-mode" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;On-heap mode exists so that Spark's own SQL test suite and the Iceberg suites can run against Comet without
+changing Spark's memory configuration; production deployments run off-heap. The accounting it performed did not
+protect anything, because native memory is not on the JVM heap and there is no Spark pool it can honestly be
+charged to. 1.1.0 removes it: on-heap mode now uses an unbounded pool, which removes six of the nine memory pool
+types along with several testing-only configuration keys. Comet also no longer runs in on-heap mode unless
+&lt;code&gt;spark.comet.exec.onHeap.enabled&lt;/code&gt; is set, including when &lt;code&gt;CometSparkSessionExtensions&lt;/code&gt; is registered directly
+rather than through the plugin.&lt;/p&gt;
+&lt;p&gt;For contributors, a new &lt;a href="https://datafusion.apache.org/comet/contributor-guide/memory_management.html"&gt;memory management guide&lt;/a&gt; describes where Comet allocates memory, which allocations
+are tracked, and the allocator hazards to watch for when adding operators.&lt;/p&gt;
 &lt;h2 id="more-iceberg-improvements"&gt;More Iceberg Improvements&lt;a class="headerlink" href="#more-iceberg-improvements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;The read side gained several things in this release too:&lt;/p&gt;
 &lt;ul&gt;
@@ -141,8 +241,9 @@ feature needs before it can lose the experimental label.&lt;/p&gt;
   implementations. Besides being faster, this is what keeps a partitioned table's write plan fully native and
   therefore eligible for the native writer.&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;Scan planning metrics and scan time&lt;/strong&gt; are reported in the Spark UI for the native Iceberg scan.&lt;/li&gt;
-&lt;li&gt;Fixes for tables partitioned by an unknown transform, complex null checks on native scans, and Iceberg
-  system functions wrapped as &lt;code&gt;ApplyFunctionExpression&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Fixes for tables partitioned by an unknown transform, complex null checks on native scans, Iceberg system
+  functions wrapped as &lt;code&gt;ApplyFunctionExpression&lt;/code&gt;, and transform residuals that were previously pushed down as
+  filters on their source column.&lt;/li&gt;
 &lt;/ul&gt;
 &lt;h2 id="native-parquet-writes-on-spark-40"&gt;Native Parquet Writes on Spark 4.0+&lt;a class="headerlink" href="#native-parquet-writes-on-spark-40" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;Separately from Iceberg, 1.1.0 hooks native Parquet writes into Spark's &lt;code&gt;WriteFilesExec&lt;/code&gt; seam on Spark 4.0 and
@@ -157,27 +258,31 @@ native shuffle execution, the map-side push lifecycle, a raw native shuffle read
 retains ordinary Spark/Celeborn shuffle. It also requires a Celeborn client that provides a safe
 push-completion API — released 0.6.0 and 0.7.0 clients do not, and those versions retain ordinary shuffle even
 in native mode. Native RSS does not support &lt;code&gt;spark.io.encryption.enabled=true&lt;/code&gt;. Celeborn is an optional
-application dependency and is not bundled with Comet. See the &lt;a href="https://datafusion.apache.org/comet/user-guide/latest/tuning.html"&gt;tuning guide&lt;/a&gt; for the full set of
-requirements and the frame-size and in-flight-bytes knobs.&lt;/p&gt;
+application dependency and is not bundled with Comet. See the &lt;a href="https://datafusion.apache.org/comet/user-guide/latest/tuning.html"&gt;Celeborn section of the tuning guide&lt;/a&gt; for the
+full set of requirements and the frame-size and in-flight-bytes knobs.&lt;/p&gt;
 &lt;h2 id="performance"&gt;Performance&lt;a class="headerlink" href="#performance" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;h3 id="shuffle"&gt;Shuffle&lt;a class="headerlink" href="#shuffle" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;Several changes target shuffle, which dominates many TPC-DS-shaped workloads:&lt;/p&gt;
 &lt;ul&gt;
+&lt;li&gt;The native shuffle writer had been running with a &lt;strong&gt;1-byte write buffer&lt;/strong&gt; by default, because its 1 MiB
+  default was declared in MiB but sent to native code as a byte count. It now uses the intended 1 MiB.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Round-robin repartitioning&lt;/strong&gt; is now positional, placing rows by row ordinal the way Spark does, instead of
+  hashing every column of every row. Besides being much cheaper on wide nested schemas, this spreads a column of
+  repeated values across reducers as Spark's round robin does.&lt;/li&gt;
 &lt;li&gt;A task now spills &lt;strong&gt;every shuffle partition into one file&lt;/strong&gt; instead of one file per partition.&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;Zstd compression contexts and Arrow IPC contexts are reused&lt;/strong&gt; across shuffle blocks instead of being
   rebuilt per block.&lt;/li&gt;
 &lt;li&gt;Shuffle blocks are &lt;strong&gt;decoded against a cached schema&lt;/strong&gt; rather than re-parsing the schema per block, and
   expected schemas are cached for remote shuffle decoding.&lt;/li&gt;
-&lt;li&gt;Per-partition scratch buffers are reused in the shuffle write path.&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;ArrowWriter&lt;/code&gt; bulk-copies fixed-width columns.&lt;/li&gt;
+&lt;li&gt;Per-partition scratch buffers are reused in the shuffle write path, and &lt;code&gt;ArrowWriter&lt;/code&gt; bulk-copies fixed-width
+  columns.&lt;/li&gt;
 &lt;/ul&gt;
 &lt;h3 id="planning-and-execution"&gt;Planning and Execution&lt;a class="headerlink" href="#planning-and-execution" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;ul&gt;
 &lt;li&gt;&lt;strong&gt;Native dynamic filter pushdown&lt;/strong&gt; from hash joins into Parquet scans.&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;Adaptive partial aggregation&lt;/strong&gt; is enabled for eligible native shuffle plans.&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;Parsed plan data is cached across the tasks of a stage&lt;/strong&gt;, avoiding repeated deserialization work.&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;Native Parquet scan I/O and read-amplification metrics&lt;/strong&gt; are exposed, alongside native aggregate spill and
-  memory metrics.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Native Parquet scan I/O and read-amplification metrics&lt;/strong&gt; are exposed.&lt;/li&gt;
 &lt;/ul&gt;
 &lt;h3 id="expression-kernels"&gt;Expression Kernels&lt;a class="headerlink" href="#expression-kernels" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;Ongoing kernel-level work continued across the expression library: &lt;code&gt;map_sort&lt;/code&gt; is up to 3x faster for
@@ -186,33 +291,43 @@ and &lt;code&gt;GetMapValue&lt;/code&gt; is vectorized; &lt;code&gt;collect_list
 regex patterns are compiled once per planned expression; &lt;code&gt;hour&lt;/code&gt;/&lt;code&gt;minute&lt;/code&gt;/&lt;code&gt;second&lt;/code&gt; and &lt;code&gt;dayofweek&lt;/code&gt;/&lt;code&gt;weekday&lt;/code&gt;
 skip calendar reconstruction; &lt;code&gt;posexplode&lt;/code&gt; array expressions are evaluated once per batch; unnesting slices
 the child rather than gathering it; and the nested-element list hash is batched for flat struct elements.&lt;/p&gt;
-&lt;h2 id="memory-observability"&gt;Memory Observability&lt;a class="headerlink" href="#memory-observability" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
-&lt;p&gt;Two features make Comet's memory use easier to reason about: &lt;strong&gt;native allocation accounting&lt;/strong&gt;, and &lt;strong&gt;tracing
-of Arrow memory held on the JVM side&lt;/strong&gt;. Together they close a long-standing gap where memory held by the
-native engine and by Arrow buffers on the JVM was hard to attribute when diagnosing executor OOMs.&lt;/p&gt;
 &lt;h2 id="expanded-coverage"&gt;Expanded Coverage&lt;a class="headerlink" href="#expanded-coverage" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
-&lt;p&gt;New expression and operator support in this release includes the &lt;code&gt;mode&lt;/code&gt; aggregate, &lt;code&gt;max_by&lt;/code&gt; / &lt;code&gt;min_by&lt;/code&gt;, the
-&lt;code&gt;regr_slope&lt;/code&gt; / &lt;code&gt;regr_intercept&lt;/code&gt; / &lt;code&gt;regr_r2&lt;/code&gt; / &lt;code&gt;regr_sxx&lt;/code&gt; / &lt;code&gt;regr_syy&lt;/code&gt; / &lt;code&gt;regr_sxy&lt;/code&gt; regression aggregates,
-&lt;code&gt;WindowGroupLimitExec&lt;/code&gt;, &lt;code&gt;explode_outer&lt;/code&gt;, &lt;code&gt;make_interval&lt;/code&gt;, a native &lt;code&gt;spark_sequence&lt;/code&gt; kernel for integral
-element types, a native &lt;code&gt;spark_unbase64&lt;/code&gt; kernel, &lt;code&gt;_metadata&lt;/code&gt; constant columns in the native Parquet scan,
-nested types as native shuffle hash partitioning keys, &lt;code&gt;BinaryType&lt;/code&gt; for sort-merge join, and Spark 4's
-&lt;code&gt;EmptyRelationExec&lt;/code&gt; as a native input. Several more expressions — &lt;code&gt;translate&lt;/code&gt;, &lt;code&gt;to_csv&lt;/code&gt;, &lt;code&gt;encode&lt;/code&gt;, &lt;code&gt;lpad&lt;/code&gt; /
-&lt;code&gt;rpad&lt;/code&gt;, &lt;code&gt;round&lt;/code&gt; on float/double, &lt;code&gt;abs&lt;/code&gt; on intervals, &lt;code&gt;timestampadd&lt;/code&gt; / &lt;code&gt;timestampdiff&lt;/code&gt;, &lt;code&gt;next_day&lt;/code&gt; and
-&lt;code&gt;levenshtein&lt;/code&gt; on collated input, and unrecognized &lt;code&gt;StaticInvoke&lt;/code&gt; / &lt;code&gt;Invoke&lt;/code&gt; — are now routed through codegen
-dispatch by default, and &lt;code&gt;rlike&lt;/code&gt; runs natively by default for Java-equivalent literal patterns.&lt;/p&gt;
-&lt;p&gt;Spark 4 &lt;strong&gt;Variant&lt;/strong&gt; support advanced as well, with Parquet storage adapted for Variant projection, Variant
-arrays normalized at the native Parquet boundary, and &lt;code&gt;VariantType&lt;/code&gt; identity carried through schema
-serialization.&lt;/p&gt;
+&lt;p&gt;New expression and operator support in this release includes the &lt;code&gt;mode&lt;/code&gt; aggregate, &lt;code&gt;max_by&lt;/code&gt; / &lt;code&gt;min_by&lt;/code&gt;,
+&lt;code&gt;listagg&lt;/code&gt; / &lt;code&gt;string_agg&lt;/code&gt; on Spark 4.0+, the &lt;code&gt;regr_slope&lt;/code&gt; / &lt;code&gt;regr_intercept&lt;/code&gt; / &lt;code&gt;regr_r2&lt;/code&gt; / &lt;code&gt;regr_sxx&lt;/code&gt; /
+&lt;code&gt;regr_syy&lt;/code&gt; / &lt;code&gt;regr_sxy&lt;/code&gt; regression aggregates, &lt;code&gt;WindowGroupLimitExec&lt;/code&gt;, &lt;code&gt;explode_outer&lt;/code&gt;, &lt;code&gt;make_interval&lt;/code&gt;, a
+native &lt;code&gt;spark_sequence&lt;/code&gt; kernel for integral element types, a native &lt;code&gt;spark_unbase64&lt;/code&gt; kernel, &lt;code&gt;_metadata&lt;/code&gt;
+constant columns in the native Parquet scan, nested types as native shuffle hash partitioning keys,
+&lt;code&gt;BinaryType&lt;/code&gt; for sort-merge join, and Spark 4's &lt;code&gt;EmptyRelationExec&lt;/code&gt; as a native input. Several more
+expressions — &lt;code&gt;translate&lt;/code&gt;, &lt;code&gt;to_csv&lt;/code&gt;, &lt;code&gt;encode&lt;/code&gt;, &lt;code&gt;lpad&lt;/code&gt; / &lt;code&gt;rpad&lt;/code&gt;, &lt;code&gt;round&lt;/code&gt; on float/double, &lt;code&gt;abs&lt;/code&gt; on intervals,
+&lt;code&gt;timestampadd&lt;/code&gt; / &lt;code&gt;timestampdiff&lt;/code&gt;, &lt;code&gt;next_day&lt;/code&gt; and &lt;code&gt;levenshtein&lt;/code&gt; on collated input, and unrecognized
+&lt;code&gt;StaticInvoke&lt;/code&gt; / &lt;code&gt;Invoke&lt;/code&gt; — are now routed through codegen dispatch by default, and &lt;code&gt;rlike&lt;/code&gt; runs natively by
+default for Java-equivalent literal patterns.&lt;/p&gt;
+&lt;p&gt;Spark 4 &lt;strong&gt;Variant&lt;/strong&gt; support advanced as well: native Parquet scans can now project Variant columns directly,
+with Parquet storage adapted for Variant projection, Variant arrays normalized at the native Parquet boundary,
+and &lt;code&gt;VariantType&lt;/code&gt; identity carried through schema serialization.&lt;/p&gt;
 &lt;p&gt;This release also adds &lt;strong&gt;experimental native support for an in-memory cache&lt;/strong&gt;
 (&lt;code&gt;spark.comet.exec.inMemoryCache.enabled&lt;/code&gt;, disabled by default), support for &lt;strong&gt;S3-compliant filesystems&lt;/strong&gt;, and
 build gates for contrib &lt;strong&gt;Delta&lt;/strong&gt; and &lt;strong&gt;Lance&lt;/strong&gt; scans.&lt;/p&gt;
-&lt;h2 id="deprecations-and-removals"&gt;Deprecations and Removals&lt;a class="headerlink" href="#deprecations-and-removals" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;h2 id="previewing-comet-plans"&gt;Previewing Comet Plans&lt;a class="headerlink" href="#previewing-comet-plans" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;A new &lt;code&gt;spark.comet.explain.planOnly.enabled&lt;/code&gt; setting builds the plan Comet would have executed, logs it to the
+driver log, and then lets Spark run the query unchanged. This makes it possible to see how much of a production
+workload Comet would accelerate, and why anything falls back, without running any of it through Comet.&lt;/p&gt;
+&lt;h2 id="upgrading-to-110"&gt;Upgrading to 1.1.0&lt;a class="headerlink" href="#upgrading-to-110" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;A few changes in this release are worth checking before upgrading:&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;&lt;strong&gt;JDK 11 support has been removed&lt;/strong&gt;, as announced in the 1.0.0 release. Comet 1.1.0 requires JDK 17 or
   later.&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;Apache Spark 3.4 remains deprecated.&lt;/strong&gt; Comet continues to build and publish Spark 3.4 binaries, but
   Spark's own SQL test suite no longer runs against Spark 3.4 on every change, so Spark 3.4-specific
   regressions are more likely to reach a release. We recommend moving to Spark 3.5 or later.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Tasks can reserve more memory before spilling&lt;/strong&gt; with the &lt;code&gt;fair_unified&lt;/code&gt; pool, because of the fix described
+  above. The difference is largest on executors that run few tasks at once. If you sized executor memory against
+  0.15.0 through 1.0.0, use the new memory usage log to check that executors still have enough headroom.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;&lt;code&gt;spark.comet.exec.memoryPool.fraction&lt;/code&gt; is deprecated&lt;/strong&gt; and will be removed in a future release.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;A bare-number &lt;code&gt;spark.memory.offHeap.size&lt;/code&gt;&lt;/strong&gt; is now read as bytes, as Spark reads it, rather than as MiB.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Testing-only on-heap configuration keys have been removed&lt;/strong&gt;, including &lt;code&gt;spark.comet.memoryOverhead&lt;/code&gt; and
+  &lt;code&gt;spark.comet.exec.onHeap.memoryPool&lt;/code&gt;. These are in the &lt;code&gt;testing&lt;/code&gt; category, which the
+  &lt;a href="https://datafusion.apache.org/comet/about/versioning_policy.html"&gt;versioning policy&lt;/a&gt; exempts.&lt;/li&gt;
 &lt;/ul&gt;
 &lt;h2 id="compatibility"&gt;Compatibility&lt;a class="headerlink" href="#compatibility" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;Supported platforms include:&lt;/p&gt;
