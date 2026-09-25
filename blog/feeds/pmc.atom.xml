@@ -167,10 +167,8 @@ in an accounting layer that maintains a single process-wide count of native byte
 It is observability only: it never rejects an allocation and never touches the memory pool. Per-thread deltas
 are batched and flushed into the shared counter every 64 KiB, so the common path is a thread-local add rather
 than an atomic operation.&lt;/p&gt;
-&lt;p&gt;The accounting layer is always on, so its cost was measured carefully. Because &lt;code&gt;libcomet&lt;/code&gt; is loaded with
-&lt;code&gt;dlopen&lt;/code&gt;, every thread-local access goes through the dynamic loader, and the first version made several per
-allocation, costing 4.8% on TPC-H SF100 Q21. Reducing that to a single thread-local access per allocation
-brought the cost down to 2.1% on the same query, and further reduction is tracked in
+&lt;p&gt;The accounting layer is always on. It makes a single thread-local access per allocation and free, and costs
+about 2% on TPC-H SF100 Q21, an allocation-heavy query. Further reduction is tracked in
 &lt;a href="https://github.com/apache/datafusion-comet/issues/6213"&gt;#6213&lt;/a&gt;.&lt;/p&gt;
 &lt;p&gt;The JVM side got the same treatment. Arrow buffers that Comet imports from native code are now held in a
 dedicated child allocator, so tracing can separate Arrow memory the JVM allocated itself from native memory
@@ -192,7 +190,7 @@ to fall between samples.&lt;/p&gt;
 detail there is worth repeating: setting &lt;code&gt;spark.executor.memoryOverhead&lt;/code&gt; &lt;em&gt;replaces&lt;/em&gt; the value Spark derives from
 &lt;code&gt;spark.executor.memoryOverheadFactor&lt;/code&gt; rather than adding to it, so on a large executor a fixed value can shrink
 the container. For large executors, raising the factor is usually the better choice.&lt;/p&gt;
-&lt;p&gt;The driver plugin previously tried to raise &lt;code&gt;spark.executor.memoryOverhead&lt;/code&gt; on the user's behalf, but that
+&lt;p&gt;In 1.0.0, the driver plugin tried to raise &lt;code&gt;spark.executor.memoryOverhead&lt;/code&gt; on the user's behalf, but that
 adjustment could not reach the container on most supported Spark versions and has been removed. The driver now
 warns when neither &lt;code&gt;spark.executor.memoryOverhead&lt;/code&gt; nor &lt;code&gt;spark.executor.memoryOverheadFactor&lt;/code&gt; is set, except in
 local mode.&lt;/p&gt;
@@ -241,9 +239,11 @@ are tracked, and the allocator hazards to watch for when adding operators.&lt;/p
   implementations. Besides being faster, this is what keeps a partitioned table's write plan fully native and
   therefore eligible for the native writer.&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;Scan planning metrics and scan time&lt;/strong&gt; are reported in the Spark UI for the native Iceberg scan.&lt;/li&gt;
-&lt;li&gt;Fixes for tables partitioned by an unknown transform, complex null checks on native scans, Iceberg system
-  functions wrapped as &lt;code&gt;ApplyFunctionExpression&lt;/code&gt;, and transform residuals that were previously pushed down as
-  filters on their source column.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;A wrong-results fix for transform residuals.&lt;/strong&gt; A residual such as &lt;code&gt;bucket(4, id) = 2&lt;/code&gt; combined with another
+  predicate under &lt;code&gt;AND&lt;/code&gt;, &lt;code&gt;OR&lt;/code&gt;, or &lt;code&gt;NOT&lt;/code&gt; was pushed to the native scan as &lt;code&gt;id = 2&lt;/code&gt;, returning too few rows. Such
+  residuals are no longer pushed down.&lt;/li&gt;
+&lt;li&gt;Tables partitioned by an unknown transform can now be read natively, and &lt;code&gt;IS NULL&lt;/code&gt; / &lt;code&gt;IS NOT NULL&lt;/code&gt; checks on
+  list and map columns no longer force the scan back to Spark.&lt;/li&gt;
 &lt;/ul&gt;
 &lt;h2 id="native-parquet-writes-on-spark-40"&gt;Native Parquet Writes on Spark 4.0+&lt;a class="headerlink" href="#native-parquet-writes-on-spark-40" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;Separately from Iceberg, 1.1.0 hooks native Parquet writes into Spark's &lt;code&gt;WriteFilesExec&lt;/code&gt; seam on Spark 4.0 and
@@ -251,9 +251,9 @@ later, behind &lt;code&gt;spark.comet.parquet.write.enabled&lt;/code&gt;. This r
 IDs in native Parquet writes.&lt;/p&gt;
 &lt;h2 id="remote-shuffle-with-celeborn"&gt;Remote Shuffle with Celeborn&lt;a class="headerlink" href="#remote-shuffle-with-celeborn" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;Applications using Apache Celeborn can now use Comet's composite shuffle manager to run Comet's &lt;strong&gt;native&lt;/strong&gt;
-shuffle over Celeborn, rather than falling back to ordinary Spark/Celeborn shuffle for every exchange. This
-landed as a series of changes adding an RSS partition writer, task-owned JNI callbacks, destination-aware
-native shuffle execution, the map-side push lifecycle, a raw native shuffle reader, and native-only planning.&lt;/p&gt;
+shuffle over Celeborn, where 1.0.0 retained ordinary Spark/Celeborn shuffle for every exchange. Map-side
+tasks push Comet's Arrow frames directly to Celeborn, and the reduce side reads them back through a native
+shuffle reader.&lt;/p&gt;
 &lt;p&gt;Native shuffle over Celeborn requires an explicit &lt;code&gt;spark.comet.shuffle.mode=native&lt;/code&gt;; the default &lt;code&gt;auto&lt;/code&gt; mode
 retains ordinary Spark/Celeborn shuffle. It also requires a Celeborn client that provides a safe
 push-completion API — released 0.6.0 and 0.7.0 clients do not, and those versions retain ordinary shuffle even
@@ -264,7 +264,7 @@ full set of requirements and the frame-size and in-flight-bytes knobs.&lt;/p&gt;
 &lt;h3 id="shuffle"&gt;Shuffle&lt;a class="headerlink" href="#shuffle" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;Several changes target shuffle, which dominates many TPC-DS-shaped workloads:&lt;/p&gt;
 &lt;ul&gt;
-&lt;li&gt;The native shuffle writer had been running with a &lt;strong&gt;1-byte write buffer&lt;/strong&gt; by default, because its 1 MiB
+&lt;li&gt;In 1.0.0, the native shuffle writer ran with a &lt;strong&gt;1-byte write buffer&lt;/strong&gt; by default, because its 1 MiB
   default was declared in MiB but sent to native code as a byte count. It now uses the intended 1 MiB.&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;Round-robin repartitioning&lt;/strong&gt; is now positional, placing rows by row ordinal the way Spark does, instead of
   hashing every column of every row. Besides being much cheaper on wide nested schemas, this spreads a column of

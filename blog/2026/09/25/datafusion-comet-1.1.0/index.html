@@ -235,10 +235,8 @@ in an accounting layer that maintains a single process-wide count of native byte
 It is observability only: it never rejects an allocation and never touches the memory pool. Per-thread deltas
 are batched and flushed into the shared counter every 64 KiB, so the common path is a thread-local add rather
 than an atomic operation.</p>
-<p>The accounting layer is always on, so its cost was measured carefully. Because <code>libcomet</code> is loaded with
-<code>dlopen</code>, every thread-local access goes through the dynamic loader, and the first version made several per
-allocation, costing 4.8% on TPC-H SF100 Q21. Reducing that to a single thread-local access per allocation
-brought the cost down to 2.1% on the same query, and further reduction is tracked in
+<p>The accounting layer is always on. It makes a single thread-local access per allocation and free, and costs
+about 2% on TPC-H SF100 Q21, an allocation-heavy query. Further reduction is tracked in
 <a href="https://github.com/apache/datafusion-comet/issues/6213">#6213</a>.</p>
 <p>The JVM side got the same treatment. Arrow buffers that Comet imports from native code are now held in a
 dedicated child allocator, so tracing can separate Arrow memory the JVM allocated itself from native memory
@@ -260,7 +258,7 @@ to fall between samples.</p>
 detail there is worth repeating: setting <code>spark.executor.memoryOverhead</code> <em>replaces</em> the value Spark derives from
 <code>spark.executor.memoryOverheadFactor</code> rather than adding to it, so on a large executor a fixed value can shrink
 the container. For large executors, raising the factor is usually the better choice.</p>
-<p>The driver plugin previously tried to raise <code>spark.executor.memoryOverhead</code> on the user's behalf, but that
+<p>In 1.0.0, the driver plugin tried to raise <code>spark.executor.memoryOverhead</code> on the user's behalf, but that
 adjustment could not reach the container on most supported Spark versions and has been removed. The driver now
 warns when neither <code>spark.executor.memoryOverhead</code> nor <code>spark.executor.memoryOverheadFactor</code> is set, except in
 local mode.</p>
@@ -309,9 +307,11 @@ are tracked, and the allocator hazards to watch for when adding operators.</p>
   implementations. Besides being faster, this is what keeps a partitioned table's write plan fully native and
   therefore eligible for the native writer.</li>
 <li><strong>Scan planning metrics and scan time</strong> are reported in the Spark UI for the native Iceberg scan.</li>
-<li>Fixes for tables partitioned by an unknown transform, complex null checks on native scans, Iceberg system
-  functions wrapped as <code>ApplyFunctionExpression</code>, and transform residuals that were previously pushed down as
-  filters on their source column.</li>
+<li><strong>A wrong-results fix for transform residuals.</strong> A residual such as <code>bucket(4, id) = 2</code> combined with another
+  predicate under <code>AND</code>, <code>OR</code>, or <code>NOT</code> was pushed to the native scan as <code>id = 2</code>, returning too few rows. Such
+  residuals are no longer pushed down.</li>
+<li>Tables partitioned by an unknown transform can now be read natively, and <code>IS NULL</code> / <code>IS NOT NULL</code> checks on
+  list and map columns no longer force the scan back to Spark.</li>
 </ul>
 <h2 id="native-parquet-writes-on-spark-40">Native Parquet Writes on Spark 4.0+<a class="headerlink" href="#native-parquet-writes-on-spark-40" title="Permanent link">¶</a></h2>
 <p>Separately from Iceberg, 1.1.0 hooks native Parquet writes into Spark's <code>WriteFilesExec</code> seam on Spark 4.0 and
@@ -319,9 +319,9 @@ later, behind <code>spark.comet.parquet.write.enabled</code>. This release also 
 IDs in native Parquet writes.</p>
 <h2 id="remote-shuffle-with-celeborn">Remote Shuffle with Celeborn<a class="headerlink" href="#remote-shuffle-with-celeborn" title="Permanent link">¶</a></h2>
 <p>Applications using Apache Celeborn can now use Comet's composite shuffle manager to run Comet's <strong>native</strong>
-shuffle over Celeborn, rather than falling back to ordinary Spark/Celeborn shuffle for every exchange. This
-landed as a series of changes adding an RSS partition writer, task-owned JNI callbacks, destination-aware
-native shuffle execution, the map-side push lifecycle, a raw native shuffle reader, and native-only planning.</p>
+shuffle over Celeborn, where 1.0.0 retained ordinary Spark/Celeborn shuffle for every exchange. Map-side
+tasks push Comet's Arrow frames directly to Celeborn, and the reduce side reads them back through a native
+shuffle reader.</p>
 <p>Native shuffle over Celeborn requires an explicit <code>spark.comet.shuffle.mode=native</code>; the default <code>auto</code> mode
 retains ordinary Spark/Celeborn shuffle. It also requires a Celeborn client that provides a safe
 push-completion API — released 0.6.0 and 0.7.0 clients do not, and those versions retain ordinary shuffle even
@@ -332,7 +332,7 @@ full set of requirements and the frame-size and in-flight-bytes knobs.</p>
 <h3 id="shuffle">Shuffle<a class="headerlink" href="#shuffle" title="Permanent link">¶</a></h3>
 <p>Several changes target shuffle, which dominates many TPC-DS-shaped workloads:</p>
 <ul>
-<li>The native shuffle writer had been running with a <strong>1-byte write buffer</strong> by default, because its 1 MiB
+<li>In 1.0.0, the native shuffle writer ran with a <strong>1-byte write buffer</strong> by default, because its 1 MiB
   default was declared in MiB but sent to native code as a byte count. It now uses the intended 1 MiB.</li>
 <li><strong>Round-robin repartitioning</strong> is now positional, placing rows by row ordinal the way Spark does, instead of
   hashing every column of every row. Besides being much cheaper on wide nested schemas, this spreads a column of
