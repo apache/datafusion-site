@@ -145,6 +145,10 @@ reader computes. Two are worth knowing about operationally:&lt;/p&gt;
 &lt;p&gt;The &lt;a href="https://datafusion.apache.org/comet/user-guide/latest/iceberg-writes.html"&gt;Iceberg Writes guide&lt;/a&gt; documents the full eligibility table and every accepted divergence. Please try it
 on a non-production table and tell us what you find — feedback from real workloads is exactly what this
 feature needs before it can lose the experimental label.&lt;/p&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/jordepic"&gt;@jordepic&lt;/a&gt; for designing and implementing the split-operator plan, write detection, and the native
+writer, and to &lt;a href="https://github.com/andygrove"&gt;@andygrove&lt;/a&gt; for the fidelity and failure-handling work, with contributions from
+&lt;a href="https://github.com/zhangfengcdt"&gt;@zhangfengcdt&lt;/a&gt;, &lt;a href="https://github.com/snmvaughan"&gt;@snmvaughan&lt;/a&gt;, and &lt;a href="https://github.com/0lai0"&gt;@0lai0&lt;/a&gt;, and reviews from &lt;a href="https://github.com/sunchao"&gt;@sunchao&lt;/a&gt;, &lt;a href="https://github.com/comphead"&gt;@comphead&lt;/a&gt;, &lt;a href="https://github.com/unikdahal"&gt;@unikdahal&lt;/a&gt;, and
+&lt;a href="https://github.com/mbutrovich"&gt;@mbutrovich&lt;/a&gt;. Related PRs: &lt;a href="https://github.com/apache/datafusion-comet/pull/4658"&gt;#4658&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/5298"&gt;#5298&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/5361"&gt;#5361&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/5663"&gt;#5663&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/5780"&gt;#5780&lt;/a&gt;.&lt;/p&gt;
 &lt;h2 id="memory-management"&gt;Memory Management&lt;a class="headerlink" href="#memory-management" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;A recurring operational problem for Comet users has been executors killed by the cluster manager
 (on Kubernetes, &lt;code&gt;ExecutorLostFailure&lt;/code&gt; with exit code 137) even though Comet stayed within its configured memory
@@ -231,6 +235,10 @@ types along with several testing-only configuration keys. Comet also no longer r
 rather than through the plugin.&lt;/p&gt;
 &lt;p&gt;For contributors, a new &lt;a href="https://datafusion.apache.org/comet/contributor-guide/memory_management.html"&gt;memory management guide&lt;/a&gt; describes where Comet allocates memory, which allocations
 are tracked, and the allocator hazards to watch for when adding operators.&lt;/p&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/andygrove"&gt;@andygrove&lt;/a&gt; for driving this work, &lt;a href="https://github.com/peterxcli"&gt;@peterxcli&lt;/a&gt; for the memory pool lifecycle and shuffle spill
+accounting fixes, &lt;a href="https://github.com/ywskycn"&gt;@ywskycn&lt;/a&gt; for reporting native memory usage to Spark, &lt;a href="https://github.com/1fanwang"&gt;@1fanwang&lt;/a&gt; for the Arrow import leak
+fix, and &lt;a href="https://github.com/sunchao"&gt;@sunchao&lt;/a&gt; for the native aggregate spill and memory metrics, with reviews from &lt;a href="https://github.com/sunchao"&gt;@sunchao&lt;/a&gt;,
+&lt;a href="https://github.com/comphead"&gt;@comphead&lt;/a&gt;, and &lt;a href="https://github.com/mbutrovich"&gt;@mbutrovich&lt;/a&gt;. Related PRs: &lt;a href="https://github.com/apache/datafusion-comet/pull/5934"&gt;#5934&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/6162"&gt;#6162&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/6048"&gt;#6048&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/6128"&gt;#6128&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/6205"&gt;#6205&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/6066"&gt;#6066&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/5494"&gt;#5494&lt;/a&gt;.&lt;/p&gt;
 &lt;h2 id="more-iceberg-improvements"&gt;More Iceberg Improvements&lt;a class="headerlink" href="#more-iceberg-improvements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;The read side gained several things in this release too:&lt;/p&gt;
 &lt;ul&gt;
@@ -245,10 +253,15 @@ are tracked, and the allocator hazards to watch for when adding operators.&lt;/p
 &lt;li&gt;Tables partitioned by an unknown transform can now be read natively, and &lt;code&gt;IS NULL&lt;/code&gt; / &lt;code&gt;IS NOT NULL&lt;/code&gt; checks on
   list and map columns no longer force the scan back to Spark.&lt;/li&gt;
 &lt;/ul&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/mbutrovich"&gt;@mbutrovich&lt;/a&gt; for deletion vector support, &lt;a href="https://github.com/parthchandra"&gt;@parthchandra&lt;/a&gt; for the scan metrics, &lt;a href="https://github.com/ErikBPF"&gt;@ErikBPF&lt;/a&gt; for the
+null-check fix, and &lt;a href="https://github.com/andygrove"&gt;@andygrove&lt;/a&gt; for the native system functions and residual fix, with reviews from
+&lt;a href="https://github.com/sunchao"&gt;@sunchao&lt;/a&gt;, &lt;a href="https://github.com/rich7420"&gt;@rich7420&lt;/a&gt;, &lt;a href="https://github.com/unikdahal"&gt;@unikdahal&lt;/a&gt;, and &lt;a href="https://github.com/jordepic"&gt;@jordepic&lt;/a&gt;. Related PRs: &lt;a href="https://github.com/apache/datafusion-comet/pull/5853"&gt;#5853&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/5638"&gt;#5638&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/6027"&gt;#6027&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/6154"&gt;#6154&lt;/a&gt;.&lt;/p&gt;
 &lt;h2 id="native-parquet-writes-on-spark-40"&gt;Native Parquet Writes on Spark 4.0+&lt;a class="headerlink" href="#native-parquet-writes-on-spark-40" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;Separately from Iceberg, 1.1.0 hooks native Parquet writes into Spark's &lt;code&gt;WriteFilesExec&lt;/code&gt; seam on Spark 4.0 and
 later, behind &lt;code&gt;spark.comet.parquet.write.enabled&lt;/code&gt;. This release also preserves Catalyst nullability and field
 IDs in native Parquet writes.&lt;/p&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/andygrove"&gt;@andygrove&lt;/a&gt; and &lt;a href="https://github.com/sunchao"&gt;@sunchao&lt;/a&gt; for this work, with reviews from &lt;a href="https://github.com/comphead"&gt;@comphead&lt;/a&gt;, &lt;a href="https://github.com/peterxcli"&gt;@peterxcli&lt;/a&gt;,
+&lt;a href="https://github.com/rich7420"&gt;@rich7420&lt;/a&gt;, and &lt;a href="https://github.com/parthchandra"&gt;@parthchandra&lt;/a&gt;. Related PRs: &lt;a href="https://github.com/apache/datafusion-comet/pull/5763"&gt;#5763&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/5369"&gt;#5369&lt;/a&gt;.&lt;/p&gt;
 &lt;h2 id="remote-shuffle-with-celeborn"&gt;Remote Shuffle with Celeborn&lt;a class="headerlink" href="#remote-shuffle-with-celeborn" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;Applications using Apache Celeborn can now use Comet's composite shuffle manager to run Comet's &lt;strong&gt;native&lt;/strong&gt;
 shuffle over Celeborn, where 1.0.0 retained ordinary Spark/Celeborn shuffle for every exchange. Map-side
@@ -260,6 +273,8 @@ push-completion API — released 0.6.0 and 0.7.0 clients do not, and those versi
 in native mode. Native RSS does not support &lt;code&gt;spark.io.encryption.enabled=true&lt;/code&gt;. Celeborn is an optional
 application dependency and is not bundled with Comet. See the &lt;a href="https://datafusion.apache.org/comet/user-guide/latest/tuning.html"&gt;Celeborn section of the tuning guide&lt;/a&gt; for the
 full set of requirements and the frame-size and in-flight-bytes knobs.&lt;/p&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/pingzh"&gt;@pingzh&lt;/a&gt; for this work, with reviews from &lt;a href="https://github.com/sunchao"&gt;@sunchao&lt;/a&gt;, &lt;a href="https://github.com/ziting-openai"&gt;@ziting-openai&lt;/a&gt;, and &lt;a href="https://github.com/andygrove"&gt;@andygrove&lt;/a&gt;. Related
+PRs: &lt;a href="https://github.com/apache/datafusion-comet/pull/5473"&gt;#5473&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/5481"&gt;#5481&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/5513"&gt;#5513&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/5531"&gt;#5531&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/5537"&gt;#5537&lt;/a&gt;.&lt;/p&gt;
 &lt;h2 id="performance"&gt;Performance&lt;a class="headerlink" href="#performance" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;h3 id="shuffle"&gt;Shuffle&lt;a class="headerlink" href="#shuffle" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;Several changes target shuffle, which dominates many TPC-DS-shaped workloads:&lt;/p&gt;
@@ -277,6 +292,8 @@ full set of requirements and the frame-size and in-flight-bytes knobs.&lt;/p&gt;
 &lt;li&gt;Per-partition scratch buffers are reused in the shuffle write path, and &lt;code&gt;ArrowWriter&lt;/code&gt; bulk-copies fixed-width
   columns.&lt;/li&gt;
 &lt;/ul&gt;
+&lt;p&gt;Thanks to the contributors who drove this work, especially &lt;a href="https://github.com/peterxcli"&gt;@peterxcli&lt;/a&gt;, &lt;a href="https://github.com/dwsmith1983"&gt;@dwsmith1983&lt;/a&gt;, &lt;a href="https://github.com/pingzh"&gt;@pingzh&lt;/a&gt;, and
+&lt;a href="https://github.com/andygrove"&gt;@andygrove&lt;/a&gt;, with reviews from &lt;a href="https://github.com/sunchao"&gt;@sunchao&lt;/a&gt; and &lt;a href="https://github.com/mbutrovich"&gt;@mbutrovich&lt;/a&gt;.&lt;/p&gt;
 &lt;h3 id="planning-and-execution"&gt;Planning and Execution&lt;a class="headerlink" href="#planning-and-execution" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;ul&gt;
 &lt;li&gt;&lt;strong&gt;Native dynamic filter pushdown&lt;/strong&gt; from hash joins into Parquet scans.&lt;/li&gt;
@@ -305,6 +322,8 @@ default for Java-equivalent literal patterns.&lt;/p&gt;
 &lt;p&gt;Spark 4 &lt;strong&gt;Variant&lt;/strong&gt; support advanced as well: native Parquet scans can now project Variant columns directly,
 with Parquet storage adapted for Variant projection, Variant arrays normalized at the native Parquet boundary,
 and &lt;code&gt;VariantType&lt;/code&gt; identity carried through schema serialization.&lt;/p&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/peterxcli"&gt;@peterxcli&lt;/a&gt; for driving Variant support, with reviews from &lt;a href="https://github.com/sunchao"&gt;@sunchao&lt;/a&gt;. Related PRs: &lt;a href="https://github.com/apache/datafusion-comet/pull/5868"&gt;#5868&lt;/a&gt;,
+&lt;a href="https://github.com/apache/datafusion-comet/pull/5794"&gt;#5794&lt;/a&gt;.&lt;/p&gt;
 &lt;p&gt;This release also adds &lt;strong&gt;experimental native support for an in-memory cache&lt;/strong&gt;
 (&lt;code&gt;spark.comet.exec.inMemoryCache.enabled&lt;/code&gt;, disabled by default), support for &lt;strong&gt;S3-compliant filesystems&lt;/strong&gt;, and
 build gates for contrib &lt;strong&gt;Delta&lt;/strong&gt; and &lt;strong&gt;Lance&lt;/strong&gt; scans.&lt;/p&gt;
@@ -312,6 +331,8 @@ build gates for contrib &lt;strong&gt;Delta&lt;/strong&gt; and &lt;strong&gt;Lan
 &lt;p&gt;A new &lt;code&gt;spark.comet.explain.planOnly.enabled&lt;/code&gt; setting builds the plan Comet would have executed, logs it to the
 driver log, and then lets Spark run the query unchanged. This makes it possible to see how much of a production
 workload Comet would accelerate, and why anything falls back, without running any of it through Comet.&lt;/p&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/andygrove"&gt;@andygrove&lt;/a&gt; for this feature, with reviews from &lt;a href="https://github.com/coderfender"&gt;@coderfender&lt;/a&gt; and &lt;a href="https://github.com/sunchao"&gt;@sunchao&lt;/a&gt;. Related PRs:
+&lt;a href="https://github.com/apache/datafusion-comet/pull/5394"&gt;#5394&lt;/a&gt;.&lt;/p&gt;
 &lt;h2 id="upgrading-to-110"&gt;Upgrading to 1.1.0&lt;a class="headerlink" href="#upgrading-to-110" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;A few changes in this release are worth checking before upgrading:&lt;/p&gt;
 &lt;ul&gt;
