@@ -187,6 +187,13 @@ pages. Reserved memory is therefore a lower bound on what Comet really uses, and
 to fit in `spark.executor.memoryOverhead`. Until now there was no way to see how large it was, so sizing the
 overhead meant guessing.
 
+<img
+src="/blog/images/comet-1.1.0/comet-executor-memory.svg"
+width="100%"
+class="img-fluid"
+alt="The executor container holds the JVM heap, the off-heap memory pool, and the memory overhead. Spark and Comet share the off-heap pool, where Comet's sorts, joins, aggregations, and shuffles reserve memory. The memory overhead holds the JVM's own overhead plus Comet's native memory that the pool does not track."
+/>
+
 ### Measuring the gap: native allocation accounting
 
 1.1.0 wraps Comet's global allocator — jemalloc, mimalloc, or the system allocator, whichever the build selects —
