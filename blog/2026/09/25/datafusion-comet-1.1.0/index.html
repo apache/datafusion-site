@@ -82,7 +82,14 @@
 </li>
 <li><a href="#expanded-coverage">Expanded Coverage</a></li>
 <li><a href="#previewing-comet-plans">Previewing Comet Plans</a></li>
-<li><a href="#upgrading-to-110">Upgrading to 1.1.0</a></li>
+<li><a href="#upgrading-to-110">Upgrading to 1.1.0</a><ul>
+<li><a href="#platform">Platform</a></li>
+<li><a href="#size-settings-that-now-take-effect-as-documented">Size settings that now take effect as documented</a></li>
+<li><a href="#memory-pool-headroom">Memory pool headroom</a></li>
+<li><a href="#conditions-for-enabling-comet">Conditions for enabling Comet</a></li>
+<li><a href="#deprecated-and-removed-settings">Deprecated and removed settings</a></li>
+</ul>
+</li>
 <li><a href="#compatibility">Compatibility</a></li>
 <li><a href="#get-started-with-comet-110">Get Started with Comet 1.1.0</a></li>
 </ul>
@@ -111,7 +118,7 @@ limitations under the License.
 <p>The Apache DataFusion PMC is pleased to announce version 1.1.0 of the <a href="https://datafusion.apache.org/comet/">Comet</a> subproject.</p>
 <p>Comet is an accelerator for Apache Spark that translates Spark physical plans to DataFusion physical plans for
 improved performance and efficiency without requiring any code changes.</p>
-<p>This release covers roughly seven weeks of development since 1.0.0 and consists of 379 commits from 40
+<p>This release covers roughly seven weeks of development since 1.0.0 and consists of 392 commits from 40
 contributors. See the <a href="https://github.com/apache/datafusion-comet/blob/main/docs/source/changelog/1.1.0.md">change log</a> for the full list of changes.</p>
 <p>Two themes dominate this release. The first is <strong>native Iceberg writes</strong>, an experimental feature that lets
 Comet write Iceberg data files through iceberg-rust instead of iceberg-java. The second is a thorough rework of
@@ -183,6 +190,8 @@ implementations (see below).</p>
 <p>Eligibility is decided entirely at plan time, including the reflection surface: every iceberg-java class and
 method the executor-side commit assembly needs is eagerly resolved on the driver, so an Iceberg release that
 moves any of them declines the native path rather than failing tasks mid-write.</p>
+<p>To check which path a write took, look at the physical plan: a write that runs natively shows
+<code>CometIcebergWrite</code> under <code>IcebergCommit</code>, and an ineligible write keeps <code>IcebergWrite</code>.</p>
 <p>Beyond Comet's own suites, CI now runs Apache Iceberg's Spark test suites, for Iceberg 1.8.1 through 1.11.0,
 with the native writer enabled in every Comet-configured session.</p>
 <h3 id="failures-never-commit-partial-results">Failures never commit partial results<a class="headerlink" href="#failures-never-commit-partial-results" title="Permanent link">¶</a></h3>
@@ -259,7 +268,7 @@ to the overhead the executors had before Comet was enabled, and add a margin. Th
 <code>spark.comet.memory.logInterval</code>, and setting it to <code>1s</code> for a sizing run makes a short-lived peak less likely
 to fall between samples.</p>
 <p>The executor also logs a warning when its native memory looks larger than its container allows, and the
-<a href="https://datafusion.apache.org/comet/user-guide/latest/tuning.html#memory-tuning">tuning guide</a> walks through the sizing procedure with worked examples for small and large executors. One
+<a href="https://datafusion.apache.org/comet/user-guide/latest/tuning/memory.html">tuning guide</a> walks through the sizing procedure with worked examples for small and large executors. One
 detail there is worth repeating: setting <code>spark.executor.memoryOverhead</code> <em>replaces</em> the value Spark derives from
 <code>spark.executor.memoryOverheadFactor</code> rather than adding to it, so on a large executor a fixed value can shrink
 the container. For large executors, raising the factor is usually the better choice.</p>
@@ -284,24 +293,25 @@ local mode.</p>
 <li><strong>Leaks on failure paths.</strong> The per-task shared memory pool is now reference-counted and removes itself from
   the registry when the last plan using it is dropped, so a plan that fails during setup or teardown no longer
   leaks its pool. A failed Arrow vector import now releases the vectors already imported for that batch.</li>
-<li><strong>Configuration units.</strong> <code>spark.memory.offHeap.size</code> was read as MiB when given as a bare number, where Spark
-  reads bytes, and <code>spark.comet.maxTempDirectorySize</code> silently fell back to its default when given a unit.
-  Every config that native code reads is now resolved on the JVM before crossing JNI.</li>
+<li><strong>Configuration units.</strong> Comet 1.0.0 misread three size settings, including <code>spark.memory.offHeap.size</code> when
+  it was written as a bare number of bytes. Every setting that native code reads is now resolved on the JVM
+  before it crosses JNI, so each one takes effect as documented. See <a href="#upgrading-to-110">Upgrading to 1.1.0</a>
+  for what that changes.</li>
 <li><strong>Metrics.</strong> Native memory usage is now reported to Spark, and native aggregate spill and memory metrics,
   native child spill metrics in shuffle tasks, and native operator spill metrics in non-shuffle stages all appear
   in Spark's task metrics.</li>
 </ul>
 <p><code>spark.comet.exec.memoryPool.fraction</code> is now deprecated. It was meant to leave room in the off-heap pool for
-untracked memory, but Spark hands out the whole pool regardless, so it never did. Size
-<code>spark.executor.memoryOverhead</code> for that memory instead.</p>
+untracked memory, but Spark hands out the whole pool regardless, so it never did. It keeps working as before,
+and the driver logs a warning when it is set. Size <code>spark.executor.memoryOverhead</code> for that memory instead.</p>
 <h3 id="a-simpler-on-heap-mode">A simpler on-heap mode<a class="headerlink" href="#a-simpler-on-heap-mode" title="Permanent link">¶</a></h3>
 <p>On-heap mode exists so that Spark's own SQL test suite and the Iceberg suites can run against Comet without
 changing Spark's memory configuration; production deployments run off-heap. The accounting it performed did not
 protect anything, because native memory is not on the JVM heap and there is no Spark pool it can honestly be
 charged to. 1.1.0 removes it: on-heap mode now uses an unbounded pool, which removes six of the nine memory pool
-types along with several testing-only configuration keys. Comet also no longer runs in on-heap mode unless
-<code>spark.comet.exec.onHeap.enabled</code> is set, including when <code>CometSparkSessionExtensions</code> is registered directly
-rather than through the plugin.</p>
+types along with several testing-only configuration keys. Outside of tests, Comet now requires off-heap memory
+on every path, including when <code>CometSparkSessionExtensions</code> is registered directly rather than through the
+plugin, and disables itself with a warning when off-heap memory is not enabled.</p>
 <p>For contributors, a new <a href="https://datafusion.apache.org/comet/contributor-guide/memory_management.html">memory management guide</a> describes where Comet allocates memory, which allocations
 are tracked, and the allocator hazards to watch for when adding operators.</p>
 <p>Thanks to <a href="https://github.com/andygrove">@andygrove</a> for driving this work, <a href="https://github.com/peterxcli">@peterxcli</a> for the memory pool lifecycle and shuffle spill
@@ -340,7 +350,7 @@ shuffle reader.</p>
 retains ordinary Spark/Celeborn shuffle. It also requires a Celeborn client that provides a safe
 push-completion API — released 0.6.0 and 0.7.0 clients do not, and those versions retain ordinary shuffle even
 in native mode. Native RSS does not support <code>spark.io.encryption.enabled=true</code>. Celeborn is an optional
-application dependency and is not bundled with Comet. See the <a href="https://datafusion.apache.org/comet/user-guide/latest/tuning.html">Celeborn section of the tuning guide</a> for the
+application dependency and is not bundled with Comet. See the <a href="https://datafusion.apache.org/comet/user-guide/latest/tuning/celeborn.html">Celeborn section of the tuning guide</a> for the
 full set of requirements and the frame-size and in-flight-bytes knobs.</p>
 <p>Thanks to <a href="https://github.com/pingzh">@pingzh</a> for this work, with reviews from <a href="https://github.com/sunchao">@sunchao</a>, <a href="https://github.com/ziting-openai">@ziting-openai</a>, and <a href="https://github.com/andygrove">@andygrove</a>. Related
 PRs: <a href="https://github.com/apache/datafusion-comet/pull/5473">#5473</a>, <a href="https://github.com/apache/datafusion-comet/pull/5481">#5481</a>, <a href="https://github.com/apache/datafusion-comet/pull/5513">#5513</a>, <a href="https://github.com/apache/datafusion-comet/pull/5531">#5531</a>, <a href="https://github.com/apache/datafusion-comet/pull/5537">#5537</a>.</p>
@@ -368,6 +378,9 @@ PRs: <a href="https://github.com/apache/datafusion-comet/pull/5473">#5473</a>, <
 <li><strong>Native dynamic filter pushdown</strong> from hash joins into Parquet scans.</li>
 <li><strong>Adaptive partial aggregation</strong> is enabled for eligible native shuffle plans.</li>
 <li><strong>Parsed plan data is cached across the tasks of a stage</strong>, avoiding repeated deserialization work.</li>
+<li><strong>Native scans no longer busy-poll</strong> while waiting on native I/O. In 1.0.0, a Parquet or Iceberg scan reading
+  from S3 or HDFS could spin its executor thread at 100% CPU for the whole read, for example on the probe side
+  of a broadcast hash join. The scan loop now parks until the I/O completes.</li>
 <li><strong>Native Parquet scan I/O and read-amplification metrics</strong> are exposed.</li>
 </ul>
 <h3 id="expression-kernels">Expression Kernels<a class="headerlink" href="#expression-kernels" title="Permanent link">¶</a></h3>
@@ -376,7 +389,9 @@ multi-entry string maps and 18x faster on singleton normalization; the native ma
 and <code>GetMapValue</code> is vectorized; <code>collect_list</code> and <code>collect_set</code> gained a native <code>GroupsAccumulator</code>; user
 regex patterns are compiled once per planned expression; <code>hour</code>/<code>minute</code>/<code>second</code> and <code>dayofweek</code>/<code>weekday</code>
 skip calendar reconstruction; <code>posexplode</code> array expressions are evaluated once per batch; unnesting slices
-the child rather than gathering it; and the nested-element list hash is batched for flat struct elements.</p>
+the child rather than gathering it; the nested-element list hash is batched for flat struct elements;
+decimal arithmetic tracks overflow during evaluation instead of rescanning its results; <code>list_extract</code> without a
+default uses Arrow's <code>take</code> kernel; and approximate percentile merges reuse their quantile summary buffers.</p>
 <h2 id="expanded-coverage">Expanded Coverage<a class="headerlink" href="#expanded-coverage" title="Permanent link">¶</a></h2>
 <p>New expression and operator support in this release includes the <code>mode</code> aggregate, <code>max_by</code> / <code>min_by</code>,
 <code>listagg</code> / <code>string_agg</code> on Spark 4.0+, the <code>regr_slope</code> / <code>regr_intercept</code> / <code>regr_r2</code> / <code>regr_sxx</code> /
@@ -394,8 +409,10 @@ and <code>VariantType</code> identity carried through schema serialization.</p>
 <p>Thanks to <a href="https://github.com/peterxcli">@peterxcli</a> for driving Variant support, with reviews from <a href="https://github.com/sunchao">@sunchao</a>. Related PRs: <a href="https://github.com/apache/datafusion-comet/pull/5868">#5868</a>,
 <a href="https://github.com/apache/datafusion-comet/pull/5794">#5794</a>.</p>
 <p>This release also adds <strong>experimental native support for an in-memory cache</strong>
-(<code>spark.comet.exec.inMemoryCache.enabled</code>, disabled by default), support for <strong>S3-compliant filesystems</strong>, and
-build gates for contrib <strong>Delta</strong> and <strong>Lance</strong> scans.</p>
+(<code>spark.comet.exec.inMemoryCache.enabled</code>, disabled by default), support for <strong>S3-compliant filesystems</strong>,
+<strong>per-location S3 credentials</strong>, so that a credential provider implementing
+<code>CometS3LocationScopedCredentialProvider</code> can supply different credentials for different prefixes within one
+bucket, and build gates for contrib <strong>Delta</strong> and <strong>Lance</strong> scans.</p>
 <h2 id="previewing-comet-plans">Previewing Comet Plans<a class="headerlink" href="#previewing-comet-plans" title="Permanent link">¶</a></h2>
 <p>A new <code>spark.comet.explain.planOnly.enabled</code> setting builds the plan Comet would have executed, logs it to the
 driver log, and then lets Spark run the query unchanged. This makes it possible to see how much of a production
@@ -403,28 +420,63 @@ workload Comet would accelerate, and why anything falls back, without running an
 <p>Thanks to <a href="https://github.com/andygrove">@andygrove</a> for this feature, with reviews from <a href="https://github.com/coderfender">@coderfender</a> and <a href="https://github.com/sunchao">@sunchao</a>. Related PRs:
 <a href="https://github.com/apache/datafusion-comet/pull/5394">#5394</a>.</p>
 <h2 id="upgrading-to-110">Upgrading to 1.1.0<a class="headerlink" href="#upgrading-to-110" title="Permanent link">¶</a></h2>
-<p>A few changes in this release are worth checking before upgrading:</p>
+<p>Comet 1.1.0 makes no behavior changes that need a <code>spark.comet.legacy.*</code> key, but several changes can affect a
+deployment. The <a href="https://datafusion.apache.org/comet/user-guide/latest/migration-guide.html">Comet Upgrade Guide</a> describes each one in full.</p>
+<h3 id="platform">Platform<a class="headerlink" href="#platform" title="Permanent link">¶</a></h3>
 <ul>
 <li><strong>JDK 11 support has been removed</strong>, as announced in the 1.0.0 release. Comet 1.1.0 requires JDK 17 or
   later.</li>
 <li><strong>Apache Spark 3.4 remains deprecated.</strong> Comet continues to build and publish Spark 3.4 binaries, but
-  Spark's own SQL test suite no longer runs against Spark 3.4 on every change, so Spark 3.4-specific
-  regressions are more likely to reach a release. We recommend moving to Spark 3.5 or later.</li>
-<li><strong>Tasks can reserve more memory before spilling</strong> with the <code>fair_unified</code> pool, because of the fix described
-  above. The difference is largest on executors that run few tasks at once. If you sized executor memory against
-  0.15.0 through 1.0.0, use the new memory usage log to check that executors still have enough headroom.</li>
-<li><strong><code>spark.comet.exec.memoryPool.fraction</code> is deprecated</strong> and will be removed in a future release.</li>
-<li><strong>A bare-number <code>spark.memory.offHeap.size</code></strong> is now read as bytes, as Spark reads it, rather than as MiB.</li>
-<li><strong>Testing-only on-heap configuration keys have been removed</strong>, including <code>spark.comet.memoryOverhead</code> and
-  <code>spark.comet.exec.onHeap.memoryPool</code>. These are in the <code>testing</code> category, which the
-  <a href="https://datafusion.apache.org/comet/about/versioning_policy.html">versioning policy</a> exempts.</li>
+  Spark's own SQL test suite runs against Spark 3.4 only on demand, so Spark 3.4-specific regressions are more
+  likely to reach a release. We recommend moving to Spark 3.5 or later.</li>
+</ul>
+<h3 id="size-settings-that-now-take-effect-as-documented">Size settings that now take effect as documented<a class="headerlink" href="#size-settings-that-now-take-effect-as-documented" title="Permanent link">¶</a></h3>
+<p>Comet 1.0.0 misread three size settings. Comet 1.1.0 reads each of them as documented, so a job that sets one of
+them can behave differently after the upgrade:</p>
+<ul>
+<li><strong><code>spark.memory.offHeap.size</code> written as a bare number of bytes</strong> was read as MiB. The <code>fair_unified</code> pool's
+  per-operator shares were therefore about a million times too large, and never limited an operator. The shares
+  are now correct, so operators can spill sooner, and an operator that cannot spill can fail when it exceeds its
+  share. A size written with a unit, such as <code>16g</code>, is unaffected by this change. Setting
+  <code>spark.comet.exec.memoryPool=greedy_unified</code> restores the old behavior by leaving every limit to Spark.</li>
+<li><strong><code>spark.comet.maxTempDirectorySize</code> written with a unit</strong>, such as <code>10g</code>, was ignored in favor of the 100 GB
+  default. It is now enforced, so a query that spills more than the limit fails.</li>
+<li><strong><code>spark.comet.shuffle.native.writeBufferSize</code> written with a unit</strong> was used as a byte count, so <code>64m</code> gave
+  the writer 64 bytes. A value with a unit now means what it says. These buffers are native memory that no pool
+  tracks, so check any value you set against <code>spark.executor.memoryOverhead</code>.</li>
+</ul>
+<p>A malformed value of <code>spark.comet.maxTempDirectorySize</code> or <code>spark.comet.explain.native.enabled</code> now fails the
+query instead of being replaced by the default.</p>
+<h3 id="memory-pool-headroom">Memory pool headroom<a class="headerlink" href="#memory-pool-headroom" title="Permanent link">¶</a></h3>
+<p>Separately from the units change, the <code>fair_unified</code> fix described above lets tasks with several operators
+reserve more memory before spilling than they could in 0.15.0 through 1.0.0. The difference is largest on
+executors that run few tasks at once. If you sized executor memory against one of those releases, use the new
+memory usage log to check that executors still have enough headroom.</p>
+<h3 id="conditions-for-enabling-comet">Conditions for enabling Comet<a class="headerlink" href="#conditions-for-enabling-comet" title="Permanent link">¶</a></h3>
+<p>Comet needs Spark's off-heap memory to be enabled. <code>CometPlugin</code> already disabled Comet when off-heap memory was
+disabled, and Comet 1.1.0 now makes the same check when <code>CometSparkSessionExtensions</code> is registered directly
+with <code>spark.sql.extensions</code>, disabling itself with a warning. Both checks read <code>spark.memory.offHeap.enabled</code>
+from the SparkContext, so set it when the application starts rather than on a <code>SparkSession.builder</code> after the
+SparkContext exists.</p>
+<p>Comet also checks the shuffle manager the application is actually running, rather than the session's
+<code>spark.shuffle.manager</code>. A session that names <code>CometShuffleManager</code> after the SparkContext has started with a
+different shuffle manager now runs without Comet, with a warning, instead of failing with a
+<code>ClassCastException</code>.</p>
+<h3 id="deprecated-and-removed-settings">Deprecated and removed settings<a class="headerlink" href="#deprecated-and-removed-settings" title="Permanent link">¶</a></h3>
+<ul>
+<li><strong><code>spark.comet.exec.memoryPool.fraction</code> is deprecated</strong> and will be removed in a future major release. It
+  keeps working as before, and the driver logs a warning when it is set.</li>
+<li><strong>Testing-only on-heap configuration keys have been removed</strong>: <code>spark.comet.memoryOverhead</code>,
+  <code>spark.comet.exec.onHeap.memoryPool</code>, and <code>spark.comet.shuffle.jvm.memoryFactor</code> (including its older name
+  <code>spark.comet.columnar.shuffle.memory.factor</code>). They are in the <code>testing</code> category, which the
+  <a href="https://datafusion.apache.org/comet/about/versioning_policy.html#testing-and-internal-configurations-are-exempt">versioning policy</a> exempts, and Comet ignores them if they are still set.</li>
 </ul>
 <h2 id="compatibility">Compatibility<a class="headerlink" href="#compatibility" title="Permanent link">¶</a></h2>
 <p>Supported platforms include:</p>
 <ul>
 <li><strong>Spark 3.4.3</strong> with Java 17 and Scala 2.12/2.13 (deprecated)</li>
 <li><strong>Spark 3.5.9</strong> with Java 17 and Scala 2.12/2.13</li>
-<li><strong>Spark 4.0.4</strong> with Java 17 and Scala 2.13</li>
+<li><strong>Spark 4.0.4</strong> with Java 17/21 and Scala 2.13</li>
 <li><strong>Spark 4.1.3</strong> with Java 17/21 and Scala 2.13</li>
 <li><strong>Spark 4.2.0</strong> with Java 17 and Scala 2.13 (experimental, for early evaluation only)</li>
 </ul>
@@ -494,7 +546,14 @@ to get up and running, then point Comet at your existing Spark workloads and see
 </li>
 <li><a href="#expanded-coverage">Expanded Coverage</a></li>
 <li><a href="#previewing-comet-plans">Previewing Comet Plans</a></li>
-<li><a href="#upgrading-to-110">Upgrading to 1.1.0</a></li>
+<li><a href="#upgrading-to-110">Upgrading to 1.1.0</a><ul>
+<li><a href="#platform">Platform</a></li>
+<li><a href="#size-settings-that-now-take-effect-as-documented">Size settings that now take effect as documented</a></li>
+<li><a href="#memory-pool-headroom">Memory pool headroom</a></li>
+<li><a href="#conditions-for-enabling-comet">Conditions for enabling Comet</a></li>
+<li><a href="#deprecated-and-removed-settings">Deprecated and removed settings</a></li>
+</ul>
+</li>
 <li><a href="#compatibility">Compatibility</a></li>
 <li><a href="#get-started-with-comet-110">Get Started with Comet 1.1.0</a></li>
 </ul>
