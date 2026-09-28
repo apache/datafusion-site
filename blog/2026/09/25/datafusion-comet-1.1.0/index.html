@@ -72,8 +72,8 @@
 </ul>
 </li>
 <li><a href="#more-iceberg-improvements">More Iceberg Improvements</a></li>
-<li><a href="#native-parquet-writes-on-spark-40-experimental">Native Parquet Writes on Spark 4.0+ (Experimental)</a></li>
 <li><a href="#remote-shuffle-with-celeborn">Remote Shuffle with Celeborn</a></li>
+<li><a href="#native-parquet-writes-on-spark-40-experimental">Native Parquet Writes on Spark 4.0+ (Experimental)</a></li>
 <li><a href="#s3-credentials">S3 Credentials</a></li>
 <li><a href="#performance">Performance</a><ul>
 <li><a href="#shuffle">Shuffle</a></li>
@@ -127,10 +127,10 @@ contributors. See the <a href="https://github.com/apache/datafusion-comet/blob/b
   iceberg-java.</li>
 <li><strong>Memory management</strong>: Comet can now measure the native memory its pools never see, reports it on every
   executor, and fixes several long-standing bugs in how its pools account for what they do see.</li>
+<li><strong>Native shuffle over Apache Celeborn</strong>: Comet's native shuffle can now run over Celeborn remote shuffle, for
+  Celeborn clients that provide a safe push-completion API.</li>
 <li><strong>Native Parquet writes on Spark 4.0+</strong> (experimental): Comet now plugs into Spark's own write path, so Spark
   keeps ownership of the commit protocol and job commit.</li>
-<li><strong>Native shuffle over Apache Celeborn</strong>: applications that use Celeborn for remote shuffle can now run
-  Comet's native shuffle through it, instead of using ordinary Spark shuffle for every exchange.</li>
 </ul>
 <h2 id="native-iceberg-writes-experimental">Native Iceberg Writes (Experimental)<a class="headerlink" href="#native-iceberg-writes-experimental" title="Permanent link">¶</a></h2>
 <p>Every Comet release up to now has accelerated the read side of an Iceberg workload while leaving writes
@@ -347,6 +347,19 @@ fix, and <a href="https://github.com/sunchao">@sunchao</a> for the native aggreg
 <p>Thanks to <a href="https://github.com/mbutrovich">@mbutrovich</a> for deletion vector support, <a href="https://github.com/parthchandra">@parthchandra</a> for the scan metrics, <a href="https://github.com/ErikBPF">@ErikBPF</a> for the
 null-check fix, and <a href="https://github.com/andygrove">@andygrove</a> for the native system functions and residual fix, with reviews from
 <a href="https://github.com/sunchao">@sunchao</a>, <a href="https://github.com/rich7420">@rich7420</a>, <a href="https://github.com/unikdahal">@unikdahal</a>, and <a href="https://github.com/jordepic">@jordepic</a>. Related PRs: <a href="https://github.com/apache/datafusion-comet/pull/5853">#5853</a>, <a href="https://github.com/apache/datafusion-comet/pull/5638">#5638</a>, <a href="https://github.com/apache/datafusion-comet/pull/6027">#6027</a>, <a href="https://github.com/apache/datafusion-comet/pull/6154">#6154</a>.</p>
+<h2 id="remote-shuffle-with-celeborn">Remote Shuffle with Celeborn<a class="headerlink" href="#remote-shuffle-with-celeborn" title="Permanent link">¶</a></h2>
+<p>Applications using Apache Celeborn can now use Comet's composite shuffle manager to run Comet's <strong>native</strong>
+shuffle over Celeborn, where 1.0.0 retained ordinary Spark/Celeborn shuffle for every exchange. Map-side
+tasks push Comet's Arrow frames directly to Celeborn, and the reduce side reads them back through a native
+shuffle reader.</p>
+<p>Native shuffle over Celeborn requires an explicit <code>spark.comet.shuffle.mode=native</code>; the default <code>auto</code> mode
+retains ordinary Spark/Celeborn shuffle. It also requires a Celeborn client that provides a safe
+push-completion API — released 0.6.0 and 0.7.0 clients do not, and those versions retain ordinary shuffle even
+in native mode. Native RSS does not support <code>spark.io.encryption.enabled=true</code>. Celeborn is an optional
+application dependency and is not bundled with Comet. See the <a href="https://datafusion.apache.org/comet/user-guide/latest/tuning/celeborn.html">Celeborn section of the tuning guide</a> for the
+full set of requirements and the frame-size and in-flight-bytes knobs.</p>
+<p>Thanks to <a href="https://github.com/pingzh">@pingzh</a> for this work, with reviews from <a href="https://github.com/sunchao">@sunchao</a>, <a href="https://github.com/ziting-openai">@ziting-openai</a>, and <a href="https://github.com/andygrove">@andygrove</a>. Related
+PRs: <a href="https://github.com/apache/datafusion-comet/pull/5473">#5473</a>, <a href="https://github.com/apache/datafusion-comet/pull/5481">#5481</a>, <a href="https://github.com/apache/datafusion-comet/pull/5513">#5513</a>, <a href="https://github.com/apache/datafusion-comet/pull/5531">#5531</a>, <a href="https://github.com/apache/datafusion-comet/pull/5537">#5537</a>.</p>
 <h2 id="native-parquet-writes-on-spark-40-experimental">Native Parquet Writes on Spark 4.0+ (Experimental)<a class="headerlink" href="#native-parquet-writes-on-spark-40-experimental" title="Permanent link">¶</a></h2>
 <p>Separately from Iceberg, 1.1.0 changes how native Parquet writes plug into Spark on Spark 4.0 and later. The
 feature is <strong>experimental and disabled by default</strong>.</p>
@@ -366,19 +379,6 @@ writes when <code>spark.sql.files.maxRecordsPerFile</code> is set. Enable it wit
 and <code>spark.comet.operator.WriteFilesExec.allowIncompatible=true</code>. Spark 3.4 and 3.5 keep the existing write path.</p>
 <p>Thanks to <a href="https://github.com/andygrove">@andygrove</a> and <a href="https://github.com/sunchao">@sunchao</a> for this work, with reviews from <a href="https://github.com/comphead">@comphead</a>, <a href="https://github.com/peterxcli">@peterxcli</a>,
 <a href="https://github.com/rich7420">@rich7420</a>, and <a href="https://github.com/parthchandra">@parthchandra</a>. Related PRs: <a href="https://github.com/apache/datafusion-comet/pull/5763">#5763</a>, <a href="https://github.com/apache/datafusion-comet/pull/5369">#5369</a>.</p>
-<h2 id="remote-shuffle-with-celeborn">Remote Shuffle with Celeborn<a class="headerlink" href="#remote-shuffle-with-celeborn" title="Permanent link">¶</a></h2>
-<p>Applications using Apache Celeborn can now use Comet's composite shuffle manager to run Comet's <strong>native</strong>
-shuffle over Celeborn, where 1.0.0 retained ordinary Spark/Celeborn shuffle for every exchange. Map-side
-tasks push Comet's Arrow frames directly to Celeborn, and the reduce side reads them back through a native
-shuffle reader.</p>
-<p>Native shuffle over Celeborn requires an explicit <code>spark.comet.shuffle.mode=native</code>; the default <code>auto</code> mode
-retains ordinary Spark/Celeborn shuffle. It also requires a Celeborn client that provides a safe
-push-completion API — released 0.6.0 and 0.7.0 clients do not, and those versions retain ordinary shuffle even
-in native mode. Native RSS does not support <code>spark.io.encryption.enabled=true</code>. Celeborn is an optional
-application dependency and is not bundled with Comet. See the <a href="https://datafusion.apache.org/comet/user-guide/latest/tuning/celeborn.html">Celeborn section of the tuning guide</a> for the
-full set of requirements and the frame-size and in-flight-bytes knobs.</p>
-<p>Thanks to <a href="https://github.com/pingzh">@pingzh</a> for this work, with reviews from <a href="https://github.com/sunchao">@sunchao</a>, <a href="https://github.com/ziting-openai">@ziting-openai</a>, and <a href="https://github.com/andygrove">@andygrove</a>. Related
-PRs: <a href="https://github.com/apache/datafusion-comet/pull/5473">#5473</a>, <a href="https://github.com/apache/datafusion-comet/pull/5481">#5481</a>, <a href="https://github.com/apache/datafusion-comet/pull/5513">#5513</a>, <a href="https://github.com/apache/datafusion-comet/pull/5531">#5531</a>, <a href="https://github.com/apache/datafusion-comet/pull/5537">#5537</a>.</p>
 <h2 id="s3-credentials">S3 Credentials<a class="headerlink" href="#s3-credentials" title="Permanent link">¶</a></h2>
 <p>Several changes make Comet's native S3 access work with more of the credential setups that Spark already
 supports:</p>
@@ -586,8 +586,8 @@ to get up and running, then point Comet at your existing Spark workloads and see
 </ul>
 </li>
 <li><a href="#more-iceberg-improvements">More Iceberg Improvements</a></li>
-<li><a href="#native-parquet-writes-on-spark-40-experimental">Native Parquet Writes on Spark 4.0+ (Experimental)</a></li>
 <li><a href="#remote-shuffle-with-celeborn">Remote Shuffle with Celeborn</a></li>
+<li><a href="#native-parquet-writes-on-spark-40-experimental">Native Parquet Writes on Spark 4.0+ (Experimental)</a></li>
 <li><a href="#s3-credentials">S3 Credentials</a></li>
 <li><a href="#performance">Performance</a><ul>
 <li><a href="#shuffle">Shuffle</a></li>

@@ -51,10 +51,10 @@ contributors. See the &lt;a href="https://github.com/apache/datafusion-comet/blo
   iceberg-java.&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;Memory management&lt;/strong&gt;: Comet can now measure the native memory its pools never see, reports it on every
   executor, and fixes several long-standing bugs in how its pools account for what they do see.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Native shuffle over Apache Celeborn&lt;/strong&gt;: Comet's native shuffle can now run over Celeborn remote shuffle, for
+  Celeborn clients that provide a safe push-completion API.&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;Native Parquet writes on Spark 4.0+&lt;/strong&gt; (experimental): Comet now plugs into Spark's own write path, so Spark
   keeps ownership of the commit protocol and job commit.&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;Native shuffle over Apache Celeborn&lt;/strong&gt;: applications that use Celeborn for remote shuffle can now run
-  Comet's native shuffle through it, instead of using ordinary Spark shuffle for every exchange.&lt;/li&gt;
 &lt;/ul&gt;
 &lt;h2 id="native-iceberg-writes-experimental"&gt;Native Iceberg Writes (Experimental)&lt;a class="headerlink" href="#native-iceberg-writes-experimental" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;Every Comet release up to now has accelerated the read side of an Iceberg workload while leaving writes
@@ -271,6 +271,19 @@ fix, and &lt;a href="https://github.com/sunchao"&gt;@sunchao&lt;/a&gt; for the n
 &lt;p&gt;Thanks to &lt;a href="https://github.com/mbutrovich"&gt;@mbutrovich&lt;/a&gt; for deletion vector support, &lt;a href="https://github.com/parthchandra"&gt;@parthchandra&lt;/a&gt; for the scan metrics, &lt;a href="https://github.com/ErikBPF"&gt;@ErikBPF&lt;/a&gt; for the
 null-check fix, and &lt;a href="https://github.com/andygrove"&gt;@andygrove&lt;/a&gt; for the native system functions and residual fix, with reviews from
 &lt;a href="https://github.com/sunchao"&gt;@sunchao&lt;/a&gt;, &lt;a href="https://github.com/rich7420"&gt;@rich7420&lt;/a&gt;, &lt;a href="https://github.com/unikdahal"&gt;@unikdahal&lt;/a&gt;, and &lt;a href="https://github.com/jordepic"&gt;@jordepic&lt;/a&gt;. Related PRs: &lt;a href="https://github.com/apache/datafusion-comet/pull/5853"&gt;#5853&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/5638"&gt;#5638&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/6027"&gt;#6027&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/6154"&gt;#6154&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id="remote-shuffle-with-celeborn"&gt;Remote Shuffle with Celeborn&lt;a class="headerlink" href="#remote-shuffle-with-celeborn" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Applications using Apache Celeborn can now use Comet's composite shuffle manager to run Comet's &lt;strong&gt;native&lt;/strong&gt;
+shuffle over Celeborn, where 1.0.0 retained ordinary Spark/Celeborn shuffle for every exchange. Map-side
+tasks push Comet's Arrow frames directly to Celeborn, and the reduce side reads them back through a native
+shuffle reader.&lt;/p&gt;
+&lt;p&gt;Native shuffle over Celeborn requires an explicit &lt;code&gt;spark.comet.shuffle.mode=native&lt;/code&gt;; the default &lt;code&gt;auto&lt;/code&gt; mode
+retains ordinary Spark/Celeborn shuffle. It also requires a Celeborn client that provides a safe
+push-completion API — released 0.6.0 and 0.7.0 clients do not, and those versions retain ordinary shuffle even
+in native mode. Native RSS does not support &lt;code&gt;spark.io.encryption.enabled=true&lt;/code&gt;. Celeborn is an optional
+application dependency and is not bundled with Comet. See the &lt;a href="https://datafusion.apache.org/comet/user-guide/latest/tuning/celeborn.html"&gt;Celeborn section of the tuning guide&lt;/a&gt; for the
+full set of requirements and the frame-size and in-flight-bytes knobs.&lt;/p&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/pingzh"&gt;@pingzh&lt;/a&gt; for this work, with reviews from &lt;a href="https://github.com/sunchao"&gt;@sunchao&lt;/a&gt;, &lt;a href="https://github.com/ziting-openai"&gt;@ziting-openai&lt;/a&gt;, and &lt;a href="https://github.com/andygrove"&gt;@andygrove&lt;/a&gt;. Related
+PRs: &lt;a href="https://github.com/apache/datafusion-comet/pull/5473"&gt;#5473&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/5481"&gt;#5481&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/5513"&gt;#5513&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/5531"&gt;#5531&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/5537"&gt;#5537&lt;/a&gt;.&lt;/p&gt;
 &lt;h2 id="native-parquet-writes-on-spark-40-experimental"&gt;Native Parquet Writes on Spark 4.0+ (Experimental)&lt;a class="headerlink" href="#native-parquet-writes-on-spark-40-experimental" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;Separately from Iceberg, 1.1.0 changes how native Parquet writes plug into Spark on Spark 4.0 and later. The
 feature is &lt;strong&gt;experimental and disabled by default&lt;/strong&gt;.&lt;/p&gt;
@@ -290,19 +303,6 @@ writes when &lt;code&gt;spark.sql.files.maxRecordsPerFile&lt;/code&gt; is set. E
 and &lt;code&gt;spark.comet.operator.WriteFilesExec.allowIncompatible=true&lt;/code&gt;. Spark 3.4 and 3.5 keep the existing write path.&lt;/p&gt;
 &lt;p&gt;Thanks to &lt;a href="https://github.com/andygrove"&gt;@andygrove&lt;/a&gt; and &lt;a href="https://github.com/sunchao"&gt;@sunchao&lt;/a&gt; for this work, with reviews from &lt;a href="https://github.com/comphead"&gt;@comphead&lt;/a&gt;, &lt;a href="https://github.com/peterxcli"&gt;@peterxcli&lt;/a&gt;,
 &lt;a href="https://github.com/rich7420"&gt;@rich7420&lt;/a&gt;, and &lt;a href="https://github.com/parthchandra"&gt;@parthchandra&lt;/a&gt;. Related PRs: &lt;a href="https://github.com/apache/datafusion-comet/pull/5763"&gt;#5763&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/5369"&gt;#5369&lt;/a&gt;.&lt;/p&gt;
-&lt;h2 id="remote-shuffle-with-celeborn"&gt;Remote Shuffle with Celeborn&lt;a class="headerlink" href="#remote-shuffle-with-celeborn" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
-&lt;p&gt;Applications using Apache Celeborn can now use Comet's composite shuffle manager to run Comet's &lt;strong&gt;native&lt;/strong&gt;
-shuffle over Celeborn, where 1.0.0 retained ordinary Spark/Celeborn shuffle for every exchange. Map-side
-tasks push Comet's Arrow frames directly to Celeborn, and the reduce side reads them back through a native
-shuffle reader.&lt;/p&gt;
-&lt;p&gt;Native shuffle over Celeborn requires an explicit &lt;code&gt;spark.comet.shuffle.mode=native&lt;/code&gt;; the default &lt;code&gt;auto&lt;/code&gt; mode
-retains ordinary Spark/Celeborn shuffle. It also requires a Celeborn client that provides a safe
-push-completion API — released 0.6.0 and 0.7.0 clients do not, and those versions retain ordinary shuffle even
-in native mode. Native RSS does not support &lt;code&gt;spark.io.encryption.enabled=true&lt;/code&gt;. Celeborn is an optional
-application dependency and is not bundled with Comet. See the &lt;a href="https://datafusion.apache.org/comet/user-guide/latest/tuning/celeborn.html"&gt;Celeborn section of the tuning guide&lt;/a&gt; for the
-full set of requirements and the frame-size and in-flight-bytes knobs.&lt;/p&gt;
-&lt;p&gt;Thanks to &lt;a href="https://github.com/pingzh"&gt;@pingzh&lt;/a&gt; for this work, with reviews from &lt;a href="https://github.com/sunchao"&gt;@sunchao&lt;/a&gt;, &lt;a href="https://github.com/ziting-openai"&gt;@ziting-openai&lt;/a&gt;, and &lt;a href="https://github.com/andygrove"&gt;@andygrove&lt;/a&gt;. Related
-PRs: &lt;a href="https://github.com/apache/datafusion-comet/pull/5473"&gt;#5473&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/5481"&gt;#5481&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/5513"&gt;#5513&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/5531"&gt;#5531&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/5537"&gt;#5537&lt;/a&gt;.&lt;/p&gt;
 &lt;h2 id="s3-credentials"&gt;S3 Credentials&lt;a class="headerlink" href="#s3-credentials" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;Several changes make Comet's native S3 access work with more of the credential setups that Spark already
 supports:&lt;/p&gt;
