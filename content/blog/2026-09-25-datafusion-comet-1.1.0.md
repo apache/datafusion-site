@@ -32,10 +32,10 @@ The Apache DataFusion PMC is pleased to announce version 1.1.0 of the [Comet](ht
 Comet is an accelerator for Apache Spark that translates Spark physical plans to DataFusion physical plans for
 improved performance and efficiency without requiring any code changes.
 
-This release covers roughly seven weeks of development since 1.0.0 and consists of 392 commits from 40
+This release covers roughly seven weeks of development since 1.0.0 and consists of 398 commits from 40
 contributors. See the [change log] for the full list of changes.
 
-[change log]: https://github.com/apache/datafusion-comet/blob/main/docs/source/changelog/1.1.0.md
+[change log]: https://github.com/apache/datafusion-comet/blob/branch-1.1/docs/source/changelog/1.1.0.md
 
 Two themes dominate this release. The first is **native Iceberg writes**, an experimental feature that lets
 Comet write Iceberg data files through iceberg-rust instead of iceberg-java. The second is a thorough rework of
@@ -164,7 +164,7 @@ feature needs before it can lose the experimental label.
 
 Thanks to [@jordepic] for designing and implementing the split-operator plan, write detection, and the native
 writer, and to [@andygrove] for the fidelity and failure-handling work, with contributions from
-[@zhangfengcdt], [@snmvaughan], and [@0lai0], and reviews from [@sunchao], [@comphead], [@unikdahal], and
+[@zhangfengcdt], [@snmvaughan], [@liupoyi-1031], and [@0lai0], and reviews from [@sunchao], [@comphead], [@unikdahal], and
 [@mbutrovich]. Related PRs: [#4658], [#5298], [#5361], [#5663], [#5780].
 
 [Iceberg Writes guide]: https://datafusion.apache.org/comet/user-guide/latest/iceberg-writes.html
@@ -265,6 +265,10 @@ Several bugs in the pools themselves are fixed in this release:
   it was written as a bare number of bytes. Every setting that native code reads is now resolved on the JVM
   before it crosses JNI, so each one takes effect as documented. See [Upgrading to 1.1.0](#upgrading-to-110)
   for what that changes.
+- **Spilling no longer floods the log.** A partial grant from Spark is how a native operator learns to spill,
+  but 1.0.0 logged a warning and dumped the task's memory usage on every one, so a spilling query could log
+  hundreds of them. Partial grants are now logged at DEBUG. The memory usage dump is removed entirely, because
+  it took a lock that could deadlock the task against a concurrent memory request.
 - **Metrics.** Native memory usage is now reported to Spark, and native aggregate spill and memory metrics,
   native child spill metrics in shuffle tasks, and native operator spill metrics in non-shuffle stages all appear
   in Spark's task metrics.
@@ -340,6 +344,38 @@ PRs: [#5473], [#5481], [#5513], [#5531], [#5537].
 
 [Celeborn section of the tuning guide]: https://datafusion.apache.org/comet/user-guide/latest/tuning/celeborn.html
 
+## S3 Credentials
+
+Several changes make Comet's native S3 access work with more of the credential setups that Spark already
+supports:
+
+- **Built-in credential provider adapters.** In 1.0.0, a native Parquet scan failed with
+  `Unsupported credential provider` when `fs.s3a.aws.credentials.provider` named a class that Spark accepts but
+  Comet's native reader does not reimplement, such as `DefaultAWSCredentialsProviderChain`. Comet now ships two
+  adapters that fix this with a one-line change. `HadoopS3ACredentialProviderAdapter`, the recommended one,
+  delegates to Hadoop S3A's own provider construction, so it accepts everything the S3A chain accepts,
+  including web-identity, assumed-role, and per-bucket configuration. `AwsSdkCredentialProviderAdapter` wraps a
+  specific AWS SDK credential provider class.
+- **STS throttling protection on EKS with IRSA.** Under a large concurrent startup, STS can throttle the
+  `AssumeRoleWithWebIdentity` call. In 1.0.0, the native Iceberg path did not retry the throttle and fell
+  through to the EKS node role, which usually cannot read the bucket, so the job failed with a flood of `403`
+  errors. When Comet detects IRSA and no explicit credentials are configured, native Iceberg reads and writes
+  now resolve web-identity credentials themselves: the call is retried with backoff and jitter, never falls back
+  to the node role, and one credential is cached per executor rather than fetched per thread. This is on by
+  default and needs no configuration.
+- **Per-location credentials.** A credential provider implementing `CometS3LocationScopedCredentialProvider`
+  can supply different credentials for different prefixes within one bucket, for example one policy for
+  `warehouse/sales` and another for `warehouse/finance`.
+- **S3-compliant filesystems** are now supported by the native reader.
+
+See the [S3 credential providers guide] for configuration details.
+
+[S3 credential providers guide]: https://datafusion.apache.org/comet/user-guide/latest/s3-credential-providers.html
+
+Thanks to [@parthchandra] for the credential adapters and STS throttling protection, [@snmvaughan] for
+per-location credentials, and [@comphead] for S3-compliant filesystem support, with reviews from [@sunchao] and
+[@andygrove]. Related PRs: [#6023], [#6025], [#6031], [#5314].
+
 ## Performance
 
 ### Shuffle
@@ -404,10 +440,8 @@ Thanks to [@peterxcli] for driving Variant support, with reviews from [@sunchao]
 [#5794].
 
 This release also adds **experimental native support for an in-memory cache**
-(`spark.comet.exec.inMemoryCache.enabled`, disabled by default), support for **S3-compliant filesystems**,
-**per-location S3 credentials**, so that a credential provider implementing
-`CometS3LocationScopedCredentialProvider` can supply different credentials for different prefixes within one
-bucket, and build gates for contrib **Delta** and **Lance** scans.
+(`spark.comet.exec.inMemoryCache.enabled`, disabled by default) and build gates for contrib **Delta** and
+**Lance** scans.
 
 ## Previewing Comet Plans
 
@@ -508,6 +542,7 @@ to get up and running, then point Comet at your existing Spark workloads and see
 [@andygrove]: https://github.com/andygrove
 [@zhangfengcdt]: https://github.com/zhangfengcdt
 [@snmvaughan]: https://github.com/snmvaughan
+[@liupoyi-1031]: https://github.com/liupoyi-1031
 [@0lai0]: https://github.com/0lai0
 [@sunchao]: https://github.com/sunchao
 [@comphead]: https://github.com/comphead
@@ -547,6 +582,10 @@ to get up and running, then point Comet at your existing Spark workloads and see
 [#5513]: https://github.com/apache/datafusion-comet/pull/5513
 [#5531]: https://github.com/apache/datafusion-comet/pull/5531
 [#5537]: https://github.com/apache/datafusion-comet/pull/5537
+[#6023]: https://github.com/apache/datafusion-comet/pull/6023
+[#6025]: https://github.com/apache/datafusion-comet/pull/6025
+[#6031]: https://github.com/apache/datafusion-comet/pull/6031
+[#5314]: https://github.com/apache/datafusion-comet/pull/5314
 [#5868]: https://github.com/apache/datafusion-comet/pull/5868
 [#5794]: https://github.com/apache/datafusion-comet/pull/5794
 [#5394]: https://github.com/apache/datafusion-comet/pull/5394
