@@ -37,10 +37,16 @@ contributors. See the [change log] for the full list of changes.
 
 [change log]: https://github.com/apache/datafusion-comet/blob/branch-1.1/docs/source/changelog/1.1.0.md
 
-Two themes dominate this release. The first is **native Iceberg writes**, an experimental feature that lets
-Comet write Iceberg data files through iceberg-rust instead of iceberg-java. The second is a thorough rework of
-**memory management**: Comet can now measure the native memory its pools never see, reports it on every
-executor, and fixes several long-standing bugs in how its pools account for what they do see.
+The highlights of this release are:
+
+- **Native Iceberg writes** (experimental): Comet can write Iceberg data files through iceberg-rust instead of
+  iceberg-java.
+- **Memory management**: Comet can now measure the native memory its pools never see, reports it on every
+  executor, and fixes several long-standing bugs in how its pools account for what they do see.
+- **Native Parquet writes on Spark 4.0+** (experimental): Comet now plugs into Spark's own write path, so Spark
+  keeps ownership of the commit protocol and job commit.
+- **Native shuffle over Apache Celeborn**: applications that use Celeborn for remote shuffle can now run
+  Comet's native shuffle through it, instead of using ordinary Spark shuffle for every exchange.
 
 ## Native Iceberg Writes (Experimental)
 
@@ -316,11 +322,25 @@ Thanks to [@mbutrovich] for deletion vector support, [@parthchandra] for the sca
 null-check fix, and [@andygrove] for the native system functions and residual fix, with reviews from
 [@sunchao], [@rich7420], [@unikdahal], and [@jordepic]. Related PRs: [#5853], [#5638], [#6027], [#6154].
 
-## Native Parquet Writes on Spark 4.0+
+## Native Parquet Writes on Spark 4.0+ (Experimental)
 
-Separately from Iceberg, 1.1.0 hooks native Parquet writes into Spark's `WriteFilesExec` seam on Spark 4.0 and
-later, behind `spark.comet.parquet.write.enabled`. This release also preserves Catalyst nullability and field
-IDs in native Parquet writes.
+Separately from Iceberg, 1.1.0 changes how native Parquet writes plug into Spark on Spark 4.0 and later. The
+feature is **experimental and disabled by default**.
+
+In 1.0.0, a native Parquet write replaced Spark's entire write command, so Comet had to reimplement everything
+that command does: the commit protocol, save modes, commit-message collection, and the job commit. On
+Spark 4.0+, Comet now replaces only `WriteFilesExec`, the per-task write that Spark 4.0 made pluggable for this
+purpose, and Spark keeps ownership of everything above it. As a result:
+
+- Output paths come from Spark's `FileCommitProtocol`, so file names match Spark's and committers that track
+  individual files, such as the S3A magic committer, work unchanged.
+- Column names, nullability, and field IDs come from the target table rather than the query output, so
+  `INSERT INTO t SELECT a + 1 ...` writes the target column's name.
+- Byte and row counts come from Spark's own stats tracker, so they are correct on HDFS.
+
+The native writer currently handles non-partitioned, non-bucketed writes to local and HDFS paths, and declines
+writes when `spark.sql.files.maxRecordsPerFile` is set. Enable it with `spark.comet.parquet.write.enabled=true`
+and `spark.comet.operator.WriteFilesExec.allowIncompatible=true`. Spark 3.4 and 3.5 keep the existing write path.
 
 Thanks to [@andygrove] and [@sunchao] for this work, with reviews from [@comphead], [@peterxcli],
 [@rich7420], and [@parthchandra]. Related PRs: [#5763], [#5369].
