@@ -45,10 +45,17 @@ limitations under the License.
 improved performance and efficiency without requiring any code changes.&lt;/p&gt;
 &lt;p&gt;This release covers roughly seven weeks of development since 1.0.0 and consists of 398 commits from 40
 contributors. See the &lt;a href="https://github.com/apache/datafusion-comet/blob/branch-1.1/docs/source/changelog/1.1.0.md"&gt;change log&lt;/a&gt; for the full list of changes.&lt;/p&gt;
-&lt;p&gt;Two themes dominate this release. The first is &lt;strong&gt;native Iceberg writes&lt;/strong&gt;, an experimental feature that lets
-Comet write Iceberg data files through iceberg-rust instead of iceberg-java. The second is a thorough rework of
-&lt;strong&gt;memory management&lt;/strong&gt;: Comet can now measure the native memory its pools never see, reports it on every
-executor, and fixes several long-standing bugs in how its pools account for what they do see.&lt;/p&gt;
+&lt;p&gt;The highlights of this release are:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Native Iceberg writes&lt;/strong&gt; (experimental): Comet can write Iceberg data files through iceberg-rust instead of
+  iceberg-java.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Memory management&lt;/strong&gt;: Comet can now measure the native memory its pools never see, reports it on every
+  executor, and fixes several long-standing bugs in how its pools account for what they do see.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Native Parquet writes on Spark 4.0+&lt;/strong&gt; (experimental): Comet now plugs into Spark's own write path, so Spark
+  keeps ownership of the commit protocol and job commit.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Native shuffle over Apache Celeborn&lt;/strong&gt;: applications that use Celeborn for remote shuffle can now run
+  Comet's native shuffle through it, instead of using ordinary Spark shuffle for every exchange.&lt;/li&gt;
+&lt;/ul&gt;
 &lt;h2 id="native-iceberg-writes-experimental"&gt;Native Iceberg Writes (Experimental)&lt;a class="headerlink" href="#native-iceberg-writes-experimental" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;Every Comet release up to now has accelerated the read side of an Iceberg workload while leaving writes
 entirely to the JVM. 1.1.0 changes that: Comet can now write Iceberg data files natively, through
@@ -264,10 +271,23 @@ fix, and &lt;a href="https://github.com/sunchao"&gt;@sunchao&lt;/a&gt; for the n
 &lt;p&gt;Thanks to &lt;a href="https://github.com/mbutrovich"&gt;@mbutrovich&lt;/a&gt; for deletion vector support, &lt;a href="https://github.com/parthchandra"&gt;@parthchandra&lt;/a&gt; for the scan metrics, &lt;a href="https://github.com/ErikBPF"&gt;@ErikBPF&lt;/a&gt; for the
 null-check fix, and &lt;a href="https://github.com/andygrove"&gt;@andygrove&lt;/a&gt; for the native system functions and residual fix, with reviews from
 &lt;a href="https://github.com/sunchao"&gt;@sunchao&lt;/a&gt;, &lt;a href="https://github.com/rich7420"&gt;@rich7420&lt;/a&gt;, &lt;a href="https://github.com/unikdahal"&gt;@unikdahal&lt;/a&gt;, and &lt;a href="https://github.com/jordepic"&gt;@jordepic&lt;/a&gt;. Related PRs: &lt;a href="https://github.com/apache/datafusion-comet/pull/5853"&gt;#5853&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/5638"&gt;#5638&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/6027"&gt;#6027&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/6154"&gt;#6154&lt;/a&gt;.&lt;/p&gt;
-&lt;h2 id="native-parquet-writes-on-spark-40"&gt;Native Parquet Writes on Spark 4.0+&lt;a class="headerlink" href="#native-parquet-writes-on-spark-40" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
-&lt;p&gt;Separately from Iceberg, 1.1.0 hooks native Parquet writes into Spark's &lt;code&gt;WriteFilesExec&lt;/code&gt; seam on Spark 4.0 and
-later, behind &lt;code&gt;spark.comet.parquet.write.enabled&lt;/code&gt;. This release also preserves Catalyst nullability and field
-IDs in native Parquet writes.&lt;/p&gt;
+&lt;h2 id="native-parquet-writes-on-spark-40-experimental"&gt;Native Parquet Writes on Spark 4.0+ (Experimental)&lt;a class="headerlink" href="#native-parquet-writes-on-spark-40-experimental" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Separately from Iceberg, 1.1.0 changes how native Parquet writes plug into Spark on Spark 4.0 and later. The
+feature is &lt;strong&gt;experimental and disabled by default&lt;/strong&gt;.&lt;/p&gt;
+&lt;p&gt;In 1.0.0, a native Parquet write replaced Spark's entire write command, so Comet had to reimplement everything
+that command does: the commit protocol, save modes, commit-message collection, and the job commit. On
+Spark 4.0+, Comet now replaces only &lt;code&gt;WriteFilesExec&lt;/code&gt;, the per-task write that Spark 4.0 made pluggable for this
+purpose, and Spark keeps ownership of everything above it. As a result:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Output paths come from Spark's &lt;code&gt;FileCommitProtocol&lt;/code&gt;, so file names match Spark's and committers that track
+  individual files, such as the S3A magic committer, work unchanged.&lt;/li&gt;
+&lt;li&gt;Column names, nullability, and field IDs come from the target table rather than the query output, so
+  &lt;code&gt;INSERT INTO t SELECT a + 1 ...&lt;/code&gt; writes the target column's name.&lt;/li&gt;
+&lt;li&gt;Byte and row counts come from Spark's own stats tracker, so they are correct on HDFS.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;The native writer currently handles non-partitioned, non-bucketed writes to local and HDFS paths, and declines
+writes when &lt;code&gt;spark.sql.files.maxRecordsPerFile&lt;/code&gt; is set. Enable it with &lt;code&gt;spark.comet.parquet.write.enabled=true&lt;/code&gt;
+and &lt;code&gt;spark.comet.operator.WriteFilesExec.allowIncompatible=true&lt;/code&gt;. Spark 3.4 and 3.5 keep the existing write path.&lt;/p&gt;
 &lt;p&gt;Thanks to &lt;a href="https://github.com/andygrove"&gt;@andygrove&lt;/a&gt; and &lt;a href="https://github.com/sunchao"&gt;@sunchao&lt;/a&gt; for this work, with reviews from &lt;a href="https://github.com/comphead"&gt;@comphead&lt;/a&gt;, &lt;a href="https://github.com/peterxcli"&gt;@peterxcli&lt;/a&gt;,
 &lt;a href="https://github.com/rich7420"&gt;@rich7420&lt;/a&gt;, and &lt;a href="https://github.com/parthchandra"&gt;@parthchandra&lt;/a&gt;. Related PRs: &lt;a href="https://github.com/apache/datafusion-comet/pull/5763"&gt;#5763&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/5369"&gt;#5369&lt;/a&gt;.&lt;/p&gt;
 &lt;h2 id="remote-shuffle-with-celeborn"&gt;Remote Shuffle with Celeborn&lt;a class="headerlink" href="#remote-shuffle-with-celeborn" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
