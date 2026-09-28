@@ -423,9 +423,6 @@ Thanks to the contributors who drove this work, especially [@peterxcli], [@dwsmi
 - **Native dynamic filter pushdown** from hash joins into Parquet scans.
 - **Adaptive partial aggregation** is enabled for eligible native shuffle plans.
 - **Parsed plan data is cached across the tasks of a stage**, avoiding repeated deserialization work.
-- **Native scans no longer busy-poll** while waiting on native I/O. In 1.0.0, a Parquet or Iceberg scan reading
-  from S3 or HDFS could spin its executor thread at 100% CPU for the whole read, for example on the probe side
-  of a broadcast hash join. The scan loop now parks until the I/O completes.
 - **Native Parquet scan I/O and read-amplification metrics** are exposed.
 
 ### Expression Kernels
@@ -471,6 +468,64 @@ workload Comet would accelerate, and why anything falls back, without running an
 
 Thanks to [@andygrove] for this feature, with reviews from [@coderfender] and [@sunchao]. Related PRs:
 [#5394].
+
+## Correctness Fixes
+
+1.1.0 fixes a long list of cases where Comet returned different results from Spark, failed where Spark
+succeeds, or accepted input that Spark rejects. The Iceberg residual and memory pool fixes are described
+above. These are the others most likely to affect 1.0.0 users. The [change log] has the full list.
+
+### Wrong results
+
+- Decimal `SUM` returned NULL, or raised an overflow error under ANSI, when an intermediate sum overflowed
+  but the final result fit ([#6041], [@dwsmith1983]).
+- After a late shuffle fallback, `avg` could return NULL and `collect_list` / `collect_set` could produce
+  mismatched buffers ([#5421], [@sunchao]).
+- Exchange reuse could share one shuffle between plans that differ, such as `COUNT(*) + 1` and `COUNT(*) - 1`,
+  semi and anti joins, or `explode` and `explode_outer` ([#5470], [@sunchao] and [#5828], [@ErikBPF]).
+- Two ABFS containers in the same storage account shared a cached object store, so a read could return the
+  other container's data ([#5053], [@peterxcli]).
+- Dictionary-encoded values hashed differently from the same values decoded, and a null struct hashed its
+  fields, which affected joins, aggregates and shuffle partitioning ([#5757] and [#5754], [@viirya]).
+- Parquet field names containing non-ASCII characters that differ only in case read as NULL ([#5602],
+  [@comphead]).
+- `IN`, `InSet`, nested `=`, `arrays_overlap` and `array_position` now treat `-0.0` and `0.0`, and every NaN
+  encoding, as Spark does ([#6073], [@mizulun], [#5235], [@divyankshah] and [#5472], [@sunchao]).
+- Decimal to double and float casts were off by one unit in the last place for most `DECIMAL(38,18)` values
+  ([#5684], [@peterxcli]).
+- String to timestamp casts now follow Spark's parsing rules for short fields, time zones and signed years
+  ([#5682] and [#5858], [@peterxcli]).
+
+### Errors Spark raises that Comet did not
+
+- Casts and expressions routed through codegen dispatch could skip ANSI errors raised inside a constant
+  subexpression ([#5623], [@andygrove]).
+- Rejected `TIMESTAMP_NTZ` casts returned NULL under ANSI instead of raising `CAST_INVALID_INPUT` ([#5752],
+  [@peterxcli]).
+- Out-of-range Parquet `TIMESTAMP_MILLIS` values, top-level or nested, silently wrapped ([#5177] and [#5740],
+  [@peterxcli]).
+- Nested Parquet struct, list and map fields now follow Spark's conversion rules instead of returning NULL on
+  overflow or accepting values Spark rejects ([#5681], [@peterxcli]).
+
+### Query failures and crashes
+
+- `collect_list` and `collect_set` over nested arguments failed with "column types must match schema types"
+  ([#5159], [@andygrove]).
+- Native shuffle failed with a 2 GB task serialization error on jobs with very many partitions ([#5392],
+  [@parthchandra]).
+- A Scala UDF from a user jar failed with a `ClassCastException` ([#5282], [@andygrove]).
+- `rpad` and `lpad` panicked on a NULL length ([#5680], [@peterxcli]).
+- Structs with duplicate field names failed the task in native shuffle, and panicked in the native Parquet
+  scan ([#5866], [@dwsmith1983] and [#5786], [@ErikBPF]).
+
+### Hangs and resource use
+
+- The JVM hung on exit when an application returned from `main` without calling `spark.stop()` ([#5748],
+  [@zhangfengcdt]).
+- The native scan busy-polled while waiting on S3 or HDFS reads, keeping one core per task at 100% ([#6219],
+  [@mixermt] and [@andygrove]).
+- One task could force-spill another task's shuffle buffers, and a failed shuffle write leaked its memory
+  reservation ([#5493] and [#5461], [@peterxcli]).
 
 ## Upgrading to 1.1.0
 
@@ -578,6 +633,10 @@ to get up and running, then point Comet at your existing Spark workloads and see
 [@ziting-openai]: https://github.com/ziting-openai
 [@dwsmith1983]: https://github.com/dwsmith1983
 [@coderfender]: https://github.com/coderfender
+[@viirya]: https://github.com/viirya
+[@mizulun]: https://github.com/mizulun
+[@divyankshah]: https://github.com/divyankshah
+[@mixermt]: https://github.com/mixermt
 
 [#4658]: https://github.com/apache/datafusion-comet/pull/4658
 [#5298]: https://github.com/apache/datafusion-comet/pull/5298
@@ -595,13 +654,13 @@ to get up and running, then point Comet at your existing Spark workloads and see
 [#5638]: https://github.com/apache/datafusion-comet/pull/5638
 [#6027]: https://github.com/apache/datafusion-comet/pull/6027
 [#6154]: https://github.com/apache/datafusion-comet/pull/6154
-[#5763]: https://github.com/apache/datafusion-comet/pull/5763
-[#5369]: https://github.com/apache/datafusion-comet/pull/5369
 [#5473]: https://github.com/apache/datafusion-comet/pull/5473
 [#5481]: https://github.com/apache/datafusion-comet/pull/5481
 [#5513]: https://github.com/apache/datafusion-comet/pull/5513
 [#5531]: https://github.com/apache/datafusion-comet/pull/5531
 [#5537]: https://github.com/apache/datafusion-comet/pull/5537
+[#5763]: https://github.com/apache/datafusion-comet/pull/5763
+[#5369]: https://github.com/apache/datafusion-comet/pull/5369
 [#6023]: https://github.com/apache/datafusion-comet/pull/6023
 [#6025]: https://github.com/apache/datafusion-comet/pull/6025
 [#6031]: https://github.com/apache/datafusion-comet/pull/6031
@@ -609,3 +668,32 @@ to get up and running, then point Comet at your existing Spark workloads and see
 [#5868]: https://github.com/apache/datafusion-comet/pull/5868
 [#5794]: https://github.com/apache/datafusion-comet/pull/5794
 [#5394]: https://github.com/apache/datafusion-comet/pull/5394
+[#6041]: https://github.com/apache/datafusion-comet/pull/6041
+[#5421]: https://github.com/apache/datafusion-comet/pull/5421
+[#5470]: https://github.com/apache/datafusion-comet/pull/5470
+[#5828]: https://github.com/apache/datafusion-comet/pull/5828
+[#5053]: https://github.com/apache/datafusion-comet/pull/5053
+[#5757]: https://github.com/apache/datafusion-comet/pull/5757
+[#5754]: https://github.com/apache/datafusion-comet/pull/5754
+[#5602]: https://github.com/apache/datafusion-comet/pull/5602
+[#6073]: https://github.com/apache/datafusion-comet/pull/6073
+[#5235]: https://github.com/apache/datafusion-comet/pull/5235
+[#5472]: https://github.com/apache/datafusion-comet/pull/5472
+[#5684]: https://github.com/apache/datafusion-comet/pull/5684
+[#5682]: https://github.com/apache/datafusion-comet/pull/5682
+[#5858]: https://github.com/apache/datafusion-comet/pull/5858
+[#5623]: https://github.com/apache/datafusion-comet/pull/5623
+[#5752]: https://github.com/apache/datafusion-comet/pull/5752
+[#5177]: https://github.com/apache/datafusion-comet/pull/5177
+[#5740]: https://github.com/apache/datafusion-comet/pull/5740
+[#5681]: https://github.com/apache/datafusion-comet/pull/5681
+[#5159]: https://github.com/apache/datafusion-comet/pull/5159
+[#5392]: https://github.com/apache/datafusion-comet/pull/5392
+[#5282]: https://github.com/apache/datafusion-comet/pull/5282
+[#5680]: https://github.com/apache/datafusion-comet/pull/5680
+[#5866]: https://github.com/apache/datafusion-comet/pull/5866
+[#5786]: https://github.com/apache/datafusion-comet/pull/5786
+[#5748]: https://github.com/apache/datafusion-comet/pull/5748
+[#6219]: https://github.com/apache/datafusion-comet/pull/6219
+[#5493]: https://github.com/apache/datafusion-comet/pull/5493
+[#5461]: https://github.com/apache/datafusion-comet/pull/5461
