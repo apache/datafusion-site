@@ -43,10 +43,10 @@ The highlights of this release are:
   iceberg-java.
 - **Memory management**: Comet can now measure the native memory its pools never see, reports it on every
   executor, and fixes several long-standing bugs in how its pools account for what they do see.
+- **Native shuffle over Apache Celeborn**: Comet's native shuffle can now run over Celeborn remote shuffle, for
+  Celeborn clients that provide a safe push-completion API.
 - **Native Parquet writes on Spark 4.0+** (experimental): Comet now plugs into Spark's own write path, so Spark
   keeps ownership of the commit protocol and job commit.
-- **Native shuffle over Apache Celeborn**: applications that use Celeborn for remote shuffle can now run
-  Comet's native shuffle through it, instead of using ordinary Spark shuffle for every exchange.
 
 ## Native Iceberg Writes (Experimental)
 
@@ -322,6 +322,25 @@ Thanks to [@mbutrovich] for deletion vector support, [@parthchandra] for the sca
 null-check fix, and [@andygrove] for the native system functions and residual fix, with reviews from
 [@sunchao], [@rich7420], [@unikdahal], and [@jordepic]. Related PRs: [#5853], [#5638], [#6027], [#6154].
 
+## Remote Shuffle with Celeborn
+
+Applications using Apache Celeborn can now use Comet's composite shuffle manager to run Comet's **native**
+shuffle over Celeborn, where 1.0.0 retained ordinary Spark/Celeborn shuffle for every exchange. Map-side
+tasks push Comet's Arrow frames directly to Celeborn, and the reduce side reads them back through a native
+shuffle reader.
+
+Native shuffle over Celeborn requires an explicit `spark.comet.shuffle.mode=native`; the default `auto` mode
+retains ordinary Spark/Celeborn shuffle. It also requires a Celeborn client that provides a safe
+push-completion API — released 0.6.0 and 0.7.0 clients do not, and those versions retain ordinary shuffle even
+in native mode. Native RSS does not support `spark.io.encryption.enabled=true`. Celeborn is an optional
+application dependency and is not bundled with Comet. See the [Celeborn section of the tuning guide] for the
+full set of requirements and the frame-size and in-flight-bytes knobs.
+
+Thanks to [@pingzh] for this work, with reviews from [@sunchao], [@ziting-openai], and [@andygrove]. Related
+PRs: [#5473], [#5481], [#5513], [#5531], [#5537].
+
+[Celeborn section of the tuning guide]: https://datafusion.apache.org/comet/user-guide/latest/tuning/celeborn.html
+
 ## Native Parquet Writes on Spark 4.0+ (Experimental)
 
 Separately from Iceberg, 1.1.0 changes how native Parquet writes plug into Spark on Spark 4.0 and later. The
@@ -344,25 +363,6 @@ and `spark.comet.operator.WriteFilesExec.allowIncompatible=true`. Spark 3.4 and 
 
 Thanks to [@andygrove] and [@sunchao] for this work, with reviews from [@comphead], [@peterxcli],
 [@rich7420], and [@parthchandra]. Related PRs: [#5763], [#5369].
-
-## Remote Shuffle with Celeborn
-
-Applications using Apache Celeborn can now use Comet's composite shuffle manager to run Comet's **native**
-shuffle over Celeborn, where 1.0.0 retained ordinary Spark/Celeborn shuffle for every exchange. Map-side
-tasks push Comet's Arrow frames directly to Celeborn, and the reduce side reads them back through a native
-shuffle reader.
-
-Native shuffle over Celeborn requires an explicit `spark.comet.shuffle.mode=native`; the default `auto` mode
-retains ordinary Spark/Celeborn shuffle. It also requires a Celeborn client that provides a safe
-push-completion API — released 0.6.0 and 0.7.0 clients do not, and those versions retain ordinary shuffle even
-in native mode. Native RSS does not support `spark.io.encryption.enabled=true`. Celeborn is an optional
-application dependency and is not bundled with Comet. See the [Celeborn section of the tuning guide] for the
-full set of requirements and the frame-size and in-flight-bytes knobs.
-
-Thanks to [@pingzh] for this work, with reviews from [@sunchao], [@ziting-openai], and [@andygrove]. Related
-PRs: [#5473], [#5481], [#5513], [#5531], [#5537].
-
-[Celeborn section of the tuning guide]: https://datafusion.apache.org/comet/user-guide/latest/tuning/celeborn.html
 
 ## S3 Credentials
 
