@@ -354,9 +354,6 @@ per-location credentials, and &lt;a href="https://github.com/comphead"&gt;@comph
 &lt;li&gt;&lt;strong&gt;Native dynamic filter pushdown&lt;/strong&gt; from hash joins into Parquet scans.&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;Adaptive partial aggregation&lt;/strong&gt; is enabled for eligible native shuffle plans.&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;Parsed plan data is cached across the tasks of a stage&lt;/strong&gt;, avoiding repeated deserialization work.&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;Native scans no longer busy-poll&lt;/strong&gt; while waiting on native I/O. In 1.0.0, a Parquet or Iceberg scan reading
-  from S3 or HDFS could spin its executor thread at 100% CPU for the whole read, for example on the probe side
-  of a broadcast hash join. The scan loop now parks until the I/O completes.&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;Native Parquet scan I/O and read-amplification metrics&lt;/strong&gt; are exposed.&lt;/li&gt;
 &lt;/ul&gt;
 &lt;h3 id="expression-kernels"&gt;Expression Kernels&lt;a class="headerlink" href="#expression-kernels" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
@@ -393,6 +390,62 @@ driver log, and then lets Spark run the query unchanged. This makes it possible 
 workload Comet would accelerate, and why anything falls back, without running any of it through Comet.&lt;/p&gt;
 &lt;p&gt;Thanks to &lt;a href="https://github.com/andygrove"&gt;@andygrove&lt;/a&gt; for this feature, with reviews from &lt;a href="https://github.com/coderfender"&gt;@coderfender&lt;/a&gt; and &lt;a href="https://github.com/sunchao"&gt;@sunchao&lt;/a&gt;. Related PRs:
 &lt;a href="https://github.com/apache/datafusion-comet/pull/5394"&gt;#5394&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id="correctness-fixes"&gt;Correctness Fixes&lt;a class="headerlink" href="#correctness-fixes" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;1.1.0 fixes a long list of cases where Comet returned different results from Spark, failed where Spark
+succeeds, or accepted input that Spark rejects. The Iceberg residual and memory pool fixes are described
+above. These are the others most likely to affect 1.0.0 users. The &lt;a href="https://github.com/apache/datafusion-comet/blob/branch-1.1/docs/source/changelog/1.1.0.md"&gt;change log&lt;/a&gt; has the full list.&lt;/p&gt;
+&lt;h3 id="wrong-results"&gt;Wrong results&lt;a class="headerlink" href="#wrong-results" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Decimal &lt;code&gt;SUM&lt;/code&gt; returned NULL, or raised an overflow error under ANSI, when an intermediate sum overflowed
+  but the final result fit (&lt;a href="https://github.com/apache/datafusion-comet/pull/6041"&gt;#6041&lt;/a&gt;, &lt;a href="https://github.com/dwsmith1983"&gt;@dwsmith1983&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;After a late shuffle fallback, &lt;code&gt;avg&lt;/code&gt; could return NULL and &lt;code&gt;collect_list&lt;/code&gt; / &lt;code&gt;collect_set&lt;/code&gt; could produce
+  mismatched buffers (&lt;a href="https://github.com/apache/datafusion-comet/pull/5421"&gt;#5421&lt;/a&gt;, &lt;a href="https://github.com/sunchao"&gt;@sunchao&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;Exchange reuse could share one shuffle between plans that differ, such as &lt;code&gt;COUNT(*) + 1&lt;/code&gt; and &lt;code&gt;COUNT(*) - 1&lt;/code&gt;,
+  semi and anti joins, or &lt;code&gt;explode&lt;/code&gt; and &lt;code&gt;explode_outer&lt;/code&gt; (&lt;a href="https://github.com/apache/datafusion-comet/pull/5470"&gt;#5470&lt;/a&gt;, &lt;a href="https://github.com/sunchao"&gt;@sunchao&lt;/a&gt; and &lt;a href="https://github.com/apache/datafusion-comet/pull/5828"&gt;#5828&lt;/a&gt;, &lt;a href="https://github.com/ErikBPF"&gt;@ErikBPF&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;Two ABFS containers in the same storage account shared a cached object store, so a read could return the
+  other container's data (&lt;a href="https://github.com/apache/datafusion-comet/pull/5053"&gt;#5053&lt;/a&gt;, &lt;a href="https://github.com/peterxcli"&gt;@peterxcli&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;Dictionary-encoded values hashed differently from the same values decoded, and a null struct hashed its
+  fields, which affected joins, aggregates and shuffle partitioning (&lt;a href="https://github.com/apache/datafusion-comet/pull/5757"&gt;#5757&lt;/a&gt; and &lt;a href="https://github.com/apache/datafusion-comet/pull/5754"&gt;#5754&lt;/a&gt;, &lt;a href="https://github.com/viirya"&gt;@viirya&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;Parquet field names containing non-ASCII characters that differ only in case read as NULL (&lt;a href="https://github.com/apache/datafusion-comet/pull/5602"&gt;#5602&lt;/a&gt;,
+  &lt;a href="https://github.com/comphead"&gt;@comphead&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;IN&lt;/code&gt;, &lt;code&gt;InSet&lt;/code&gt;, nested &lt;code&gt;=&lt;/code&gt;, &lt;code&gt;arrays_overlap&lt;/code&gt; and &lt;code&gt;array_position&lt;/code&gt; now treat &lt;code&gt;-0.0&lt;/code&gt; and &lt;code&gt;0.0&lt;/code&gt;, and every NaN
+  encoding, as Spark does (&lt;a href="https://github.com/apache/datafusion-comet/pull/6073"&gt;#6073&lt;/a&gt;, &lt;a href="https://github.com/mizulun"&gt;@mizulun&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/5235"&gt;#5235&lt;/a&gt;, &lt;a href="https://github.com/divyankshah"&gt;@divyankshah&lt;/a&gt; and &lt;a href="https://github.com/apache/datafusion-comet/pull/5472"&gt;#5472&lt;/a&gt;, &lt;a href="https://github.com/sunchao"&gt;@sunchao&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;Decimal to double and float casts were off by one unit in the last place for most &lt;code&gt;DECIMAL(38,18)&lt;/code&gt; values
+  (&lt;a href="https://github.com/apache/datafusion-comet/pull/5684"&gt;#5684&lt;/a&gt;, &lt;a href="https://github.com/peterxcli"&gt;@peterxcli&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;String to timestamp casts now follow Spark's parsing rules for short fields, time zones and signed years
+  (&lt;a href="https://github.com/apache/datafusion-comet/pull/5682"&gt;#5682&lt;/a&gt; and &lt;a href="https://github.com/apache/datafusion-comet/pull/5858"&gt;#5858&lt;/a&gt;, &lt;a href="https://github.com/peterxcli"&gt;@peterxcli&lt;/a&gt;).&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id="errors-spark-raises-that-comet-did-not"&gt;Errors Spark raises that Comet did not&lt;a class="headerlink" href="#errors-spark-raises-that-comet-did-not" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Casts and expressions routed through codegen dispatch could skip ANSI errors raised inside a constant
+  subexpression (&lt;a href="https://github.com/apache/datafusion-comet/pull/5623"&gt;#5623&lt;/a&gt;, &lt;a href="https://github.com/andygrove"&gt;@andygrove&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;Rejected &lt;code&gt;TIMESTAMP_NTZ&lt;/code&gt; casts returned NULL under ANSI instead of raising &lt;code&gt;CAST_INVALID_INPUT&lt;/code&gt; (&lt;a href="https://github.com/apache/datafusion-comet/pull/5752"&gt;#5752&lt;/a&gt;,
+  &lt;a href="https://github.com/peterxcli"&gt;@peterxcli&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;Out-of-range Parquet &lt;code&gt;TIMESTAMP_MILLIS&lt;/code&gt; values, top-level or nested, silently wrapped (&lt;a href="https://github.com/apache/datafusion-comet/pull/5177"&gt;#5177&lt;/a&gt; and &lt;a href="https://github.com/apache/datafusion-comet/pull/5740"&gt;#5740&lt;/a&gt;,
+  &lt;a href="https://github.com/peterxcli"&gt;@peterxcli&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;Nested Parquet struct, list and map fields now follow Spark's conversion rules instead of returning NULL on
+  overflow or accepting values Spark rejects (&lt;a href="https://github.com/apache/datafusion-comet/pull/5681"&gt;#5681&lt;/a&gt;, &lt;a href="https://github.com/peterxcli"&gt;@peterxcli&lt;/a&gt;).&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id="query-failures-and-crashes"&gt;Query failures and crashes&lt;a class="headerlink" href="#query-failures-and-crashes" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;collect_list&lt;/code&gt; and &lt;code&gt;collect_set&lt;/code&gt; over nested arguments failed with "column types must match schema types"
+  (&lt;a href="https://github.com/apache/datafusion-comet/pull/5159"&gt;#5159&lt;/a&gt;, &lt;a href="https://github.com/andygrove"&gt;@andygrove&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;Native shuffle failed with a 2 GB task serialization error on jobs with very many partitions (&lt;a href="https://github.com/apache/datafusion-comet/pull/5392"&gt;#5392&lt;/a&gt;,
+  &lt;a href="https://github.com/parthchandra"&gt;@parthchandra&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;A Scala UDF from a user jar failed with a &lt;code&gt;ClassCastException&lt;/code&gt; (&lt;a href="https://github.com/apache/datafusion-comet/pull/5282"&gt;#5282&lt;/a&gt;, &lt;a href="https://github.com/andygrove"&gt;@andygrove&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;rpad&lt;/code&gt; and &lt;code&gt;lpad&lt;/code&gt; panicked on a NULL length (&lt;a href="https://github.com/apache/datafusion-comet/pull/5680"&gt;#5680&lt;/a&gt;, &lt;a href="https://github.com/peterxcli"&gt;@peterxcli&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;Structs with duplicate field names failed the task in native shuffle, and panicked in the native Parquet
+  scan (&lt;a href="https://github.com/apache/datafusion-comet/pull/5866"&gt;#5866&lt;/a&gt;, &lt;a href="https://github.com/dwsmith1983"&gt;@dwsmith1983&lt;/a&gt; and &lt;a href="https://github.com/apache/datafusion-comet/pull/5786"&gt;#5786&lt;/a&gt;, &lt;a href="https://github.com/ErikBPF"&gt;@ErikBPF&lt;/a&gt;).&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id="hangs-and-resource-use"&gt;Hangs and resource use&lt;a class="headerlink" href="#hangs-and-resource-use" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;The JVM hung on exit when an application returned from &lt;code&gt;main&lt;/code&gt; without calling &lt;code&gt;spark.stop()&lt;/code&gt; (&lt;a href="https://github.com/apache/datafusion-comet/pull/5748"&gt;#5748&lt;/a&gt;,
+  &lt;a href="https://github.com/zhangfengcdt"&gt;@zhangfengcdt&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;The native scan busy-polled while waiting on S3 or HDFS reads, keeping one core per task at 100% (&lt;a href="https://github.com/apache/datafusion-comet/pull/6219"&gt;#6219&lt;/a&gt;,
+  &lt;a href="https://github.com/mixermt"&gt;@mixermt&lt;/a&gt; and &lt;a href="https://github.com/andygrove"&gt;@andygrove&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;One task could force-spill another task's shuffle buffers, and a failed shuffle write leaked its memory
+  reservation (&lt;a href="https://github.com/apache/datafusion-comet/pull/5493"&gt;#5493&lt;/a&gt; and &lt;a href="https://github.com/apache/datafusion-comet/pull/5461"&gt;#5461&lt;/a&gt;, &lt;a href="https://github.com/peterxcli"&gt;@peterxcli&lt;/a&gt;).&lt;/li&gt;
+&lt;/ul&gt;
 &lt;h2 id="upgrading-to-110"&gt;Upgrading to 1.1.0&lt;a class="headerlink" href="#upgrading-to-110" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;Comet 1.1.0 makes no behavior changes that need a &lt;code&gt;spark.comet.legacy.*&lt;/code&gt; key, but several changes can affect a
 deployment. The &lt;a href="https://datafusion.apache.org/comet/user-guide/latest/migration-guide.html"&gt;Comet Upgrade Guide&lt;/a&gt; describes each one in full.&lt;/p&gt;
