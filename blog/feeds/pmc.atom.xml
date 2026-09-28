@@ -43,8 +43,8 @@ limitations under the License.
 &lt;p&gt;The Apache DataFusion PMC is pleased to announce version 1.1.0 of the &lt;a href="https://datafusion.apache.org/comet/"&gt;Comet&lt;/a&gt; subproject.&lt;/p&gt;
 &lt;p&gt;Comet is an accelerator for Apache Spark that translates Spark physical plans to DataFusion physical plans for
 improved performance and efficiency without requiring any code changes.&lt;/p&gt;
-&lt;p&gt;This release covers roughly seven weeks of development since 1.0.0 and consists of 392 commits from 40
-contributors. See the &lt;a href="https://github.com/apache/datafusion-comet/blob/main/docs/source/changelog/1.1.0.md"&gt;change log&lt;/a&gt; for the full list of changes.&lt;/p&gt;
+&lt;p&gt;This release covers roughly seven weeks of development since 1.0.0 and consists of 398 commits from 40
+contributors. See the &lt;a href="https://github.com/apache/datafusion-comet/blob/branch-1.1/docs/source/changelog/1.1.0.md"&gt;change log&lt;/a&gt; for the full list of changes.&lt;/p&gt;
 &lt;p&gt;Two themes dominate this release. The first is &lt;strong&gt;native Iceberg writes&lt;/strong&gt;, an experimental feature that lets
 Comet write Iceberg data files through iceberg-rust instead of iceberg-java. The second is a thorough rework of
 &lt;strong&gt;memory management&lt;/strong&gt;: Comet can now measure the native memory its pools never see, reports it on every
@@ -149,7 +149,7 @@ on a non-production table and tell us what you find — feedback from real workl
 feature needs before it can lose the experimental label.&lt;/p&gt;
 &lt;p&gt;Thanks to &lt;a href="https://github.com/jordepic"&gt;@jordepic&lt;/a&gt; for designing and implementing the split-operator plan, write detection, and the native
 writer, and to &lt;a href="https://github.com/andygrove"&gt;@andygrove&lt;/a&gt; for the fidelity and failure-handling work, with contributions from
-&lt;a href="https://github.com/zhangfengcdt"&gt;@zhangfengcdt&lt;/a&gt;, &lt;a href="https://github.com/snmvaughan"&gt;@snmvaughan&lt;/a&gt;, and &lt;a href="https://github.com/0lai0"&gt;@0lai0&lt;/a&gt;, and reviews from &lt;a href="https://github.com/sunchao"&gt;@sunchao&lt;/a&gt;, &lt;a href="https://github.com/comphead"&gt;@comphead&lt;/a&gt;, &lt;a href="https://github.com/unikdahal"&gt;@unikdahal&lt;/a&gt;, and
+&lt;a href="https://github.com/zhangfengcdt"&gt;@zhangfengcdt&lt;/a&gt;, &lt;a href="https://github.com/snmvaughan"&gt;@snmvaughan&lt;/a&gt;, &lt;a href="https://github.com/liupoyi-1031"&gt;@liupoyi-1031&lt;/a&gt;, and &lt;a href="https://github.com/0lai0"&gt;@0lai0&lt;/a&gt;, and reviews from &lt;a href="https://github.com/sunchao"&gt;@sunchao&lt;/a&gt;, &lt;a href="https://github.com/comphead"&gt;@comphead&lt;/a&gt;, &lt;a href="https://github.com/unikdahal"&gt;@unikdahal&lt;/a&gt;, and
 &lt;a href="https://github.com/mbutrovich"&gt;@mbutrovich&lt;/a&gt;. Related PRs: &lt;a href="https://github.com/apache/datafusion-comet/pull/4658"&gt;#4658&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/5298"&gt;#5298&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/5361"&gt;#5361&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/5663"&gt;#5663&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/5780"&gt;#5780&lt;/a&gt;.&lt;/p&gt;
 &lt;h2 id="memory-management"&gt;Memory Management&lt;a class="headerlink" href="#memory-management" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;A recurring operational problem for Comet users has been executors killed by the cluster manager
@@ -222,6 +222,10 @@ local mode.&lt;/p&gt;
   it was written as a bare number of bytes. Every setting that native code reads is now resolved on the JVM
   before it crosses JNI, so each one takes effect as documented. See &lt;a href="#upgrading-to-110"&gt;Upgrading to 1.1.0&lt;/a&gt;
   for what that changes.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Spilling no longer floods the log.&lt;/strong&gt; A partial grant from Spark is how a native operator learns to spill,
+  but 1.0.0 logged a warning and dumped the task's memory usage on every one, so a spilling query could log
+  hundreds of them. Partial grants are now logged at DEBUG. The memory usage dump is removed entirely, because
+  it took a lock that could deadlock the task against a concurrent memory request.&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;Metrics.&lt;/strong&gt; Native memory usage is now reported to Spark, and native aggregate spill and memory metrics,
   native child spill metrics in shuffle tasks, and native operator spill metrics in non-shuffle stages all appear
   in Spark's task metrics.&lt;/li&gt;
@@ -279,6 +283,33 @@ application dependency and is not bundled with Comet. See the &lt;a href="https:
 full set of requirements and the frame-size and in-flight-bytes knobs.&lt;/p&gt;
 &lt;p&gt;Thanks to &lt;a href="https://github.com/pingzh"&gt;@pingzh&lt;/a&gt; for this work, with reviews from &lt;a href="https://github.com/sunchao"&gt;@sunchao&lt;/a&gt;, &lt;a href="https://github.com/ziting-openai"&gt;@ziting-openai&lt;/a&gt;, and &lt;a href="https://github.com/andygrove"&gt;@andygrove&lt;/a&gt;. Related
 PRs: &lt;a href="https://github.com/apache/datafusion-comet/pull/5473"&gt;#5473&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/5481"&gt;#5481&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/5513"&gt;#5513&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/5531"&gt;#5531&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/5537"&gt;#5537&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id="s3-credentials"&gt;S3 Credentials&lt;a class="headerlink" href="#s3-credentials" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Several changes make Comet's native S3 access work with more of the credential setups that Spark already
+supports:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Built-in credential provider adapters.&lt;/strong&gt; In 1.0.0, a native Parquet scan failed with
+  &lt;code&gt;Unsupported credential provider&lt;/code&gt; when &lt;code&gt;fs.s3a.aws.credentials.provider&lt;/code&gt; named a class that Spark accepts but
+  Comet's native reader does not reimplement, such as &lt;code&gt;DefaultAWSCredentialsProviderChain&lt;/code&gt;. Comet now ships two
+  adapters that fix this with a one-line change. &lt;code&gt;HadoopS3ACredentialProviderAdapter&lt;/code&gt;, the recommended one,
+  delegates to Hadoop S3A's own provider construction, so it accepts everything the S3A chain accepts,
+  including web-identity, assumed-role, and per-bucket configuration. &lt;code&gt;AwsSdkCredentialProviderAdapter&lt;/code&gt; wraps a
+  specific AWS SDK credential provider class.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;STS throttling protection on EKS with IRSA.&lt;/strong&gt; Under a large concurrent startup, STS can throttle the
+  &lt;code&gt;AssumeRoleWithWebIdentity&lt;/code&gt; call. In 1.0.0, the native Iceberg path did not retry the throttle and fell
+  through to the EKS node role, which usually cannot read the bucket, so the job failed with a flood of &lt;code&gt;403&lt;/code&gt;
+  errors. When Comet detects IRSA and no explicit credentials are configured, native Iceberg reads and writes
+  now resolve web-identity credentials themselves: the call is retried with backoff and jitter, never falls back
+  to the node role, and one credential is cached per executor rather than fetched per thread. This is on by
+  default and needs no configuration.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Per-location credentials.&lt;/strong&gt; A credential provider implementing &lt;code&gt;CometS3LocationScopedCredentialProvider&lt;/code&gt;
+  can supply different credentials for different prefixes within one bucket, for example one policy for
+  &lt;code&gt;warehouse/sales&lt;/code&gt; and another for &lt;code&gt;warehouse/finance&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;S3-compliant filesystems&lt;/strong&gt; are now supported by the native reader.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;See the &lt;a href="https://datafusion.apache.org/comet/user-guide/latest/s3-credential-providers.html"&gt;S3 credential providers guide&lt;/a&gt; for configuration details.&lt;/p&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/parthchandra"&gt;@parthchandra&lt;/a&gt; for the credential adapters and STS throttling protection, &lt;a href="https://github.com/snmvaughan"&gt;@snmvaughan&lt;/a&gt; for
+per-location credentials, and &lt;a href="https://github.com/comphead"&gt;@comphead&lt;/a&gt; for S3-compliant filesystem support, with reviews from &lt;a href="https://github.com/sunchao"&gt;@sunchao&lt;/a&gt; and
+&lt;a href="https://github.com/andygrove"&gt;@andygrove&lt;/a&gt;. Related PRs: &lt;a href="https://github.com/apache/datafusion-comet/pull/6023"&gt;#6023&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/6025"&gt;#6025&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/6031"&gt;#6031&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/5314"&gt;#5314&lt;/a&gt;.&lt;/p&gt;
 &lt;h2 id="performance"&gt;Performance&lt;a class="headerlink" href="#performance" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;h3 id="shuffle"&gt;Shuffle&lt;a class="headerlink" href="#shuffle" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;Several changes target shuffle, which dominates many TPC-DS-shaped workloads:&lt;/p&gt;
@@ -334,10 +365,8 @@ and &lt;code&gt;VariantType&lt;/code&gt; identity carried through schema seriali
 &lt;p&gt;Thanks to &lt;a href="https://github.com/peterxcli"&gt;@peterxcli&lt;/a&gt; for driving Variant support, with reviews from &lt;a href="https://github.com/sunchao"&gt;@sunchao&lt;/a&gt;. Related PRs: &lt;a href="https://github.com/apache/datafusion-comet/pull/5868"&gt;#5868&lt;/a&gt;,
 &lt;a href="https://github.com/apache/datafusion-comet/pull/5794"&gt;#5794&lt;/a&gt;.&lt;/p&gt;
 &lt;p&gt;This release also adds &lt;strong&gt;experimental native support for an in-memory cache&lt;/strong&gt;
-(&lt;code&gt;spark.comet.exec.inMemoryCache.enabled&lt;/code&gt;, disabled by default), support for &lt;strong&gt;S3-compliant filesystems&lt;/strong&gt;,
-&lt;strong&gt;per-location S3 credentials&lt;/strong&gt;, so that a credential provider implementing
-&lt;code&gt;CometS3LocationScopedCredentialProvider&lt;/code&gt; can supply different credentials for different prefixes within one
-bucket, and build gates for contrib &lt;strong&gt;Delta&lt;/strong&gt; and &lt;strong&gt;Lance&lt;/strong&gt; scans.&lt;/p&gt;
+(&lt;code&gt;spark.comet.exec.inMemoryCache.enabled&lt;/code&gt;, disabled by default) and build gates for contrib &lt;strong&gt;Delta&lt;/strong&gt; and
+&lt;strong&gt;Lance&lt;/strong&gt; scans.&lt;/p&gt;
 &lt;h2 id="previewing-comet-plans"&gt;Previewing Comet Plans&lt;a class="headerlink" href="#previewing-comet-plans" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;A new &lt;code&gt;spark.comet.explain.planOnly.enabled&lt;/code&gt; setting builds the plan Comet would have executed, logs it to the
 driver log, and then lets Spark run the query unchanged. This makes it possible to see how much of a production
