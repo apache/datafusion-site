@@ -56,24 +56,19 @@ disabled by default**, and it only engages under fairly strict conditions.
 ### Splitting the write operator
 
 Spark writes an Iceberg table with a single operator that writes the data files, writes the metadata, commits,
-and validates against the catalog. Adaptive Query Execution (AQE) re-plans the query feeding that operator, but
-the operator itself sits outside AQE, so the file writing can't adapt to how its input actually ran. And because
-file writing is bundled with the metadata and commit steps, there is no separate piece for Comet to take over.
+and validates against the catalog. Because file writing is bundled with the metadata and commit steps, there was
+no separate piece for Comet to replace.
 
 Setting `spark.comet.write.iceberg.splitOperator.enabled=true` splits eligible Iceberg writes into two operators:
 
-1. **`IcebergWrite`** writes data files on the executors and returns each task's commit message. When AQE is
-   enabled, as it is by default, it runs inside AQE along with the query feeding it. The split also works with
-   AQE disabled.
-2. **`IcebergCommit`** collects the commit messages on the driver and performs the normal Iceberg commit, once,
-   outside AQE.
+1. **`IcebergWrite`** writes data files on the executors and returns each task's commit message.
+2. **`IcebergCommit`** collects the commit messages on the driver and performs the normal Iceberg commit, once.
 
-On its own, the split doesn't change who writes the files; that's still iceberg-java. It moves file writing inside
-AQE and separates it from the commit, which gives the native writer a place to plug in. It covers `INSERT INTO`
-and DataFrame `append`, static and dynamic `INSERT OVERWRITE`, and copy-on-write `DELETE`, `UPDATE`, and `MERGE`,
-on every supported Spark version. Merge-on-read writes are left alone. When Comet can't split a write (an
-unrecognized write class, CTAS on Spark 3.4, or a write that needs Spark's commit coordinator), it plans the write
-exactly as if Comet weren't there.
+With only the split enabled, iceberg-java still writes the files; the native writer, described next, replaces
+that step. The split covers `INSERT INTO` and DataFrame `append`, static and dynamic `INSERT OVERWRITE`, and
+copy-on-write `DELETE`, `UPDATE`, and `MERGE`, on every supported Spark version. Merge-on-read writes are left
+alone. When Comet can't split a write (an unrecognized write class, CTAS on Spark 3.4, or a write that needs
+Spark's commit coordinator), it plans the write exactly as if Comet weren't there.
 
 ### Writing Parquet natively
 
@@ -95,10 +90,10 @@ To see which path a write took, check the physical plan: a native write shows `C
 
 ### Matching iceberg-java
 
-The goal is the table iceberg-java would have written, not just a valid one. Manifest metrics drive pruning for
-every future reader, so rather than trust the native writer's numbers, Comet recomputes them with iceberg-java's
-own code. Parity tests write the same rows through both writers and compare the committed counts and bounds. The
-cost is one small footer read per file.
+The native writer aims to write the same table iceberg-java would, down to the metadata. Manifest metrics drive
+pruning for every future reader, so rather than trust the native writer's numbers, Comet recomputes them with
+iceberg-java's own code. Parity tests write the same rows through both writers and compare the committed counts
+and bounds. The cost is one small footer read per file.
 
 Eligibility is an allowlist. A write goes native only if its whole configuration matches the documented set of
 supported settings. Anything else, including properties added by future Iceberg versions, falls back to
