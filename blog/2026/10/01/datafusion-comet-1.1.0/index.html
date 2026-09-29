@@ -1,0 +1,603 @@
+<!doctype html>
+<html class="no-js" lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apache DataFusion Comet 1.1.0 Release - Apache DataFusion Blog</title>
+<link href="/blog/favicon.ico" rel="icon" type="image/x-icon">
+<link href="/blog/favicon.ico" rel="shortcut icon" type="image/x-icon">
+<link href="/blog/css/bootstrap.min.css" rel="stylesheet">
+<link href="/blog/css/fontawesome.all.min.css" rel="stylesheet">
+<link href="/blog/css/headerlink.css" rel="stylesheet">
+<link href="/blog/highlight/default.min.css" rel="stylesheet">
+<link href="/blog/css/app.css" rel="stylesheet">
+<link href="/blog/css/dark-mode.css" rel="stylesheet">
+<script src="/blog/js/dark-mode.js"></script>
+<script src="/blog/highlight/highlight.js"></script>
+<script>hljs.highlightAll();</script>  </head>
+  <body class="d-flex flex-column h-100">
+  <main class="flex-shrink-0">
+<!-- nav bar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark" aria-label="Fifth navbar example">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/blog/"><img src="/blog/images/logo_original4x.png" style="height: 32px;"/> Apache DataFusion Blog</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarADP" aria-controls="navbarADP" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarADP">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/about.html">About</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/feed.xml">RSS</a>
+                </li>
+            </ul>
+            <button id="dark-mode-toggle" type="button" class="dark-mode-toggle" aria-label="Toggle dark mode" aria-pressed="false" title="Toggle dark mode">
+                <span class="sun-icon" aria-hidden="true">☀</span>
+                <span class="moon-icon" aria-hidden="true">☾</span>
+            </button>
+        </div>
+    </div>
+</nav>    
+<!-- article contents -->
+<div id="contents">
+  <div class="bg-white p-4 p-md-5 rounded">
+    <div class="row justify-content-center">
+      <div class="col-12 col-md-8 main-content">
+        <h1>
+          Apache DataFusion Comet 1.1.0 Release
+        </h1>
+        <p>Posted on: Thu 01 October 2026 by pmc</p>
+
+        <aside class="toc-container d-md-none mb-2">
+          <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#native-iceberg-writes-experimental">Native Iceberg Writes (Experimental)</a><ul>
+<li><a href="#splitting-the-write-operator">Splitting the write operator</a></li>
+<li><a href="#writing-parquet-natively">Writing Parquet natively</a></li>
+<li><a href="#matching-iceberg-java">Matching iceberg-java</a></li>
+<li><a href="#failure-handling">Failure handling</a></li>
+<li><a href="#known-differences">Known differences</a></li>
+</ul>
+</li>
+<li><a href="#memory-management">Memory Management</a><ul>
+<li><a href="#where-the-memory-goes">Where the memory goes</a></li>
+<li><a href="#measuring-it">Measuring it</a></li>
+<li><a href="#memory-pool-fixes">Memory pool fixes</a></li>
+<li><a href="#on-heap-mode">On-heap mode</a></li>
+</ul>
+</li>
+<li><a href="#more-iceberg-improvements">More Iceberg Improvements</a></li>
+<li><a href="#remote-shuffle-with-celeborn">Remote Shuffle with Celeborn</a></li>
+<li><a href="#native-parquet-writes-on-spark-40-experimental">Native Parquet Writes on Spark 4.0+ (Experimental)</a></li>
+<li><a href="#s3-credentials">S3 Credentials</a></li>
+<li><a href="#performance">Performance</a><ul>
+<li><a href="#shuffle">Shuffle</a></li>
+<li><a href="#planning-and-execution">Planning and Execution</a></li>
+<li><a href="#expressions">Expressions</a></li>
+</ul>
+</li>
+<li><a href="#expanded-coverage">Expanded Coverage</a></li>
+<li><a href="#previewing-comet-plans">Previewing Comet Plans</a></li>
+<li><a href="#correctness-fixes">Correctness Fixes</a><ul>
+<li><a href="#wrong-results">Wrong results</a></li>
+<li><a href="#errors-spark-raises-that-comet-did-not">Errors Spark raises that Comet did not</a></li>
+<li><a href="#query-failures-and-crashes">Query failures and crashes</a></li>
+<li><a href="#hangs-and-resource-use">Hangs and resource use</a></li>
+</ul>
+</li>
+<li><a href="#upgrading-to-110">Upgrading to 1.1.0</a><ul>
+<li><a href="#platform">Platform</a></li>
+<li><a href="#size-settings-now-read-correctly">Size settings now read correctly</a></li>
+<li><a href="#more-memory-before-spilling">More memory before spilling</a></li>
+<li><a href="#conditions-for-enabling-comet">Conditions for enabling Comet</a></li>
+<li><a href="#deprecated-and-removed-settings">Deprecated and removed settings</a></li>
+</ul>
+</li>
+<li><a href="#compatibility">Compatibility</a></li>
+<li><a href="#get-started-with-comet-110">Get Started with Comet 1.1.0</a></li>
+</ul>
+</div>
+        </aside>
+
+        <!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+-->
+
+<p>The Apache DataFusion PMC is pleased to announce version 1.1.0 of the <a href="https://datafusion.apache.org/comet/">Comet</a> subproject.</p>
+<p>Comet is an accelerator for Apache Spark that translates Spark physical plans to DataFusion physical plans for
+improved performance and efficiency without requiring any code changes.</p>
+<p>This release covers roughly seven weeks of development since 1.0.0: 398 commits from 40 contributors. See the
+<a href="https://github.com/apache/datafusion-comet/blob/branch-1.1/docs/source/changelog/1.1.0.md">change log</a> for the full list of changes.</p>
+<p>The highlights:</p>
+<ul>
+<li><strong>Native Iceberg writes</strong> (experimental): Comet can write Iceberg data files with iceberg-rust instead of
+  iceberg-java.</li>
+<li><strong>Memory management</strong>: Comet now measures the native memory its pools don't track, logs it on every executor,
+  and fixes several long-standing pool accounting bugs.</li>
+<li><strong>Native shuffle over Apache Celeborn</strong>, for Celeborn clients that provide a safe push-completion API.</li>
+<li><strong>Native Parquet writes on Spark 4.0+</strong> (experimental), now built on Spark's own write path.</li>
+</ul>
+<h2 id="native-iceberg-writes-experimental">Native Iceberg Writes (Experimental)<a class="headerlink" href="#native-iceberg-writes-experimental" title="Permanent link">¶</a></h2>
+<p>Until now, Comet accelerated Iceberg reads but left writes to the JVM. In 1.1.0, Comet can write Iceberg data
+files natively using <a href="https://github.com/apache/iceberg-rust">iceberg-rust</a>. The feature is <strong>experimental and
+disabled by default</strong>, and it only engages under fairly strict conditions.</p>
+<h3 id="splitting-the-write-operator">Splitting the write operator<a class="headerlink" href="#splitting-the-write-operator" title="Permanent link">¶</a></h3>
+<p>Spark writes an Iceberg table with a single operator that writes the data files, writes the metadata, commits,
+and validates against the catalog. That operator sits outside Adaptive Query Execution (AQE), so the query
+feeding it can't be re-planned at runtime, and Comet can't see into it.</p>
+<p>Setting <code>spark.comet.write.iceberg.splitOperator.enabled=true</code> splits eligible writes into two operators:</p>
+<ol>
+<li><strong><code>IcebergWrite</code></strong> writes data files on the executors and returns each task's commit message. It runs inside
+   AQE, along with the query feeding it.</li>
+<li><strong><code>IcebergCommit</code></strong> collects the commit messages on the driver and performs the normal Iceberg commit, once,
+   outside AQE.</li>
+</ol>
+<p>On its own, the split doesn't change who writes the files; that's still iceberg-java. It makes the write's input
+visible to AQE and to Comet, and gives the native writer a place to plug in. It covers <code>INSERT INTO</code> and
+DataFrame <code>append</code>, static and dynamic <code>INSERT OVERWRITE</code>, and copy-on-write <code>DELETE</code>, <code>UPDATE</code>, and <code>MERGE</code>, on
+every supported Spark version. Merge-on-read writes are left alone. When Comet can't split a write (an
+unrecognized write class, CTAS on Spark 3.4, or a write that needs Spark's commit coordinator), it plans the
+write exactly as if Comet weren't there.</p>
+<h3 id="writing-parquet-natively">Writing Parquet natively<a class="headerlink" href="#writing-parquet-natively" title="Permanent link">¶</a></h3>
+<p>Also setting <code>spark.comet.iceberg.write.enabled=true</code> hands each task's Parquet writing to iceberg-rust. The
+driver passes the native writer everything it needs: schema, partition spec, data location, Parquet settings,
+writer mode, and object-store configuration. Each task writes its files and returns their metadata as an
+in-memory Iceberg manifest.</p>
+<p>From there, iceberg-java takes over again. The JVM reads the manifest, recomputes each file's metrics from its
+Parquet footer, and builds the same commit message the JVM writer would have produced. Snapshots, manifest
+lists, commit validation, and retries all work as before.</p>
+<p>The native writer consumes Arrow batches from a Comet operator, so the query feeding the write must run in Comet
+too. Writes from a local relation, such as <code>INSERT ... VALUES</code>, also need
+<code>spark.comet.exec.localTableScan.enabled=true</code>.</p>
+<p>To see which path a write took, check the physical plan: a native write shows <code>CometIcebergWrite</code> under
+<code>IcebergCommit</code>, and a write that fell back shows <code>IcebergWrite</code>.</p>
+<h3 id="matching-iceberg-java">Matching iceberg-java<a class="headerlink" href="#matching-iceberg-java" title="Permanent link">¶</a></h3>
+<p>The goal is the table iceberg-java would have written, not just a valid one. Manifest metrics drive pruning for
+every future reader, so rather than trust the native writer's numbers, Comet recomputes them with iceberg-java's
+own code. Parity tests write the same rows through both writers and compare the committed counts and bounds. The
+cost is one small footer read per file.</p>
+<p>Eligibility is an allowlist. A write goes native only if its whole configuration matches the documented set of
+supported settings. Anything else, including properties added by future Iceberg versions, falls back to
+iceberg-java and reports why in Comet's extended <code>EXPLAIN</code> output. Encryption, object-storage layout, custom
+location providers, bloom filters, and unrecognized <code>parquet.*</code> properties all fall back. For a partitioned
+table, the distribution and sort Iceberg requests on its partition transforms must also run natively, which
+works because Iceberg's system functions now have native implementations (see below).</p>
+<p>Comet decides all of this at planning time, including checking that every iceberg-java class it relies on is
+where it expects. An Iceberg release that moves one falls back instead of failing tasks mid-write. CI also runs
+Apache Iceberg's own Spark test suites, for Iceberg 1.8.1 through 1.11.0, with the native writer enabled.</p>
+<h3 id="failure-handling">Failure handling<a class="headerlink" href="#failure-handling" title="Permanent link">¶</a></h3>
+<p>Only successful tasks' commit messages are committed. A failed task deletes the files it wrote, as iceberg-java
+does, and a failed job commits nothing and deletes the completed tasks' files. Retries can't collide, because
+each attempt's ID is part of its file names. Anything cleanup misses is invisible to readers and is removed by
+Iceberg's normal <code>remove_orphan_files</code> maintenance.</p>
+<h3 id="known-differences">Known differences<a class="headerlink" href="#known-differences" title="Permanent link">¶</a></h3>
+<p>Files written by parquet-rs differ from parquet-mr's in a few ways, which enabling the feature accepts. Most are
+cosmetic, such as footer metadata, <code>created_by</code>, and page encoding labels. Two are worth knowing about:</p>
+<ul>
+<li><strong>Files won't split at the same points.</strong> Both writers check file size every 1000 rows, but they estimate it
+  differently, so they can roll over to a new file at different rows.</li>
+<li><strong>High-cardinality columns keep a dictionary page.</strong> parquet-mr drops dictionary encoding early when it isn't
+  saving space, while parquet-rs keeps it up to <code>write.parquet.dict-size-bytes</code>. Results are the same, but
+  selective reads of native-written files fetch more bytes
+  (<a href="https://github.com/apache/datafusion-comet/issues/6114">#6114</a>).</li>
+</ul>
+<p>The <a href="https://datafusion.apache.org/comet/user-guide/latest/iceberg-writes.html">Iceberg Writes guide</a> lists every supported setting and every difference. Please try it on a non-production
+table and tell us how it goes. Feedback from real workloads is what this feature needs before it loses the
+experimental label.</p>
+<p>Thanks to <a href="https://github.com/jordepic">@jordepic</a> for designing and implementing the split-operator plan, write detection, and the native
+writer, and to <a href="https://github.com/andygrove">@andygrove</a> for the fidelity and failure-handling work, with contributions from
+<a href="https://github.com/zhangfengcdt">@zhangfengcdt</a>, <a href="https://github.com/snmvaughan">@snmvaughan</a>, <a href="https://github.com/liupoyi-1031">@liupoyi-1031</a>, and <a href="https://github.com/0lai0">@0lai0</a>, and reviews from <a href="https://github.com/sunchao">@sunchao</a>, <a href="https://github.com/comphead">@comphead</a>,
+<a href="https://github.com/unikdahal">@unikdahal</a>, and <a href="https://github.com/mbutrovich">@mbutrovich</a>. Related PRs: <a href="https://github.com/apache/datafusion-comet/pull/4658">#4658</a>, <a href="https://github.com/apache/datafusion-comet/pull/5298">#5298</a>, <a href="https://github.com/apache/datafusion-comet/pull/5361">#5361</a>, <a href="https://github.com/apache/datafusion-comet/pull/5663">#5663</a>, <a href="https://github.com/apache/datafusion-comet/pull/5780">#5780</a>.</p>
+<h2 id="memory-management">Memory Management<a class="headerlink" href="#memory-management" title="Permanent link">¶</a></h2>
+<p>A recurring problem for Comet users has been executors killed by the cluster manager (on Kubernetes,
+<code>ExecutorLostFailure</code> with exit code 137) even though Comet stayed within its memory pool. 1.1.0 explains why
+this happens, lets you measure it, and fixes pool bugs that made it worse.</p>
+<h3 id="where-the-memory-goes">Where the memory goes<a class="headerlink" href="#where-the-memory-goes" title="Permanent link">¶</a></h3>
+<p>Comet's native operators allocate from the Rust heap but charge their reservations against Spark's off-heap
+pool, sized by <code>spark.memory.offHeap.size</code>. Operators only reserve memory for data they deliberately hold onto:
+sort buffers, hash join build sides, aggregation state, and buffered shuffle partitions.</p>
+<p>Plenty of memory is never reserved: working memory in expression kernels, decompression buffers, Parquet reader
+state, object store buffers, JVM-side Arrow buffers, and allocator overhead. All of it has to fit in
+<code>spark.executor.memoryOverhead</code>, and until now there was no way to see how much of it there was.</p>
+<p><img alt="The executor container holds the JVM heap, the off-heap memory pool, and the memory overhead. Spark and Comet share the off-heap pool, where Comet's sorts, joins, aggregations, and shuffles reserve memory. The memory overhead holds the JVM's own overhead plus Comet's native memory that the pool does not track." class="img-fluid" src="/blog/images/comet-1.1.0/comet-executor-memory.svg" width="100%"/></p>
+<h3 id="measuring-it">Measuring it<a class="headerlink" href="#measuring-it" title="Permanent link">¶</a></h3>
+<p>Comet now wraps its native allocator in a counter that tracks every byte allocated and not yet freed. It only
+observes and never rejects an allocation. It's always on, and costs about 2% on TPC-H SF100 Q21, an
+allocation-heavy query. Further reduction is tracked in
+<a href="https://github.com/apache/datafusion-comet/issues/6213">#6213</a>. Arrow buffers the JVM imports from native code
+are now tracked separately, so they aren't counted twice.</p>
+<p>Each executor uses the counter to log its native memory usage every 10 seconds while Comet runs:</p>
+<pre><code>Comet native memory usage: allocated 5412.3 MiB, reserved 3890.0 MiB (16 native plans, 8 memory pools)
+</code></pre>
+<p><code>reserved</code> is what the pools track, and the container already has room for it. <code>allocated</code> is everything
+Comet's native code holds. The difference is what has to fit in <code>spark.executor.memoryOverhead</code>, next to the
+JVM's own non-heap memory. To size the overhead, run a representative workload, take the largest difference from
+the log, add it to the overhead you had before Comet, and leave a margin. Setting
+<code>spark.comet.memory.logInterval=1s</code> for that run makes it less likely to miss a short peak.</p>
+<p>The executor also warns when its native memory looks larger than the container allows, and the
+<a href="https://datafusion.apache.org/comet/user-guide/latest/tuning/memory.html">tuning guide</a> walks through sizing with examples. One gotcha: setting <code>spark.executor.memoryOverhead</code>
+<em>replaces</em> the value Spark derives from <code>spark.executor.memoryOverheadFactor</code> instead of adding to it, so on a
+large executor it can shrink the container. For large executors, raise the factor instead.</p>
+<p>In 1.0.0, the driver plugin tried to raise <code>spark.executor.memoryOverhead</code> for you, but on most Spark versions
+the change never reached the container, so it has been removed. The driver now warns when neither the overhead
+nor the factor is set, except in local mode.</p>
+<h3 id="memory-pool-fixes">Memory pool fixes<a class="headerlink" href="#memory-pool-fixes" title="Permanent link">¶</a></h3>
+<ul>
+<li><strong><code>fair_unified</code> limited a whole task to one operator's share.</strong> Since 0.15.0, the pool compared all of a
+  task's reservations against a single operator's share, and each new operator shrank the limit for the rest.
+  Each operator now gets its own share, so tasks with several operators can use more memory before spilling.</li>
+<li><strong>A partial grant from Spark no longer panics the task.</strong> DataFusion sometimes has to record memory that
+  already exists, such as a spilled batch being read back, and both pools panicked when Spark granted less than
+  they asked for. They now track the shortfall and repay it before returning memory to Spark.</li>
+<li><strong>Leaks on failure paths.</strong> A plan that failed during setup or teardown could leak its task's memory pool, and
+  a failed Arrow import leaked the vectors it had already imported.</li>
+<li><strong>Configuration units.</strong> 1.0.0 misread three size settings, including <code>spark.memory.offHeap.size</code> written as
+  a bare number. See <a href="#upgrading-to-110">Upgrading to 1.1.0</a> for what changes.</li>
+<li><strong>Less log noise when spilling.</strong> A partial grant is how an operator learns to spill, but 1.0.0 logged a
+  warning and a memory dump for each one, so a spilling query could log hundreds. Partial grants now log at
+  DEBUG, and the dump is gone because it could deadlock the task.</li>
+<li><strong>Metrics.</strong> Native memory usage, spill, and aggregate memory metrics now appear in Spark's task metrics.</li>
+</ul>
+<p><code>spark.comet.exec.memoryPool.fraction</code> is deprecated. It was meant to leave room for untracked memory, but Spark
+hands out the whole pool anyway, so it never did. Size <code>spark.executor.memoryOverhead</code> instead.</p>
+<h3 id="on-heap-mode">On-heap mode<a class="headerlink" href="#on-heap-mode" title="Permanent link">¶</a></h3>
+<p>On-heap mode exists so that Spark's and Iceberg's test suites can run against Comet; production runs off-heap.
+Its memory accounting didn't protect anything, because native memory isn't on the JVM heap, so 1.1.0 removes it,
+along with six of the nine pool types and several testing-only settings. Outside tests, Comet now requires
+off-heap memory however it's enabled, including when <code>CometSparkSessionExtensions</code> is registered directly, and
+disables itself with a warning otherwise.</p>
+<p>Contributors can find more detail in the new <a href="https://datafusion.apache.org/comet/contributor-guide/memory_management.html">memory management guide</a>.</p>
+<p>Thanks to <a href="https://github.com/andygrove">@andygrove</a> for driving this work, <a href="https://github.com/peterxcli">@peterxcli</a> for the memory pool lifecycle and shuffle spill
+accounting fixes, <a href="https://github.com/ywskycn">@ywskycn</a> for reporting native memory usage to Spark, <a href="https://github.com/1fanwang">@1fanwang</a> for the Arrow import leak
+fix, and <a href="https://github.com/sunchao">@sunchao</a> for the native aggregate spill and memory metrics, with reviews from <a href="https://github.com/sunchao">@sunchao</a>,
+<a href="https://github.com/comphead">@comphead</a>, and <a href="https://github.com/mbutrovich">@mbutrovich</a>. Related PRs: <a href="https://github.com/apache/datafusion-comet/pull/5934">#5934</a>, <a href="https://github.com/apache/datafusion-comet/pull/6162">#6162</a>, <a href="https://github.com/apache/datafusion-comet/pull/6048">#6048</a>, <a href="https://github.com/apache/datafusion-comet/pull/6128">#6128</a>, <a href="https://github.com/apache/datafusion-comet/pull/6205">#6205</a>, <a href="https://github.com/apache/datafusion-comet/pull/6066">#6066</a>, <a href="https://github.com/apache/datafusion-comet/pull/5494">#5494</a>.</p>
+<h2 id="more-iceberg-improvements">More Iceberg Improvements<a class="headerlink" href="#more-iceberg-improvements" title="Permanent link">¶</a></h2>
+<ul>
+<li><strong>V3 deletion vectors</strong> are applied on native scans.</li>
+<li><strong>Iceberg system functions</strong> (<code>bucket</code>, <code>truncate</code>, <code>years</code>, <code>months</code>, <code>days</code>, and <code>hours</code>) run natively.
+  Besides being faster, this keeps partitioned writes eligible for the native writer.</li>
+<li><strong>Scan planning metrics and scan time</strong> appear in the Spark UI for native Iceberg scans.</li>
+<li><strong>A wrong-results fix.</strong> A filter such as <code>bucket(4, id) = 2</code> combined with another predicate was pushed to
+  the native scan as <code>id = 2</code>, returning too few rows.</li>
+<li>Tables partitioned by an unknown transform can be read natively, and <code>IS NULL</code> / <code>IS NOT NULL</code> checks on list
+  and map columns no longer force a fallback.</li>
+</ul>
+<p>Thanks to <a href="https://github.com/mbutrovich">@mbutrovich</a> for deletion vector support, <a href="https://github.com/parthchandra">@parthchandra</a> for the scan metrics, <a href="https://github.com/ErikBPF">@ErikBPF</a> for the
+null-check fix, and <a href="https://github.com/andygrove">@andygrove</a> for the native system functions and residual fix, with reviews from
+<a href="https://github.com/sunchao">@sunchao</a>, <a href="https://github.com/rich7420">@rich7420</a>, <a href="https://github.com/unikdahal">@unikdahal</a>, and <a href="https://github.com/jordepic">@jordepic</a>. Related PRs: <a href="https://github.com/apache/datafusion-comet/pull/5853">#5853</a>, <a href="https://github.com/apache/datafusion-comet/pull/5638">#5638</a>, <a href="https://github.com/apache/datafusion-comet/pull/6027">#6027</a>, <a href="https://github.com/apache/datafusion-comet/pull/6154">#6154</a>.</p>
+<h2 id="remote-shuffle-with-celeborn">Remote Shuffle with Celeborn<a class="headerlink" href="#remote-shuffle-with-celeborn" title="Permanent link">¶</a></h2>
+<p>Comet's native shuffle can now run over Apache Celeborn, through Comet's composite shuffle manager. In 1.0.0,
+Celeborn users always got ordinary Spark shuffle. Map tasks push Comet's Arrow data straight to Celeborn, and
+reducers read it back natively.</p>
+<p>To use it, set <code>spark.comet.shuffle.mode=native</code>; the default <code>auto</code> mode keeps ordinary shuffle. You also need
+a Celeborn client with a safe push-completion API. Released 0.6.0 and 0.7.0 clients don't have one, so they keep
+ordinary shuffle even in native mode. Native shuffle over Celeborn doesn't support
+<code>spark.io.encryption.enabled=true</code>, and Celeborn isn't bundled with Comet. The <a href="https://datafusion.apache.org/comet/user-guide/latest/tuning/celeborn.html">Celeborn tuning guide</a> has the
+full requirements.</p>
+<p>Thanks to <a href="https://github.com/pingzh">@pingzh</a> for this work, with reviews from <a href="https://github.com/sunchao">@sunchao</a>, <a href="https://github.com/ziting-openai">@ziting-openai</a>, and <a href="https://github.com/andygrove">@andygrove</a>. Related
+PRs: <a href="https://github.com/apache/datafusion-comet/pull/5473">#5473</a>, <a href="https://github.com/apache/datafusion-comet/pull/5481">#5481</a>, <a href="https://github.com/apache/datafusion-comet/pull/5513">#5513</a>, <a href="https://github.com/apache/datafusion-comet/pull/5531">#5531</a>, <a href="https://github.com/apache/datafusion-comet/pull/5537">#5537</a>.</p>
+<h2 id="native-parquet-writes-on-spark-40-experimental">Native Parquet Writes on Spark 4.0+ (Experimental)<a class="headerlink" href="#native-parquet-writes-on-spark-40-experimental" title="Permanent link">¶</a></h2>
+<p>Native Parquet writes remain <strong>experimental and disabled by default</strong>, but on Spark 4.0+ they now build on
+Spark's own write path.</p>
+<p>In 1.0.0, a native write replaced Spark's entire write command, so Comet had to reimplement the commit protocol,
+save modes, and job commit. On Spark 4.0+, Comet replaces only <code>WriteFilesExec</code>, the per-task write step that
+Spark 4.0 made pluggable, and Spark handles the rest. That means:</p>
+<ul>
+<li>File names come from Spark's commit protocol, so committers that track individual files, like the S3A magic
+  committer, work.</li>
+<li>Column names, nullability, and field IDs come from the target table, not the query.</li>
+<li>Byte and row counts are correct on HDFS.</li>
+</ul>
+<p>The writer handles non-partitioned, non-bucketed writes to local and HDFS paths, and skips writes that set
+<code>spark.sql.files.maxRecordsPerFile</code>. To enable it, set <code>spark.comet.parquet.write.enabled=true</code> and
+<code>spark.comet.operator.WriteFilesExec.allowIncompatible=true</code>. Spark 3.4 and 3.5 keep the old write path.</p>
+<p>Thanks to <a href="https://github.com/andygrove">@andygrove</a> and <a href="https://github.com/sunchao">@sunchao</a> for this work, with reviews from <a href="https://github.com/comphead">@comphead</a>, <a href="https://github.com/peterxcli">@peterxcli</a>,
+<a href="https://github.com/rich7420">@rich7420</a>, and <a href="https://github.com/parthchandra">@parthchandra</a>. Related PRs: <a href="https://github.com/apache/datafusion-comet/pull/5763">#5763</a>, <a href="https://github.com/apache/datafusion-comet/pull/5369">#5369</a>.</p>
+<h2 id="s3-credentials">S3 Credentials<a class="headerlink" href="#s3-credentials" title="Permanent link">¶</a></h2>
+<p>Comet's native S3 access now works with more of the credential setups Spark supports:</p>
+<ul>
+<li><strong>Built-in credential provider adapters.</strong> In 1.0.0, a native Parquet scan failed with
+  <code>Unsupported credential provider</code> for classes Spark accepts but Comet didn't reimplement, such as
+  <code>DefaultAWSCredentialsProviderChain</code>. Two new adapters fix this with one config line.
+  <code>HadoopS3ACredentialProviderAdapter</code> (recommended) uses Hadoop S3A's own provider chain, so it supports
+  everything S3A does, including web identity, assumed roles, and per-bucket settings.
+  <code>AwsSdkCredentialProviderAdapter</code> wraps a specific AWS SDK provider class.</li>
+<li><strong>STS throttling protection on EKS with IRSA.</strong> When many executors start at once, STS can throttle their
+  credential requests. In 1.0.0, the native Iceberg path then fell back to the EKS node role, which usually can't
+  read the bucket, and the job failed with <code>403</code> errors. Native Iceberg reads and writes now fetch web-identity
+  credentials themselves, retry throttled requests with backoff, never fall back to the node role, and share one
+  credential per executor. This happens automatically.</li>
+<li><strong>Per-location credentials.</strong> A provider implementing <code>CometS3LocationScopedCredentialProvider</code> can return
+  different credentials for different prefixes in the same bucket, such as <code>warehouse/sales</code> and
+  <code>warehouse/finance</code>.</li>
+<li><strong>S3-compliant filesystems</strong> are supported by the native reader.</li>
+</ul>
+<p>See the <a href="https://datafusion.apache.org/comet/user-guide/latest/s3-credential-providers.html">S3 credential providers guide</a> for details.</p>
+<p>Thanks to <a href="https://github.com/parthchandra">@parthchandra</a> for the credential adapters and STS throttling protection, <a href="https://github.com/snmvaughan">@snmvaughan</a> for
+per-location credentials, and <a href="https://github.com/comphead">@comphead</a> for S3-compliant filesystem support, with reviews from <a href="https://github.com/sunchao">@sunchao</a> and
+<a href="https://github.com/andygrove">@andygrove</a>. Related PRs: <a href="https://github.com/apache/datafusion-comet/pull/6023">#6023</a>, <a href="https://github.com/apache/datafusion-comet/pull/6025">#6025</a>, <a href="https://github.com/apache/datafusion-comet/pull/6031">#6031</a>, <a href="https://github.com/apache/datafusion-comet/pull/5314">#5314</a>.</p>
+<h2 id="performance">Performance<a class="headerlink" href="#performance" title="Permanent link">¶</a></h2>
+<h3 id="shuffle">Shuffle<a class="headerlink" href="#shuffle" title="Permanent link">¶</a></h3>
+<ul>
+<li>In 1.0.0, the native shuffle writer ran with a <strong>1-byte write buffer</strong> by default: its 1 MiB default was
+  declared in MiB but passed to native code as bytes. It now gets the intended 1 MiB.</li>
+<li><strong>Round-robin repartitioning</strong> assigns rows by position, as Spark does, instead of hashing every column of
+  every row. That's much cheaper on wide nested schemas, and it spreads repeated values across reducers the way
+  Spark does.</li>
+<li>A task <strong>spills all of its shuffle partitions into one file</strong> instead of one file each.</li>
+<li><strong>Zstd and Arrow IPC compression contexts are reused</strong> across shuffle blocks.</li>
+<li>Shuffle blocks are <strong>decoded against a cached schema</strong> instead of re-parsing it for every block.</li>
+<li>Per-partition scratch buffers are reused, and <code>ArrowWriter</code> bulk-copies fixed-width columns.</li>
+</ul>
+<p>Thanks to the contributors who drove this work, especially <a href="https://github.com/peterxcli">@peterxcli</a>, <a href="https://github.com/dwsmith1983">@dwsmith1983</a>, <a href="https://github.com/pingzh">@pingzh</a>, and
+<a href="https://github.com/andygrove">@andygrove</a>, with reviews from <a href="https://github.com/sunchao">@sunchao</a> and <a href="https://github.com/mbutrovich">@mbutrovich</a>.</p>
+<h3 id="planning-and-execution">Planning and Execution<a class="headerlink" href="#planning-and-execution" title="Permanent link">¶</a></h3>
+<ul>
+<li><strong>Native dynamic filter pushdown</strong> from hash joins into Parquet scans.</li>
+<li><strong>Adaptive partial aggregation</strong> for eligible native shuffle plans.</li>
+<li><strong>Parsed plan data is cached</strong> across a stage's tasks.</li>
+<li>New <strong>native Parquet scan I/O and read-amplification metrics</strong>.</li>
+</ul>
+<h3 id="expressions">Expressions<a class="headerlink" href="#expressions" title="Permanent link">¶</a></h3>
+<p>Many expression kernels got faster. <code>map_sort</code> is up to 3x faster on multi-entry string maps and 18x faster on
+singleton normalization. The map lookup behind <code>element_at</code> and <code>GetMapValue</code> is vectorized, <code>collect_list</code> and
+<code>collect_set</code> have a native <code>GroupsAccumulator</code>, and regex patterns are compiled once per planned expression.
+Smaller gains cover date and time field extraction, <code>posexplode</code>, unnesting, nested hashing, decimal overflow
+checks, <code>list_extract</code>, and approximate percentile merges.</p>
+<h2 id="expanded-coverage">Expanded Coverage<a class="headerlink" href="#expanded-coverage" title="Permanent link">¶</a></h2>
+<p>New native support includes the <code>mode</code>, <code>max_by</code> / <code>min_by</code>, <code>listagg</code> / <code>string_agg</code> (Spark 4.0+), and
+<code>regr_*</code> regression aggregates; <code>WindowGroupLimitExec</code>; <code>explode_outer</code>; <code>make_interval</code>; native
+<code>spark_sequence</code> for integral types and <code>spark_unbase64</code>; <code>_metadata</code> constant columns in the native Parquet
+scan; nested types as shuffle hash partitioning keys; <code>BinaryType</code> in sort-merge joins; and Spark 4's
+<code>EmptyRelationExec</code>.</p>
+<p>More expressions go through codegen dispatch by default, including <code>translate</code>, <code>to_csv</code>, <code>encode</code>, <code>lpad</code> /
+<code>rpad</code>, <code>round</code> on floats, <code>abs</code> on intervals, <code>timestampadd</code> / <code>timestampdiff</code>, and <code>next_day</code> and
+<code>levenshtein</code> on collated input, plus any unrecognized <code>StaticInvoke</code> / <code>Invoke</code>. <code>rlike</code> runs natively by
+default for literal patterns that behave the same as in Java.</p>
+<p>Spark 4 <strong>Variant</strong> support also improved: native Parquet scans can project Variant columns directly. Thanks to
+<a href="https://github.com/peterxcli">@peterxcli</a> for driving Variant support, with reviews from <a href="https://github.com/sunchao">@sunchao</a>. Related PRs: <a href="https://github.com/apache/datafusion-comet/pull/5868">#5868</a>, <a href="https://github.com/apache/datafusion-comet/pull/5794">#5794</a>.</p>
+<p>There's also <strong>experimental native support for the in-memory cache</strong> (<code>spark.comet.exec.inMemoryCache.enabled</code>,
+off by default), and build gates for contrib <strong>Delta</strong> and <strong>Lance</strong> scans.</p>
+<h2 id="previewing-comet-plans">Previewing Comet Plans<a class="headerlink" href="#previewing-comet-plans" title="Permanent link">¶</a></h2>
+<p>The new <code>spark.comet.explain.planOnly.enabled</code> setting logs the plan Comet would have run to the driver log,
+then lets Spark run the query as normal. It shows how much of a production workload Comet would accelerate, and
+why anything falls back, without running any of it through Comet.</p>
+<p>Thanks to <a href="https://github.com/andygrove">@andygrove</a> for this feature, with reviews from <a href="https://github.com/coderfender">@coderfender</a> and <a href="https://github.com/sunchao">@sunchao</a>. Related PRs:
+<a href="https://github.com/apache/datafusion-comet/pull/5394">#5394</a>.</p>
+<h2 id="correctness-fixes">Correctness Fixes<a class="headerlink" href="#correctness-fixes" title="Permanent link">¶</a></h2>
+<p>1.1.0 fixes many cases where Comet returned different results from Spark, failed where Spark succeeds, or
+accepted input that Spark rejects. Besides the Iceberg and memory fixes above, these are the ones most likely to
+affect 1.0.0 users. The <a href="https://github.com/apache/datafusion-comet/blob/branch-1.1/docs/source/changelog/1.1.0.md">change log</a> has the rest.</p>
+<h3 id="wrong-results">Wrong results<a class="headerlink" href="#wrong-results" title="Permanent link">¶</a></h3>
+<ul>
+<li>Decimal <code>SUM</code> returned NULL, or raised an overflow error under ANSI, when an intermediate sum overflowed
+  but the final result fit (<a href="https://github.com/apache/datafusion-comet/pull/6041">#6041</a>, <a href="https://github.com/dwsmith1983">@dwsmith1983</a>).</li>
+<li>After a late shuffle fallback, <code>avg</code> could return NULL and <code>collect_list</code> / <code>collect_set</code> could produce
+  mismatched buffers (<a href="https://github.com/apache/datafusion-comet/pull/5421">#5421</a>, <a href="https://github.com/sunchao">@sunchao</a>).</li>
+<li>Exchange reuse could share one shuffle between plans that differ, such as <code>COUNT(*) + 1</code> and <code>COUNT(*) - 1</code>,
+  semi and anti joins, or <code>explode</code> and <code>explode_outer</code> (<a href="https://github.com/apache/datafusion-comet/pull/5470">#5470</a>, <a href="https://github.com/sunchao">@sunchao</a> and <a href="https://github.com/apache/datafusion-comet/pull/5828">#5828</a>, <a href="https://github.com/ErikBPF">@ErikBPF</a>).</li>
+<li>Two ABFS containers in the same storage account shared a cached object store, so a read could return the
+  other container's data (<a href="https://github.com/apache/datafusion-comet/pull/5053">#5053</a>, <a href="https://github.com/peterxcli">@peterxcli</a>).</li>
+<li>Dictionary-encoded values hashed differently from the same values decoded, and a null struct hashed its
+  fields, which affected joins, aggregates and shuffle partitioning (<a href="https://github.com/apache/datafusion-comet/pull/5757">#5757</a> and <a href="https://github.com/apache/datafusion-comet/pull/5754">#5754</a>, <a href="https://github.com/viirya">@viirya</a>).</li>
+<li>Parquet field names containing non-ASCII characters that differ only in case read as NULL (<a href="https://github.com/apache/datafusion-comet/pull/5602">#5602</a>,
+  <a href="https://github.com/comphead">@comphead</a>).</li>
+<li><code>IN</code>, <code>InSet</code>, nested <code>=</code>, <code>arrays_overlap</code> and <code>array_position</code> now treat <code>-0.0</code> and <code>0.0</code>, and every NaN
+  encoding, as Spark does (<a href="https://github.com/apache/datafusion-comet/pull/6073">#6073</a>, <a href="https://github.com/mizulun">@mizulun</a>, <a href="https://github.com/apache/datafusion-comet/pull/5235">#5235</a>, <a href="https://github.com/divyankshah">@divyankshah</a> and <a href="https://github.com/apache/datafusion-comet/pull/5472">#5472</a>, <a href="https://github.com/sunchao">@sunchao</a>).</li>
+<li>Decimal to double and float casts were off by one unit in the last place for most <code>DECIMAL(38,18)</code> values
+  (<a href="https://github.com/apache/datafusion-comet/pull/5684">#5684</a>, <a href="https://github.com/peterxcli">@peterxcli</a>).</li>
+<li>String to timestamp casts now follow Spark's parsing rules for short fields, time zones and signed years
+  (<a href="https://github.com/apache/datafusion-comet/pull/5682">#5682</a> and <a href="https://github.com/apache/datafusion-comet/pull/5858">#5858</a>, <a href="https://github.com/peterxcli">@peterxcli</a>).</li>
+</ul>
+<h3 id="errors-spark-raises-that-comet-did-not">Errors Spark raises that Comet did not<a class="headerlink" href="#errors-spark-raises-that-comet-did-not" title="Permanent link">¶</a></h3>
+<ul>
+<li>Casts and expressions routed through codegen dispatch could skip ANSI errors raised inside a constant
+  subexpression (<a href="https://github.com/apache/datafusion-comet/pull/5623">#5623</a>, <a href="https://github.com/andygrove">@andygrove</a>).</li>
+<li>Rejected <code>TIMESTAMP_NTZ</code> casts returned NULL under ANSI instead of raising <code>CAST_INVALID_INPUT</code> (<a href="https://github.com/apache/datafusion-comet/pull/5752">#5752</a>,
+  <a href="https://github.com/peterxcli">@peterxcli</a>).</li>
+<li>Out-of-range Parquet <code>TIMESTAMP_MILLIS</code> values, top-level or nested, silently wrapped (<a href="https://github.com/apache/datafusion-comet/pull/5177">#5177</a> and <a href="https://github.com/apache/datafusion-comet/pull/5740">#5740</a>,
+  <a href="https://github.com/peterxcli">@peterxcli</a>).</li>
+<li>Nested Parquet struct, list and map fields now follow Spark's conversion rules instead of returning NULL on
+  overflow or accepting values Spark rejects (<a href="https://github.com/apache/datafusion-comet/pull/5681">#5681</a>, <a href="https://github.com/peterxcli">@peterxcli</a>).</li>
+</ul>
+<h3 id="query-failures-and-crashes">Query failures and crashes<a class="headerlink" href="#query-failures-and-crashes" title="Permanent link">¶</a></h3>
+<ul>
+<li><code>collect_list</code> and <code>collect_set</code> over nested arguments failed with "column types must match schema types"
+  (<a href="https://github.com/apache/datafusion-comet/pull/5159">#5159</a>, <a href="https://github.com/andygrove">@andygrove</a>).</li>
+<li>Native shuffle failed with a 2 GB task serialization error on jobs with very many partitions (<a href="https://github.com/apache/datafusion-comet/pull/5392">#5392</a>,
+  <a href="https://github.com/parthchandra">@parthchandra</a>).</li>
+<li>A Scala UDF from a user jar failed with a <code>ClassCastException</code> (<a href="https://github.com/apache/datafusion-comet/pull/5282">#5282</a>, <a href="https://github.com/andygrove">@andygrove</a>).</li>
+<li><code>rpad</code> and <code>lpad</code> panicked on a NULL length (<a href="https://github.com/apache/datafusion-comet/pull/5680">#5680</a>, <a href="https://github.com/peterxcli">@peterxcli</a>).</li>
+<li>Structs with duplicate field names failed the task in native shuffle, and panicked in the native Parquet
+  scan (<a href="https://github.com/apache/datafusion-comet/pull/5866">#5866</a>, <a href="https://github.com/dwsmith1983">@dwsmith1983</a> and <a href="https://github.com/apache/datafusion-comet/pull/5786">#5786</a>, <a href="https://github.com/ErikBPF">@ErikBPF</a>).</li>
+</ul>
+<h3 id="hangs-and-resource-use">Hangs and resource use<a class="headerlink" href="#hangs-and-resource-use" title="Permanent link">¶</a></h3>
+<ul>
+<li>The JVM hung on exit when an application returned from <code>main</code> without calling <code>spark.stop()</code> (<a href="https://github.com/apache/datafusion-comet/pull/5748">#5748</a>,
+  <a href="https://github.com/zhangfengcdt">@zhangfengcdt</a>).</li>
+<li>The native scan busy-polled while waiting on S3 or HDFS reads, keeping one core per task at 100% (<a href="https://github.com/apache/datafusion-comet/pull/6219">#6219</a>,
+  <a href="https://github.com/mixermt">@mixermt</a> and <a href="https://github.com/andygrove">@andygrove</a>).</li>
+<li>One task could force-spill another task's shuffle buffers, and a failed shuffle write leaked its memory
+  reservation (<a href="https://github.com/apache/datafusion-comet/pull/5493">#5493</a> and <a href="https://github.com/apache/datafusion-comet/pull/5461">#5461</a>, <a href="https://github.com/peterxcli">@peterxcli</a>).</li>
+</ul>
+<h2 id="upgrading-to-110">Upgrading to 1.1.0<a class="headerlink" href="#upgrading-to-110" title="Permanent link">¶</a></h2>
+<p>1.1.0 has no behavior changes that need a <code>spark.comet.legacy.*</code> key, but a few changes can affect a
+deployment. The <a href="https://datafusion.apache.org/comet/user-guide/latest/migration-guide.html">Comet Upgrade Guide</a> has the details.</p>
+<h3 id="platform">Platform<a class="headerlink" href="#platform" title="Permanent link">¶</a></h3>
+<ul>
+<li><strong>JDK 17 or later is required.</strong> JDK 11 support was removed, as announced in 1.0.0.</li>
+<li><strong>Spark 3.4 is still deprecated.</strong> Comet still publishes Spark 3.4 binaries, but Spark's SQL test suite runs
+  against 3.4 only on demand, so 3.4-specific regressions are more likely. We recommend Spark 3.5 or later.</li>
+</ul>
+<h3 id="size-settings-now-read-correctly">Size settings now read correctly<a class="headerlink" href="#size-settings-now-read-correctly" title="Permanent link">¶</a></h3>
+<p>1.0.0 misread three size settings, so jobs that set them may behave differently:</p>
+<ul>
+<li><strong><code>spark.memory.offHeap.size</code> as a bare number of bytes</strong> was read as MiB, which made <code>fair_unified</code>'s
+  per-operator shares about a million times too large. With correct shares, operators can spill sooner, and an
+  operator that can't spill can fail when it exceeds its share. Sizes with a unit, like <code>16g</code>, aren't affected.
+  <code>spark.comet.exec.memoryPool=greedy_unified</code> restores the old behavior.</li>
+<li><strong><code>spark.comet.maxTempDirectorySize</code> with a unit</strong>, like <code>10g</code>, was ignored in favor of the 100 GB default.
+  It's now enforced, so a query that spills past it fails.</li>
+<li><strong><code>spark.comet.shuffle.native.writeBufferSize</code> with a unit</strong> was treated as bytes, so <code>64m</code> meant 64 bytes. It
+  now means what it says. These buffers use untracked native memory, so check large values against
+  <code>spark.executor.memoryOverhead</code>.</li>
+</ul>
+<p>Malformed values for <code>spark.comet.maxTempDirectorySize</code> and <code>spark.comet.explain.native.enabled</code> now fail the
+query instead of falling back to the default.</p>
+<h3 id="more-memory-before-spilling">More memory before spilling<a class="headerlink" href="#more-memory-before-spilling" title="Permanent link">¶</a></h3>
+<p>With the <code>fair_unified</code> fix, tasks with several operators can reserve more memory before spilling than in
+0.15.0 through 1.0.0, especially on executors running few tasks at once. If you sized executors for one of those
+releases, check the memory usage log for headroom.</p>
+<h3 id="conditions-for-enabling-comet">Conditions for enabling Comet<a class="headerlink" href="#conditions-for-enabling-comet" title="Permanent link">¶</a></h3>
+<p>Comet requires Spark's off-heap memory. <code>CometPlugin</code> already enforced this, and 1.1.0 applies the same check
+when <code>CometSparkSessionExtensions</code> is registered directly, disabling Comet with a warning. Both checks read
+<code>spark.memory.offHeap.enabled</code> from the SparkContext, so set it when the application starts, not on a
+<code>SparkSession.builder</code> after the context exists.</p>
+<p>Comet also checks the shuffle manager that's actually running, not the session's <code>spark.shuffle.manager</code>. A
+session that names <code>CometShuffleManager</code> after the context started with a different one now runs without Comet,
+with a warning, instead of failing with a <code>ClassCastException</code>.</p>
+<h3 id="deprecated-and-removed-settings">Deprecated and removed settings<a class="headerlink" href="#deprecated-and-removed-settings" title="Permanent link">¶</a></h3>
+<ul>
+<li><strong><code>spark.comet.exec.memoryPool.fraction</code></strong> is deprecated and will be removed in a future major release. It
+  still works, and the driver warns when it's set.</li>
+<li><strong>Testing-only on-heap settings</strong> were removed: <code>spark.comet.memoryOverhead</code>,
+  <code>spark.comet.exec.onHeap.memoryPool</code>, and <code>spark.comet.shuffle.jvm.memoryFactor</code> (and its old name,
+  <code>spark.comet.columnar.shuffle.memory.factor</code>). The <a href="https://datafusion.apache.org/comet/about/versioning_policy.html#testing-and-internal-configurations-are-exempt">versioning policy</a> exempts testing settings, and Comet
+  ignores them if they're still set.</li>
+</ul>
+<h2 id="compatibility">Compatibility<a class="headerlink" href="#compatibility" title="Permanent link">¶</a></h2>
+<p>Supported platforms:</p>
+<ul>
+<li><strong>Spark 3.4.3</strong> with Java 17 and Scala 2.12/2.13 (deprecated)</li>
+<li><strong>Spark 3.5.9</strong> with Java 17 and Scala 2.12/2.13</li>
+<li><strong>Spark 4.0.4</strong> with Java 17/21 and Scala 2.13</li>
+<li><strong>Spark 4.1.3</strong> with Java 17/21 and Scala 2.13</li>
+<li><strong>Spark 4.2.0</strong> with Java 17 and Scala 2.13 (experimental, for early evaluation only)</li>
+</ul>
+<p>See the <a href="https://datafusion.apache.org/comet/user-guide/latest/compatibility/spark-versions.html">Spark Version Compatibility</a> page for known limitations specific to each version.</p>
+<p>This release builds on <strong>DataFusion 55.1</strong> and <strong>Arrow 59.2</strong>.</p>
+<h2 id="get-started-with-comet-110">Get Started with Comet 1.1.0<a class="headerlink" href="#get-started-with-comet-110" title="Permanent link">¶</a></h2>
+<p>Follow the <a href="https://datafusion.apache.org/comet/user-guide/1.1/installation.html">Comet 1.1.0 Installation Guide</a>
+to get up and running, then point Comet at your existing Spark workloads.</p>
+
+<!--
+  Comments Section
+  Loaded only after explicit visitor consent to comply with ASF policy.
+-->
+
+<div>
+  <hr>
+  <h3 id="comments">Comments<a class="headerlink" href="#comments" title="Permanent link">&para;</a></h3>
+
+  <!-- Local loader script -->
+  <script src="/blog/js/giscus-consent.js" defer></script>
+
+  <!-- Consent UI -->
+  <div id="giscus-consent">
+    <p>
+        We use <a href="https://giscus.app/">Giscus</a> for comments, powered by GitHub Discussions.
+        To respect your privacy, Giscus and comments will load only if you click "Show Comments"
+    </p>
+
+    <div class="consent-actions">
+      <button id="giscus-load" type="button">Show Comments</button>
+      <button id="giscus-revoke" type="button" hidden>Hide Comments</button>
+    </div>
+
+    <noscript>JavaScript is required to load comments from Giscus.</noscript>
+  </div>
+
+  <!-- Container where Giscus will render -->
+  <div id="comment-thread"></div>
+</div>      </div>
+      <aside class="toc-container d-none d-md-block col-md-4 col-xl-3 ms-xl-2">
+        <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#native-iceberg-writes-experimental">Native Iceberg Writes (Experimental)</a><ul>
+<li><a href="#splitting-the-write-operator">Splitting the write operator</a></li>
+<li><a href="#writing-parquet-natively">Writing Parquet natively</a></li>
+<li><a href="#matching-iceberg-java">Matching iceberg-java</a></li>
+<li><a href="#failure-handling">Failure handling</a></li>
+<li><a href="#known-differences">Known differences</a></li>
+</ul>
+</li>
+<li><a href="#memory-management">Memory Management</a><ul>
+<li><a href="#where-the-memory-goes">Where the memory goes</a></li>
+<li><a href="#measuring-it">Measuring it</a></li>
+<li><a href="#memory-pool-fixes">Memory pool fixes</a></li>
+<li><a href="#on-heap-mode">On-heap mode</a></li>
+</ul>
+</li>
+<li><a href="#more-iceberg-improvements">More Iceberg Improvements</a></li>
+<li><a href="#remote-shuffle-with-celeborn">Remote Shuffle with Celeborn</a></li>
+<li><a href="#native-parquet-writes-on-spark-40-experimental">Native Parquet Writes on Spark 4.0+ (Experimental)</a></li>
+<li><a href="#s3-credentials">S3 Credentials</a></li>
+<li><a href="#performance">Performance</a><ul>
+<li><a href="#shuffle">Shuffle</a></li>
+<li><a href="#planning-and-execution">Planning and Execution</a></li>
+<li><a href="#expressions">Expressions</a></li>
+</ul>
+</li>
+<li><a href="#expanded-coverage">Expanded Coverage</a></li>
+<li><a href="#previewing-comet-plans">Previewing Comet Plans</a></li>
+<li><a href="#correctness-fixes">Correctness Fixes</a><ul>
+<li><a href="#wrong-results">Wrong results</a></li>
+<li><a href="#errors-spark-raises-that-comet-did-not">Errors Spark raises that Comet did not</a></li>
+<li><a href="#query-failures-and-crashes">Query failures and crashes</a></li>
+<li><a href="#hangs-and-resource-use">Hangs and resource use</a></li>
+</ul>
+</li>
+<li><a href="#upgrading-to-110">Upgrading to 1.1.0</a><ul>
+<li><a href="#platform">Platform</a></li>
+<li><a href="#size-settings-now-read-correctly">Size settings now read correctly</a></li>
+<li><a href="#more-memory-before-spilling">More memory before spilling</a></li>
+<li><a href="#conditions-for-enabling-comet">Conditions for enabling Comet</a></li>
+<li><a href="#deprecated-and-removed-settings">Deprecated and removed settings</a></li>
+</ul>
+</li>
+<li><a href="#compatibility">Compatibility</a></li>
+<li><a href="#get-started-with-comet-110">Get Started with Comet 1.1.0</a></li>
+</ul>
+</div>
+      </aside>
+    </div>
+  </div>
+</div>    
+    <!-- footer -->
+    <div class="row g-0">
+      <div class="col-12">
+        <p style="font-style: italic; font-size: 0.8rem; text-align: center;">
+          Copyright 2026, <a href="https://www.apache.org/">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a>.<br/>
+          Apache&reg; and the Apache logo are trademarks of The Apache Software Foundation.
+        </p>
+        <p style="font-size: 0.8rem; text-align: center;">
+          <a href="https://www.apache.org/">Foundation</a> |
+          <a href="https://www.apache.org/events/current-event.html">Events</a> |
+          <a href="https://www.apache.org/licenses/">License</a> |
+          <a href="https://www.apache.org/security/">Security</a> |
+          <a href="https://www.apache.org/foundation/sponsorship.html">Sponsorship</a> |
+          <a href="https://www.apache.org/foundation/thanks.html">Thanks</a> |
+          <a href="https://privacy.apache.org/policies/privacy-policy-public.html">Privacy</a>
+        </p>
+      </div>
+    </div>
+    <script src="/blog/js/bootstrap.bundle.min.js"></script>  </main>
+  </body>
+</html>
