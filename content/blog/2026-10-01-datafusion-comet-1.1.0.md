@@ -1,7 +1,7 @@
 ---
 layout: post
 title: Apache DataFusion Comet 1.1.0 Release
-date: 2026-09-25
+date: 2026-10-01
 author: pmc
 categories: [subprojects]
 ---
