@@ -62,8 +62,9 @@ file writing is bundled with the metadata and commit steps, there is no separate
 
 Setting `spark.comet.write.iceberg.splitOperator.enabled=true` splits eligible writes into two operators:
 
-1. **`IcebergWrite`** writes data files on the executors and returns each task's commit message. It runs inside
-   AQE, along with the query feeding it.
+1. **`IcebergWrite`** writes data files on the executors and returns each task's commit message. When AQE is
+   enabled, as it is by default, it runs inside AQE along with the query feeding it. The split also works with
+   AQE disabled.
 2. **`IcebergCommit`** collects the commit messages on the driver and performs the normal Iceberg commit, once,
    outside AQE.
 
@@ -165,7 +166,7 @@ class="img-fluid"
 alt="The executor container holds the JVM heap, the off-heap memory pool, and the memory overhead. Spark and Comet share the off-heap pool, where Comet's sorts, joins, aggregations, and shuffles reserve memory. The memory overhead holds the JVM's own overhead plus Comet's native memory that the pool does not track."
 />
 
-### Measuring it
+### Measuring used memory
 
 Comet now wraps its native allocator in a counter that tracks every byte allocated and not yet freed. It only
 observes and never rejects an allocation. Arrow buffers the JVM imports from native code are now tracked
@@ -189,10 +190,6 @@ _replaces_ the value Spark derives from `spark.executor.memoryOverheadFactor` in
 large executor it can shrink the container. For large executors, raise the factor instead.
 
 [tuning guide]: https://datafusion.apache.org/comet/user-guide/latest/tuning/memory.html
-
-In 1.0.0, the driver plugin tried to raise `spark.executor.memoryOverhead` for you, but on most Spark versions
-the change never reached the container, so it has been removed. The driver now warns when neither the overhead
-nor the factor is set, except in local mode.
 
 ### Memory pool fixes
 
