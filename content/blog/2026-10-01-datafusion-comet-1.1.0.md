@@ -164,10 +164,8 @@ alt="The executor container holds the JVM heap, the off-heap memory pool, and th
 ### Measuring it
 
 Comet now wraps its native allocator in a counter that tracks every byte allocated and not yet freed. It only
-observes and never rejects an allocation. It's always on, and costs about 2% on TPC-H SF100 Q21, an
-allocation-heavy query. Further reduction is tracked in
-[#6213](https://github.com/apache/datafusion-comet/issues/6213). Arrow buffers the JVM imports from native code
-are now tracked separately, so they aren't counted twice.
+observes and never rejects an allocation. Arrow buffers the JVM imports from native code are now tracked
+separately, so they aren't counted twice.
 
 Each executor uses the counter to log its native memory usage every 10 seconds while Comet runs:
 
