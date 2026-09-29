@@ -61,23 +61,18 @@ files natively using &lt;a href="https://github.com/apache/iceberg-rust"&gt;iceb
 disabled by default&lt;/strong&gt;, and it only engages under fairly strict conditions.&lt;/p&gt;
 &lt;h3 id="splitting-the-write-operator"&gt;Splitting the write operator&lt;a class="headerlink" href="#splitting-the-write-operator" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;Spark writes an Iceberg table with a single operator that writes the data files, writes the metadata, commits,
-and validates against the catalog. Adaptive Query Execution (AQE) re-plans the query feeding that operator, but
-the operator itself sits outside AQE, so the file writing can't adapt to how its input actually ran. And because
-file writing is bundled with the metadata and commit steps, there is no separate piece for Comet to take over.&lt;/p&gt;
+and validates against the catalog. Because file writing is bundled with the metadata and commit steps, there was
+no separate piece for Comet to replace.&lt;/p&gt;
 &lt;p&gt;Setting &lt;code&gt;spark.comet.write.iceberg.splitOperator.enabled=true&lt;/code&gt; splits eligible Iceberg writes into two operators:&lt;/p&gt;
 &lt;ol&gt;
-&lt;li&gt;&lt;strong&gt;&lt;code&gt;IcebergWrite&lt;/code&gt;&lt;/strong&gt; writes data files on the executors and returns each task's commit message. When AQE is
-   enabled, as it is by default, it runs inside AQE along with the query feeding it. The split also works with
-   AQE disabled.&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;&lt;code&gt;IcebergCommit&lt;/code&gt;&lt;/strong&gt; collects the commit messages on the driver and performs the normal Iceberg commit, once,
-   outside AQE.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;&lt;code&gt;IcebergWrite&lt;/code&gt;&lt;/strong&gt; writes data files on the executors and returns each task's commit message.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;&lt;code&gt;IcebergCommit&lt;/code&gt;&lt;/strong&gt; collects the commit messages on the driver and performs the normal Iceberg commit, once.&lt;/li&gt;
 &lt;/ol&gt;
-&lt;p&gt;On its own, the split doesn't change who writes the files; that's still iceberg-java. It moves file writing inside
-AQE and separates it from the commit, which gives the native writer a place to plug in. It covers &lt;code&gt;INSERT INTO&lt;/code&gt;
-and DataFrame &lt;code&gt;append&lt;/code&gt;, static and dynamic &lt;code&gt;INSERT OVERWRITE&lt;/code&gt;, and copy-on-write &lt;code&gt;DELETE&lt;/code&gt;, &lt;code&gt;UPDATE&lt;/code&gt;, and &lt;code&gt;MERGE&lt;/code&gt;,
-on every supported Spark version. Merge-on-read writes are left alone. When Comet can't split a write (an
-unrecognized write class, CTAS on Spark 3.4, or a write that needs Spark's commit coordinator), it plans the write
-exactly as if Comet weren't there.&lt;/p&gt;
+&lt;p&gt;With only the split enabled, iceberg-java still writes the files; the native writer, described next, replaces
+that step. The split covers &lt;code&gt;INSERT INTO&lt;/code&gt; and DataFrame &lt;code&gt;append&lt;/code&gt;, static and dynamic &lt;code&gt;INSERT OVERWRITE&lt;/code&gt;, and
+copy-on-write &lt;code&gt;DELETE&lt;/code&gt;, &lt;code&gt;UPDATE&lt;/code&gt;, and &lt;code&gt;MERGE&lt;/code&gt;, on every supported Spark version. Merge-on-read writes are left
+alone. When Comet can't split a write (an unrecognized write class, CTAS on Spark 3.4, or a write that needs
+Spark's commit coordinator), it plans the write exactly as if Comet weren't there.&lt;/p&gt;
 &lt;h3 id="writing-parquet-natively"&gt;Writing Parquet natively&lt;a class="headerlink" href="#writing-parquet-natively" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
 &lt;p&gt;The native writer requires the split. Also setting &lt;code&gt;spark.comet.iceberg.write.enabled=true&lt;/code&gt; hands each task's
 Parquet writing to iceberg-rust. The driver passes the native writer everything it needs: schema, partition spec,
@@ -92,10 +87,10 @@ too. Writes from a local relation, such as &lt;code&gt;INSERT ... VALUES&lt;/cod
 &lt;p&gt;To see which path a write took, check the physical plan: a native write shows &lt;code&gt;CometIcebergWrite&lt;/code&gt; under
 &lt;code&gt;IcebergCommit&lt;/code&gt;, and a write that fell back shows &lt;code&gt;IcebergWrite&lt;/code&gt;.&lt;/p&gt;
 &lt;h3 id="matching-iceberg-java"&gt;Matching iceberg-java&lt;a class="headerlink" href="#matching-iceberg-java" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
-&lt;p&gt;The goal is the table iceberg-java would have written, not just a valid one. Manifest metrics drive pruning for
-every future reader, so rather than trust the native writer's numbers, Comet recomputes them with iceberg-java's
-own code. Parity tests write the same rows through both writers and compare the committed counts and bounds. The
-cost is one small footer read per file.&lt;/p&gt;
+&lt;p&gt;The native writer aims to write the same table iceberg-java would, down to the metadata. Manifest metrics drive
+pruning for every future reader, so rather than trust the native writer's numbers, Comet recomputes them with
+iceberg-java's own code. Parity tests write the same rows through both writers and compare the committed counts
+and bounds. The cost is one small footer read per file.&lt;/p&gt;
 &lt;p&gt;Eligibility is an allowlist. A write goes native only if its whole configuration matches the documented set of
 supported settings. Anything else, including properties added by future Iceberg versions, falls back to
 iceberg-java and reports why in Comet's extended &lt;code&gt;EXPLAIN&lt;/code&gt; output. Encryption, object-storage layout, custom
