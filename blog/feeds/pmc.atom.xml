@@ -64,7 +64,7 @@ disabled by default&lt;/strong&gt;, and it only engages under fairly strict cond
 and validates against the catalog. Adaptive Query Execution (AQE) re-plans the query feeding that operator, but
 the operator itself sits outside AQE, so the file writing can't adapt to how its input actually ran. And because
 file writing is bundled with the metadata and commit steps, there is no separate piece for Comet to take over.&lt;/p&gt;
-&lt;p&gt;Setting &lt;code&gt;spark.comet.write.iceberg.splitOperator.enabled=true&lt;/code&gt; splits eligible writes into two operators:&lt;/p&gt;
+&lt;p&gt;Setting &lt;code&gt;spark.comet.write.iceberg.splitOperator.enabled=true&lt;/code&gt; splits eligible Iceberg writes into two operators:&lt;/p&gt;
 &lt;ol&gt;
 &lt;li&gt;&lt;strong&gt;&lt;code&gt;IcebergWrite&lt;/code&gt;&lt;/strong&gt; writes data files on the executors and returns each task's commit message. When AQE is
    enabled, as it is by default, it runs inside AQE along with the query feeding it. The split also works with
@@ -79,10 +79,10 @@ on every supported Spark version. Merge-on-read writes are left alone. When Come
 unrecognized write class, CTAS on Spark 3.4, or a write that needs Spark's commit coordinator), it plans the write
 exactly as if Comet weren't there.&lt;/p&gt;
 &lt;h3 id="writing-parquet-natively"&gt;Writing Parquet natively&lt;a class="headerlink" href="#writing-parquet-natively" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
-&lt;p&gt;Also setting &lt;code&gt;spark.comet.iceberg.write.enabled=true&lt;/code&gt; hands each task's Parquet writing to iceberg-rust. The
-driver passes the native writer everything it needs: schema, partition spec, data location, Parquet settings,
-writer mode, and object-store configuration. Each task writes its files and returns their metadata as an
-in-memory Iceberg manifest.&lt;/p&gt;
+&lt;p&gt;The native writer requires the split. Also setting &lt;code&gt;spark.comet.iceberg.write.enabled=true&lt;/code&gt; hands each task's
+Parquet writing to iceberg-rust. The driver passes the native writer everything it needs: schema, partition spec,
+data location, Parquet settings, writer mode, and object-store configuration. Each task writes its files and
+returns their metadata as an in-memory Iceberg manifest.&lt;/p&gt;
 &lt;p&gt;From there, iceberg-java takes over again. The JVM reads the manifest, recomputes each file's metrics from its
 Parquet footer, and builds the same commit message the JVM writer would have produced. Snapshots, manifest
 lists, commit validation, and retries all work as before.&lt;/p&gt;

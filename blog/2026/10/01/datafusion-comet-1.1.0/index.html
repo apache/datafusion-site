@@ -145,7 +145,7 @@ disabled by default</strong>, and it only engages under fairly strict conditions
 and validates against the catalog. Adaptive Query Execution (AQE) re-plans the query feeding that operator, but
 the operator itself sits outside AQE, so the file writing can't adapt to how its input actually ran. And because
 file writing is bundled with the metadata and commit steps, there is no separate piece for Comet to take over.</p>
-<p>Setting <code>spark.comet.write.iceberg.splitOperator.enabled=true</code> splits eligible writes into two operators:</p>
+<p>Setting <code>spark.comet.write.iceberg.splitOperator.enabled=true</code> splits eligible Iceberg writes into two operators:</p>
 <ol>
 <li><strong><code>IcebergWrite</code></strong> writes data files on the executors and returns each task's commit message. When AQE is
    enabled, as it is by default, it runs inside AQE along with the query feeding it. The split also works with
@@ -160,10 +160,10 @@ on every supported Spark version. Merge-on-read writes are left alone. When Come
 unrecognized write class, CTAS on Spark 3.4, or a write that needs Spark's commit coordinator), it plans the write
 exactly as if Comet weren't there.</p>
 <h3 id="writing-parquet-natively">Writing Parquet natively<a class="headerlink" href="#writing-parquet-natively" title="Permanent link">¶</a></h3>
-<p>Also setting <code>spark.comet.iceberg.write.enabled=true</code> hands each task's Parquet writing to iceberg-rust. The
-driver passes the native writer everything it needs: schema, partition spec, data location, Parquet settings,
-writer mode, and object-store configuration. Each task writes its files and returns their metadata as an
-in-memory Iceberg manifest.</p>
+<p>The native writer requires the split. Also setting <code>spark.comet.iceberg.write.enabled=true</code> hands each task's
+Parquet writing to iceberg-rust. The driver passes the native writer everything it needs: schema, partition spec,
+data location, Parquet settings, writer mode, and object-store configuration. Each task writes its files and
+returns their metadata as an in-memory Iceberg manifest.</p>
 <p>From there, iceberg-java takes over again. The JVM reads the manifest, recomputes each file's metrics from its
 Parquet footer, and builds the same commit message the JVM writer would have produced. Snapshots, manifest
 lists, commit validation, and retries all work as before.</p>
