@@ -60,7 +60,7 @@ and validates against the catalog. Adaptive Query Execution (AQE) re-plans the q
 the operator itself sits outside AQE, so the file writing can't adapt to how its input actually ran. And because
 file writing is bundled with the metadata and commit steps, there is no separate piece for Comet to take over.
 
-Setting `spark.comet.write.iceberg.splitOperator.enabled=true` splits eligible writes into two operators:
+Setting `spark.comet.write.iceberg.splitOperator.enabled=true` splits eligible Iceberg writes into two operators:
 
 1. **`IcebergWrite`** writes data files on the executors and returns each task's commit message. When AQE is
    enabled, as it is by default, it runs inside AQE along with the query feeding it. The split also works with
@@ -77,10 +77,10 @@ exactly as if Comet weren't there.
 
 ### Writing Parquet natively
 
-Also setting `spark.comet.iceberg.write.enabled=true` hands each task's Parquet writing to iceberg-rust. The
-driver passes the native writer everything it needs: schema, partition spec, data location, Parquet settings,
-writer mode, and object-store configuration. Each task writes its files and returns their metadata as an
-in-memory Iceberg manifest.
+The native writer requires the split. Also setting `spark.comet.iceberg.write.enabled=true` hands each task's
+Parquet writing to iceberg-rust. The driver passes the native writer everything it needs: schema, partition spec,
+data location, Parquet settings, writer mode, and object-store configuration. Each task writes its files and
+returns their metadata as an in-memory Iceberg manifest.
 
 From there, iceberg-java takes over again. The JVM reads the manifest, recomputes each file's metrics from its
 Parquet footer, and builds the same commit message the JVM writer would have produced. Snapshots, manifest
