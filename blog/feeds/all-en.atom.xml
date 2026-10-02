@@ -171,7 +171,10 @@ grants an operator less memory than it asked for (a partial grant), the operator
 &lt;li&gt;&lt;strong&gt;Less log noise when spilling.&lt;/strong&gt; 1.0.0 logged a warning and a memory dump for every partial grant, so a
   spilling query could log hundreds. Partial grants now log at DEBUG, and the dump is gone because it could
   deadlock the task.&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;Metrics.&lt;/strong&gt; Native memory usage, spill, and aggregate memory metrics now appear in Spark's task metrics.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Metrics.&lt;/strong&gt; Spills from native sorts, sort-merge joins, and aggregates now count toward Spark's Spill (Disk)
+  task metric in every stage. The native shuffle writer reports Spill (Disk) and Spill (Memory) separately, where
+  1.0.0 put the same number in both. Native aggregates with grouping keys also show spill counts, bytes, and rows
+  in the SQL tab.&lt;/li&gt;
 &lt;/ul&gt;
 &lt;p&gt;&lt;code&gt;spark.comet.exec.memoryPool.fraction&lt;/code&gt; is deprecated. It was meant to leave room for untracked memory, but Spark
 hands out the whole pool anyway, so it never did. Size &lt;code&gt;spark.executor.memoryOverhead&lt;/code&gt; instead.&lt;/p&gt;
@@ -184,7 +187,7 @@ disables itself with a warning otherwise.&lt;/p&gt;
 &lt;p&gt;Contributors can find more detail in the new &lt;a href="https://datafusion.apache.org/comet/contributor-guide/memory_management.html"&gt;memory management guide&lt;/a&gt;.&lt;/p&gt;
 &lt;p&gt;Thanks to &lt;a href="https://github.com/andygrove"&gt;@andygrove&lt;/a&gt; for driving this work, &lt;a href="https://github.com/peterxcli"&gt;@peterxcli&lt;/a&gt; for the memory pool lifecycle and shuffle spill
 accounting fixes, &lt;a href="https://github.com/ywskycn"&gt;@ywskycn&lt;/a&gt; for reporting native memory usage to Spark, &lt;a href="https://github.com/1fanwang"&gt;@1fanwang&lt;/a&gt; for the Arrow import leak
-fix, and &lt;a href="https://github.com/sunchao"&gt;@sunchao&lt;/a&gt; for the native aggregate spill and memory metrics, with reviews from &lt;a href="https://github.com/sunchao"&gt;@sunchao&lt;/a&gt;,
+fix, and &lt;a href="https://github.com/sunchao"&gt;@sunchao&lt;/a&gt; for the native aggregate spill metrics, with reviews from &lt;a href="https://github.com/sunchao"&gt;@sunchao&lt;/a&gt;,
 &lt;a href="https://github.com/comphead"&gt;@comphead&lt;/a&gt;, and &lt;a href="https://github.com/mbutrovich"&gt;@mbutrovich&lt;/a&gt;. Related PRs: &lt;a href="https://github.com/apache/datafusion-comet/pull/5934"&gt;#5934&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/6162"&gt;#6162&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/6048"&gt;#6048&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/6128"&gt;#6128&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/6205"&gt;#6205&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/6066"&gt;#6066&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/5494"&gt;#5494&lt;/a&gt;.&lt;/p&gt;
 &lt;h2 id="more-iceberg-improvements"&gt;More Iceberg Improvements&lt;a class="headerlink" href="#more-iceberg-improvements" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;ul&gt;
