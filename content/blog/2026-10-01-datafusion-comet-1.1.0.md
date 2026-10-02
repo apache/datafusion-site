@@ -205,7 +205,10 @@ grants an operator less memory than it asked for (a partial grant), the operator
 - **Less log noise when spilling.** 1.0.0 logged a warning and a memory dump for every partial grant, so a
   spilling query could log hundreds. Partial grants now log at DEBUG, and the dump is gone because it could
   deadlock the task.
-- **Metrics.** Native memory usage, spill, and aggregate memory metrics now appear in Spark's task metrics.
+- **Metrics.** Spills from native sorts, sort-merge joins, and aggregates now count toward Spark's Spill (Disk)
+  task metric in every stage. The native shuffle writer reports Spill (Disk) and Spill (Memory) separately, where
+  1.0.0 put the same number in both. Native aggregates with grouping keys also show spill counts, bytes, and rows
+  in the SQL tab.
 
 `spark.comet.exec.memoryPool.fraction` is deprecated. It was meant to leave room for untracked memory, but Spark
 hands out the whole pool anyway, so it never did. Size `spark.executor.memoryOverhead` instead.
@@ -222,7 +225,7 @@ Contributors can find more detail in the new [memory management guide].
 
 Thanks to [@andygrove] for driving this work, [@peterxcli] for the memory pool lifecycle and shuffle spill
 accounting fixes, [@ywskycn] for reporting native memory usage to Spark, [@1fanwang] for the Arrow import leak
-fix, and [@sunchao] for the native aggregate spill and memory metrics, with reviews from [@sunchao],
+fix, and [@sunchao] for the native aggregate spill metrics, with reviews from [@sunchao],
 [@comphead], and [@mbutrovich]. Related PRs: [#5934], [#6162], [#6048], [#6128], [#6205], [#6066], [#5494].
 
 [memory management guide]: https://datafusion.apache.org/comet/contributor-guide/memory_management.html
