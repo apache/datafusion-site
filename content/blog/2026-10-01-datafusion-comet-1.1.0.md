@@ -249,13 +249,15 @@ null-check fix, and [@andygrove] for the native system functions and residual fi
 1.1.0 adds Comet's side of native shuffle over Apache Celeborn: map tasks push Comet's Arrow data straight to
 Celeborn, and reducers read it back natively. In 1.0.0, Celeborn users always got ordinary Spark shuffle.
 
-It does not run with a released Celeborn yet. Native shuffle needs Celeborn to report reliably when an in-flight
-push has completed, and no released client does, including 0.7.0, the latest release. Those clients keep ordinary
-shuffle even when native shuffle is requested. Once a Celeborn release provides that API, set
-`spark.shuffle.manager` to `org.apache.spark.sql.comet.execution.shuffle.CometCelebornShuffleManager` and
-`spark.comet.shuffle.mode=native`; the default `auto` mode keeps ordinary shuffle. Native shuffle over Celeborn
-doesn't support `spark.io.encryption.enabled=true`, and Celeborn isn't bundled with Comet. The
-[Celeborn tuning guide] has the full requirements.
+Native Celeborn shuffle is unavailable with released Celeborn 0.6.x and 0.7.x clients in Comet 1.1.0 because
+these clients do not pass Comet's push-completion compatibility checks. Set `spark.shuffle.manager` to
+`org.apache.spark.sql.comet.execution.shuffle.CometCelebornShuffleManager` to use Comet alongside
+ordinary Spark/Celeborn shuffle; Comet can still accelerate other operators. These clients retain
+ordinary Spark/Celeborn shuffle even when `spark.comet.shuffle.mode=native` is requested, and the
+default `auto` mode also retains ordinary shuffle. Follow-up work to enable native shuffle with
+released clients is tracked in [#6523](https://github.com/apache/datafusion-comet/issues/6523).
+Native shuffle over Celeborn does not support `spark.io.encryption.enabled=true`, and Celeborn
+is not bundled with Comet. The [Celeborn tuning guide] has the full requirements.
 
 Thanks to [@pingzh] for this work, with reviews from [@sunchao], [@ziting-openai], and [@andygrove]. Related
 PRs: [#5473], [#5481], [#5513], [#5531], [#5537].
