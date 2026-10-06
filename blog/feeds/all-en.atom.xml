@@ -205,13 +205,15 @@ null-check fix, and &lt;a href="https://github.com/andygrove"&gt;@andygrove&lt;/
 &lt;h2 id="remote-shuffle-with-celeborn"&gt;Remote Shuffle with Celeborn&lt;a class="headerlink" href="#remote-shuffle-with-celeborn" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;1.1.0 adds Comet's side of native shuffle over Apache Celeborn: map tasks push Comet's Arrow data straight to
 Celeborn, and reducers read it back natively. In 1.0.0, Celeborn users always got ordinary Spark shuffle.&lt;/p&gt;
-&lt;p&gt;It does not run with a released Celeborn yet. Native shuffle needs Celeborn to report reliably when an in-flight
-push has completed, and no released client does, including 0.7.0, the latest release. Those clients keep ordinary
-shuffle even when native shuffle is requested. Once a Celeborn release provides that API, set
-&lt;code&gt;spark.shuffle.manager&lt;/code&gt; to &lt;code&gt;org.apache.spark.sql.comet.execution.shuffle.CometCelebornShuffleManager&lt;/code&gt; and
-&lt;code&gt;spark.comet.shuffle.mode=native&lt;/code&gt;; the default &lt;code&gt;auto&lt;/code&gt; mode keeps ordinary shuffle. Native shuffle over Celeborn
-doesn't support &lt;code&gt;spark.io.encryption.enabled=true&lt;/code&gt;, and Celeborn isn't bundled with Comet. The
-&lt;a href="https://datafusion.apache.org/comet/user-guide/latest/tuning/celeborn.html"&gt;Celeborn tuning guide&lt;/a&gt; has the full requirements.&lt;/p&gt;
+&lt;p&gt;Native Celeborn shuffle is unavailable with released Celeborn 0.6.x and 0.7.x clients in Comet 1.1.0 because
+these clients do not pass Comet's push-completion compatibility checks. Set &lt;code&gt;spark.shuffle.manager&lt;/code&gt; to
+&lt;code&gt;org.apache.spark.sql.comet.execution.shuffle.CometCelebornShuffleManager&lt;/code&gt; to use Comet alongside
+ordinary Spark/Celeborn shuffle; Comet can still accelerate other operators. These clients retain
+ordinary Spark/Celeborn shuffle even when &lt;code&gt;spark.comet.shuffle.mode=native&lt;/code&gt; is requested, and the
+default &lt;code&gt;auto&lt;/code&gt; mode also retains ordinary shuffle. Follow-up work to enable native shuffle with
+released clients is tracked in &lt;a href="https://github.com/apache/datafusion-comet/issues/6523"&gt;#6523&lt;/a&gt;.
+Native shuffle over Celeborn does not support &lt;code&gt;spark.io.encryption.enabled=true&lt;/code&gt;, and Celeborn
+is not bundled with Comet. The &lt;a href="https://datafusion.apache.org/comet/user-guide/latest/tuning/celeborn.html"&gt;Celeborn tuning guide&lt;/a&gt; has the full requirements.&lt;/p&gt;
 &lt;p&gt;Thanks to &lt;a href="https://github.com/pingzh"&gt;@pingzh&lt;/a&gt; for this work, with reviews from &lt;a href="https://github.com/sunchao"&gt;@sunchao&lt;/a&gt;, &lt;a href="https://github.com/ziting-openai"&gt;@ziting-openai&lt;/a&gt;, and &lt;a href="https://github.com/andygrove"&gt;@andygrove&lt;/a&gt;. Related
 PRs: &lt;a href="https://github.com/apache/datafusion-comet/pull/5473"&gt;#5473&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/5481"&gt;#5481&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/5513"&gt;#5513&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/5531"&gt;#5531&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/5537"&gt;#5537&lt;/a&gt;.&lt;/p&gt;
 &lt;h2 id="native-parquet-writes-on-spark-40-experimental"&gt;Native Parquet Writes on Spark 4.0+ (Experimental)&lt;a class="headerlink" href="#native-parquet-writes-on-spark-40-experimental" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
