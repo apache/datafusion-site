@@ -43,8 +43,8 @@ The highlights:
   iceberg-java.
 - **Memory management**: Comet now measures the native memory its pools don't track, logs it on every executor,
   and fixes several long-standing pool accounting bugs.
-- **Native shuffle over Apache Celeborn**: Comet's side is in place, but it needs a Celeborn client API that no
-  released Celeborn version provides yet.
+- **Native shuffle over Apache Celeborn**: 1.1.0 includes the native writer and reader, but released Celeborn
+  clients currently fall back to ordinary Spark/Celeborn shuffle.
 - **Native Parquet writes on Spark 4.0+** (experimental), now built on Spark's own write path.
 
 ## Native Iceberg Writes (Experimental)
