@@ -1,5 +1,140 @@
 <?xml version="1.0" encoding="utf-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - pmc</title><link href="https://datafusion.apache.org/blog/" rel="alternate"/><link href="https://datafusion.apache.org/blog/feeds/pmc.atom.xml" rel="self"/><id>https://datafusion.apache.org/blog/</id><updated>2026-10-01T00:00:00+00:00</updated><entry><title>Apache DataFusion Comet 1.1.0 Release</title><link href="https://datafusion.apache.org/blog/2026/10/01/datafusion-comet-1.1.0" rel="alternate"/><published>2026-10-01T00:00:00+00:00</published><updated>2026-10-01T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2026-10-01:/blog/2026/10/01/datafusion-comet-1.1.0</id><summary type="html">&lt;!--
+<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - pmc</title><link href="https://datafusion.apache.org/blog/" rel="alternate"/><link href="https://datafusion.apache.org/blog/feeds/pmc.atom.xml" rel="self"/><id>https://datafusion.apache.org/blog/</id><updated>2026-10-03T00:00:00+00:00</updated><entry><title>Apache DataFusion Ballista 55.0.0 Released</title><link href="https://datafusion.apache.org/blog/2026/10/03/datafusion-ballista-55.0.0" rel="alternate"/><published>2026-10-03T00:00:00+00:00</published><updated>2026-10-03T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2026-10-03:/blog/2026/10/03/datafusion-ballista-55.0.0</id><summary type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+
+&lt;p&gt;We are pleased to announce version &lt;a href="https://github.com/apache/datafusion-ballista/blob/55.0.0/docs/source/changelog/55.0.0.md"&gt;55.0.0&lt;/a&gt; of &lt;a href="https://datafusion.apache.org/ballista/"&gt;Apache DataFusion Ballista&lt;/a&gt;. Ballista is a distributed query
+execution engine that enhances &lt;a href="https://datafusion.apache.org"&gt;Apache DataFusion&lt;/a&gt; by enabling parallel execution of workloads across multiple
+nodes.&lt;/p&gt;
+&lt;p&gt;This release contains 322 commits from 25 contributors. It builds on &lt;a href="/blog/2026/08/09/datafusion-ballista-54.1.0/"&gt;54.1.0&lt;/a&gt;, upgrades to DataFusion …&lt;/p&gt;</summary><content type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+
+&lt;p&gt;We are pleased to announce version &lt;a href="https://github.com/apache/datafusion-ballista/blob/55.0.0/docs/source/changelog/55.0.0.md"&gt;55.0.0&lt;/a&gt; of &lt;a href="https://datafusion.apache.org/ballista/"&gt;Apache DataFusion Ballista&lt;/a&gt;. Ballista is a distributed query
+execution engine that enhances &lt;a href="https://datafusion.apache.org"&gt;Apache DataFusion&lt;/a&gt; by enabling parallel execution of workloads across multiple
+nodes.&lt;/p&gt;
+&lt;p&gt;This release contains 322 commits from 25 contributors. It builds on &lt;a href="/blog/2026/08/09/datafusion-ballista-54.1.0/"&gt;54.1.0&lt;/a&gt;, upgrades to DataFusion 55.1.0,
+and brings major improvements to adaptive planning, SQL connectivity, observability, distributed windows,
+and resource management.&lt;/p&gt;
+&lt;h2 id="adaptive-query-execution-by-default"&gt;Adaptive Query Execution by default&lt;a class="headerlink" href="#adaptive-query-execution-by-default" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Adaptive Query Execution (AQE), introduced experimentally in 53.0.0, is now enabled by default. The scheduler
+replans between stages using statistics from completed work, allowing it to choose a join strategy with actual
+row counts rather than estimates made before execution.&lt;/p&gt;
+&lt;p&gt;The adaptive planner received extensive correctness work in this release. All 99 TPC-DS queries now complete
+and match single-process DataFusion in the project's AQE test suite. The planner also avoids a redundant
+shuffle when join inputs already have the required partitioning and applies broadcast thresholds consistently
+between the adaptive and static paths.&lt;/p&gt;
+&lt;p&gt;Two related defaults reduce per-stage overhead. The scheduler now packs multiple input partitions into each
+task, up to the assigned executor's available vcores, and the broadcast join threshold increases from 10 MB
+to 128 MB. The previous behavior remains available through configuration; see the &lt;a href="https://datafusion.apache.org/ballista/upgrading/55.0.0.html"&gt;upgrade guide&lt;/a&gt; for details.&lt;/p&gt;
+&lt;h2 id="performance-compared-with-spark-and-comet"&gt;Performance compared with Spark and Comet&lt;a class="headerlink" href="#performance-compared-with-spark-and-comet" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;We benchmarked Ballista against &lt;a href="https://spark.apache.org/"&gt;Apache Spark&lt;/a&gt; 4.1.3, and against Spark 4.1.3 with &lt;a href="https://datafusion.apache.org/comet/"&gt;Apache DataFusion Comet&lt;/a&gt;
+1.1.0, on TPC-H at scale factor 1000, with the data stored as Parquet on S3. All three ran on the same Kubernetes
+cluster with 32 executors, each with 8 vCPU and 64 GiB of memory, and each query time is the mean of two runs.&lt;/p&gt;
+&lt;p&gt;Ballista ran the 22 queries in 502.4 seconds in total, against 898.2 seconds for Spark and 455.1 seconds for
+Spark with Comet. That makes Ballista 1.79x faster than Spark over the suite, and faster on 19 of the 22 queries,
+with the largest gaps on Q1 (5.1x) and Q17 (3.9x). Comet is still 1.10x faster than Ballista overall, but
+Ballista was faster on 7 queries, including Q8 (2.3x) and Q9 (1.6x).&lt;/p&gt;
+&lt;p&gt;The dataset is partitioned by date, and these numbers come from a benchmark runner that declares the partition
+columns, so Ballista skips the partitions a date filter excludes, as Spark and Comet do. The runner in the
+55.0.0 release did not, so Ballista read every file's footer and pruned only through Parquet statistics. With
+that runner, the total was 571.6 seconds: Q6 took 4.7 seconds instead of 1.6, and Q14 8.9 seconds instead of
+5.5.&lt;/p&gt;
+&lt;p&gt;These are not tuned comparisons. Spark and Comet ran 16 tasks on each executor's 8 vCPU, while Ballista ran 8,
+and Comet had an extra 32 GiB of off-heap memory per executor. The &lt;a href="https://datafusion.apache.org/ballista/contributors-guide/benchmarking.html"&gt;benchmarking guide&lt;/a&gt; has the full
+configuration, the per-query results, and a Trino column for reference.&lt;/p&gt;
+&lt;p&gt;Although Ballista and Comet perform similarly on this benchmark, they serve different audiences. Comet
+accelerates existing Spark workloads and aims to produce the same results as Spark. Ballista does not aim to be
+compatible with Spark. It is an alternative for distributed DataFusion queries with no JVM dependencies.&lt;/p&gt;
+&lt;p&gt;The 55.0.0 release resolved many long-standing architectural issues in Ballista, with adaptive planning on by
+default, tasks that cover several partitions, a reworked shuffle, and bounded memory with spilling. With that
+foundation in place, we expect to see significant performance gains in future releases.&lt;/p&gt;
+&lt;h2 id="flight-sql-and-adbc"&gt;Flight SQL and ADBC&lt;a class="headerlink" href="#flight-sql-and-adbc" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;The scheduler now has an &lt;a href="https://arrow.apache.org/docs/format/FlightSql.html"&gt;Arrow Flight SQL&lt;/a&gt; frontend, allowing generic SQL clients to query a Ballista cluster
+through the standard &lt;a href="https://arrow.apache.org/adbc/"&gt;ADBC&lt;/a&gt; interface without using a Ballista-specific client library. The implementation
+supports statements, prepared statements, and catalog metadata, and was validated end-to-end using the Python
+Flight SQL ADBC driver and all 22 TPC-H queries.&lt;/p&gt;
+&lt;p&gt;Flight SQL is opt-in: it requires the &lt;code&gt;flight-sql&lt;/code&gt; build feature and the scheduler's &lt;code&gt;--flight-sql&lt;/code&gt; flag. This
+keeps existing deployments unchanged while making it possible to connect BI tools and other Flight SQL clients
+to Ballista through a standard protocol.&lt;/p&gt;
+&lt;h2 id="event-logs-and-history-server"&gt;Event logs and history server&lt;a class="headerlink" href="#event-logs-and-history-server" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;The scheduler normally removes completed jobs from memory after a retention interval, and an in-memory history
+is lost when the scheduler restarts. Ballista 55.0.0 can instead write a durable event log for each job when the
+scheduler is started with &lt;code&gt;--event-log-dir&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;The new &lt;code&gt;ballista-history-server&lt;/code&gt; indexes those logs and serves the same job, stage, configuration, plan, and
+metrics REST endpoints as a live scheduler. The existing TUI can therefore browse completed jobs even when the
+original scheduler is no longer running. Logs are read on demand so retaining detailed histories does not
+require keeping every job plan and task metric in memory.&lt;/p&gt;
+&lt;p&gt;The REST API is now documented with OpenAPI and exposes its specification at &lt;code&gt;/api/openapi.json&lt;/code&gt;. REST and gRPC
+responses also report the Ballista version, making it easier for clients and operators to identify the cluster
+they are connected to.&lt;/p&gt;
+&lt;h2 id="distributed-windows-and-range-shuffles"&gt;Distributed windows and range shuffles&lt;a class="headerlink" href="#distributed-windows-and-range-shuffles" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Ballista's execution model can now assign a slice of several input partitions to one task, instead of requiring
+one scheduler task per partition. This reduces planning, serialization, and dispatch overhead and provides the
+foundation for range-partitioned algorithms.&lt;/p&gt;
+&lt;p&gt;Building on that model, 55.0.0 adds ordered and unordered range repartition operators, quantile sketches, and
+an ordering-preserving range shuffle. Range readers only fetch the bytes that overlap their assigned ranges,
+reducing unnecessary network and disk I/O.&lt;/p&gt;
+&lt;p&gt;The first optimization to use this machinery parallelizes &lt;code&gt;UNBOUNDED PRECEDING&lt;/code&gt; window aggregates that do not
+have a &lt;code&gt;PARTITION BY&lt;/code&gt; clause. This optimization remains experimental and is disabled by default behind
+&lt;code&gt;ballista.planner.parallel_window.enabled&lt;/code&gt;; it currently targets a single ascending, fixed-width ordering key.&lt;/p&gt;
+&lt;h2 id="safer-memory-defaults"&gt;Safer memory defaults&lt;a class="headerlink" href="#safer-memory-defaults" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Executors now use a bounded &lt;code&gt;FairSpillPool&lt;/code&gt; by default instead of an unbounded memory pool. Unless explicitly
+configured, the pool is sized to 70% of the detected host or container memory limit and divided across the
+executor's vcores. Spillable operators can now write to disk under pressure rather than growing until the
+operating system or container runtime kills the executor.&lt;/p&gt;
+&lt;p&gt;Operators should ensure that the executor work directory has enough scratch space for spills. Set
+&lt;code&gt;--memory-pool-fraction&lt;/code&gt; to tune the automatically selected limit, supply an exact &lt;code&gt;--memory-pool-size&lt;/code&gt;, or use
+&lt;code&gt;--memory-pool-size 0&lt;/code&gt; to restore the previous unbounded behavior.&lt;/p&gt;
+&lt;h2 id="shuffle-and-scheduler-efficiency"&gt;Shuffle and scheduler efficiency&lt;a class="headerlink" href="#shuffle-and-scheduler-efficiency" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;The hash shuffle writer, which had already been superseded by sort shuffle, has been removed. Shuffle-heavy
+workloads benefit from zero-copy remote block receives, one sort-shuffle file per task, reused partition-index
+buffers, skipped IPC validation on sort-shuffle read paths, and removal of an unnecessary read-side sort.&lt;/p&gt;
+&lt;p&gt;Scheduler overhead is also lower: session configuration is encoded once rather than for every task, file
+statistics can be shared across sessions, and small unfiltered scans can execute inline instead of creating a
+separate stage. Executors continue heartbeating while all vcores are busy, and several failure paths now return
+vcores, preserve stages for retry, or fail the job promptly rather than leaving it running indefinitely.&lt;/p&gt;
+&lt;h2 id="compatibility-and-operations"&gt;Compatibility and operations&lt;a class="headerlink" href="#compatibility-and-operations" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Ballista 55.0.0 adds a protocol version and Kubernetes health probes. Clients now receive a clear error when
+their major version differs from the scheduler's, and the maximum gRPC message size is configurable
+consistently across clients, schedulers, and executors. Configuration APIs were also simplified and normalized,
+with deprecations for older method names.&lt;/p&gt;
+&lt;p&gt;The release adds first-generation column statistics at the task and stage levels, including null counts. This
+information lays the groundwork for more informed broadcast and adaptive planning decisions in future releases.&lt;/p&gt;
+&lt;h2 id="thank-you"&gt;Thank You&lt;a class="headerlink" href="#thank-you" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Thank you to all 25 contributors, including Andy Grove, Brent Gardner, Noah Kusaba, Daniël Heres, Marko
+Milenković, Akshay Chitneni, Ville Brofeldt, and everyone who contributed code, reviews, bug reports, and
+feedback. See the &lt;a href="https://github.com/apache/datafusion-ballista/blob/55.0.0/docs/source/changelog/55.0.0.md"&gt;changelog&lt;/a&gt; for the complete list of changes and contributors.&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Apache DataFusion Comet 1.1.0 Release</title><link href="https://datafusion.apache.org/blog/2026/10/01/datafusion-comet-1.1.0" rel="alternate"/><published>2026-10-01T00:00:00+00:00</published><updated>2026-10-01T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2026-10-01:/blog/2026/10/01/datafusion-comet-1.1.0</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
