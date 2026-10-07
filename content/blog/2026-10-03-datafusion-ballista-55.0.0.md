@@ -63,17 +63,16 @@ We benchmarked Ballista against [Apache Spark] 4.1.3, and against Spark 4.1.3 wi
 1.1.0-rc2, on TPC-H at scale factor 1000, with the data stored as Parquet on S3. All three ran on the same Kubernetes
 cluster with 32 executors, each with 8 vCPU and 64 GiB of memory, and each query time is the mean of two runs.
 
-With the 55.0.0 code, Ballista ran the 22 queries in 571.6 seconds in total, against 898.2 seconds for Spark and
-455.1 seconds for Spark with Comet. That makes Ballista 1.57x faster than Spark over the suite, and faster on 16
-of the 22 queries, with the largest gaps on Q1 (5.1x) and Q17 (4.2x). Comet is still 1.26x faster than Ballista
-overall, although Ballista was faster on Q8, Q9, Q13, Q15, and Q17.
+Ballista ran the 22 queries in 502.4 seconds in total, against 898.2 seconds for Spark and 455.1 seconds for
+Spark with Comet. That makes Ballista 1.79x faster than Spark over the suite, and faster on 19 of the 22 queries,
+with the largest gaps on Q1 (5.1x) and Q17 (3.9x). Comet is still 1.10x faster than Ballista overall, but
+Ballista was faster on 7 queries, including Q8 (2.3x) and Q9 (1.6x).
 
-Most of the queries where Ballista trailed, such as Q6, Q14, and Q20, filter on dates. The dataset is
-partitioned by date, and the benchmark runner did not tell Ballista about the partition columns, so Ballista
-read every file's footer and pruned only through Parquet statistics, while Spark skipped whole directories. The
-runner now declares the partition columns. On `main`, which also includes a few engine changes made since the
-release, the total falls to 502.4 seconds, with Q6 going from 4.7 to 1.6 seconds and Q14 from 8.9 to 5.5
-seconds.
+The dataset is partitioned by date, and these numbers come from a benchmark runner that declares the partition
+columns, so Ballista skips the partitions a date filter excludes, as Spark and Comet do. The runner in the
+55.0.0 release did not, so Ballista read every file's footer and pruned only through Parquet statistics. With
+that runner, the total was 571.6 seconds: Q6 took 4.7 seconds instead of 1.6, and Q14 8.9 seconds instead of
+5.5.
 
 These are not tuned comparisons. Spark and Comet ran 16 tasks on each executor's 8 vCPU, while Ballista ran 8,
 and Comet had an extra 32 GiB of off-heap memory per executor. The [benchmarking guide] has the full
