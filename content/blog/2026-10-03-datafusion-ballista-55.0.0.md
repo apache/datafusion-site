@@ -78,6 +78,10 @@ These are not tuned comparisons. Spark and Comet ran 16 tasks on each executor's
 and Comet had an extra 32 GiB of off-heap memory per executor. The [benchmarking guide] has the full
 configuration, the per-query results, and a Trino column for reference.
 
+Although Ballista and Comet perform similarly on this benchmark, they serve different audiences. Comet
+accelerates existing Spark workloads and aims to produce the same results as Spark. Ballista does not aim to be
+compatible with Spark. It is an alternative for distributed DataFusion queries with no JVM dependencies.
+
 The 55.0.0 release resolved many long-standing architectural issues in Ballista, with adaptive planning on by
 default, tasks that cover several partitions, a reworked shuffle, and bounded memory with spilling. With that
 foundation in place, we expect to see significant performance gains in future releases.
