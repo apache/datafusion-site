@@ -51,15 +51,37 @@ and match single-process DataFusion in the project's AQE test suite. The planner
 shuffle when join inputs already have the required partitioning and applies broadcast thresholds consistently
 between the adaptive and static paths.
 
-These changes produced a substantial improvement in the benchmark reported with the AQE work: TPC-H SF10 on
-one 10-vcore executor fell from 62.2 seconds with the static planner to 23.8 seconds with AQE. Results will
-vary by workload and cluster, but this gave the project enough confidence to make AQE the default.
-
 Two related defaults reduce per-stage overhead. The scheduler now packs multiple input partitions into each
 task, up to the assigned executor's available vcores, and the broadcast join threshold increases from 10 MB
 to 128 MB. The previous behavior remains available through configuration; see the [upgrade guide] for details.
 
 [upgrade guide]: https://datafusion.apache.org/ballista/upgrading/55.0.0.html
+
+## Performance compared with Spark and Comet
+
+We benchmarked Ballista against [Apache Spark] 4.1.3, and against Spark 4.1.3 with [Apache DataFusion Comet]
+1.1.0-rc2, on TPC-H at scale factor 1000 (about 1 TB of Parquet on S3). All three ran on the same Kubernetes
+cluster with 32 executors, each with 8 vCPU and 64 GiB of memory, and each query time is the mean of two runs.
+
+With the 55.0.0 code, Ballista ran the 22 queries in 571.6 seconds in total, against 898.2 seconds for Spark and
+455.1 seconds for Spark with Comet. That makes Ballista 1.57x faster than Spark over the suite, and faster on 16
+of the 22 queries, with the largest gaps on Q1 (5.1x) and Q17 (4.2x). Comet is still 1.26x faster than Ballista
+overall, although Ballista was faster on Q8, Q9, Q13, Q15, and Q17.
+
+Most of the queries where Ballista trailed, such as Q6, Q14, and Q20, filter on dates. The dataset is
+partitioned by date, and the benchmark runner did not tell Ballista about the partition columns, so Ballista
+read every file's footer and pruned only through Parquet statistics, while Spark skipped whole directories. The
+runner now declares the partition columns. On `main`, which also includes a few engine changes made since the
+release, the total falls to 502.4 seconds, with Q6 going from 4.7 to 1.6 seconds and Q14 from 8.9 to 5.5
+seconds.
+
+These are not tuned comparisons. Spark and Comet ran 16 tasks on each executor's 8 vCPU, while Ballista ran 8,
+and Comet had an extra 32 GiB of off-heap memory per executor. The [benchmarking guide] has the full
+configuration, the per-query results, and a Trino column for reference.
+
+[Apache Spark]: https://spark.apache.org/
+[Apache DataFusion Comet]: https://datafusion.apache.org/comet/
+[benchmarking guide]: https://datafusion.apache.org/ballista/contributors-guide/benchmarking.html
 
 ## Flight SQL and ADBC
 
