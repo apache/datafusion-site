@@ -60,7 +60,7 @@ to 128 MB. The previous behavior remains available through configuration; see th
 ## Performance compared with Spark and Comet
 
 We benchmarked Ballista against [Apache Spark] 4.1.3, and against Spark 4.1.3 with [Apache DataFusion Comet]
-1.1.0-rc2, on TPC-H at scale factor 1000, with the data stored as Parquet on S3. All three ran on the same Kubernetes
+1.1.0, on TPC-H at scale factor 1000, with the data stored as Parquet on S3. All three ran on the same Kubernetes
 cluster with 32 executors, each with 8 vCPU and 64 GiB of memory, and each query time is the mean of two runs.
 
 Ballista ran the 22 queries in 502.4 seconds in total, against 898.2 seconds for Spark and 455.1 seconds for
