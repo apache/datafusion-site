@@ -78,6 +78,10 @@ These are not tuned comparisons. Spark and Comet ran 16 tasks on each executor's
 and Comet had an extra 32 GiB of off-heap memory per executor. The [benchmarking guide] has the full
 configuration, the per-query results, and a Trino column for reference.
 
+The 55.0.0 release resolved many long-standing architectural issues in Ballista, with adaptive planning on by
+default, tasks that cover several partitions, a reworked shuffle, and bounded memory with spilling. With that
+foundation in place, we expect to see significant performance gains in future releases.
+
 [Apache Spark]: https://spark.apache.org/
 [Apache DataFusion Comet]: https://datafusion.apache.org/comet/
 [benchmarking guide]: https://datafusion.apache.org/ballista/contributors-guide/benchmarking.html
