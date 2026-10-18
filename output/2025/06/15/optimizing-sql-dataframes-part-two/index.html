@@ -127,7 +127,7 @@ in <a href="https://vegafusion.io/">VegaFusion</a>.</p>
 and are typically the first implemented as they provide the largest cost /
 benefit ratio (and performance is terrible without them).</p>
 <h3 id="predicatefilter-pushdown">Predicate/Filter Pushdown<a class="headerlink" href="#predicatefilter-pushdown" title="Permanent link">¶</a></h3>
-<p><strong>Why</strong>: Avoid carrying unneeded <em>rows </em>as soon as possible</p>
+<p><strong>Why</strong>: Avoid carrying unneeded *rows *as soon as possible</p>
 <p><strong>What</strong>: Moves filters “down” in the plan so they run earlier during execution, as shown in Figure 1.</p>
 <p><strong>Example Implementations</strong>: <a href="https://github.com/apache/datafusion/blob/main/datafusion/optimizer/src/push_down_filter.rs">DataFusion</a>, <a href="https://github.com/duckdb/duckdb/blob/main/src/optimizer/filter_pushdown.cpp">DuckDB</a>, <a href="https://github.com/ClickHouse/ClickHouse/blob/master/src/Processors/QueryPlan/Optimizations/filterPushDown.cpp">ClickHouse</a></p>
 <p>The earlier data is filtered out in the plan, the less work the rest of the plan
@@ -147,9 +147,9 @@ processes more rows, reducing efficiency. In (<strong>B</strong>) with filter pu
 operator receives fewer rows, resulting in less overall work and leading to a
 faster and more efficient query.</p>
 <h3 id="projection-pushdown">Projection Pushdown<a class="headerlink" href="#projection-pushdown" title="Permanent link">¶</a></h3>
-<p><strong>Why</strong>: Avoid carrying unneeded <em>columns </em>as soon as possible</p>
-<p><strong>What: </strong>Pushes “projection” (keeping only certain columns) earlier in the plan, as shown in Figure 2.</p>
-<p><strong>Example Implementations: </strong>Implementations: <a href="https://github.com/apache/datafusion/blob/main/datafusion/physical-optimizer/src/projection_pushdown.rs">DataFusion</a>, <a href="https://github.com/duckdb/duckdb/blob/a8a6a080c8809d5d4b3c955e9f113574f6f0bfe0/src/optimizer/pushdown/pushdown_projection.cpp">DuckDB</a>, <a href="https://github.com/ClickHouse/ClickHouse/blob/master/src/Processors/QueryPlan/Optimizations/optimizeUseNormalProjection.cpp">ClickHouse</a></p>
+<p><strong>Why</strong>: Avoid carrying unneeded *columns *as soon as possible</p>
+<p>**What: **Pushes “projection” (keeping only certain columns) earlier in the plan, as shown in Figure 2.</p>
+<p>**Example Implementations: **Implementations: <a href="https://github.com/apache/datafusion/blob/main/datafusion/physical-optimizer/src/projection_pushdown.rs">DataFusion</a>, <a href="https://github.com/duckdb/duckdb/blob/a8a6a080c8809d5d4b3c955e9f113574f6f0bfe0/src/optimizer/pushdown/pushdown_projection.cpp">DuckDB</a>, <a href="https://github.com/ClickHouse/ClickHouse/blob/master/src/Processors/QueryPlan/Optimizations/optimizeUseNormalProjection.cpp">ClickHouse</a></p>
 <p>Similarly to the motivation for <em>Filter Pushdown</em>, the earlier the plan stops
 doing something, the less work it does overall and thus the faster it runs. For
 Projection Pushdown, if columns are not needed later in a plan, copying the data
@@ -170,7 +170,7 @@ receives fewer columns, leading to optimized execution.</p>
 <h3 id="limit-pushdown">Limit Pushdown<a class="headerlink" href="#limit-pushdown" title="Permanent link">¶</a></h3>
 <p><strong>Why</strong>: The earlier the plan stops generating data, the less overall work it
 does, and some operators have more efficient limited implementations.</p>
-<p><strong>What: </strong>Pushes limits (maximum row counts) down in a plan as early as possible.</p>
+<p>**What: **Pushes limits (maximum row counts) down in a plan as early as possible.</p>
 <p><strong>Example Implementations:</strong> <a href="https://github.com/apache/datafusion/blob/main/datafusion/optimizer/src/push_down_limit.rs">DataFusion</a>, <a href="https://github.com/duckdb/duckdb/blob/main/src/optimizer/limit_pushdown.cpp">DuckDB</a>, <a href="https://github.com/ClickHouse/ClickHouse/blob/master/src/Processors/QueryPlan/Optimizations/limitPushDown.cpp">ClickHouse</a>, Spark (<a href="https://github.com/apache/spark/blob/7bc8e99cde424c59b98fe915e3fdaaa30beadb76/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/optimizer/LimitPushDownThroughWindow.scala">Window</a> and <a href="https://github.com/apache/spark/blob/7bc8e99cde424c59b98fe915e3fdaaa30beadb76/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/optimizer/PushProjectionThroughLimit.scala">Projection</a>)</p>
 <p>Often queries have a <code>LIMIT</code> or other clause that allows them to stop generating
 results early so the sooner they can stop execution, the more efficiently they
@@ -302,7 +302,7 @@ decreases complexity for later stages.</p>
 <h3 id="algorithm-selection">Algorithm Selection<a class="headerlink" href="#algorithm-selection" title="Permanent link">¶</a></h3>
 <p><strong>Why</strong>: Different engines have different specialized operators for certain
 operations.</p>
-<p><strong>What: </strong>Selects specific implementations from the available operators, based
+<p>**What: **Selects specific implementations from the available operators, based
 on properties of the query.</p>
 <p><strong>Example Implementations:</strong> DataFusion’s <a href="https://github.com/apache/datafusion/blob/8f3f70877febaa79be3349875e979d3a6e65c30e/datafusion/physical-optimizer/src/enforce_sorting/mod.rs">EnforceSorting</a> pass uses sort optimized implementations, Spark’s <a href="https://github.com/apache/spark/blob/7bc8e99cde424c59b98fe915e3fdaaa30beadb76/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/optimizer/RewriteAsOfJoin.scala">rewrite to use a special operator for ASOF joins</a>, and ClickHouse’s<a href="https://github.com/ClickHouse/ClickHouse/blob/7d15deda4b33282f356bb3e40a190d005acf72f2/src/Interpreters/ExpressionAnalyzer.cpp#L1066-L1080"> join algorithm selection </a> such as <a href="https://github.com/ClickHouse/ClickHouse/blob/7d15deda4b33282f356bb3e40a190d005acf72f2/src/Interpreters/ExpressionAnalyzer.cpp#L1022">when to use MergeJoin</a></p>
 <p>For example, DataFusion uses a <code>TopK</code> (<a href="https://docs.rs/datafusion/latest/datafusion/physical_plan/struct.TopK.html">source</a>) operator rather than a full
@@ -310,7 +310,7 @@ on properties of the query.</p>
 more efficient <code>PartialOrdered</code> grouping operation when the data is sorted on
 group keys or a <code>MergeJoin</code></p>
 <p><img alt="Fig 6: Specialized Grouping." class="img-fluid" src="/blog/images/optimizing-sql-dataframes/specialized-grouping.png" width="80%"/></p>
-<p><strong>Figure 6: </strong>An example of specialized operation for grouping. In (<strong>A</strong>), input data has no specified ordering and DataFusion uses a hashing-based grouping operator (<a href="https://github.com/apache/datafusion/blob/main/datafusion/physical-plan/src/aggregates/row_hash.rs">source</a>) to determine distinct groups. In (<strong>B</strong>), when the input data is ordered by the group keys, DataFusion uses a specialized grouping operator (<a href="https://github.com/apache/datafusion/tree/main/datafusion/physical-plan/src/aggregates/order">source</a>) to find boundaries that separate groups.</p>
+<p>**Figure 6: **An example of specialized operation for grouping. In (<strong>A</strong>), input data has no specified ordering and DataFusion uses a hashing-based grouping operator (<a href="https://github.com/apache/datafusion/blob/main/datafusion/physical-plan/src/aggregates/row_hash.rs">source</a>) to determine distinct groups. In (<strong>B</strong>), when the input data is ordered by the group keys, DataFusion uses a specialized grouping operator (<a href="https://github.com/apache/datafusion/tree/main/datafusion/physical-plan/src/aggregates/order">source</a>) to find boundaries that separate groups.</p>
 <h3 id="using-statistics-directly">Using Statistics Directly<a class="headerlink" href="#using-statistics-directly" title="Permanent link">¶</a></h3>
 <p><strong>Why</strong>: Using pre-computed statistics from a table, without actually reading or
 opening files, is much faster than processing data.</p>
@@ -322,7 +322,7 @@ to statistics for other reasons (such as Access Path and Join Order Selection)
 and statistics are commonly stored in analytic file formats. For example, the
 <a href="https://docs.rs/parquet/latest/parquet/file/metadata/index.html">Metadata</a> of Apache Parquet files stores <code>MIN</code>, <code>MAX</code>, and <code>COUNT</code> information.</p>
 <p><img alt="Fig 7: Using Statistics." class="img-fluid" src="/blog/images/optimizing-sql-dataframes/using-statistics.png" width="80%"/></p>
-<p><strong>Figure 7: </strong>When the aggregation result is already stored in the statistics,
+<p>**Figure 7: **When the aggregation result is already stored in the statistics,
 the query can be evaluated using the values from statistics without looking at
 any compressed data. The optimizer replaces the Aggregation operation with
 values from statistics.</p>
@@ -376,13 +376,13 @@ order enumeration</a>.</p>
 <p>However, the use of heuristics and (imprecise) cost models means optimizers must</p>
 <ol>
 <li>
-<p><strong>Make deep assumptions about the execution environment: </strong>For example the
+<p>**Make deep assumptions about the execution environment: **For example the
    heuristics often include assumptions that joins implement <a href="https://www.alibabacloud.com/blog/alibaba-cloud-analyticdb-for-mysql-create-ultimate-runtimefilter-capability_600228">sideways information
    passing (RuntimeFilters)</a>, or that Join operators always preserve a particular
    input's order.</p>
 </li>
 <li>
-<p><strong>Use one particular objective function: </strong>There are almost always trade-offs
+<p>**Use one particular objective function: **There are almost always trade-offs
    between desirable plan properties, such as execution speed, memory use, and
    robustness in the face of cardinality estimation. Industrial optimizers
    typically have one cost function which attempts to balance between the
