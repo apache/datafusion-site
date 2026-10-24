@@ -22,7 +22,7 @@ IMAGE_NAME = df-site-build
 # runs the Docker container to build the site
 build:
 	@if ! docker image inspect $(IMAGE_NAME) > /dev/null 2>&1; then \
-		docker build -t $(IMAGE_NAME) https://github.com/apache/infrastructure-actions.git#06c3bf8a70aeddc0db4febabfbe56921d7f61ab3:pelican; \
+		docker build -t $(IMAGE_NAME) https://github.com/apache/infrastructure-actions.git#955e87054e303ccabdfb55ad097eb0a9b7060401:pelican; \
 	fi
 	docker run -it --rm -p8000:8000 -v $(PWD):/site --entrypoint /bin/bash $(IMAGE_NAME) -c \
 		"pelicanasf content -o blog --autoreload & \

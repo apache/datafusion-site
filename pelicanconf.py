@@ -1,4 +1,5 @@
 import datetime
+import re
 # Basic information about the site.
 SITENAME = 'Apache DataFusion Blog'
 SITEDESC = 'The official new and blog for the Apache DataFusion project'
@@ -73,3 +74,8 @@ MARKDOWN = {
     },
     'output_format': 'html5',
 }
+
+def strip_style(html):
+    return re.sub(r'<style.*?</style>', '', html, flags=re.S | re.I)
+
+JINJA_FILTERS = { 'strip_style': strip_style, }
