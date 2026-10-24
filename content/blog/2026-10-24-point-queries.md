@@ -1,7 +1,7 @@
 ---
 layout: post
 title: Best Practices for Single Row Lookups (Point Queries)
-date: 2026-10-17
+date: 2026-10-24
 author: Nuno Faria (INESC TEC)
 categories: [performance]
 ---
