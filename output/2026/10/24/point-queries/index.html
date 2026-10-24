@@ -1,0 +1,669 @@
+<!doctype html>
+<html class="no-js" lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Best Practices for Single Row Lookups (Point Queries) - Apache DataFusion Blog</title>
+<link href="/blog/favicon.ico" rel="icon" type="image/x-icon">
+<link href="/blog/favicon.ico" rel="shortcut icon" type="image/x-icon">
+<link href="/blog/css/bootstrap.min.css" rel="stylesheet">
+<link href="/blog/css/fontawesome.all.min.css" rel="stylesheet">
+<link href="/blog/css/headerlink.css" rel="stylesheet">
+<link href="/blog/highlight/default.min.css" rel="stylesheet">
+<link href="/blog/css/app.css" rel="stylesheet">
+<link href="/blog/css/dark-mode.css" rel="stylesheet">
+<script src="/blog/js/dark-mode.js"></script>
+<script src="/blog/highlight/highlight.js"></script>
+<script>hljs.highlightAll();</script>  </head>
+  <body class="d-flex flex-column h-100">
+  <main class="flex-shrink-0">
+<!-- nav bar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top" aria-label="Fifth navbar example">
+    <div class="container-fluid navbar-content">
+        <a class="navbar-brand" href="/blog/"><img src="/blog/images/logo_original4x.png" style="height: 32px;"/> Apache DataFusion Blog</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarADP" aria-controls="navbarADP" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarADP">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/about.html">About</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/blog/feed.xml">RSS</a>
+                </li>
+            </ul>
+            <button id="dark-mode-toggle" type="button" class="dark-mode-toggle" aria-label="Toggle dark mode" aria-pressed="false" title="Toggle dark mode">
+                <span class="sun-icon" aria-hidden="true">☀</span>
+                <span class="moon-icon" aria-hidden="true">☾</span>
+            </button>
+        </div>
+    </div>
+</nav>    
+<!-- article contents -->
+<div id="contents">
+  <div class="bg-white p-4 p-md-5 rounded">
+    <div class="row justify-content-center">
+      <div class="col-12 col-md-8 main-content">
+        <h1>
+          Best Practices for Single Row Lookups (Point Queries)
+        </h1>
+        <p><i>Posted on: Sat 24 October 2026 by Nuno Faria (INESC TEC)</i></p>
+
+        <aside class="toc-container d-md-none mb-2">
+          <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#introduction">Introduction</a></li>
+<li><a href="#methodology">Methodology</a></li>
+<li><a href="#storage-optimizing-parquet-settings">Storage (Optimizing Parquet Settings)</a><ul>
+<li><a href="#file-ordering">File Ordering</a></li>
+<li><a href="#additional-metadata">Additional Metadata</a></li>
+<li><a href="#file-configuration">File Configuration</a></li>
+<li><a href="#compression">Compression</a></li>
+</ul>
+</li>
+<li><a href="#execution-optimizing-datafusion-settings">Execution (Optimizing DataFusion Settings)</a><ul>
+<li><a href="#target-partitions">Target Partitions</a></li>
+<li><a href="#pushdown-filters">Pushdown Filters</a></li>
+<li><a href="#metadata-cache">Metadata Cache</a></li>
+<li><a href="#prepared-statements">Prepared Statements</a></li>
+<li><a href="#memory-allocator">Memory Allocator</a></li>
+<li><a href="#runtime">Runtime</a></li>
+</ul>
+</li>
+<li><a href="#summary">Summary</a></li>
+<li><a href="#acknowledgements">Acknowledgements</a></li>
+<li><a href="#about-the-author">About the Author</a></li>
+<li><a href="#about-datafusion">About DataFusion</a></li>
+</ul>
+</div>
+        </aside>
+
+        <!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+-->
+
+<p>This blog post covers different techniques to improve the performance of point
+queries in DataFusion. It is based on a talk (<a href="https://nuno-faria.github.io/papers/df-point-queries.pdf">slides</a>, <a href="https://www.youtube.com/watch?v=lpr70D9tmSE">recording</a>) given at
+the Boston DataFusion meetup, in September 2026.</p>
+<h2 id="introduction">Introduction<a class="headerlink" href="#introduction" title="Permanent link">¶</a></h2>
+<p>While DataFusion is commonly seen as an engine to run analytical workloads --
+which are comprised by queries that access large sets of data -- some of its
+users regularly require random lookups to large files. During the DataFusion
+meetup in Boston, I met several community members that shared their experiences
+with these types of workloads, and how they hit some of the same challenges I
+highlighted in my talk.</p>
+<p>For this blog post, I will cover some best practices on how to handle random
+lookups (aka point reads) based on my past experience with these workloads in
+DataFusion. Since we usually have many more queries to execute comparatively to
+analytical workloads, the challenge here is completing each query as fast as
+possible (&lt; 1ms) to achieve a reasonable throughput.</p>
+<p>The first part goes over optimizations in the storage (in this case, Parquet
+files), while the second optimizes the execution in DataFusion.</p>
+<h2 id="methodology">Methodology<a class="headerlink" href="#methodology" title="Permanent link">¶</a></h2>
+<p>The dataset we will be using here is formed by a single Parquet file with 100M
+rows (unless otherwise stated), using a key (<code>bigint</code>, unique) and value
+(<code>varchar</code>, md5 of the key) columns, generated with the following code:</p>
+<pre><code class="language-sql">select i as k, md5(i::varchar) as v
+from generate_series(1, {rows}) t(i)
+</code></pre>
+<p>Unless otherwise stated, the queries tested retrieve a random row from the table
+by key (i.e., <code>select v from t where k = {}</code>). Most tests run on a
+<code>c4d-standard-4</code> (4 vCPUs, 15GB RAM) Google Cloud virtual machine, using a 100GB
+<a href="https://docs.cloud.google.com/compute/docs/disks/hyperdisks">HyperDisk</a> (6k IOPS, 500 MB/s) to store the data. The <a href="#runtime">Runtime</a> test
+uses a machine with more CPU cores (<code>c4d-highcpu-8</code>). Each test builds on the
+last.</p>
+<h2 id="storage-optimizing-parquet-settings">Storage (Optimizing Parquet Settings)<a class="headerlink" href="#storage-optimizing-parquet-settings" title="Permanent link">¶</a></h2>
+<h3 id="file-ordering">File Ordering<a class="headerlink" href="#file-ordering" title="Permanent link">¶</a></h3>
+<p>Having the Parquet file sorted by key will allow random lookups to access the
+minimum amount of data, assuming our predicate is also based on the key. To
+confirm this, the first test measures the throughput of random reads against a
+sorted (<code>True</code>) and non sorted (<code>False</code>) file:</p>
+<div align="center">
+<img alt="Barchart comparing throughput with and without a sorted file." class="img-fluid" src="/blog/images/point-queries/parquet_sort.svg" width="400px"/>
+<p style="max-width: 500px; font-style: italic">
+<b>Figure 1</b>: Throughput with (<code>True</code>) and without
+        (<code>False</code>) a sorted file.
+    </p>
+</div>
+<p>The overall throughput of the <strong>sorted version is 6000x faster</strong> than the
+non-sorted one (which is not even visible in the plot). In this case, the
+execution plans show that the non-sorted version needs to access, on average, 67
+row groups and 122 total pages, while the sorted version only accesses one page
+in one group.</p>
+<p>In case you are not familiar, Parquet files are divided into multiple row
+groups, with each column in each group divided into multiple pages (more details
+in the official Parquet
+<a href="https://parquet.apache.org/docs/file-format/">documentation</a>). DataFusion uses
+the min/max statistics for each group/page to determine if it needs to access it
+or not. If the file is not sorted, the min/max bounds will be wide, forcing more
+groups/pages to be accessed, as illustrated in the diagram below:</p>
+<div align="center">
+<img alt="Example structure of a sorted and non sorted Parquet file." class="img-fluid" src="/blog/images/point-queries/sort.svg" width="400px"/>
+<p style="max-width: 500px; font-style: italic">
+<b>Figure 2</b>: Example structure of a sorted and non sorted Parquet
+        file. The orange pages are the ones matched by the predicate
+        <code>k=20</code>.
+    </p>
+</div>
+<h3 id="additional-metadata">Additional Metadata<a class="headerlink" href="#additional-metadata" title="Permanent link">¶</a></h3>
+<p>By default, DataFusion writes Parquet files with dictionary encoding enabled.
+<a href="https://parquet.apache.org/docs/file-format/data-pages/encodings/">Dictionary
+encoding</a>
+maps column values to integers in an attempt to compact the space used, working
+pretty well for columns that have many duplicate values. The figure below shows
+a small example of how it works in practice:</p>
+<div align="center">
+<img alt="Example of a column with and without dictionary encoding." class="img-fluid" src="/blog/images/point-queries/dictionary_encoding.svg" width="450px"/>
+<p style="max-width: 500px; font-style: italic">
+<b>Figure 4</b>: Illustration of dictionary encoding.
+    </p>
+</div>
+<p>However, if a column contains many distinct values (which is the case in our
+dataset), the dictionary will only add overhead. The following test compares
+enabling (<code>True</code>, default) and disabling (<code>False</code>) the dictionary, showing that
+the latter achieves a higher throughput:</p>
+<div align="center">
+<img alt="Barchart comparing throughput with and without dictionary encoding." class="img-fluid" src="/blog/images/point-queries/parquet_dictionary.svg" width="400px"/>
+<p style="max-width: 500px; font-style: italic">
+<b>Figure 5</b>: Throughput with and without dictionary encoding.
+    </p>
+</div>
+<p>Another optional metadata commonly used in Parquet files are <a href="https://parquet.apache.org/docs/file-format/bloomfilter/">bloom
+filters</a>, which much
+like min/max statistics help speedup predicates. In the context of Parquet
+files, a bloom filter is an array of bits that can determine if a value is
+<em>definitely not</em> or <em>maybe is</em> in a specific row group. Figure 6 provides a
+small example of a bloom filter and two different predicates.</p>
+<div align="center">
+<img alt="Example of a bloom filter and two predicates." class="img-fluid" src="/blog/images/point-queries/bloom_filters.svg" width="300px"/>
+<p style="max-width: 500px; font-style: italic">
+<b>Figure 6</b>: Example of a bloom filter and two predicates: the value
+        <code>apple</code> is not present since one of the bits it maps to is
+        0; <code>banana</code> might be present since all the bits it maps to
+        are 1.
+    </p>
+</div>
+<p>In our case, since the column we filter by only contains unique values and is
+already sorted, the min/max statistics suffice, and thus there is no need to add
+bloom filters. By default, DataFusion already does not add bloom filters when
+writing Parquet files. The figure below checks the impact on throughput of point
+reads on a file with (<code>True</code>) and without (<code>False</code>, default) these structures:</p>
+<div align="center">
+<img alt="Barchart comparing throughput with and without bloom filters." class="img-fluid" src="/blog/images/point-queries/parquet_bloom_filter.svg" width="400px"/>
+<p style="max-width: 500px; font-style: italic">
+<b>Figure 7</b>: Throughput with and without bloom filters.
+    </p>
+</div>
+<p>In summary, at least for sorted files with many unique values, it is better to
+<strong>disable both of these structures</strong> when writing Parquet files. This can be set
+in the <a href="https://datafusion.apache.org/user-guide/sql/format_options.html#parquet-format-options"><code>OPTIONS</code> part of the SQL <code>COPY</code>
+command</a>,
+or by changing the
+<a href="https://docs.rs/datafusion/55.2.0/datafusion/common/config/struct.TableParquetOptions.html"><code>TableParquetOptions</code></a>
+in <code>DataFrame::write_parquet</code>:</p>
+<pre><code class="language-sql">COPY (...) to 't.parquet'
+OPTIONS (
+    DICTIONARY_ENABLED false,
+    BLOOM_FILTER_ON_WRITE false
+)
+</code></pre>
+<pre><code class="language-rust">let mut parquet_options = ParquetOptions::default();
+parquet_options.dictionary_enabled = false;
+parquet_options.bloom_filter_on_write = false;
+let mut table_options = TableParquetOptions::new();
+table_options.global = parquet_options;
+df.write_parquet(
+    "t.parquet", 
+    DataFrameWriteOptions::new(), 
+    Some(parquet_options)
+).await?;
+</code></pre>
+<h3 id="file-configuration">File Configuration<a class="headerlink" href="#file-configuration" title="Permanent link">¶</a></h3>
+<p>Next up, we are going to take a look at what should be the optimal row group and
+data page sizes for point reads, by doing a simple grid search. The heatmap in
+Figure 8 shows the throughput for the different combinations.</p>
+<div align="center">
+<img alt="Heatmap comparing throughput based on the row group and data page size." class="img-fluid" src="/blog/images/point-queries/parquet_structure.svg" width="400px"/>
+<p style="max-width: 500px; font-style: italic">
+<b>Figure 8</b>: Point read throughput based on the size of the Parquet
+        row groups and data pages (darker is better).
+    </p>
+</div>
+<p>We can conclude that the optimal configurations for point reads are the values
+around <strong>128k rows per row group</strong> and <strong>1k rows per page</strong>, which are quite
+different from the defaults used in DataFusion (1M sized row groups and 20k
+sized pages). Tiny groups or pages will lead to a large number of them, which
+means more time when pruning. On the other hand, large groups or pages means
+less data is pruned and thus more rows are scanned.</p>
+<p>But what if we need our Parquet files for both point reads and analytical
+workloads? Is there a configuration that can serve both efficiently? To answer
+that, we do another grid search in Figure 9, this time fixing the row group size
+to 512k rows and varying the number of rows scanned per read (x) and the data
+page size (y).</p>
+<div align="center">
+<img alt="Heatmap comparing throughput based on the read size and data page size." class="img-fluid" src="/blog/images/point-queries/parquet_structure_read_size.svg" width="300px"/>
+<p style="max-width: 500px; font-style: italic">
+<b>Figure 9</b>: Throughput based on the read size and the size of the
+        Parquet data pages (512k rows per row group). Each cell shows the ratio
+        between its throughput value and the max throughput in its column
+        (darker is better)..
+    </p>
+</div>
+<p>We see that while large reads favor larger pages, and smaller reads favor
+smaller pages, we can use around <strong>2k-4k rows per page</strong> to achieve a good
+throughput for both workloads, meaning we don't need to sacrifice one over the
+other. These settings can also be set using the <a href="https://datafusion.apache.org/user-guide/sql/format_options.html#parquet-format-options"><code>OPTIONS</code> part of the SQL
+<code>COPY</code>
+command</a>,
+or by changing the
+<a href="https://docs.rs/datafusion/55.2.0/datafusion/common/config/struct.TableParquetOptions.html"><code>TableParquetOptions</code></a>
+in <code>DataFrame::write_parquet</code>:</p>
+<pre><code class="language-sql">COPY (...) to 't.parquet'
+OPTIONS (
+    MAX_ROW_GROUP_SIZE 131072,
+    DATA_PAGE_ROW_COUNT_LIMIT 2048
+)
+</code></pre>
+<h3 id="compression">Compression<a class="headerlink" href="#compression" title="Permanent link">¶</a></h3>
+<p>Finally, we will examine how compression affects performance. The optimal values
+here will be dependent both on the dataset and the user requirements (decoding
+speed vs storage used), thus the conclusion here might not apply to all cases.
+With that said, Figure 10 shows the throughput based on the read size and the
+compression algorithm used, while Figure 11 shows the file size per algorithm.</p>
+<div align="center">
+<img alt="Heatmap comparing throughput based on the read size and compression algorithm." class="img-fluid" src="/blog/images/point-queries/parquet_compression.svg" width="450px"/>
+<p style="max-width: 500px; font-style: italic">
+<b>Figure 10</b>: Throughput based on the read size and the compression
+        algorithm. Each cell is shaded based on the ratio between its throughput
+        value and the max throughput in its column (darker is better).
+    </p>
+</div>
+<div align="center">
+<img alt="Barchart showing the file size per compression algorithm." class="img-fluid" src="/blog/images/point-queries/parquet_compression_file_size.svg" width="450px"/>
+<p style="max-width: 500px; font-style: italic">
+<b>Figure 11</b>: File size based on the compression algorithm used.
+    </p>
+</div>
+<p>The main conclusion here is that, for our dataset, we should use <strong><code>lz4</code> if we
+favor faster speeds</strong> (or maybe even <code>uncompressed</code>), while <strong><code>zstd</code> shows the
+best space/speed tradeoff</strong> (default used in DataFusion). The <code>snappy</code>
+algorithm, which is commonly used and even the default to write Parquet files in
+systems like <a href="https://spark.apache.org/docs/4.2.0/sql-data-sources-parquet.html#data-source-option">Spark</a> and <a href="https://duckdb.org/docs/lts/sql/statements/copy#parquet-options">DuckDB</a>, uses around the same space as <code>lz4</code> for this
+dataset but is slower in larger scans in DataFusion.</p>
+<h2 id="execution-optimizing-datafusion-settings">Execution (Optimizing DataFusion Settings)<a class="headerlink" href="#execution-optimizing-datafusion-settings" title="Permanent link">¶</a></h2>
+<h3 id="target-partitions">Target Partitions<a class="headerlink" href="#target-partitions" title="Permanent link">¶</a></h3>
+<p>We are now going to optimize the execution itself, starting with the
+<code>target_partitions</code> config in DataFusion. This parameter essentially controls
+the parallelism of a query, and by default is set to the number of available
+cores. However, since point reads require so little work, the overhead of
+distributing load to multiple cores outweighs its benefits. So for this next
+test (Figure 12) we compare the throughput of both point reads and larger scans
+with 1 and 8 (default) partitions.</p>
+<div align="center">
+<img alt="Heatmap comparing throughput based on the read size and number of target partitions (1 and 8)." class="img-fluid" src="/blog/images/point-queries/target_partitions.svg" width="400px"/>
+<p style="max-width: 500px; font-style: italic">
+<b>Figure 12</b>: Throughput based on the read size and the number of
+        target partitions. Each cell is shaded based on the ratio between its
+        throughput value and the max throughput in its column (darker is
+        better).
+    </p>
+</div>
+<p>We observe that <strong>small reads are faster with a single partition</strong>, as extra
+ones have the additional cost of coalescing into a single one. On the other
+hand, larger reads (in this case, 10M rows) are faster as they can use the
+additional parallelism, so this option is very much workload dependent. Luckily,
+it can be changed at runtime with <code>SET datafusion.execution.target_partitions =
+...</code>.</p>
+<h3 id="pushdown-filters">Pushdown Filters<a class="headerlink" href="#pushdown-filters" title="Permanent link">¶</a></h3>
+<p>Next up, we are going to take a look at another DataFusion config:
+<code>pushdown_filters</code>. This config pushes filters directly to the Parquet scan,
+instead of having an extra <code>FilterExec</code> node. Even with this disabled (default),
+there is still data pruning done at page-level. The following physical plan
+excerpts show the difference between enabling and disabling this feature for a
+random lookup:</p>
+<pre><code># pushdown_filters disabled
+FilterExec k=&lt;VAL&gt; (output_rows=1)
+  DataSourceExec predicate=k=&lt;VAL&gt; (output_rows=1k)
+
+# pushdown_filters enabled
+DataSourceExec predicate=k=&lt;VAL&gt; (output_rows=1)
+</code></pre>
+<p>In the default version, <code>DataSourceExec</code> returns 1k rows, which is the size of a
+data page, so then the <code>FilterExec</code> cuts it down to the one row we want. The
+version with <code>pushdown_filters</code> enabled does everything in the Arrow crate,
+returning just one row. To determine the best alternative, we will now compare
+the performance using reads of different sizes, with the throughput plotted in
+Figure 13.</p>
+<div align="center">
+<img alt="Heatmap comparing throughput based on the read size and pushdown filters enabled and disabled." class="img-fluid" src="/blog/images/point-queries/pushdown_filters.svg" width="400px"/>
+<p style="max-width: 500px; font-style: italic">
+<b>Figure 13</b>: Throughput based on the read size with
+        <code>pushdown_filters</code> enabled (<code>True</code>) and disabled
+        (<code>False</code>). Each cell is shaded based on the ratio between its
+        throughput value and the max throughput in its column (darker is
+        better).
+    </p>
+</div>
+<p>For both smaller (&lt;10k rows) and larger (&gt;100k rows) reads, we conclude that
+<strong>enabling <code>pushdown_filters</code> results in a higher throughput</strong>. Curiously,
+medium sized reads (between 10k and 100k) are faster with <code>pushdown_filters</code>
+disabled. It's not clear why this is the case (most likely a combination of
+different I/O patterns and filter representation efficiency), but I retested
+this multiple times and in different machines and always saw this behavior.</p>
+<p>As of the writing of the post, this feature is currently disabled because it
+slows some queries down. More info can be found at <a href="https://github.com/apache/datafusion/issues/3463">#3463</a> and <a href="https://github.com/apache/datafusion/issues/20324">#20324</a>.</p>
+<h3 id="metadata-cache">Metadata Cache<a class="headerlink" href="#metadata-cache" title="Permanent link">¶</a></h3>
+<p>To find data in a Parquet file, DataFusion first has to retrieve and parse the
+file's built-in metadata. Since this initial process can itself be several times
+more expensive than a point lookup, DataFusion caches Parquet metadata by
+default since version 50.0.0 to avoid having to do this at every read (more
+details at <a href="https://github.com/apache/datafusion/issues/17000">#17000</a>). To see how important this is, we will now take a look at
+the performance of point reads with and without this cache based on the table
+size, in Figure 14.</p>
+<div align="center">
+<img alt="Linechart showing the throughput with and without metadata caching based on the number of rows in the table." class="img-fluid" src="/blog/images/point-queries/cache_metadata.svg" width="300px"/>
+<p style="max-width: 500px; font-style: italic">
+<b>Figure 14</b>: Throughput with (<code>True</code>) and without
+        (<code>False</code>) caching metadata, based on the table size.
+    </p>
+</div>
+<p>The version that has the metadata cache enabled stays mostly consistent, while
+the version without quickly slows down with large files (large file = more
+metadata = more processing time). Thus, it is better to <strong>keep this caching
+enabled</strong> if we intend to query the same file more than once. The only tuning
+required here might be to increase the cache limit in case we concurrently query
+a large number of (large) files, using the
+<code>datafusion.runtime.metadata_cache_limit</code> (50MB by default). An overview of the
+cache can be accessed using the <code>datafusion-cli</code> tool, through the
+<code>metadata_cache()</code> function:</p>
+<pre><code>&gt; SELECT path, metadata_size_bytes, hits FROM metadata_cache();
++-----------+---------------------+------+
+| path      | metadata_size_bytes | hits |
++-----------+---------------------+------+
+| t.parquet | 19752725            | 1    |
++-----------+---------------------+------+
+</code></pre>
+<h3 id="prepared-statements">Prepared Statements<a class="headerlink" href="#prepared-statements" title="Permanent link">¶</a></h3>
+<p>Before executing a SQL query, DataFusion first builds and optimizes the logical
+plan, from which it then builds and optimizes the physical plan. For point reads
+specifically, this optimization process has quite a significant weight on
+performance, as depicted by Figure 15, which shows the CPU profiling of a point
+read benchmark.</p>
+<div align="center">
+<img alt="Flamegraph of a CPU profiling, showing the logical plan computation taking 12% of the total time and the physical plan computation taking 50% of the total time." class="img-fluid" src="/blog/images/point-queries/profile.png" width="600px"/>
+<p style="max-width: 500px; font-style: italic">
+<b>Figure 15</b>: CPU time profiling in a point read benchmark.
+    </p>
+</div>
+<p>Of the total CPU time, around 12% is spent on building the logical plan, while
+50% is spent on the physical one. If we execute the same query multiple times or
+only change its parameters, it will be worth it to cache the plans by using
+prepared statements. However, prepared statements in DataFusion currently only
+reuse the logical plan.</p>
+<p>To determine the potential benefits of having prepared statements that reuse the
+physical plan, I implemented a version that builds and caches the plan using
+placeholder arguments. Then, at runtime, the plan is cloned and any node with
+placeholders (e.g., <code>DataSourceExec</code>, <code>FilterExec</code>, <code>ProjectionExec</code>) is
+recreated with the final arguments. Figure 16 compares the throughput with this
+version (<code>physical</code>) vs DataFusion's prepared statements (<code>logical</code>) and no
+prepared statements (<code>no</code>), using different types of point read queries.</p>
+<div align="center">
+<img alt="Barchart showing the throughput for different query types with no prepared statements." class="img-fluid" src="/blog/images/point-queries/prepared_statements.svg" width="500px"/>
+<p style="max-width: 500px; font-style: italic">
+<b>Figure 16</b>: Throughput of different point read queries with no
+        prepared statements (<code>no</code>), DataFusion's builtin prepared
+        statements (<code>logical</code>), and the custom implementation that
+        reuses physical plans (<code>physical</code>).
+    </p>
+</div>
+<p>While reusing the logical plan offers an improvement over not reusing anything,
+it's clear that <strong>reusing the physical plan leads to a considerably higher
+throughput</strong>, doubling or even tripling performance. Currently, this is not
+available in DataFusion. See <a href="https://github.com/apache/datafusion/issues/26706">#26706</a> for more details. </p>
+<h3 id="memory-allocator">Memory Allocator<a class="headerlink" href="#memory-allocator" title="Permanent link">¶</a></h3>
+<p>Another important contributor to the overall performance in DataFusion is the
+memory allocator used. As we will see in Figure 17, this is true for both point
+reads and larger scans.</p>
+<div align="center">
+<img alt="Heatmap comparing throughput based on the read size and memory allocator." class="img-fluid" src="/blog/images/point-queries/memory_allocator.svg" width="450px"/>
+<p style="max-width: 500px; font-style: italic">
+<b>Figure 17</b>: Throughput of different memory allocators based on the
+        read size (<code>system</code> is the default). Each cell is shaded
+        based on the ratio between its throughput value and the max throughput
+        in its column (darker is better).
+    </p>
+</div>
+<p>The results show that the allocators have widely different throughputs. Smaller
+reads are faster with <code>snmalloc</code> or <code>mimalloc</code>, while larger ones work better
+with <code>system</code>, <code>mimalloc</code>, or <code>tcmalloc</code>.</p>
+<p>Thus, in our workload, <strong><code>mimalloc</code> appears to be the overall best choice</strong>.
+It's no coincidence that it's the one used by <code>datafusion-cli</code> and the
+DataFusion Python library.</p>
+<h3 id="runtime">Runtime<a class="headerlink" href="#runtime" title="Permanent link">¶</a></h3>
+<p>The last topic we are going to look at concerns the <code>tokio</code> runtime used by
+DataFusion. <a href="https://tokio.rs/"><code>tokio</code></a> provides asynchronous processing
+capabilities to Rust, and is particularly useful in DataFusion where queries
+often need to wait for I/O or network when retrieving data, which they can do so
+by releasing the current thread to another task. Andrew Lamb gave a talk at
+Tokio Conf 2026 titled "<a href="https://docs.google.com/presentation/d/1gnMDMuzVE-ESqFeBrQHVzspgFKgUsEDJ4cTgrX3hD0Q/edit?slide=id.g33d6952b95a_0_1014]">Using Tokio for CPU-Bound Tasks (Works Really Well)</a>"
+about this.</p>
+<p>However, for workloads where we have multiple different clients executing many
+queries that access tiny amounts of data, I noticed that the throughput was not
+scaling as well as I'd hoped. My default implementation was the most straight
+forward, creating one <code>tokio::task</code> for each client (each with its own
+<code>SessionContext</code>):</p>
+<pre><code class="language-rust">tokio::task::spawn(
+    async move {
+        let ctx = SessionContext::new();
+        // do work
+    }
+)
+</code></pre>
+<p>After experimenting with different configurations, I found that having a
+<strong>separate single-threaded runtime for each client scaled better</strong>, as
+illustrated by the results in Figure 18:</p>
+<pre><code class="language-rust">tokio::task::spawn(async move {
+    std::thread::spawn(move || {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        rt.block_on(async {
+            let ctx = SessionContext::new();
+            // do work
+        })
+    })
+})
+</code></pre>
+<div align="center">
+<img alt="Two linecharts, the left compares the throughput with the single runtime vs multiple runtimes, while the right shows the total CPU usage, both based on the number of clients." class="img-fluid" src="/blog/images/point-queries/runtime.svg" width="600px"/>
+<p style="max-width: 500px; font-style: italic">
+<b>Figure 18</b>: Throughput and CPU usage of the single multi-thread
+        runtime (<code>default</code>) vs the multiple single-threaded runtimes
+        (<code>single-threaded</code>).
+    </p>
+</div>
+<p>We see in the results that the default version does not really improve with 7 or
+8 clients, as the CPU is not being fully utilized, unlike the multiple
+single-threaded runtimes version. Of course, with the latter technique any
+analytical queries will only be able to use a single thread, so this is only
+recommended for point queries.</p>
+<h2 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">¶</a></h2>
+<p>Table 1 shows an overview of the main optimizations tested. In total, we managed
+to improve the throughput in almost 8x over the baseline and reduce the response
+time to sub 0.2ms, demonstrating that DataFusion is well capable of handling
+point read workloads.</p>
+<p align="center" style="font-style: italic">
+<b>Table 1</b>: Throughput and response time for points reads based on the
+    optimization (single client; each optimization builds on the previous one).
+</p>
+<table class="table">
+<thead>
+<tr>
+<th>Optimization</th>
+<th style="text-align: center;">Throughput (reads/s)</th>
+<th style="text-align: center;">Response time (ms)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Sorted file</td>
+<td style="text-align: center;">698</td>
+<td style="text-align: center;">1.43</td>
+</tr>
+<tr>
+<td>Disable Dictionary Encoding</td>
+<td style="text-align: center;">1062</td>
+<td style="text-align: center;">0.94</td>
+</tr>
+<tr>
+<td>Row Group / Page Configuration</td>
+<td style="text-align: center;">1370</td>
+<td style="text-align: center;">0.73</td>
+</tr>
+<tr>
+<td>Target Partitions</td>
+<td style="text-align: center;">1553</td>
+<td style="text-align: center;">0.64</td>
+</tr>
+<tr>
+<td>Pushdown Filters</td>
+<td style="text-align: center;">1616</td>
+<td style="text-align: center;">0.62</td>
+</tr>
+<tr>
+<td>Prepared Statements</td>
+<td style="text-align: center;">4606</td>
+<td style="text-align: center;">0.22</td>
+</tr>
+<tr>
+<td>Mimalloc Allocator</td>
+<td style="text-align: center;">5192</td>
+<td style="text-align: center;">0.19</td>
+</tr>
+<tr>
+<td>Single-threaded Runtimes</td>
+<td style="text-align: center;">5433</td>
+<td style="text-align: center;">0.18</td>
+</tr>
+</tbody>
+</table>
+<h2 id="acknowledgements">Acknowledgements<a class="headerlink" href="#acknowledgements" title="Permanent link">¶</a></h2>
+<p>Thank you to <a href="https://www.inesctec.pt/en">INESC TEC</a> for supporting my work on DataFusion. Thanks to
+<a href="https://github.com/alamb">Andrew Lamb</a>, <a href="https://github.com/NGA-TRAN">Nga Tran</a>, and <a href="https://www.linkedin.com/in/pratibharana">Pratibha Rana</a> (as well as <a href="https://www.datadoghq.com/">Datadog</a>) for
+organizing the DataFusion meetup in Boston where this work was originally
+presented. Thanks to <a href="https://github.com/alamb">Andrew Lamb</a> as well for reviewing this blog post.</p>
+<h2 id="about-the-author">About the Author<a class="headerlink" href="#about-the-author" title="Permanent link">¶</a></h2>
+<p><a href="https://nuno-faria.github.io/">Nuno Faria</a> is a researcher at
+<a href="https://www.inesctec.pt/en">INESC TEC</a> and an <a href="https://datafusion.apache.org/">Apache
+DataFusion</a> committer.</p>
+<h2 id="about-datafusion">About DataFusion<a class="headerlink" href="#about-datafusion" title="Permanent link">¶</a></h2>
+<p><a href="https://datafusion.apache.org/">Apache DataFusion</a> is an extensible query engine toolkit, written
+in Rust, that uses <a href="https://arrow.apache.org/">Apache Arrow</a> as its in-memory format. DataFusion and
+similar technology are part of the next generation “Deconstructed Database”
+architectures, where new systems are built on a foundation of fast, modular
+components, rather than as a single tightly integrated system.</p>
+<p>The <a href="https://datafusion.apache.org/contributor-guide/communication.html">DataFusion community</a> is always looking for new contributors to help
+improve the project. If you are interested in learning more about how query
+execution works, help document or improve the DataFusion codebase, or just try
+it out, we would love for you to join us.</p>
+
+<!--
+  Comments Section
+  Loaded only after explicit visitor consent to comply with ASF policy.
+-->
+
+<div>
+  <hr>
+  <h3 id="comments">Comments<a class="headerlink" href="#comments" title="Permanent link">&para;</a></h3>
+
+  <!-- Local loader script -->
+  <script src="/blog/js/giscus-consent.js" defer></script>
+
+  <!-- Consent UI -->
+  <div id="giscus-consent">
+    <p>
+        We use <a href="https://giscus.app/">Giscus</a> for comments, powered by GitHub Discussions.
+        To respect your privacy, Giscus and comments will load only if you click "Show Comments"
+    </p>
+
+    <div class="consent-actions">
+      <button id="giscus-load" type="button">Show Comments</button>
+      <button id="giscus-revoke" type="button" hidden>Hide Comments</button>
+    </div>
+
+    <noscript>JavaScript is required to load comments from Giscus.</noscript>
+  </div>
+
+  <!-- Container where Giscus will render -->
+  <div id="comment-thread"></div>
+</div>      </div>
+      <aside class="toc-container d-none d-md-block col-md-4 col-xl-3 ms-xl-2">
+        <div class="toc"><span class="toctitle">Contents</span><ul>
+<li><a href="#introduction">Introduction</a></li>
+<li><a href="#methodology">Methodology</a></li>
+<li><a href="#storage-optimizing-parquet-settings">Storage (Optimizing Parquet Settings)</a><ul>
+<li><a href="#file-ordering">File Ordering</a></li>
+<li><a href="#additional-metadata">Additional Metadata</a></li>
+<li><a href="#file-configuration">File Configuration</a></li>
+<li><a href="#compression">Compression</a></li>
+</ul>
+</li>
+<li><a href="#execution-optimizing-datafusion-settings">Execution (Optimizing DataFusion Settings)</a><ul>
+<li><a href="#target-partitions">Target Partitions</a></li>
+<li><a href="#pushdown-filters">Pushdown Filters</a></li>
+<li><a href="#metadata-cache">Metadata Cache</a></li>
+<li><a href="#prepared-statements">Prepared Statements</a></li>
+<li><a href="#memory-allocator">Memory Allocator</a></li>
+<li><a href="#runtime">Runtime</a></li>
+</ul>
+</li>
+<li><a href="#summary">Summary</a></li>
+<li><a href="#acknowledgements">Acknowledgements</a></li>
+<li><a href="#about-the-author">About the Author</a></li>
+<li><a href="#about-datafusion">About DataFusion</a></li>
+</ul>
+</div>
+      </aside>
+      <script src="/blog/js/toc-highlight.js" defer></script>
+    </div>
+  </div>
+</div>    
+    <!-- footer -->
+    <div class="row g-0">
+      <div class="col-12">
+        <p style="font-style: italic; font-size: 0.8rem; text-align: center;">
+          Copyright 2026, <a href="https://www.apache.org/">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a>.<br/>
+          Apache&reg; and the Apache logo are trademarks of The Apache Software Foundation.
+        </p>
+        <p style="font-size: 0.8rem; text-align: center;">
+          <a href="https://www.apache.org/">Foundation</a> |
+          <a href="https://www.apache.org/events/current-event.html">Events</a> |
+          <a href="https://www.apache.org/licenses/">License</a> |
+          <a href="https://www.apache.org/security/">Security</a> |
+          <a href="https://www.apache.org/foundation/sponsorship.html">Sponsorship</a> |
+          <a href="https://www.apache.org/foundation/thanks.html">Thanks</a> |
+          <a href="https://privacy.apache.org/policies/privacy-policy-public.html">Privacy</a>
+        </p>
+      </div>
+    </div>
+    <script src="/blog/js/bootstrap.bundle.min.js"></script>  </main>
+  </body>
+</html>
