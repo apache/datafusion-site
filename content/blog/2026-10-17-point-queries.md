@@ -1,6 +1,6 @@
 ---
 layout: post
-title: Best Practices for Single Row Lookups
+title: Best Practices for Single Row Lookups (Point Queries)
 date: 2026-10-17
 author: Nuno Faria (INESC TEC)
 categories: [performance]
@@ -28,10 +28,11 @@ limitations under the License.
 [TOC]
 
 This blog post covers different techniques to improve the performance of point
-queries in DataFusion. It is based on a
-[talk](https://nuno-faria.github.io/papers/df-point-queries.pdf) given at the
-Boston DataFusion meetup, in September 2026.
+queries in DataFusion. It is based on a talk ([slides], [recording]) given at
+the Boston DataFusion meetup, in September 2026.
 
+[slides]: https://nuno-faria.github.io/papers/df-point-queries.pdf
+[recording]: https://www.youtube.com/watch?v=lpr70D9tmSE
 
 ## Introduction
 
@@ -56,11 +57,23 @@ files), while the second optimizes the execution in DataFusion.
 
 The dataset we will be using here is formed by a single Parquet file with 100M
 rows (unless otherwise stated), using a key (`bigint`, unique) and value
-(`varchar`, md5 of the key) columns. Unless otherwise stated, the queries tested
-retrieve a random row from the table by key. Each test builds on the last.
+(`varchar`, md5 of the key) columns, generated with the following code:
 
+```sql
+select i as k, md5(i::varchar) as v
+from generate_series(1, {rows}) t(i)
+```
 
-## Storage
+Unless otherwise stated, the queries tested retrieve a random row from the table
+by key (i.e., `select v from t where k = {}`). Most tests run on a
+`c4d-standard-4` (4 vCPUs, 15GB RAM) Google Cloud virtual machine, using a 100GB
+[HyperDisk] (6k IOPS, 500 MB/s) to store the data. The [Runtime](#runtime) test
+uses a machine with more CPU cores (`c4d-highcpu-8`). Each test builds on the
+last.
+
+[HyperDisk]: https://docs.cloud.google.com/compute/docs/disks/hyperdisks
+
+## Storage (Optimizing Parquet Settings)
 
 ### File Ordering
 
@@ -78,7 +91,7 @@ sorted (`True`) and non sorted (`False`) file:
     />
     <p style="max-width: 500px; font-style: italic">
         <b>Figure 1</b>: Throughput with (<code>True</code>) and without
-        (<code>False</code>) a sorted Parquet file.
+        (<code>False</code>) a sorted file.
     </p>
 </div>
 
@@ -164,9 +177,9 @@ small example of a bloom filter and two different predicates.
     />
     <p style="max-width: 500px; font-style: italic">
         <b>Figure 6</b>: Example of a bloom filter and two predicates: the value
-        <code>orange</code> is not present since one of the bits it maps to is
-        0; <code>blue</code> might be present since all the bits it maps to are
-        1.
+        <code>apple</code> is not present since one of the bits it maps to is
+        0; <code>banana</code> might be present since all the bits it maps to
+        are 1.
     </p>
 </div>
 
@@ -189,7 +202,33 @@ reads on a file with (`True`) and without (`False`, default) these structures:
 </div>
 
 In summary, at least for sorted files with many unique values, it is better to
-**disable both of these structures** when writing Parquet files.
+**disable both of these structures** when writing Parquet files. This can be set
+in the [`OPTIONS` part of the SQL `COPY`
+command](https://datafusion.apache.org/user-guide/sql/format_options.html#parquet-format-options),
+or by changing the
+[`TableParquetOptions`](https://docs.rs/datafusion/55.2.0/datafusion/common/config/struct.TableParquetOptions.html)
+in `DataFrame::write_parquet`:
+
+```sql
+COPY (...) to 't.parquet'
+OPTIONS (
+    DICTIONARY_ENABLED false,
+    BLOOM_FILTER_ON_WRITE false
+)
+```
+
+```rust
+let mut parquet_options = ParquetOptions::default();
+parquet_options.dictionary_enabled = false;
+parquet_options.bloom_filter_on_write = false;
+let mut table_options = TableParquetOptions::new();
+table_options.global = parquet_options;
+df.write_parquet(
+    "t.parquet", 
+    DataFrameWriteOptions::new(), 
+    Some(parquet_options)
+).await?;
+```
 
 ### File Configuration
 
@@ -206,7 +245,7 @@ Figure 8 shows the throughput for the different combinations.
     />
     <p style="max-width: 500px; font-style: italic">
         <b>Figure 8</b>: Point read throughput based on the size of the Parquet
-        row groups and data pages.
+        row groups and data pages (darker is better).
     </p>
 </div>
 
@@ -233,23 +272,36 @@ page size (y).
     <p style="max-width: 500px; font-style: italic">
         <b>Figure 9</b>: Throughput based on the read size and the size of the
         Parquet data pages (512k rows per row group). Each cell shows the ratio
-        between its throughput value and the max throughput in its column.
+        between its throughput value and the max throughput in its column
+        (darker is better)..
     </p>
 </div>
 
 We see that while large reads favor larger pages, and smaller reads favor
 smaller pages, we can use around **2k-4k rows per page** to achieve a good
 throughput for both workloads, meaning we don't need to sacrifice one over the
-other.
+other. These settings can also be set using the [`OPTIONS` part of the SQL
+`COPY`
+command](https://datafusion.apache.org/user-guide/sql/format_options.html#parquet-format-options),
+or by changing the
+[`TableParquetOptions`](https://docs.rs/datafusion/55.2.0/datafusion/common/config/struct.TableParquetOptions.html)
+in `DataFrame::write_parquet`:
+
+```sql
+COPY (...) to 't.parquet'
+OPTIONS (
+    MAX_ROW_GROUP_SIZE 131072,
+    DATA_PAGE_ROW_COUNT_LIMIT 2048
+)
+```
 
 ### Compression
 
-Finally, the last configuration we are going to take a look in the storage is
-the compression used. The optimal values here will be dependent both on the
-dataset and the user requirements (decoding speed vs storage used), thus the
-conclusion here might not apply to all cases. With that said, Figure 10 shows
-the throughput based on the read size and the compression algorithm used, while
-Figure 11 shows the file size per algorithm.
+Finally, we will examine how compression affects performance. The optimal values
+here will be dependent both on the dataset and the user requirements (decoding
+speed vs storage used), thus the conclusion here might not apply to all cases.
+With that said, Figure 10 shows the throughput based on the read size and the
+compression algorithm used, while Figure 11 shows the file size per algorithm.
 
 <div align="center">
     <img
@@ -260,7 +312,8 @@ Figure 11 shows the file size per algorithm.
     />
     <p style="max-width: 500px; font-style: italic">
         <b>Figure 10</b>: Throughput based on the read size and the compression
-        algorithm used.
+        algorithm. Each cell is shaded based on the ratio between its throughput
+        value and the max throughput in its column (darker is better).
     </p>
 </div>
 
@@ -287,17 +340,17 @@ dataset but is slower in larger scans in DataFusion.
 [DuckDB]: https://duckdb.org/docs/lts/sql/statements/copy#parquet-options
 
 
-## Execution
+## Execution (Optimizing DataFusion Settings)
 
 ### Target Partitions
 
 We are now going to optimize the execution itself, starting with the
 `target_partitions` config in DataFusion. This parameter essentially controls
 the parallelism of a query, and by default is set to the number of available
-cores. However, since point reads are simple to execute, they should only take
-advantage of a single CPU core. So for this next test (Figure 12) we compare the
-throughput of both point reads and larger scans with 1 and 8 (default)
-partitions.
+cores. However, since point reads require so little work, the overhead of
+distributing load to multiple cores outweighs its benefits. So for this next
+test (Figure 12) we compare the throughput of both point reads and larger scans
+with 1 and 8 (default) partitions.
 
 <div align="center">
     <img
@@ -308,15 +361,18 @@ partitions.
     />
     <p style="max-width: 500px; font-style: italic">
         <b>Figure 12</b>: Throughput based on the read size and the number of
-        target partitions.
+        target partitions. Each cell is shaded based on the ratio between its
+        throughput value and the max throughput in its column (darker is
+        better).
     </p>
 </div>
 
 We observe that **small reads are faster with a single partition**, as extra
 ones have the additional cost of coalescing into a single one. On the other
-hand, larger reads (in this case, 10M rows) can use the additional parallelism,
-so this option is very much workload dependent. Luckily, it can be changed at
-runtime with `SET datafusion.execution.target_partitions = ...`.
+hand, larger reads (in this case, 10M rows) are faster as they can use the
+additional parallelism, so this option is very much workload dependent. Luckily,
+it can be changed at runtime with `SET datafusion.execution.target_partitions =
+...`.
 
 ### Pushdown Filters
 
@@ -329,11 +385,11 @@ random lookup:
 
 ```
 # pushdown_filters disabled
-FilterExec (output_rows=1)
-  DataSourceExec (output_rows=1k)
+FilterExec k=<VAL> (output_rows=1)
+  DataSourceExec predicate=k=<VAL> (output_rows=1k)
 
 # pushdown_filters enabled
-DataSourceExec (output_rows=1)
+DataSourceExec predicate=k=<VAL> (output_rows=1)
 ```
 
 In the default version, `DataSourceExec` returns 1k rows, which is the size of a
@@ -353,18 +409,21 @@ Figure 13.
     <p style="max-width: 500px; font-style: italic">
         <b>Figure 13</b>: Throughput based on the read size with
         <code>pushdown_filters</code> enabled (<code>True</code>) and disabled
-        (<code>False</code>).
+        (<code>False</code>). Each cell is shaded based on the ratio between its
+        throughput value and the max throughput in its column (darker is
+        better).
     </p>
 </div>
 
 For both smaller (<10k rows) and larger (>100k rows) reads, we conclude that
 **enabling `pushdown_filters` results in a higher throughput**. Curiously,
 medium sized reads (between 10k and 100k) are faster with `pushdown_filters`
-disabled. It's not clear why this is the case, but I retested this multiple
-times and in different machines and always saw this behavior.
+disabled. It's not clear why this is the case (most likely a combination of
+different I/O patterns and filter representation efficiency), but I retested
+this multiple times and in different machines and always saw this behavior.
 
-As of the writing of the post, this feature is currently disabled by default due
-to some performance regressions. More info can be found at [#3463] and [#20324].
+As of the writing of the post, this feature is currently disabled because it
+slows some queries down. More info can be found at [#3463] and [#20324].
 
 [#3463]: https://github.com/apache/datafusion/issues/3463
 [#20324]: https://github.com/apache/datafusion/issues/20324
@@ -464,12 +523,10 @@ prepared statements (`no`), using different types of point read queries.
 
 While reusing the logical plan offers an improvement over not reusing anything,
 it's clear that **reusing the physical plan leads to a considerably higher
-throughput**, doubling or even tripling performance. So when can we expect
-prepared statements in native DataFusion that reuse the physical plan? First, we
-need a non-hacky way to build the physical plan using placeholders, and push the
-responsibility of updating the physical node to the node implementation itself.
-But for that, we need change the `ExecutionPlan` API. There are currently no
-plans to do so, so for now we need to roll our own implementation downstream.
+throughput**, doubling or even tripling performance. Currently, this is not
+available in DataFusion. See [#26706] for more details. 
+
+[#26706]: https://github.com/apache/datafusion/issues/26706
 
 ### Memory Allocator
 
@@ -486,7 +543,9 @@ reads and larger scans.
     />
     <p style="max-width: 500px; font-style: italic">
         <b>Figure 17</b>: Throughput of different memory allocators based on the
-        read size (<code>system</code> is the default).
+        read size (<code>system</code> is the default). Each cell is shaded
+        based on the ratio between its throughput value and the max throughput
+        in its column (darker is better).
     </p>
 </div>
 
@@ -504,9 +563,9 @@ The last topic we are going to look at concerns the `tokio` runtime used by
 DataFusion. [`tokio`](https://tokio.rs/) provides asynchronous processing
 capabilities to Rust, and is particularly useful in DataFusion where queries
 often need to wait for I/O or network when retrieving data, which they can do so
-by releasing the current thread to another task. Andrew Lamb has given a talk at
+by releasing the current thread to another task. Andrew Lamb gave a talk at
 Tokio Conf 2026 titled "[Using Tokio for CPU-Bound Tasks (Works Really Well)]"
-which talks about this.
+about this.
 
 [Using Tokio for CPU-Bound Tasks (Works Really Well)]:
 https://docs.google.com/presentation/d/1gnMDMuzVE-ESqFeBrQHVzspgFKgUsEDJ4cTgrX3hD0Q/edit?slide=id.g33d6952b95a_0_1014]
@@ -575,7 +634,7 @@ point read workloads.
 
 <p style="font-style: italic" align="center">
     <b>Table 1</b>: Throughput and response time for points reads based on the
-    optimization (each optimization builds on the previous one).
+    optimization (single client; each optimization builds on the previous one).
 </p>
 | Optimization                   | Throughput (reads/s) | Response time (ms) |
 | ------------------------------ | :------------------: | :----------------: |
@@ -594,7 +653,7 @@ point read workloads.
 Thank you to [INESC TEC] for supporting my work on DataFusion. Thanks to
 [Andrew Lamb], [Nga Tran], and [Pratibha Rana] (as well as [Datadog]) for
 organizing the DataFusion meetup in Boston where this work was originally
-presented.
+presented. Thanks to [Andrew Lamb] as well for reviewing this blog post.
 
 [INESC TEC]: https://www.inesctec.pt/en
 [InfluxData]: https://www.influxdata.com/
