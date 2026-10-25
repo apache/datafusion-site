@@ -37,9 +37,9 @@ This release covers roughly five weeks of development since 1.1.0: 388 commits f
 
 [change log]: https://github.com/apache/datafusion-comet/blob/branch-1.2/docs/source/changelog/1.2.0.md
 
-1.2.0 is mostly about one thing: **getting the same answers as Spark**. A native engine that is fast but returns
-different results is not useful, so much of this cycle went into sweeping whole classes of differences instead of
-fixing one expression at a time.
+Comet has always aimed to return the same results as Spark. Much of this cycle went into the edge cases that
+remained, working through whole categories at a time (timezones, floating-point `-0.0` and `NaN`, collations)
+and adding tests that keep them fixed.
 
 The highlights:
 
@@ -54,9 +54,8 @@ The highlights:
 
 ## Results That Match Spark
 
-Comet's promise is that a query returns what Spark would return. In earlier releases, we fixed differences as
-users found them. In 1.2.0 we worked through them systematically, starting with the two areas that produced the
-most reports.
+The differences that remain between Comet and Spark tend to cluster in edge cases that share a root cause. In
+1.2.0 we went through these by category, starting with the two areas that produced the most reports.
 
 ### Timestamps and timezones
 
