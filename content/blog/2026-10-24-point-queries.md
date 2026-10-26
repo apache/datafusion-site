@@ -226,7 +226,7 @@ table_options.global = parquet_options;
 df.write_parquet(
     "t.parquet", 
     DataFrameWriteOptions::new(), 
-    Some(parquet_options)
+    Some(table_options)
 ).await?;
 ```
 
