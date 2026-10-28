@@ -27,7 +27,7 @@ limitations under the License.
 
 [TOC]
 
-Query engines get fast at what their benchmarks measure, and the most widely used analytical benchmarks contain no nested data. Apache DataFusion Comet now runs all 22 queries of a nested TPC-H at scale factor 1000 (1 TB) in 777 s, against 1,515 s for Spark. Before the fixes this benchmark exposed, it took 1,088 s.
+Query engines get fast at what their benchmarks measure, and the most widely used analytical benchmarks contain no nested data. Apache DataFusion Comet now runs all 22 queries of a nested TPC-H at scale factor 1000 (1 TB) in 777 s, against 1,515 s for Spark.
 
 <img
 src="../images/comet-nested-tpch/intro-total.svg"
