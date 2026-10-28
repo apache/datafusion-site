@@ -27,7 +27,7 @@ limitations under the License.
 
 [TOC]
 
-Query engines get fast at what their benchmarks measure, and the most widely used analytical benchmarks contain no nested data. Apache DataFusion Comet now runs all 22 queries of a nested TPC-H at scale factor 1000 (1 TB) in 777 s, against 1,515 s for Spark. Before the fixes this benchmark exposed, it took 1,088 s.
+Query engines get fast at what their benchmarks measure, and the most widely used analytical benchmarks contain no nested data. Apache DataFusion Comet now runs all 22 queries of a nested TPC-H at scale factor 1000 (1 TB) in 777 s, against 1,515 s for Spark.
 
 <img
 src="../images/comet-nested-tpch/intro-total.svg"
@@ -36,7 +36,7 @@ class="img-fluid"
 alt="Total execution time at SF1000: Spark 1,515.0 s, Comet nested unoptimized 1,087.5 s, Comet nested optimized 777.2 s"
 />
 
-Nested TPC-H is a TPC-H derived benchmark in the Comet repository ([#7044](https://github.com/apache/datafusion-comet/pull/7044)). It keeps the TPC-H data and questions and changes only the shape of the tables. The data and queries are engine neutral, so they can be used to compare Spark, Comet and other engines.
+Nested TPC-H is a TPC-H derived benchmark in the Comet repository ([#7044](https://github.com/apache/datafusion-comet/pull/7044)). The TPC-H data and the questions the queries answer are unchanged. The tables are reshaped to store most columns in arrays of structs, and the queries are rewritten to unnest those arrays. The data and queries are engine neutral, so they can be used to compare Spark, Comet and other engines.
 
 We built it because our benchmarks and our users disagreed. Comet tracked its performance with TPC-H and TPC-DS, and the numbers were encouraging. Real user pipelines showed smaller gains, or none at all. What those pipelines had in common was nested data, which neither benchmark contains.
 
@@ -56,7 +56,7 @@ Real data is often nested. Event logs, JSON, Avro and Protobuf records, and many
 
 Comet hit the shuffle case in [#5397](https://github.com/apache/datafusion-comet/issues/5397), where native shuffle writes of wide nested fields were two to three times slower than Spark's. The issue notes that it was "invisible for TPC-* benchmarks because of historical flat schema".
 
-We needed a benchmark that fills the gap between academic benchmarking and real user workloads.
+We needed a benchmark that filled the gap between academic benchmarking and real user workloads.
 
 ## How: an adapter that nests TPC-H
 
@@ -103,6 +103,8 @@ spark-shell -i scripts/nest_tpch.scala \
 
 The [README](https://github.com/apache/datafusion-comet/tree/main/benchmarks/nested) has the Iceberg variants and all settings.
 
+The script and queries in the Comet repository also serve as an example. You can customize them to test any nested complexity, such as multi-element arrays, maps or deeper nesting.
+
 ## Benchmark setup
 
 - **Data**: nested TPC-H, scale factor 1000 (1 TB).
@@ -115,7 +117,7 @@ The [README](https://github.com/apache/datafusion-comet/tree/main/benchmarks/nes
 
 ## What nested benchmarks revealed
 
-The nested benchmark exposed issues that were invisible on flat TPC-H. In the unoptimized run, Comet was slower than Spark on q20 (32.9 s against 31.5 s) and q21 (490.6 s against 373.5 s), and barely faster on q02 (34.0 s against 34.9 s). Tracing those queries surfaced a lot of technical debt in how nested data is read, shuffled and spilled, in Comet and in the iceberg-rust reader underneath it.
+The nested schema is deliberately simple: single-element arrays of structs, with no maps for now. Even that was enough to expose issues that were invisible on flat TPC-H. In the unoptimized run, Comet was slower than Spark on q20 (32.9 s against 31.5 s) and q21 (490.6 s against 373.5 s), and barely faster on q02 (34.0 s against 34.9 s). Tracing those queries surfaced a lot of technical debt in how nested data is read, shuffled and spilled, in Comet and in the iceberg-rust reader underneath it.
 
 The issues fell into four groups:
 
