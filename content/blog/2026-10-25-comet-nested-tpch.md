@@ -117,7 +117,7 @@ The script and queries in the Comet repository also serve as an example. You can
 
 ## What nested benchmarks revealed
 
-The nested schema is deliberately simple: single-element arrays of structs, with no maps for now. Even that was enough to expose issues that were invisible on flat TPC-H. In the unoptimized run, Comet was slower than Spark on q20 (32.9 s against 31.5 s) and q21 (490.6 s against 373.5 s), and barely faster on q02 (34.0 s against 34.9 s). Tracing those queries surfaced a lot of technical debt in how nested data is read, shuffled and spilled, in Comet and in the iceberg-rust reader underneath it.
+The nested schema is: single-element arrays of structs, with no maps for now. Even that was enough to expose issues that were invisible on flat TPC-H. In the unoptimized run, Comet was slower than Spark on q20 (32.9 s against 31.5 s) and q21 (490.6 s against 373.5 s), and barely faster on q02 (34.0 s against 34.9 s). Tracing those queries surfaced a lot of technical debt in how nested data is read, shuffled and spilled, in Comet and in the iceberg-rust reader underneath it.
 
 The issues fell into four groups:
 
@@ -128,7 +128,7 @@ The issues fell into four groups:
 
 Spills and shuffle writes happen in flat workloads too. The nested schema changed the data volume or access pattern enough to expose them.
 
-Most of these issues are fixed. The issues and pull requests, with their measurements, are listed in [Issues and pull requests](#issues-and-pull-requests) at the end of the post.
+The issues and pull requests, with their measurements and details, are listed in [Issues and pull requests](#issues-and-pull-requests) at the end of the post.
 
 ## Results
 
@@ -144,8 +144,6 @@ alt="Total execution time at SF1000: Spark 1,515.0 s, Comet nested unoptimized 1
 />
 
 ### Execution time by query
-
-q21 is the longest query: 490.6 s on unoptimized Comet, 373.5 s on Spark and 256.6 s on optimized Comet.
 
 <img
 src="../images/comet-nested-tpch/results-queries.svg"
