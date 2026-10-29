@@ -42,34 +42,142 @@ Neither change would have been possible without a long series of improvements to
 
 ## What it looks like
 
-Define a Python function that operates on Arrow arrays, wrap it as a UDF, and use it as you would with
-DataFusion Python:
+Python UDFs are most useful when logic is awkward to write with built-in SQL functions but natural to express
+in Python, such as business rules kept in a Python data structure. To show what this looks like on a cluster,
+we will rewrite a query from the [TPC-H] benchmark, the same benchmark Ballista uses to measure its own
+performance, so you can try it on data you generate yourself.
+
+[TPC-H Query 19] computes the revenue from parts that qualify for a discount. The rules differ by brand, and
+the reference SQL spells them out as three nearly identical blocks joined with `OR`. With a Python UDF, the
+rules can live in an ordinary Python dictionary, and the query is reduced to a join, the shared filters, and a
+single call to the UDF.
+
+To follow along, generate the two tables the query needs with [tpchgen-cli]:
+
+```shell
+pip install tpchgen-cli
+tpchgen-cli parquet --scale-factor 1 --tables lineitem,part --output-dir data
+```
+
+Then start a local cluster. The `ballista` Python package can run both the scheduler and the executor. Start
+each in its own terminal, from the same directory as `data/`, so the executor can find the files:
+
+```shell
+# terminal 1: scheduler, listening on localhost:50050
+python -c "from ballista import BallistaScheduler; s = BallistaScheduler(); s.start(); s.wait_for_termination()"
+
+# terminal 2: executor
+python -c "from ballista import BallistaExecutor; e = BallistaExecutor(); e.start(); e.wait_for_termination()"
+```
+
+Alternatively, `ballista.setup_test_cluster()` starts both inside the current Python process and returns the
+host and port to connect to. Until the next release, the `ballista` package needs to be built from source, as
+described in [Trying it out](#trying-it-out).
+
+The UDF is written with [pyarrow.compute], so each batch stays in Arrow rather than being converted to Python
+objects:
 
 ```python
+import functools
+import os
+
 import pyarrow as pa
-from datafusion import col, udf
+import pyarrow.compute as pc
+from datafusion import col, lit, udf
+from datafusion import functions as f
 from ballista import BallistaSessionContext
 
 ctx = BallistaSessionContext("df://localhost:50050")
-ctx.sql("create external table t stored as parquet location 'data/t.parquet'")
+ctx.register_parquet("lineitem", "data/lineitem.parquet")
+ctx.register_parquet("part", "data/part.parquet")
+
+# brand -> (allowed containers, minimum quantity, maximum size)
+DISCOUNT_RULES = {
+    "Brand#12": (["SM CASE", "SM BOX", "SM PACK", "SM PKG"], 1, 5),
+    "Brand#23": (["MED BAG", "MED BOX", "MED PKG", "MED PACK"], 10, 10),
+    "Brand#34": (["LG CASE", "LG BOX", "LG PACK", "LG PKG"], 20, 15),
+}
 
 
-def is_null(array: pa.Array) -> pa.Array:
-    return array.is_null()
+def is_discounted(
+    brand: pa.Array, container: pa.Array, quantity: pa.Array, size: pa.Array
+) -> pa.Array:
+    print(f"is_discounted: {len(brand)} rows in process {os.getpid()}", flush=True)
+    matches = [
+        functools.reduce(
+            pc.and_,
+            [
+                pc.equal(brand, b),
+                pc.is_in(container, pa.array(containers)),
+                pc.greater_equal(quantity, min_qty),
+                pc.less_equal(quantity, min_qty + 10),
+                pc.greater_equal(size, 1),
+                pc.less_equal(size, max_size),
+            ],
+        )
+        for b, (containers, min_qty, max_size) in DISCOUNT_RULES.items()
+    ]
+    return functools.reduce(pc.or_, matches)
 
 
-is_null_udf = udf(is_null, [pa.int64()], pa.bool_(), "stable", name="is_null_udf")
+is_discounted_udf = udf(
+    is_discounted,
+    [pa.string(), pa.string(), pa.decimal128(15, 2), pa.int32()],
+    pa.bool_(),
+    "immutable",
+    name="is_discounted",
+)
 
 # DataFrame API
-df = ctx.table("t")
-df.select(col("a"), is_null_udf(col("a")).alias("n")).show()
+lineitem = ctx.table("lineitem").filter(
+    f.in_list(col("l_shipmode"), [lit("AIR"), lit("AIR REG")]),
+    col("l_shipinstruct") == lit("DELIVER IN PERSON"),
+)
+
+revenue = (
+    lineitem.join(ctx.table("part"), left_on="l_partkey", right_on="p_partkey")
+    .filter(
+        is_discounted_udf(
+            col("p_brand"), col("p_container"), col("l_quantity"), col("p_size")
+        )
+    )
+    .aggregate(
+        [], [f.sum(col("l_extendedprice") * (lit(1) - col("l_discount"))).alias("revenue")]
+    )
+)
+revenue.show()
 
 # SQL
-ctx.register_udf(is_null_udf)
-ctx.sql("select a, is_null_udf(a) as n from t").show()
+ctx.register_udf(is_discounted_udf)
+ctx.sql("""
+    select sum(l_extendedprice * (1 - l_discount)) as revenue
+    from lineitem join part on p_partkey = l_partkey
+    where l_shipmode in ('AIR', 'AIR REG')
+      and l_shipinstruct = 'DELIVER IN PERSON'
+      and is_discounted(p_brand, p_container, l_quantity, p_size)
+""").show()
 ```
 
-The UDF does not need to be registered on the cluster ahead of time. Its code travels with the query.
+The join and filters run as native DataFusion operators on the executors, and only the rows that survive them
+are handed to `is_discounted`. The UDF does not need to be registered on the cluster ahead of time. Its code,
+along with the `DISCOUNT_RULES` dictionary it references, travels with the query.
+
+You can see this happen. The `print` call at the top of `is_discounted` writes one line per batch, and those
+lines appear in the executor's terminal, not in the terminal where you ran the query:
+
+```text
+is_discounted: 8192 rows in process 61867
+is_discounted: 8192 rows in process 61867
+...
+```
+
+The client only prints the query results. The function was pickled into the plan, sent to the executor, and
+run there, in a different Python process.
+
+[TPC-H]: https://www.tpc.org/tpch/
+[TPC-H Query 19]: https://github.com/apache/datafusion-ballista/blob/main/benchmarks/queries/q19.sql
+[pyarrow.compute]: https://arrow.apache.org/docs/python/api/compute.html
+[tpchgen-cli]: https://github.com/datafusion-contrib/tpcgen-rs
 
 ## A native DataFusion Python experience
 
