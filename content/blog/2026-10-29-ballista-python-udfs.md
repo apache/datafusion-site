@@ -186,8 +186,12 @@ Every method that executed a plan was intercepted, the logical plan was serializ
 resubmitted through a separate Ballista session. This worked for the common cases, but it had real drawbacks:
 
 - Methods the wrapper did not know about ran locally instead of on the cluster.
-- Users got a Ballista-specific `DistributedDataFrame` rather than a regular `datafusion.DataFrame`.
-- The wrapper had to track every change to the DataFusion Python API.
+- Results came back as a Ballista-specific `DistributedDataFrame`, and whether a query ran on the cluster
+  depended on the wrapper re-wrapping every DataFrame it returned. Write options such as `partition_by` were
+  silently ignored.
+- The wrapper had to track every change to the DataFusion Python API, which caused churn in the Ballista
+  repository each time a feature was added upstream. For example, it mirrored DataFusion Python's Parquet
+  writer options field by field.
 - Python objects did not always cross the boundary between the two libraries cleanly. The issue that started
   this effort, [#1142], reported a `TypeError: argument 'group_by': 'Expr' object cannot be converted to 'Expr'`
   from a simple aggregate.
