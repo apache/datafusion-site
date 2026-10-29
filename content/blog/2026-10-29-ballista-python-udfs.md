@@ -199,6 +199,15 @@ Ballista's query planner sends the plan to the scheduler. Any operation that exe
 back from `BallistaSessionContext` is a `datafusion.SessionContext`, and the DataFrames it creates are regular
 `datafusion.DataFrame`s.
 
+Because these are the standard DataFusion Python objects, the full DataFusion Python API and its
+documentation, including the [user guide], [API reference], and examples, apply to Ballista as-is. Previously,
+any method the wrapper did not intercept quietly ran locally instead of on the cluster. One known gap remains:
+`DataFrame.cache()` is not yet supported, because the in-memory table it creates cannot be serialized into the
+plan sent to the scheduler.
+
+[user guide]: https://datafusion.apache.org/python/user-guide/introduction.html
+[API reference]: https://datafusion.apache.org/python/autoapi/index.html
+
 [#1142]: https://github.com/apache/datafusion-ballista/issues/1142
 
 ## How Python UDFs travel with the plan
