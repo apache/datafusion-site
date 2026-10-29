@@ -182,8 +182,9 @@ run there, in a different Python process.
 ## A native DataFusion Python experience
 
 Earlier versions of the Ballista Python client subclassed DataFusion Python's `SessionContext` and `DataFrame`.
-Every method that executed a plan was intercepted, the logical plan was serialized, and the query was
-resubmitted through a separate Ballista session. This worked for the common cases, but it had real drawbacks:
+The main execution methods, such as `collect`, `show`, and `to_pandas`, were intercepted, the logical plan was
+serialized, and the query was resubmitted through a separate Ballista session. This worked for the common
+cases, but it had real drawbacks:
 
 - Methods the wrapper did not know about ran locally instead of on the cluster.
 - Results came back as a Ballista-specific `DistributedDataFrame`, and whether a query ran on the cluster
