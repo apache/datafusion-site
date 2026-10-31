@@ -1,9 +1,9 @@
 ---
 layout: post
-title: Announcing a derived TPC-H, a benchmark for nested data in Apache DataFusion Comet
+title: "Nested TPC-H: A Benchmark for Nested Data in Apache DataFusion Comet"
 date: 2026-10-25
 author: pmc
-categories: [performance, benchmarks]
+categories: [performance, subprojects]
 ---
 
 <!--
@@ -27,26 +27,26 @@ limitations under the License.
 
 [TOC]
 
-Query engines get fast at what their benchmarks measure, and the most widely used analytical benchmarks contain no nested data. Apache DataFusion Comet now runs all 22 queries of a nested TPC-H at scale factor 1000 (1 TB) in 777 s, against 1,515 s for Spark.
+Apache DataFusion Comet tracked its performance with TPC-H and TPC-DS, and the numbers were encouraging. Real user pipelines showed smaller gains, or none at all. What those pipelines had in common was nested data, which neither benchmark contains.
+
+To measure that gap, we built nested TPC-H. At scale factor 1000 (1 TB), Comet 1.2.0 runs all 22 of its queries in 790 s, against 1,519 s for Spark 4.1.3.
 
 <img
 src="../images/comet-nested-tpch/intro-total.svg"
 width="100%"
 class="img-fluid"
-alt="Total execution time at SF1000: Spark 1,515.0 s, Comet nested unoptimized 1,087.5 s, Comet nested optimized 777.2 s"
+alt="Total execution time at SF1000: Spark 4.1.3 1,519 s, Comet 1.1.0 869 s, Comet 1.2.0 790 s"
 />
 
 Nested TPC-H is a TPC-H derived benchmark in the Comet repository ([#7044](https://github.com/apache/datafusion-comet/pull/7044)). The TPC-H data and the questions the queries answer are unchanged. The tables are reshaped to store most columns in arrays of structs, and the queries are rewritten to unnest those arrays. The data and queries are engine neutral, so they can be used to compare Spark, Comet and other engines.
 
-We built it because our benchmarks and our users disagreed. Comet tracked its performance with TPC-H and TPC-DS, and the numbers were encouraging. Real user pipelines showed smaller gains, or none at all. What those pipelines had in common was nested data, which neither benchmark contains.
-
-So we started experimenting with nested benchmarks in Comet to see where the gaps were. The first runs showed them: some queries ran slower on Comet than on Spark, even though Comet accelerates the same queries on flat TPC-H.
+The first runs showed where the gaps were: some queries ran slower on Comet than on Spark, even though Comet accelerates the same queries on flat TPC-H.
 
 ## Why: TPC-H is flat, real data is not
 
-[TPC-H](https://www.tpc.org/tpch/) is one of the most cited analytical benchmarks, and its schema is flat: eight normalized tables with primitive columns. Its 22 queries exercise well-understood choke points such as aggregation, join ordering and correlated subqueries (Boncz, Neumann and Erling, "TPC-H Analyzed", TPCTC 2013).
+[TPC-H](https://www.tpc.org/tpch/) is one of the most cited analytical benchmarks, and its schema is flat: eight normalized tables with primitive columns. Its 22 queries exercise well-understood choke points such as aggregation, join ordering and correlated subqueries (Boncz, Neumann and Erling, ["TPC-H Analyzed"](https://doi.org/10.1007/978-3-319-04936-6_5), TPCTC 2013).
 
-Real data is often nested. Event logs, JSON, Avro and Protobuf records, and many data lake tables are full of structs and arrays, which Parquet stores with the record shredding scheme from Dremel (Melnik et al., VLDB 2010). Nested data adds work that flat benchmarks never exercise:
+Real data is often nested. Event logs, JSON, Avro and Protobuf records, and many data lake tables are full of structs and arrays, which Parquet stores with the record shredding scheme from Dremel (Melnik et al., ["Dremel"](http://www.vldb.org/pvldb/vldb2010/papers/R29.pdf), VLDB 2010). Nested data adds work that flat benchmarks never exercise:
 
 - **Reading.** Rebuilding list offsets and validity bitmaps from repetition and definition levels, and decoding only the fields a query uses.
 - **Planning.** Nested column pruning and predicate pushdown through `explode`.
@@ -107,23 +107,44 @@ The script and queries in the Comet repository also serve as an example. You can
 
 ## Benchmark setup
 
-- **Data**: nested TPC-H, scale factor 1000 (1 TB).
-- **Tables**: Apache Iceberg tables with zstd-compressed Parquet data files on S3, created with `nest_tpch.scala`. Comet reads them with its native Iceberg scan, which is built on [iceberg-rust](https://github.com/apache/iceberg-rust).
-- **Cluster**: Kubernetes with 16-core executors.
-- **Method**: one run per configuration, three iterations per query. Figures are the fastest iteration, and totals are sums of the per-query times.
-- **Spark**: Spark 4.0
-- **Comet nested unoptimized**: Comet 1.1.0 snapshot (revision `a50fe3aea863`)
-- **Comet nested optimized**: Comet 1.3.0 snapshot (revision `330b29cf`)
+- **Data**: nested TPC-H at scale factor 1000 (1 TB), created from flat TPC-H with `nest_tpch.scala`.
+- **Tables**: Apache Iceberg tables in a Hadoop catalog on S3, with zstd-compressed Parquet data files, 512 MiB row groups and the partitioning above. Comet reads them with its native Iceberg scan, which is built on [iceberg-rust](https://github.com/apache/iceberg-rust).
+- **Versions**: Spark 4.1.3 (Scala 2.13, JDK 17) and Iceberg 1.11.0. Comet 1.1.0, and Comet 1.2.0 built from `branch-1.2` at `746246049`. Both Comet builds use the native Iceberg scan and the default allocator (glibc).
+- **Cluster**: Kubernetes, with 32 executors of 16 task slots each (8 CPUs per executor pod), shuffle and spill files on a block volume attached to each executor, and `spark.sql.shuffle.partitions=512`.
+- **Method**: the queries in `benchmarks/nested`, run from `spark-shell`. Each query runs three times in one application with no warm-up, timed from `spark.sql()` to the end of `collect()`. Figures are the fastest iteration, and totals are sums of the per-query times. Every query returned the expected TPC-H row count.
+- **Memory**: each executor gets a 106 GiB container. Spark runs with a 64 GiB heap and no off-heap memory. Comet runs with a 32 GiB heap and 64 GiB of off-heap memory, which gives each task 4 GiB of native memory.
+
+Comet 1.2.0 includes two of the fixes described below, [#6698](https://github.com/apache/datafusion-comet/pull/6698) (spill compression) and [#6725](https://github.com/apache/datafusion-comet/pull/6725) (nested column pruning in the native Iceberg scan). The iceberg-rust fixes merged after the iceberg-rust revision that Comet 1.2.0 pins, so they are not in these results.
+
+Both engines share these settings: G1 GC, Kryo, `spark.io.compression.codec=zstd`, `spark.memory.fraction=0.6`, `spark.memory.storageFraction=0.2`, `spark.sql.sources.ignoreDataLocality=true` and `spark.executor.memoryOverhead=10g`. Comet adds:
+
+```
+spark.executor.memory=32g
+spark.memory.offHeap.enabled=true
+spark.memory.offHeap.size=64g
+spark.plugins=org.apache.spark.CometPlugin
+spark.shuffle.manager=org.apache.spark.sql.comet.execution.shuffle.CometShuffleManager
+spark.comet.exec.memoryPool.fraction=0.8
+spark.comet.parquet.prefetchNextFileMetadata.enabled=true
+spark.comet.scan.icebergNative.enabled=true
+spark.comet.scan.icebergNative.dataFileConcurrencyLimit=4
+spark.executor.defaultJavaOptions=-XX:TrimNativeHeapInterval=5000 -Xlog:trimnative
+```
+
+Two of these settings were needed to run the full suite on Comet:
+
+- **Off-heap memory.** With a 64 GiB heap and 32 GiB of off-heap memory, each task gets 2 GiB of native memory. That is not enough for q21's sort-merge join stage on Comet 1.2.0, which allocates about 2.2 GiB per task and reserves up to 3.1 GiB, so tasks failed and were retried.
+- **`-XX:TrimNativeHeapInterval`.** Without it, glibc keeps native memory that Comet has freed, and executor resident memory grows from one query to the next. Late in the suite, q21 had 11 executors OOMKilled while Comet's memory pools were well inside their limits. Trimming every 5 s kept executors at 61 to 70 GiB of resident memory and cost about 4% on the other queries. The Comet tuning guide now recommends it ([#7342](https://github.com/apache/datafusion-comet/pull/7342)).
 
 ## What nested benchmarks revealed
 
-The nested schema is: single-element arrays of structs, with no maps for now. Even that was enough to expose issues that were invisible on flat TPC-H. In the unoptimized run, Comet was slower than Spark on q20 (32.9 s against 31.5 s) and q21 (490.6 s against 373.5 s), and barely faster on q02 (34.0 s against 34.9 s). Tracing those queries surfaced a lot of technical debt in how nested data is read, shuffled and spilled, in Comet and in the iceberg-rust reader underneath it.
+The nested schema uses single-element arrays of structs, with no maps for now. Even that was enough to expose issues that were invisible on flat TPC-H. In our first runs, Comet was slower than Spark on q20 and q21, and barely faster on q02. Tracing those queries surfaced a lot of technical debt in how nested data is read, shuffled and spilled, in Comet and in the iceberg-rust reader underneath it.
 
 The issues fell into four groups:
 
 - **Spilling.** Wide nested values made q21's sort spill several hundred GiB per iteration, and Comet wrote spill files uncompressed.
-- **Reading only what a query needs.** Comet's native Iceberg scan decoded every field of a nested column, even when Spark had pruned it to one field. This is why q20 was no faster than Spark.
-- **Shuffle.** Native shuffle wrote wide nested fields two to three times slower than Spark.
+- **Reading only what a query needs.** Comet's native Iceberg scan decoded every field of a nested column, even when Spark had pruned it to one field. This is why q20 was no faster than Spark in our first runs.
+- **Shuffle.** Native shuffle wrote wide nested fields two to three times slower than Spark. This is still open work.
 - **Nested reads in iceberg-rust.** Nested fields read as NULL, some list types could not be read at all, and projection cost grew with the number of nested leaves.
 
 Spills and shuffle writes happen in flat workloads too. The nested schema changed the data volume or access pattern enough to expose them.
@@ -134,14 +155,7 @@ The issues and pull requests, with their measurements and details, are listed in
 
 ### Total execution time
 
-Unoptimized Comet takes `1,087.5` s against `1,515.0` s for Spark (1.39x) and is slower on q20 and q21. Optimized Comet takes `777.2` s (1.95x), 29% less than unoptimized, and is faster than Spark on all 22 queries.
-
-<img
-src="../images/comet-nested-tpch/intro-total.svg"
-width="100%"
-class="img-fluid"
-alt="Total execution time at SF1000: Spark 1,515.0 s, Comet nested unoptimized 1,087.5 s, Comet nested optimized 777.2 s"
-/>
+Comet 1.1.0 takes 869 s against 1,519 s for Spark (1.75x) and is slower than Spark on one query, q14 (8.8 s against 8.1 s). Comet 1.2.0 takes 790 s (1.92x), 9% less than 1.1.0, and is faster than Spark on all 22 queries.
 
 ### Execution time by query
 
@@ -149,34 +163,36 @@ alt="Total execution time at SF1000: Spark 1,515.0 s, Comet nested unoptimized 1
 src="../images/comet-nested-tpch/results-queries.svg"
 width="100%"
 class="img-fluid"
-alt="Execution time by query for Spark, Comet nested unoptimized and Comet nested optimized"
+alt="Execution time by query for Spark 4.1.3, Comet 1.1.0 and Comet 1.2.0"
 />
 
-| Query | Spark (s) | Comet unoptimized (s) | Comet optimized (s) |
-| ----- | ---: | ---: | ---: |
-| q01 | 78.1 | 14.5 | 13.7 |
-| q02 | 34.9 | 34.0 | 28.1 |
-| q03 | 41.0 | 19.6 | 17.9 |
-| q04 | 46.7 | 20.6 | 14.8 |
-| q05 | 82.5 | 45.7 | 47.4 |
-| q06 | 4.9 | 2.8 | 1.9 |
-| q07 | 56.7 | 33.3 | 32.4 |
-| q08 | 76.8 | 42.0 | 42.8 |
-| q09 | 97.9 | 49.9 | 48.1 |
-| q10 | 47.7 | 31.6 | 25.8 |
-| q11 | 70.4 | 40.0 | 34.5 |
-| q12 | 34.4 | 16.1 | 14.4 |
-| q13 | 25.3 | 8.7 | 8.1 |
-| q14 | 8.2 | 6.8 | 2.8 |
-| q15 | 31.8 | 18.1 | 16.5 |
-| q16 | 33.7 | 13.7 | 13.1 |
-| q17 | 109.4 | 41.5 | 40.6 |
-| q18 | 142.5 | 71.6 | 57.9 |
-| q19 | 31.2 | 14.8 | 11.0 |
-| q20 | 31.5 | 32.9 | 21.8 |
-| q21 | 373.5 | 490.6 | 256.6 |
-| q22 | 56.1 | 38.8 | 27.1 |
-| **Total** | **1,515.0** | **1,087.5** | **777.2** |
+| Query | Spark 4.1.3 (s) | Comet 1.1.0 (s) | Comet 1.2.0 (s) | Speedup, 1.1.0 | Speedup, 1.2.0 |
+| ----- | ---: | ---: | ---: | ---: | ---: |
+| q01 | 84.9 | 17.0 | 14.8 | 5.01x | 5.73x |
+| q02 | 39.3 | 23.4 | 27.0 | 1.68x | 1.45x |
+| q03 | 39.7 | 21.6 | 20.1 | 1.83x | 1.97x |
+| q04 | 45.2 | 19.8 | 16.1 | 2.28x | 2.81x |
+| q05 | 82.6 | 48.5 | 43.9 | 1.70x | 1.88x |
+| q06 | 5.0 | 2.2 | 2.1 | 2.22x | 2.41x |
+| q07 | 58.6 | 35.3 | 33.5 | 1.66x | 1.75x |
+| q08 | 84.6 | 64.1 | 59.3 | 1.32x | 1.43x |
+| q09 | 97.1 | 73.2 | 64.9 | 1.33x | 1.50x |
+| q10 | 50.9 | 29.2 | 26.6 | 1.74x | 1.91x |
+| q11 | 59.9 | 41.8 | 40.0 | 1.43x | 1.50x |
+| q12 | 37.1 | 17.8 | 15.2 | 2.08x | 2.44x |
+| q13 | 25.6 | 9.3 | 8.7 | 2.75x | 2.95x |
+| q14 | 8.1 | 8.8 | 4.3 | 0.93x | 1.91x |
+| q15 | 34.2 | 21.1 | 23.0 | 1.62x | 1.49x |
+| q16 | 31.9 | 14.7 | 15.4 | 2.16x | 2.08x |
+| q17 | 133.6 | 48.1 | 42.8 | 2.78x | 3.13x |
+| q18 | 152.6 | 76.3 | 56.4 | 2.00x | 2.71x |
+| q19 | 32.1 | 17.2 | 15.0 | 1.87x | 2.14x |
+| q20 | 34.3 | 24.6 | 24.3 | 1.39x | 1.41x |
+| q21 | 332.0 | 218.9 | 202.1 | 1.52x | 1.64x |
+| q22 | 49.8 | 36.2 | 35.0 | 1.38x | 1.43x |
+| **Total** | **1,519** | **869** | **790** | **1.75x** | **1.92x** |
+
+The largest gains from 1.1.0 to 1.2.0 are q14 (2.0x), q18 (1.35x) and q04 (1.23x). Comet 1.1.0 is slightly faster than 1.2.0 on q02, q15 and q16. Each version ran once, so differences this small may be noise.
 
 ## What's next
 
@@ -190,9 +206,9 @@ Each item links to the pull request that fixed it, or to the open pull request o
 
 ### In Comet
 
-- **q21 spills uncompressed ([#6467](https://github.com/apache/datafusion-comet/issues/6467), fixed by [#6698](https://github.com/apache/datafusion-comet/pull/6698)).** Spark pushes the `EXISTS` and `NOT EXISTS` predicates below the `explode`, so the whole unpruned `lineitem_data` column goes through the shuffle, sort and joins. The sort spilled several hundred GiB per iteration, and DataFusion writes spill files uncompressed by default. #6698 adds `spark.comet.exec.spill.compression.codec`, which defaults to `lz4`. This is behind q21's regression in the results above. The investigation in #6467 used a separate run on Spark 4, where q21 went from 380 s to 250 s against 367 s for Spark.
-- **Nested columns are read in full ([#6724](https://github.com/apache/datafusion-comet/issues/6724), fixed by [#6725](https://github.com/apache/datafusion-comet/pull/6725)).** Comet's native Iceberg scan decoded every field of a nested column even when Spark pruned it. In q20 the `partsupp` scan read 26.4 GiB for a query that needs one field, and #6724 found that scan to be the main cost of Comet's q20. This is why q20 was no faster than Spark in the unoptimized run. #6725 passes the pruned schema, and a microbenchmark of that read went from 624 ms to 62 ms, against 413 ms for Spark. The follow-up [#7019](https://github.com/apache/datafusion-comet/issues/7019) covers a partition column nested inside a pruned struct.
-- **Nested shuffle writes ([#5397](https://github.com/apache/datafusion-comet/issues/5397)).** The motivating issue above. Related work is tracked in [#6855](https://github.com/apache/datafusion-comet/issues/6855).
+- **q21 spills uncompressed ([#6467](https://github.com/apache/datafusion-comet/issues/6467), fixed by [#6698](https://github.com/apache/datafusion-comet/pull/6698)).** Spark pushes the `EXISTS` and `NOT EXISTS` predicates below the `explode`, so the whole unpruned `lineitem_data` column goes through the shuffle, sort and joins. The sort spilled several hundred GiB per iteration, and DataFusion writes spill files uncompressed by default. #6698 adds `spark.comet.exec.spill.compression.codec`, which defaults to `lz4`. In the investigation in #6467, which used an earlier build and a different cluster configuration from the results above, compression took q21 from 380 s to 250 s, against 367 s for Spark.
+- **Nested columns are read in full ([#6724](https://github.com/apache/datafusion-comet/issues/6724), fixed by [#6725](https://github.com/apache/datafusion-comet/pull/6725)).** Comet's native Iceberg scan decoded every field of a nested column even when Spark pruned it. In q20 the `partsupp` scan read 26.4 GiB for a query that needs one field, and #6724 found that scan to be the main cost of Comet's q20. This is why q20 was no faster than Spark in our first runs. #6725 passes the pruned schema, and a microbenchmark of that read went from 624 ms to 62 ms, against 413 ms for Spark. The follow-up [#7019](https://github.com/apache/datafusion-comet/issues/7019) covers a partition column nested inside a pruned struct.
+- **Nested shuffle writes ([#5397](https://github.com/apache/datafusion-comet/issues/5397)).** The motivating issue above. This is still open work. Nested-type conversion and JVM shuffle performance are tracked in [#6855](https://github.com/apache/datafusion-comet/issues/6855).
 
 ### In iceberg-rust
 
@@ -203,7 +219,7 @@ Comet's native Iceberg scan reads data files through iceberg-rust's Arrow reader
 - **List view columns read as NULL ([#3393](https://github.com/apache/iceberg-rust/issues/3393), fix in review in [#3467](https://github.com/apache/iceberg-rust/pull/3467)).** When a file's embedded Arrow schema asks for `ListView`, the projection treats the whole list as one leaf. The column reads as NULL, and a list view of structs shifts every later column to the wrong Parquet leaf. #3467 reads list views as lists.
 - **Fixed-size list columns fail to read ([#3471](https://github.com/apache/iceberg-rust/issues/3471), open).** This is the same kind of problem for `FixedSizeList`. The reader cannot convert it to Iceberg's `list` type.
 
-## Credits
+## Get involved
 
 Issues, pull requests and results from other engines and scale factors are welcome. See the [Comet contributor guide](https://datafusion.apache.org/comet/contributor-guide/index.html).
 
