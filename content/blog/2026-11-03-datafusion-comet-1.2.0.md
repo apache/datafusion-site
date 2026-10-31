@@ -295,8 +295,10 @@ run against it nightly ([#4950], [#6417]).
   ([#6969]).
 - **Spark-to-Arrow conversion**: columns are written in bulk ([#6566]), unsafe rows are converted straight from
   their memory ([#6730]), and JVM columnar shuffle converts strings, maps and arrays faster ([#6604]).
-- **Columnar to row**: a direct path is up to 1.9x faster on decimal-heavy schemas, though the PR measured it 29%
-  slower on a plain long, int, double and string schema ([#5496], thanks to [@peterxcli]).
+- **Columnar to row**: a new experimental converter writes Arrow values straight into Spark rows without
+  allocating an object per value, and is up to 1.9x faster on decimal-heavy schemas. It is opt-in
+  (`spark.comet.exec.columnarToRow.direct.enabled`), since the existing path is already fast for schemas without
+  decimals ([#5496], thanks to [@peterxcli]).
 - **Scans**: the next Parquet file's footer and page index load while the current file is read, which the PR
   reports as up to 1.9x faster on high-latency storage ([#7094]). Opt-in TopK threshold pushdown reaches the
   Parquet readers ([#6181], [#6263], thanks to [@pingzh]).
