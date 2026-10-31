@@ -32,7 +32,7 @@ The Apache DataFusion PMC is pleased to announce version 1.2.0 of the [Comet](ht
 Comet is an accelerator for Apache Spark that translates Spark physical plans to DataFusion physical plans for
 improved performance and efficiency without requiring any code changes.
 
-This release covers roughly five weeks of development since 1.1.0: 396 commits from 40 contributors. See the
+This release covers roughly five weeks of development since 1.1.0: 400 commits from 40 contributors. See the
 [change log] for the full list of changes.
 
 [change log]: https://github.com/apache/datafusion-comet/blob/branch-1.2/docs/source/changelog/1.2.0.md
@@ -121,6 +121,16 @@ Other fixes in this release changed the answer a query returned:
 - **Spark patch releases**: Spark 4.0.5, 4.1.4 and 4.2.1 change what `sequence` returns when `stop - start`
   overflows a long, and what casting a zero with a large exponent such as `'0e79'` to decimal returns. Comet
   follows the behavior of the Spark version it runs on ([#7171], thanks to [@snmvaughan]).
+- **Missing nested Parquet fields**: when every nested field a query asks for is missing from a Parquet file,
+  Comet could return a non-null struct, array or map where Spark returns `NULL`, which changed `IS NULL`, filters
+  and `count`. Comet now follows Spark's version-dependent rules, and falls back for nested reads of name-mapped
+  Iceberg tables ([#7085], thanks to [@rich7420]).
+- **Nested binary read as strings**: a nested Parquet `BINARY` value read as a string that held invalid UTF-8
+  became `NULL`. It is now decoded the way Comet's `CAST(binary AS STRING)` decodes it, replacing ill-formed bytes
+  with U+FFFD ([#7106], thanks to [@manuzhang]).
+- **Identity broadcasts**: a Spark operator that keeps every row of a Comet broadcast could see the last row of
+  each batch repeated in place of the others, because the columnar-to-row converters reuse their row object.
+  The rows are now copied ([#7260], thanks to [@pingzh]).
 - **ANSI mode**: `array_append` now evaluates its item on rows whose array is `NULL`, so it raises the errors
   Spark raises ([#7025], thanks to [@kazuyukitanimura]), and `corr` raises `DIVIDE_BY_ZERO` ([#6830], thanks to [@kazuyukitanimura]).
 
@@ -139,6 +149,9 @@ Other fixes in this release changed the answer a query returned:
   share ([#6544]), a partial merge aggregate whose input is sorted on some of its grouping keys spills instead
   of failing the task ([#7222]), and the memory reservation of grouped integer `SUM` state is now counted
   ([#6370]).
+- **Settings reach every stage.** A job launched from a query's RDD, such as through `Dataset.rdd`, ran its map
+  stages with every `spark.comet.*` setting at its default, including the memory pool. Those stages now use the
+  session's settings ([#7302], thanks to [@comphead]).
 - **Container sizing.** The native memory limit follows how YARN and Kubernetes size executor containers
   ([#6375]).
 - **Spill files are compressed with lz4 by default** (`spark.comet.exec.spill.compression.codec`, [#6698]). The
@@ -469,3 +482,7 @@ to get up and running, then point Comet at your existing Spark workloads.
 [#5022]: https://github.com/apache/datafusion-comet/issues/5022
 [#6936]: https://github.com/apache/datafusion-comet/issues/6936
 [#6940]: https://github.com/apache/datafusion-comet/pull/6940
+[#7085]: https://github.com/apache/datafusion-comet/pull/7085
+[#7106]: https://github.com/apache/datafusion-comet/pull/7106
+[#7260]: https://github.com/apache/datafusion-comet/pull/7260
+[#7302]: https://github.com/apache/datafusion-comet/pull/7302
