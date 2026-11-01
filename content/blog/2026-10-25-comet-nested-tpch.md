@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "Nested TPC-H: A Benchmark for Nested Data in Apache DataFusion Comet"
+title: Nested TPC-H: A Benchmark for Nested Data in Apache DataFusion Comet
 date: 2026-10-25
 author: pmc
 categories: [performance, subprojects]
@@ -40,7 +40,7 @@ alt="Total execution time at SF1000: Spark 4.1.3 1,519 s, Comet 1.1.0 869 s, upc
 
 Nested TPC-H is a TPC-H derived benchmark in the Comet repository ([#7044](https://github.com/apache/datafusion-comet/pull/7044)). The TPC-H data and the questions the queries answer are unchanged. The tables are reshaped to store most columns in arrays of structs, and the queries are rewritten to unnest those arrays. The data and queries are engine neutral, so they can be used to compare Spark, Comet and other engines.
 
-The first runs showed where the gaps were: some queries ran slower on Comet than on Spark, even though Comet accelerates the same queries on flat TPC-H.
+Our first runs showed where the gaps were. They used development builds from before the fixes described below and a different cluster configuration from the results in this post. Some queries ran slower on Comet than on Spark, even though Comet accelerates the same queries on flat TPC-H.
 
 ## Why: TPC-H is flat, real data is not
 
@@ -135,12 +135,12 @@ Two of these settings were needed to run the full suite on Comet:
 
 ## What nested benchmarks revealed
 
-The nested schema uses single-element arrays of structs, with no maps for now. Even that was enough to expose issues that were invisible on flat TPC-H. In our first runs, Comet was slower than Spark on q20 and q21, and barely faster on q02. Tracing those queries surfaced a lot of technical debt in how nested data is read, shuffled and spilled, in Comet and in the iceberg-rust reader underneath it.
+The nested schema uses single-element arrays of structs, with no maps for now. Even that was enough to expose issues that were invisible on flat TPC-H. In those first runs, Comet was slower than Spark on q20 and q21, and barely faster on q02. Tracing those queries surfaced a lot of technical debt in how nested data is read, shuffled and spilled, in Comet and in the iceberg-rust reader underneath it. Comet 1.1.0 predates the fixes but is already faster than Spark on both q20 and q21 in the results below, which use a different cluster and memory configuration.
 
 The issues fell into four groups:
 
 - **Spilling.** Wide nested values made q21's sort spill several hundred GiB per iteration, and Comet wrote spill files uncompressed.
-- **Reading only what a query needs.** Comet's native Iceberg scan decoded every field of a nested column, even when Spark had pruned it to one field. This is why q20 was no faster than Spark in our first runs.
+- **Reading only what a query needs.** Comet's native Iceberg scan decoded every field of a nested column, even when Spark had pruned it to one field. This is why q20 was no faster than Spark in those first runs.
 - **Shuffle.** Round-robin shuffle wrote wide nested fields two to three times slower than Spark. The remaining nested shuffle work is still open.
 - **Nested reads in iceberg-rust.** Nested fields read as NULL, some list types could not be read at all, and projection cost grew with the number of nested leaves.
 
@@ -189,7 +189,7 @@ alt="Execution time by query for Spark 4.1.3, Comet 1.1.0 and upcoming Comet 1.2
 | q22 | 49.8 | 36.2 | 35.0 | 1.38x | 1.43x |
 | **Total** | **1,519** | **869** | **790** | **1.75x** | **1.92x** |
 
-The largest gains from 1.1.0 to 1.2.0 are q14 (2.0x), q18 (1.35x) and q04 (1.23x). Comet 1.1.0 is slightly faster than 1.2.0 on q02, q15 and q16. Each version ran once, so differences this small may be noise.
+The largest gains from 1.1.0 to 1.2.0 are q14 (2.0x), q18 (1.35x) and q04 (1.23x). q02 goes the other way: 1.2.0 is 15% slower (27.0 s against 23.4 s), and we treat it as a regression to investigate until a repeat run shows otherwise. 1.2.0 is also 9% slower on q15 and 5% slower on q16. Each version ran in one Spark application, and the figures are the best of three iterations within it, so differences of a few percent between versions may be noise.
 
 Comet 1.2.0 includes two of the fixes described below, [#6698](https://github.com/apache/datafusion-comet/pull/6698) (spill compression) and [#6725](https://github.com/apache/datafusion-comet/pull/6725) (nested column pruning in the native Iceberg scan). The iceberg-rust fixes merged after the iceberg-rust revision that Comet 1.2.0 pins, so they are not in these results.
 
