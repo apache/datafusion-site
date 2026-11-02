@@ -93,8 +93,9 @@ choices. The differences are easy to miss in testing and show up as wrong joins,
 - **Array functions**: `array_remove`, `sort_array`, `array_distinct` and `array_union` ([#6518], [#6563]), and
   `arrays_overlap` on the Spark versions where `-0.0` and `0.0` are one value ([#6989]).
 - **Arithmetic**: `signum(-0.0)` ([#6556]) and the zero check in `Remainder` ([#6896]).
-- **Maps**: Comet no longer builds a map natively when its key type holds a `FLOAT` or `DOUBLE`, because Spark 4.0+
-  normalizes those keys and rejects duplicates in a way native code did not ([#6992]).
+- **Maps**: Comet no longer builds a map natively when its key type holds a `FLOAT` or `DOUBLE` ([#6992]).
+  Spark finds duplicate keys by value, so `NaN`s with different bits are one key, and from 4.0 it also
+  normalizes `-0.0` keys to `0.0`. Native code told keys apart by their bits.
 
 The contributor guide now has a [floating point page] that says which Spark rule each expression follows and how
 to test for it. A sweep suite crosses edge values with every operator context, so a DataFusion upgrade that
