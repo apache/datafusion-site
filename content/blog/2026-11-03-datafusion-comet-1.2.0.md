@@ -270,8 +270,10 @@ and are enabled with `spark.comet.exec.nativeArrowPythonUDF.enabled`. The PR rep
 `pyarrow.compute.negate` over 50 million rows running 3.6x faster than Spark, and a UDF that loops in Python
 running 3.4x slower, so try it on your own workload before relying on it. Thanks to [@viirya].
 
-Custom Rust UDFs through Arrow FFI ([#4459]) remain experimental. A new setting disables or restricts native
-library loading ([#6775]).
+Custom Rust UDFs are also new and experimental. Comet can load scalar UDFs written in Rust from a shared
+library and call them through Arrow FFI ([#4459]). See the
+[Rust UDF guide](https://datafusion.apache.org/comet/user-guide/latest/rust_udfs.html). A new setting disables
+or restricts native library loading ([#6775]).
 
 ### Parquet writes to S3 with the magic committer
 
