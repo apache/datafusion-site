@@ -43,9 +43,9 @@ and adding tests that keep them fixed.
 
 The highlights:
 
-- **Results that match Spark**: native timestamp results carry the right timezone, `-0.0`, `0.0` and `NaN`
-  follow Spark in hashing, comparison, sorting, aggregation and array functions, and fixes to decimal `AVG`,
-  nested types, broadcasts and join order.
+- **Results that match Spark**: native timestamp results carry the right timezone label. `-0.0`, `0.0` and
+  `NaN` follow Spark in hashing, comparison, sorting, aggregation and array functions. Decimal `AVG`, nested
+  types, broadcasts and join order get fixes too.
 - **Memory, spill and shuffle at scale**: memory returned to Spark sooner, fewer memory-related task failures,
   much smaller JVM shuffle memory use with many partitions, and smaller shuffle files.
 - **Iceberg**: native writes are a documented, opt-in feature with support for format-version 3 tables, and the
