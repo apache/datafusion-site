@@ -133,10 +133,12 @@ bytes ([#5302], [#6206], [#6471], [#6480]). Thanks to [@stantheman0128], [@LinSi
   each batch repeated in place of the others. Comet now copies each row ([#7260], thanks to [@pingzh]).
 - **Join output order**: Spark drops a sort above a hash join because the join keeps its streamed side's order.
   Comet's native hash join did not keep it for some inputs, so the query could return unsorted partitions
-  ([#6835], [#6810], thanks to [@dwsmith1983]).
+  ([#6835], thanks to [@dwsmith1983], and [#6810], thanks to [@andygrove]).
 - **Spark patch releases**: Spark 4.0.5, 4.1.4, and 4.2.1 change what `sequence` returns when `stop - start`
   overflows a long, and the result of casting a zero with a large exponent, such as `'0e79'`, to decimal. Comet
-  follows the behavior of the Spark version it runs on ([#7171], thanks to [@snmvaughan]).
+  follows the behavior of the Spark version it runs on ([#7171], thanks to [@snmvaughan]). These patch releases
+  are newer than the versions listed under [Compatibility](#compatibility), which are the ones Comet 1.2.0 is
+  tested against.
 - **ANSI mode**: `array_append` now evaluates its item on rows whose array is `NULL`, so it raises the errors
   Spark raises, and `corr` raises `DIVIDE_BY_ZERO` ([#7025], [#6830], thanks to [@kazuyukitanimura], with
   [@rich7420] on `corr`).
@@ -252,7 +254,7 @@ it stays opt-in (`spark.comet.exec.inMemoryCache.enabled`) for 1.2.0. One of tho
 fix above, is in this release ([#6835]); the rest are tracked in [#6834]. Thanks to [@comphead] for the EXPLAIN
 and SQL-tab work and [@andygrove] for the rest.
 
-## Reaching New Places
+## New Places to Run
 
 ### Delta Lake (experimental)
 
@@ -298,7 +300,7 @@ run against it nightly ([#4950], [#6417]).
 
 [Nested TPC-H] is a new TPC-H derived benchmark that stores most columns in arrays of structs. At scale factor
 1000 on Iceberg tables, Comet 1.2.0 is faster than Spark on all 22 queries and takes 9% less time than 1.1.0
-overall. Spill compression ([#6698]) and nested-field pruning in the native Iceberg scan ([#6725]), both described
+overall. q02 is 15% slower than on 1.1.0, and we are investigating it. Spill compression ([#6698]) and nested-field pruning in the native Iceberg scan ([#6725]), both described
 above, came out of the work on that benchmark.
 
 [Nested TPC-H]: https://datafusion.apache.org/blog/2026/10/25/comet-nested-tpch/
@@ -319,11 +321,12 @@ above, came out of the work on that benchmark.
 
 ## Upgrading to 1.2.0
 
-A few changes in 1.2.0 can affect a deployment. The [Comet Upgrade Guide] has the details.
+A few changes in 1.2.0 can affect a deployment. The [Comet Upgrade Guide] has more detail on the setting changes
+and the new known differences.
 
 [Comet Upgrade Guide]: https://datafusion.apache.org/comet/user-guide/latest/migration-guide.html
 
-- **Native Iceberg writes use one setting.** In 1.1.0, native Iceberg writes were a testing feature that needed
+- **Native Iceberg writes use one setting.** In 1.1.0, native Iceberg writes were experimental and needed
   both `spark.comet.iceberg.write.enabled` and `spark.comet.write.iceberg.splitOperator.enabled`. The setting is
   now `spark.comet.write.iceberg.enabled`, and Comet ignores the old name. Parquet writes were renamed the same
   way, from `spark.comet.parquet.write.enabled` to `spark.comet.write.parquet.enabled` ([#6494], thanks to
