@@ -159,8 +159,8 @@ bytes ([#5302], [#6206], [#6471], [#6480]). Thanks to [@stantheman0128], [@LinSi
 - **Container sizing.** The native memory limit follows how YARN and Kubernetes size executor containers
   ([#6375]).
 - **Spill files are compressed with lz4 by default.** The codec is set by
-  `spark.comet.exec.spill.compression.codec` ([#6698]). The PR reports TPC-H q21 going from 380 s to 250 s,
-  against 367 s for Spark.
+  `spark.comet.exec.spill.compression.codec` ([#6698]). In the investigation behind it, [Nested TPC-H] q21 at
+  scale factor 1000 went from 380 s to 250 s, against 367 s for Spark.
 - **The memory usage log is in the Spark event log.** It can be read after the application ends ([#6401],
   [#6250], [#6271]).
 
