@@ -264,9 +264,11 @@ deletion vectors, row-group pruning and page pruning ([#5365]). It is opt-in: bu
 
 ### Python UDFs (experimental)
 
-Scalar Arrow Python UDFs can run in native Comet, passing Arrow data to Python without going through rows
-([#6130]). They need a native library built with the `python-udf` Cargo feature and PyArrow on every executor,
-and are enabled with `spark.comet.exec.nativeArrowPythonUDF.enabled`. The PR reports a vectorized
+On Spark 4.1 and later, scalar `@arrow_udf` functions can run in native Comet, passing Arrow data to Python
+without going through rows ([#6130]). The released jars do not include this. It needs a native library built
+from source with the `python-udf` Cargo feature, PyArrow on every executor, and
+`spark.comet.exec.nativeArrowPythonUDF.enabled`. See the
+[PyArrow UDF guide](https://datafusion.apache.org/comet/user-guide/latest/pyarrow-udfs.html). The PR reports a vectorized
 `pyarrow.compute.negate` over 50 million rows running 3.6x faster than Spark, and a UDF that loops in Python
 running 3.4x slower, so try it on your own workload before relying on it. Thanks to [@viirya].
 
