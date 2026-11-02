@@ -33,7 +33,8 @@ Comet is an accelerator for Apache Spark that translates Spark physical plans to
 improved performance and efficiency without requiring any code changes.
 
 This release covers roughly five weeks of development since 1.1.0: 399 commits from 40 contributors. See the
-[change log] for the full list of changes.
+[change log] for the full list of changes. Unless stated otherwise, performance figures come from the
+benchmarks in the linked PRs.
 
 [change log]: https://github.com/apache/datafusion-comet/blob/branch-1.2/docs/source/changelog/1.2.0.md
 
@@ -43,9 +44,8 @@ and adding tests that keep them fixed.
 
 The highlights:
 
-- **Results that match Spark**: native timestamp results carry the right timezone label. `-0.0`, `0.0`, and
-  `NaN` follow Spark in hashing, comparison, sorting, aggregation, and array functions. Decimal `AVG`, nested
-  types, broadcasts, and join order get fixes too.
+- **Results that match Spark**: timezone labels, `-0.0` and `NaN`, collations, decimal `AVG`, nested types,
+  broadcasts, and join order.
 - **Memory, spill, and shuffle at scale**: memory returned to Spark sooner, fewer memory-related task failures,
   much smaller JVM shuffle memory use with many partitions, and smaller shuffle files.
 - **Iceberg**: native writes are a documented, opt-in feature with support for format-version 3 tables, and the
@@ -57,17 +57,13 @@ The highlights:
 
 ## Results That Match Spark
 
-Timestamps and floating point produced the most reports, so we started there, followed by collations. Individual
-fixes in other areas come after that.
-
 ### Timestamps and timezones
 
 Spark labels a timestamp with the session timezone, and Comet's native code has to produce the same label, not
 only the same instant. Several native expressions got this wrong. 1.2.0 fixes them:
 
-- Native timestamp results carry the correct timezone label: `timestamp_seconds` results are labeled as UTC
-  timestamps ([#6341]), `date_trunc` keeps its input's label ([#6345]), and `CASE` and `COALESCE` relabel
-  timestamp branches instead of panicking ([#6347]).
+- `timestamp_seconds` results are labeled as UTC timestamps ([#6341]), `date_trunc` keeps its input's label
+  ([#6345]), and `CASE` and `COALESCE` relabel timestamp branches instead of panicking ([#6347]).
 - Session timezone IDs are normalized before they reach native code ([#6351]).
 - `date_trunc` with a format that differs from row to row uses the same kernel as a literal format ([#6354]).
 - The driver warns when the native and JVM timezone databases differ ([#6353]), because Comet cannot correct
@@ -82,10 +78,10 @@ Thanks to [@andygrove] for the timezone sweep and [@LinSimon-901101] for the lab
 
 ### Floating point: `-0.0`, `0.0`, and `NaN`
 
-In some operations Spark treats `-0.0` and `0.0` as equal and every `NaN` as one value; in others it treats them
-as distinct. Which rule applies depends on the operation and the Spark version, and DataFusion makes different
-choices. The differences are easy to miss in testing and show up as wrong joins, groups, and sort orders. In
-1.2.0, these follow Spark:
+Spark has two rules for these values. Some operations treat `-0.0` and `0.0` as equal and every `NaN` as one value,
+and others keep them distinct. Which rule an operation follows can change between Spark versions, and DataFusion
+makes its own choices. The differences show up as wrong joins, groups, and sort orders. In 1.2.0, these follow
+Spark:
 
 - **Hashing**: `hash`, `xxhash64`, and native shuffle hash `NaN` as Spark does ([#6413]).
 - **Comparison and ordering**: `min`, `max`, `greatest`, and `least` ([#6457]), sort and window keys nested in
@@ -171,20 +167,19 @@ Thanks to [@andygrove] for most of this work, with [@dwsmith1983] and [@viirya] 
 
 ### Shuffle and broadcast
 
-- **JVM shuffle with many partitions.** The bypass-merge writer gave every partition a page of Spark's page size,
-  32 to 64 MB, as soon as it buffered a row. When a task's memory could not hold one page per partition, every
-  new page forced a spill. Pages now start small and grow ([#7059]). The PR reports `REPARTITION(64)` on TPC-H
-  SF2 `orders` going from 266 s and 2.48 GB of shuffle output to 1.1 s and 156 MB, and on `lineitem` from
-  15.5 minutes to 3.3 s.
-- **Smaller shuffle files.** Shuffle files with string, binary, array, and map columns are 9% to 40% smaller in
-  the PR's benchmarks, because offsets are now stored as lengths and compressed with zstd ([#6943]).
-- **Faster spills.** A JVM shuffle spill writes every partition in one native call ([#7065]). The PR reports this
-  as 21% to 28% faster with 1,000 partitions, and 45% to 49% faster when the writer spills every 100,000 rows.
-  Spill pointers are now sorted in the sorter's scratch space ([#7125]).
+- **JVM shuffle with many partitions.** The bypass-merge writer gave every partition a page of Spark's page size, 32
+  to 64 MB, as soon as it buffered a row. When a task's memory could not hold one page per partition, every new page
+  forced a spill. Pages now start small and grow ([#7059]). `REPARTITION(64)` on TPC-H SF2 `orders` went from 266 s
+  and 2.48 GB of shuffle output to 1.1 s and 156 MB, and on `lineitem` from 15.5 minutes to 3.3 s.
+- **Smaller shuffle files.** Shuffle files with string, binary, array, and map columns are 9% to 40% smaller,
+  because offsets are now stored as lengths and compressed with zstd ([#6943]).
+- **Faster spills.** A JVM shuffle spill writes every partition in one native call ([#7065]), which is 21% to 28%
+  faster with 1,000 partitions, and 45% to 49% faster when the writer spills every 100,000 rows. Spill pointers are
+  now sorted in the sorter's scratch space ([#7125]).
 - **Shuffle reads.** Shuffle blocks are read in 64 KiB pieces ([#6805]).
 - **Broadcast.** Every task that read a Comet broadcast decoded the whole broadcast for itself. Tasks on an
-  executor now share one decoded copy ([#7016]). In the PR's benchmark, a 1M-row build side read by 128 tasks on
-  `local[8]` went from 1,321 ms to 684 ms.
+  executor now share one decoded copy ([#7016]). A 1M-row build side read by 128 tasks on `local[8]` went from
+  1,321 ms to 684 ms.
 
 Thanks to [@viirya] for the spill pointer sort, [@comphead] for the block reads, and [@andygrove] for the rest.
 
@@ -275,9 +270,9 @@ On Spark 4.1 and later, scalar `@arrow_udf` functions can run in native Comet, p
 without going through rows ([#6130]). The released jars do not include this. It needs a native library built
 from source with the `python-udf` Cargo feature, PyArrow on every executor, and
 `spark.comet.exec.nativeArrowPythonUDF.enabled`. See the
-[PyArrow UDF guide](https://datafusion.apache.org/comet/user-guide/latest/pyarrow-udfs.html). The PR reports a vectorized
-`pyarrow.compute.negate` over 50 million rows running 3.6x faster than Spark, and a UDF that loops in Python
-running 3.4x slower, so try it on your own workload before relying on it. Thanks to [@viirya].
+[PyArrow UDF guide](https://datafusion.apache.org/comet/user-guide/latest/pyarrow-udfs.html). A vectorized
+`pyarrow.compute.negate` over 50 million rows runs 3.6x faster than Spark, and a UDF that loops in Python
+runs 3.4x slower, so try it on your own workload before relying on it. Thanks to [@viirya].
 
 Custom Rust UDFs are also new and experimental. Comet can load scalar UDFs written in Rust from a shared
 library and call them through Arrow FFI ([#4459]). See the
@@ -317,8 +312,8 @@ above, came out of the work on that benchmark.
   allocating an object per value, and is up to 1.9x faster on decimal-heavy schemas. It is opt-in
   (`spark.comet.exec.columnarToRow.direct.enabled`) because the existing path is still faster for some schemas,
   such as primitives mixed with strings ([#5496], thanks to [@peterxcli]).
-- **Scans**: the next Parquet file's footer and page index load while the current file is read, which the PR
-  reports as up to 1.9x faster on high-latency storage ([#7094]). Opt-in TopK threshold pushdown reaches the
+- **Scans**: the next Parquet file's footer and page index load while the current file is read, which is up to
+  1.9x faster on high-latency storage ([#7094]). Opt-in TopK threshold pushdown reaches the
   Parquet readers ([#6181], [#6263], thanks to [@pingzh]).
 - **Joins**: decoded probe batches are filtered before intermediate joins ([#6433], thanks to [@sunchao]).
 
