@@ -43,14 +43,14 @@ and adding tests that keep them fixed.
 
 The highlights:
 
-- **Results that match Spark**: native timestamp results carry the right timezone label. `-0.0`, `0.0` and
-  `NaN` follow Spark in hashing, comparison, sorting, aggregation and array functions. Decimal `AVG`, nested
-  types, broadcasts and join order get fixes too.
-- **Memory, spill and shuffle at scale**: memory returned to Spark sooner, fewer memory-related task failures,
+- **Results that match Spark**: native timestamp results carry the right timezone label. `-0.0`, `0.0`, and
+  `NaN` follow Spark in hashing, comparison, sorting, aggregation, and array functions. Decimal `AVG`, nested
+  types, broadcasts, and join order get fixes too.
+- **Memory, spill, and shuffle at scale**: memory returned to Spark sooner, fewer memory-related task failures,
   much smaller JVM shuffle memory use with many partitions, and smaller shuffle files.
 - **Iceberg**: native writes are a documented, opt-in feature with support for format-version 3 tables, and the
   native scan reads fewer nested fields and more files at once.
-- **More of the plan runs natively**: existence joins, `SortAggregateExec`, the `PIVOT` fast path and
+- **More of the plan runs natively**: existence joins, `SortAggregateExec`, the `PIVOT` fast path, and
   HyperLogLog sketch functions, among others.
 - **New places to run**: a native Delta Lake scan (experimental), Arrow Python UDFs (experimental), and Spark 4.2
   as a supported version.
@@ -80,17 +80,17 @@ Thanks to [@andygrove] for the timezone sweep and [@LinSimon-901101] for the lab
 
 [timezone handling page]: https://datafusion.apache.org/comet/contributor-guide/timezones.html
 
-### Floating point: `-0.0`, `0.0` and `NaN`
+### Floating point: `-0.0`, `0.0`, and `NaN`
 
 In some operations Spark treats `-0.0` and `0.0` as equal and every `NaN` as one value; in others it treats them
 as distinct. Which rule applies depends on the operation and the Spark version, and DataFusion makes different
-choices. The differences are easy to miss in testing and show up as wrong joins, groups and sort orders. In
+choices. The differences are easy to miss in testing and show up as wrong joins, groups, and sort orders. In
 1.2.0, these follow Spark:
 
-- **Hashing**: `hash`, `xxhash64` and native shuffle hash `NaN` as Spark does ([#6413]).
-- **Comparison and ordering**: `min`, `max`, `greatest` and `least` ([#6457]), sort and window keys nested in
+- **Hashing**: `hash`, `xxhash64`, and native shuffle hash `NaN` as Spark does ([#6413]).
+- **Comparison and ordering**: `min`, `max`, `greatest`, and `least` ([#6457]), sort and window keys nested in
   arrays and structs ([#6475]), and `percentile` for negative `NaN`s ([#6829]).
-- **Array functions**: `array_remove`, `sort_array`, `array_distinct` and `array_union` ([#6518], [#6563]), and
+- **Array functions**: `array_remove`, `sort_array`, `array_distinct`, and `array_union` ([#6518], [#6563]), and
   `arrays_overlap` on the Spark versions where `-0.0` and `0.0` are one value ([#6989]).
 - **Arithmetic**: `signum(-0.0)` ([#6556]) and the zero check in `Remainder` ([#6896]).
 - **Maps**: Comet no longer builds a map natively when its key type holds a `FLOAT` or `DOUBLE` ([#6992]).
@@ -101,15 +101,15 @@ The contributor guide now has a [floating point page] that says which Spark rule
 to test for it. A sweep suite crosses edge values with every operator context, so a DataFusion upgrade that
 shifts float behavior will fail a test before it reaches users.
 
-Thanks to [@andygrove] for the float sweep, [@rich7420] for `percentile` and [@zhangfengcdt] for `signum`.
+Thanks to [@andygrove] for the float sweep, [@rich7420] for `percentile`, and [@zhangfengcdt] for `signum`.
 
 [floating point page]: https://datafusion.apache.org/comet/contributor-guide/floating_point.html
 
 ### Collations
 
-Strings with a non-default collation compare differently from ordinary strings. For collated casts, sort keys and
+Strings with a non-default collation compare differently from ordinary strings. For collated casts, sort keys, and
 comparisons, Comet now falls back to Spark or runs the expression through [codegen dispatch] instead of comparing
-bytes ([#5302], [#6206], [#6471], [#6480]). Thanks to [@stantheman0128], [@LinSimon-901101] and [@viirya].
+bytes ([#5302], [#6206], [#6471], [#6480]). Thanks to [@stantheman0128], [@LinSimon-901101], and [@viirya].
 
 [codegen dispatch]: https://datafusion.apache.org/blog/2026/06/20/datafusion-comet-0.17.0/
 
@@ -118,33 +118,33 @@ bytes ([#5302], [#6206], [#6471], [#6480]). Thanks to [@stantheman0128], [@LinSi
 - **Decimal `AVG`**: results were `NULL` or wrong for sums that overflowed an intermediate `i128`, and empty and
   overflowing partial states were mixed up. 1.2.0 repairs the division and the buffers ([#5420], thanks to
   [@sunchao]) and falls back to Spark for the cases it cannot yet do correctly ([#7017]).
-- **Variance, covariance and correlation**: these now update and merge in Spark's order, so values that are large
+- **Variance, covariance, and correlation**: these now update and merge in Spark's order, so values that are large
   and close together give Spark's result, and `regr_r2` returns `NULL` or `DIVIDE_BY_ZERO` where Spark does
   ([#6076], thanks to [@rich7420]).
 - **Nested values in comparisons and sorts**: `greatest` and `least` compare struct arguments by position and
   order nulls inside nested values first ([#6760], [#6761], thanks to [@viirya]), and native sort keeps Spark's
   null ordering inside nested values ([#6968], thanks to [@Weijun-H]).
 - **Missing nested Parquet fields**: when every nested field a query asks for is missing from a Parquet file,
-  Comet could return a non-null struct, array or map where Spark returns `NULL`, which changed `IS NULL`, filters
+  Comet could return a non-null struct, array, or map where Spark returns `NULL`, which changed `IS NULL`, filters,
   and `count`. Comet now follows Spark's version-dependent rules, and falls back for nested reads of name-mapped
   Iceberg tables ([#7085], thanks to [@rich7420]).
 - **Nested binary read as strings**: a nested Parquet `BINARY` value read as a string that held invalid UTF-8
   became `NULL`. It is now decoded the way Comet's `CAST(binary AS STRING)` decodes it, replacing ill-formed bytes
   with U+FFFD ([#7106], thanks to [@manuzhang]).
-- **Sliced broadcasts**: broadcasts of sliced string, binary, array or map batches could return wrong values or
+- **Sliced broadcasts**: broadcasts of sliced string, binary, array, or map batches could return wrong values or
   fail with `OversizedAllocationException` ([#6900], thanks to [@comphead]).
 - **Identity broadcasts**: a Spark operator that keeps every row of a Comet broadcast could see the last row of
   each batch repeated in place of the others. Comet now copies each row ([#7260], thanks to [@pingzh]).
 - **Join output order**: Spark drops a sort above a hash join because the join keeps its streamed side's order.
   Comet's native hash join did not keep it for some inputs, so the query could return unsorted partitions
   ([#6835], [#6810], thanks to [@dwsmith1983]).
-- **Spark patch releases**: Spark 4.0.5, 4.1.4 and 4.2.1 change what `sequence` returns when `stop - start`
+- **Spark patch releases**: Spark 4.0.5, 4.1.4, and 4.2.1 change what `sequence` returns when `stop - start`
   overflows a long, and the result of casting a zero with a large exponent, such as `'0e79'`, to decimal. Comet
   follows the behavior of the Spark version it runs on ([#7171], thanks to [@snmvaughan]).
 - **ANSI mode**: `array_append` now evaluates its item on rows whose array is `NULL`, so it raises the errors
   Spark raises, and `corr` raises `DIVIDE_BY_ZERO` ([#7025], [#6830], thanks to [@kazuyukitanimura]).
 
-## Memory, Spill and Shuffle
+## Memory, Spill, and Shuffle
 
 1.1.0 made Comet's memory use visible. 1.2.0 fixes more of the ways it went wrong, and makes shuffle cheaper.
 
@@ -173,8 +173,9 @@ Thanks to [@andygrove] for most of this work, with [@dwsmith1983] and [@viirya] 
 - **JVM shuffle with many partitions.** The bypass-merge writer gave every partition a page of Spark's page size,
   32 to 64 MB, as soon as it buffered a row. When a task's memory could not hold one page per partition, every
   new page forced a spill. Pages now start small and grow ([#7059]). The PR reports `REPARTITION(64)` on TPC-H
-  `orders` going from 266 s and 2.48 GB to 1.1 s and 156 MB, and on `lineitem` from 15.5 minutes to 3.3 s.
-- **Smaller shuffle files.** Shuffle files with string, binary, array and map columns are 9% to 40% smaller in
+  SF2 `orders` going from 266 s and 2.48 GB of shuffle output to 1.1 s and 156 MB, and on `lineitem` from
+  15.5 minutes to 3.3 s.
+- **Smaller shuffle files.** Shuffle files with string, binary, array, and map columns are 9% to 40% smaller in
   the PR's benchmarks, because offsets are now stored as lengths and compressed with zstd ([#6943]).
 - **Faster spills.** A JVM shuffle spill writes every partition in one native call ([#7065]). The PR reports this
   as 21% to 28% faster with 1,000 partitions, and 45% to 49% faster when the writer spills every 100,000 rows.
@@ -184,7 +185,7 @@ Thanks to [@andygrove] for most of this work, with [@dwsmith1983] and [@viirya] 
   executor now share one decoded copy ([#7016]). In the PR's benchmark, a 1M-row build side read by 128 tasks on
   `local[8]` went from 1,321 ms to 684 ms.
 
-Thanks to [@viirya] for the spill pointer sort, [@comphead] for the block reads and [@andygrove] for the rest.
+Thanks to [@viirya] for the spill pointer sort, [@comphead] for the block reads, and [@andygrove] for the rest.
 
 ## Iceberg
 
@@ -225,41 +226,45 @@ The [Iceberg guide] lists the supported operations, every fallback, and every kn
   write transactions ([#6587]).
 
 Thanks to [@andygrove] for the writer work, [@snmvaughan] for per-location credentials, [@unikdahal] for the
-row-level operations, [@comphead] for nested-field pruning, and [@sam-1112], [@0lai0] and [@parthchandra] for
-fallback gates.
+row-level operations, [@mbutrovich] for float and double identity partitions, [@comphead] for nested-field
+pruning, and [@sam-1112], [@0lai0], and [@parthchandra] for fallback gates.
 
 ## More of the Plan Runs Natively
 
 - **On by default**: existence joins ([#4587], thanks to [@coderfender]), queries without a `FROM` clause
   (`OneRowRelation`, [#6666]), aggregates with neither grouping keys nor aggregate functions ([#6899]), and `min`
-  and `max` over strings and binary ([#6927]). Broadcast joins whose build side holds an unsupported scan now run
-  natively too ([#6786], thanks to [@parthchandra]), except that a Text scan on the build side stays in Spark
-  unless `spark.comet.convert.text.enabled` is set, because converting it replaces bytes that are not valid UTF-8
-  with U+FFFD ([#7123]).
+  and `max` over strings and binary ([#6927], thanks to [@comphead]). Broadcast joins whose build side holds an
+  unsupported scan now run natively too ([#6786], thanks to [@parthchandra]), except that a Text scan on the build
+  side stays in Spark unless `spark.comet.convert.text.enabled` is set, because converting it replaces bytes that
+  are not valid UTF-8 with U+FFFD ([#7123]).
 - **New operators and expressions**: `SortAggregateExec` ([#4565]), the `PivotFirst` fast path for `PIVOT`
   ([#4798]), HyperLogLog sketch functions ([#4802]), distinct-combined `collect_list` ([#4727]),
   `AtLeastNNonNulls` ([#6180]), `replace` ([#6680]), hashing of wide decimals ([#6548]), `RANGE` window frames
-  with an offset on a `DATE` key ([#4974]), and interval multiply and divide ([#4715], [#4901]).
+  with an offset on a `DATE` key ([#4974]), and interval multiply and divide ([#4715], [#4901]). Thanks to
+  [@peterxcli] for `collect_list` and the interval operations, [@rich7420] for `AtLeastNNonNulls` and wide
+  decimal hashing, [@sam-1112] for `replace`, and [@0lai0] for `RANGE` frames.
 - **Opt-in conversions**: a native `RangeExec` ([#6553]), operators above typed Dataset operations ([#6564]),
-  native shuffle over row input ([#6607]), and join filter pushdown through deterministic residuals ([#6431]).
+  native shuffle over row input ([#6607]), and join filter pushdown through deterministic residuals ([#6431],
+  thanks to [@sunchao]).
 
 ### The in-memory cache stays opt-in
 
 Comet can store Spark's in-memory cache in Arrow format and read it natively. We planned to turn this on by
 default in 1.2.0 and hardened it first: serializer and Kryo gating ([#6360], [#6537]), EXPLAIN and SQL-tab
-fidelity ([#6453], [#6574], [#6577]), planner statistics ([#6412]) and a reader class generated once per executor
+fidelity ([#6453], [#6574], [#6577]), planner statistics ([#6412]), and a reader class generated once per executor
 ([#6860]). Auditing the feature turned up cases where default settings could return rows in the wrong order, so
 it stays opt-in (`spark.comet.exec.inMemoryCache.enabled`) for 1.2.0. One of those cases, the join output order
-fix above, is in this release ([#6835]); the rest are tracked in [#6834].
+fix above, is in this release ([#6835]); the rest are tracked in [#6834]. Thanks to [@comphead] for the EXPLAIN
+and SQL-tab work and [@andygrove] for the rest.
 
 ## Reaching New Places
 
 ### Delta Lake (experimental)
 
 A new contrib module plans Delta Lake scans on the JVM and runs them in Comet's native Parquet scan, including
-deletion vectors, row-group pruning and page pruning ([#5365]). It is opt-in: build the separate
-`comet-contrib-delta` jar and set `spark.comet.scan.delta.enabled=true`. See the [Delta Lake guide]. Thanks to
-[@dwsmith1983].
+deletion vectors, row-group pruning, and page pruning ([#5365]). It is opt-in: build the
+`comet-contrib-delta-spark` jar from source, since no release publishes it yet, and set
+`spark.comet.scan.delta.enabled=true`. See the [Delta Lake guide]. Thanks to [@dwsmith1983] and [@sunchao].
 
 [Delta Lake guide]: https://datafusion.apache.org/comet/user-guide/latest/delta.html
 
@@ -282,7 +287,7 @@ or restricts native library loading ([#6775]).
 
 The native Parquet writer can now write to S3 through the S3A magic committer ([#6940]), which Spark 4.1
 configures by default when spark-hadoop-cloud is on the classpath. S3A creates each file, so its write settings,
-such as server-side encryption, ACLs and storage class, apply as they do for Spark. Other S3 writes fall back to
+such as server-side encryption, ACLs, and storage class, apply as they do for Spark. Other S3 writes fall back to
 Spark. The native Parquet writer is still for testing only and is off by default
 (`spark.comet.write.parquet.enabled`). See the [Parquet guide]. Thanks to [@andygrove].
 
@@ -303,10 +308,10 @@ above, came out of the work on that benchmark.
 [Nested TPC-H]: https://datafusion.apache.org/blog/2026/10/25/comet-nested-tpch/
 
 - **Casts and conditionals**: `CASE WHEN` and `IF` are up to 12x faster ([#6350]), string-to-timestamp casts up
-  to 5.6x faster ([#5130]), and casts from integers, decimals, floats and booleans to timestamp are vectorized
-  ([#6969]).
+  to 5.6x faster ([#5130]), and casts from integers, decimals, floats, and booleans to timestamp are vectorized
+  ([#6969], thanks to [@Ersa-tech]).
 - **Spark-to-Arrow conversion**: columns are written in bulk ([#6566]), unsafe rows are converted straight from
-  their memory ([#6730]), and JVM columnar shuffle converts strings, maps and arrays faster ([#6604]).
+  their memory ([#6730]), and JVM columnar shuffle converts strings, maps, and arrays faster ([#6604]).
 - **Columnar to row**: a new experimental converter writes Arrow values straight into Spark rows without
   allocating an object per value, and is up to 1.9x faster on decimal-heavy schemas. It is opt-in
   (`spark.comet.exec.columnarToRow.direct.enabled`) because the existing path is still faster for some schemas,
@@ -325,15 +330,16 @@ A few changes in 1.2.0 can affect a deployment. The [Comet Upgrade Guide] has th
 - **Native Iceberg writes use one setting.** In 1.1.0, native Iceberg writes were a testing feature that needed
   both `spark.comet.iceberg.write.enabled` and `spark.comet.write.iceberg.splitOperator.enabled`. The setting is
   now `spark.comet.write.iceberg.enabled`, and Comet ignores the old name. Parquet writes were renamed the same
-  way, from `spark.comet.parquet.write.enabled` to `spark.comet.write.parquet.enabled` ([#6494]). Set the new
-  names to keep native writes.
+  way, from `spark.comet.parquet.write.enabled` to `spark.comet.write.parquet.enabled` ([#6494], thanks to
+  [@zhangfengcdt]). Set the new names to keep native writes. `spark.comet.write.iceberg.splitOperator.enabled`
+  is no longer needed, because the new setting plans the split on its own. Remove it if you set it for 1.1.0.
 - **The native Iceberg scan reads two files at once.** `spark.comet.scan.icebergNative.dataFileConcurrencyLimit` now
   defaults to 2. A task can use more off-heap memory, and a query without `ORDER BY` can return rows in a
   different order. Set it to `1` to restore the old behavior.
-- **Spark-to-Arrow conversions have their own settings.** Using
-  `spark.comet.sparkToColumnar.supportedOperatorList` to convert ranges, cached tables, RDDs, queries without a
-  `FROM` clause, Data Source V1 relations that are not file-based, or Text scans is deprecated. Use the matching `spark.comet.convert.*`
-  setting instead ([#6602], [#7123]). The old setting still works and logs a warning.
+- **Spark-to-Arrow conversions have their own settings.** Using `spark.comet.sparkToColumnar.supportedOperatorList`
+  to convert ranges, cached tables, RDDs, queries without a `FROM` clause, Data Source V1 relations that are not
+  file-based, or Text scans is deprecated. Use the matching `spark.comet.convert.*` setting instead ([#6602],
+  [#7123]). The old setting still works and logs a warning.
 - **Comet settings reach every stage.** A job launched from a query's RDD, such as through `Dataset.rdd`, ran its
   map stages with every `spark.comet.*` setting at its default, including the memory pool. Those stages now use
   the session's settings, so their behavior can change after upgrading ([#7302], thanks to [@comphead]).
@@ -343,7 +349,7 @@ A few changes in 1.2.0 can affect a deployment. The [Comet Upgrade Guide] has th
     - `RANGE` window frames over a `DATE` column with an offset of roughly 92 million days or more ([#5022])
     - memory accounting for `min` and `max` over strings in a hash aggregate ([#6936])
 - **Native libraries are extracted into private directories** ([#6987], thanks to [@manuzhang]).
-- **Fewer published artifacts.** `comet-common`, the parent pom and `comet-spark-integration` are no longer
+- **Fewer published artifacts.** `comet-common`, the parent pom, and `comet-spark-integration` are no longer
   published ([#6888]).
 
 ## Compatibility
@@ -385,6 +391,8 @@ to get up and running, then point Comet at your existing Spark workloads.
 [@parthchandra]: https://github.com/parthchandra
 [@coderfender]: https://github.com/coderfender
 [@peterxcli]: https://github.com/peterxcli
+[@Ersa-tech]: https://github.com/Ersa-tech
+[@mbutrovich]: https://github.com/mbutrovich
 [@pingzh]: https://github.com/pingzh
 [@manuzhang]: https://github.com/manuzhang
 
