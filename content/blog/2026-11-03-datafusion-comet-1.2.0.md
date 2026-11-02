@@ -299,9 +299,9 @@ run against it nightly ([#4950], [#6417]).
 ## Performance
 
 [Nested TPC-H] is a new TPC-H derived benchmark that stores most columns in arrays of structs. At scale factor 1000
-on Iceberg tables, Comet 1.2.0 is faster than Spark on all 22 queries and takes 9% less time than 1.1.0 overall. q02
-is 15% slower than on 1.1.0, and we are investigating it. Spill compression ([#6698]) and nested-field pruning in
-the native Iceberg scan ([#6725]), both described above, came out of the work on that benchmark.
+on Iceberg tables, Comet 1.2.0 is faster than Spark on all 22 queries and takes 9% less time than 1.1.0 overall.
+Spill compression ([#6698]) and nested-field pruning in the native Iceberg scan ([#6725]), both described above,
+came out of the work on that benchmark.
 
 [Nested TPC-H]: https://datafusion.apache.org/blog/2026/10/25/comet-nested-tpch/
 
