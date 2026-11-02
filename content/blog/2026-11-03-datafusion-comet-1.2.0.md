@@ -142,7 +142,8 @@ bytes ([#5302], [#6206], [#6471], [#6480]). Thanks to [@stantheman0128], [@LinSi
   overflows a long, and the result of casting a zero with a large exponent, such as `'0e79'`, to decimal. Comet
   follows the behavior of the Spark version it runs on ([#7171], thanks to [@snmvaughan]).
 - **ANSI mode**: `array_append` now evaluates its item on rows whose array is `NULL`, so it raises the errors
-  Spark raises, and `corr` raises `DIVIDE_BY_ZERO` ([#7025], [#6830], thanks to [@kazuyukitanimura]).
+  Spark raises, and `corr` raises `DIVIDE_BY_ZERO` ([#7025], [#6830], thanks to [@kazuyukitanimura], with
+  [@rich7420] on `corr`).
 
 ## Memory, Spill, and Shuffle
 
@@ -264,7 +265,8 @@ and SQL-tab work and [@andygrove] for the rest.
 A new contrib module plans Delta Lake scans on the JVM and runs them in Comet's native Parquet scan, including
 deletion vectors, row-group pruning, and page pruning ([#5365]). It is opt-in: build the
 `comet-contrib-delta-spark` jar from source, since no release publishes it yet, and set
-`spark.comet.scan.delta.enabled=true`. See the [Delta Lake guide]. Thanks to [@dwsmith1983] and [@sunchao].
+`spark.comet.scan.delta.enabled=true`. See the [Delta Lake guide]. Thanks to [@dwsmith1983], with [@schenksj],
+[@adivaish], and [@sunchao] as co-authors.
 
 [Delta Lake guide]: https://datafusion.apache.org/comet/user-guide/latest/delta.html
 
@@ -381,6 +383,8 @@ to get up and running, then point Comet at your existing Spark workloads.
 [@Weijun-H]: https://github.com/Weijun-H
 [@stantheman0128]: https://github.com/stantheman0128
 [@sunchao]: https://github.com/sunchao
+[@schenksj]: https://github.com/schenksj
+[@adivaish]: https://github.com/adivaish
 [@comphead]: https://github.com/comphead
 [@dwsmith1983]: https://github.com/dwsmith1983
 [@kazuyukitanimura]: https://github.com/kazuyukitanimura
