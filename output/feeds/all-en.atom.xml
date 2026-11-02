@@ -1,5 +1,360 @@
 <?xml version="1.0" encoding="utf-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog</title><link href="https://datafusion.apache.org/blog/" rel="alternate"/><link href="https://datafusion.apache.org/blog/feeds/all-en.atom.xml" rel="self"/><id>https://datafusion.apache.org/blog/</id><updated>2026-10-24T00:00:00+00:00</updated><entry><title>Best Practices for Single Row Lookups (Point Queries)</title><link href="https://datafusion.apache.org/blog/2026/10/24/point-queries" rel="alternate"/><published>2026-10-24T00:00:00+00:00</published><updated>2026-10-24T00:00:00+00:00</updated><author><name>Nuno Faria (INESC TEC)</name></author><id>tag:datafusion.apache.org,2026-10-24:/blog/2026/10/24/point-queries</id><summary type="html">&lt;!--
+<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog</title><link href="https://datafusion.apache.org/blog/" rel="alternate"/><link href="https://datafusion.apache.org/blog/feeds/all-en.atom.xml" rel="self"/><id>https://datafusion.apache.org/blog/</id><updated>2026-10-25T00:00:00+00:00</updated><entry><title>Nested TPC-H: A Benchmark for Nested Data in Apache DataFusion Comet</title><link href="https://datafusion.apache.org/blog/2026/10/25/comet-nested-tpch" rel="alternate"/><published>2026-10-25T00:00:00+00:00</published><updated>2026-10-25T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2026-10-25:/blog/2026/10/25/comet-nested-tpch</id><summary type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+
+&lt;p&gt;Apache DataFusion Comet tracked its performance with TPC-H and TPC-DS, and the numbers were encouraging. Real user pipelines showed smaller gains, or none at all. What those pipelines had in common was nested data, which neither benchmark contains.&lt;/p&gt;
+&lt;p&gt;To measure that gap, we built nested TPC-H. At scale factor 1000 …&lt;/p&gt;</summary><content type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+
+&lt;p&gt;Apache DataFusion Comet tracked its performance with TPC-H and TPC-DS, and the numbers were encouraging. Real user pipelines showed smaller gains, or none at all. What those pipelines had in common was nested data, which neither benchmark contains.&lt;/p&gt;
+&lt;p&gt;To measure that gap, we built nested TPC-H. At scale factor 1000 (1 TB), the upcoming Comet 1.2.0 runs all 22 of its queries in 790 s, against 1,519 s for Spark 4.1.3.&lt;/p&gt;
+&lt;p&gt;&lt;img alt="Total execution time at SF1000: Spark 4.1.3 1,519 s, Comet 1.1.0 869 s, upcoming Comet 1.2.0 790 s" class="img-fluid" src="/blog/images/comet-nested-tpch/intro-total.svg" width="100%"/&gt;&lt;/p&gt;
+&lt;p&gt;Nested TPC-H is a TPC-H derived benchmark in the Comet repository (&lt;a href="https://github.com/apache/datafusion-comet/pull/7044"&gt;#7044&lt;/a&gt;). The TPC-H data and the questions the queries answer are unchanged. The tables are reshaped to store most columns in arrays of structs, and the queries are rewritten to unnest those arrays. The data and queries are engine neutral, so they can be used to compare Spark, Comet and other engines.&lt;/p&gt;
+&lt;p&gt;Our first runs showed where the gaps were. They used development builds from before the fixes described below and a different cluster configuration from the results in this post. Some queries ran slower on Comet than on Spark, even though Comet accelerates the same queries on flat TPC-H.&lt;/p&gt;
+&lt;h2 id="why-tpc-h-is-flat-real-data-is-not"&gt;Why: TPC-H is flat, real data is not&lt;a class="headerlink" href="#why-tpc-h-is-flat-real-data-is-not" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;&lt;a href="https://www.tpc.org/tpch/"&gt;TPC-H&lt;/a&gt; is one of the most cited analytical benchmarks, and its schema is flat: eight normalized tables with primitive columns. Its 22 queries exercise well-understood choke points such as aggregation, join ordering and correlated subqueries (Boncz, Neumann and Erling, &lt;a href="https://doi.org/10.1007/978-3-319-04936-6_5"&gt;"TPC-H Analyzed"&lt;/a&gt;, TPCTC 2013).&lt;/p&gt;
+&lt;p&gt;Real data is often nested. Event logs, JSON, Avro and Protobuf records, and many data lake tables are full of structs and arrays, which Parquet stores with the record shredding scheme from Dremel (Melnik et al., &lt;a href="http://www.vldb.org/pvldb/vldb2010/papers/R29.pdf"&gt;"Dremel"&lt;/a&gt;, VLDB 2010). Nested data adds work that flat benchmarks never exercise:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Reading.&lt;/strong&gt; Rebuilding list offsets and validity bitmaps from repetition and definition levels, and decoding only the fields a query uses.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Planning.&lt;/strong&gt; Nested column pruning and predicate pushdown through &lt;code&gt;explode&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Operators.&lt;/strong&gt; &lt;code&gt;explode&lt;/code&gt;, field access, and sort, join and exchange over wide variable-size values.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Memory and spilling.&lt;/strong&gt; Variable-size values make memory use and spill volume harder to predict.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Conversion.&lt;/strong&gt; Moving nested values between a JVM and a native representation.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Comet hit the shuffle case in &lt;a href="https://github.com/apache/datafusion-comet/issues/5397"&gt;#5397&lt;/a&gt;, where round-robin shuffle writes of wide nested fields were two to three times slower than Spark's. The issue notes that it was "invisible for TPC-* benchmarks because of historical flat schema".&lt;/p&gt;
+&lt;p&gt;We needed a benchmark that filled the gap between academic benchmarking and real user workloads.&lt;/p&gt;
+&lt;h2 id="how-an-adapter-that-nests-tpc-h"&gt;How: an adapter that nests TPC-H&lt;a class="headerlink" href="#how-an-adapter-that-nests-tpc-h" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;We did not want to invent a new benchmark from scratch. TPC-H is well understood, widely published and easy to generate, and its business shape (customers, orders, line items, suppliers and parts) is what makes its results meaningful. The goal was to preserve that shape and those questions while making every query process nested data.&lt;/p&gt;
+&lt;p&gt;The idea turned out to be surprisingly simple: a transformation of both the data and the queries that leaves the key and partition columns at the top level and nests everything else. The partition columns are &lt;code&gt;p_brand&lt;/code&gt;, &lt;code&gt;c_mktsegment&lt;/code&gt;, &lt;code&gt;o_orderdate&lt;/code&gt; and &lt;code&gt;l_shipdate&lt;/code&gt;, and every other non-key column moves into one &lt;code&gt;array&amp;lt;struct&amp;gt;&lt;/code&gt; named &lt;code&gt;&amp;lt;table&amp;gt;_data&lt;/code&gt;. Each array holds exactly one element, so exploding it never changes the row count and the queries return the same answers as TPC-H. For &lt;code&gt;lineitem&lt;/code&gt;:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;-- flat                               -- nested
+l_orderkey       BIGINT               l_orderkey     BIGINT
+l_partkey        BIGINT               l_partkey      BIGINT
+l_suppkey        BIGINT               l_suppkey      BIGINT
+l_linenumber     INT                  l_shipdate     DATE        -- partition column
+l_quantity       DECIMAL(12,2)        lineitem_data  ARRAY&amp;lt;STRUCT&amp;lt;
+l_extendedprice  DECIMAL(12,2)            l_linenumber: INT,
+l_discount       DECIMAL(12,2)            l_quantity: DECIMAL(12,2),
+l_tax            DECIMAL(12,2)            l_extendedprice: DECIMAL(12,2),
+l_returnflag     STRING                   l_discount: DECIMAL(12,2),
+l_linestatus     STRING                   l_tax: DECIMAL(12,2),
+l_shipdate       DATE                     l_returnflag: STRING,
+l_commitdate     DATE                     l_linestatus: STRING,
+l_receiptdate    DATE                     l_commitdate: DATE,
+l_shipinstruct   STRING                   l_receiptdate: DATE,
+l_shipmode       STRING                   l_shipinstruct: STRING,
+l_comment        STRING                   l_shipmode: STRING,
+                                          l_comment: STRING&amp;gt;&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Each of the 22 queries is rewritten to unnest only the arrays it needs. The queries are in &lt;a href="https://github.com/apache/datafusion-comet/tree/main/benchmarks/nested/queries"&gt;&lt;code&gt;benchmarks/nested/queries&lt;/code&gt;&lt;/a&gt;.&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;from (select l_orderkey, l_partkey, l_suppkey, l_shipdate,
+             explode(lineitem_data) as lineitem_data from lineitem) as lineitem
+where lineitem_data.l_quantity &amp;lt; 24
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;a href="https://github.com/apache/datafusion-comet/blob/main/benchmarks/nested/scripts/nest_tpch.scala"&gt;&lt;code&gt;nest_tpch.scala&lt;/code&gt;&lt;/a&gt; converts an existing flat TPC-H dataset to the nested layout. The source and the target can each be Parquet or Iceberg. The script runs under &lt;code&gt;spark-shell&lt;/code&gt; on a laptop or a cluster, casts columns to fixed types, writes zstd-compressed Parquet with 512 MiB row groups, partitions by the columns above and checks row counts:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-bash"&gt;spark-shell -i scripts/nest_tpch.scala \
+  --conf spark.nesttpch.source=parquet:/data/tpch/sf10 \
+  --conf spark.nesttpch.target=parquet:/data/tpch-nested/sf10
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;The &lt;a href="https://github.com/apache/datafusion-comet/tree/main/benchmarks/nested"&gt;README&lt;/a&gt; has the Iceberg variants and all settings.&lt;/p&gt;
+&lt;p&gt;The script and queries in the Comet repository also serve as an example. You can customize them to test any nested complexity, such as multi-element arrays, maps or deeper nesting.&lt;/p&gt;
+&lt;h2 id="benchmark-setup"&gt;Benchmark setup&lt;a class="headerlink" href="#benchmark-setup" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Data&lt;/strong&gt;: nested TPC-H at scale factor 1000 (1 TB), created from flat TPC-H with &lt;code&gt;nest_tpch.scala&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Tables&lt;/strong&gt;: Apache Iceberg tables in a Hadoop catalog on S3, with zstd-compressed Parquet data files, 512 MiB row groups and the partitioning above. Comet reads them with its native Iceberg scan, which is built on &lt;a href="https://github.com/apache/iceberg-rust"&gt;iceberg-rust&lt;/a&gt;.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Versions&lt;/strong&gt;: Spark 4.1.3 (Scala 2.13, JDK 17) and Iceberg 1.11.0. Comet 1.1.0, and the upcoming Comet 1.2.0 built from &lt;code&gt;branch-1.2&lt;/code&gt; at &lt;code&gt;746246049&lt;/code&gt;. The &lt;code&gt;1.2.0-rc1&lt;/code&gt; tag is five commits ahead of that build, all backported bug fixes that we don't expect to change these numbers. Both Comet builds use the native Iceberg scan and the default allocator (glibc).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Cluster&lt;/strong&gt;: Kubernetes, with 32 executors of 16 task slots each (8 CPUs per executor pod), shuffle and spill files on a block volume attached to each executor, and &lt;code&gt;spark.sql.shuffle.partitions=512&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Method&lt;/strong&gt;: the queries in &lt;code&gt;benchmarks/nested&lt;/code&gt;, run from &lt;code&gt;spark-shell&lt;/code&gt;. Each query runs three times in one application with no warm-up, timed from &lt;code&gt;spark.sql()&lt;/code&gt; to the end of &lt;code&gt;collect()&lt;/code&gt;. Figures are the fastest iteration, and totals are sums of the per-query times. Every query returned the expected TPC-H row count.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Memory&lt;/strong&gt;: Spark runs with a 64 GiB heap and no off-heap memory. Comet runs with a 32 GiB heap and 64 GiB of off-heap memory, which gives each task 4 GiB of native memory. Both add 10 GiB of memory overhead.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Both engines share these settings: G1 GC, Kryo, &lt;code&gt;spark.io.compression.codec=zstd&lt;/code&gt;, &lt;code&gt;spark.memory.fraction=0.6&lt;/code&gt;, &lt;code&gt;spark.memory.storageFraction=0.2&lt;/code&gt;, &lt;code&gt;spark.sql.sources.ignoreDataLocality=true&lt;/code&gt; and &lt;code&gt;spark.executor.memoryOverhead=10g&lt;/code&gt;. Comet adds:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;spark.executor.memory=32g
+spark.memory.offHeap.enabled=true
+spark.memory.offHeap.size=64g
+spark.plugins=org.apache.spark.CometPlugin
+spark.shuffle.manager=org.apache.spark.sql.comet.execution.shuffle.CometShuffleManager
+spark.comet.parquet.prefetchNextFileMetadata.enabled=true
+spark.comet.scan.icebergNative.enabled=true
+spark.comet.scan.icebergNative.dataFileConcurrencyLimit=4
+spark.executor.defaultJavaOptions=-XX:TrimNativeHeapInterval=5000 -Xlog:trimnative
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Two of these settings were needed to run the full suite on Comet:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Off-heap memory.&lt;/strong&gt; With a 64 GiB heap and 32 GiB of off-heap memory, each task gets 2 GiB of native memory. That is not enough for q21's sort-merge join stage on Comet 1.2.0, which allocates about 2.2 GiB per task and reserves up to 3.1 GiB, so tasks failed and were retried.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;&lt;code&gt;-XX:TrimNativeHeapInterval&lt;/code&gt;.&lt;/strong&gt; Without it, glibc keeps native memory that Comet has freed, and executor resident memory grows from one query to the next. Late in the suite, q21 had 11 executors OOMKilled while Comet's memory pools were well inside their limits. Trimming every 5 s kept executors at 61 to 70 GiB of resident memory and cost about 4% on the other queries. The Comet tuning guide now recommends it (&lt;a href="https://github.com/apache/datafusion-comet/pull/7342"&gt;#7342&lt;/a&gt;).&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id="what-nested-benchmarks-revealed"&gt;What nested benchmarks revealed&lt;a class="headerlink" href="#what-nested-benchmarks-revealed" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;The nested schema uses single-element arrays of structs, with no maps for now. Even that was enough to expose issues that were invisible on flat TPC-H. In those first runs, Comet was slower than Spark on q20 and q21, and barely faster on q02. Tracing those queries surfaced a lot of technical debt in how nested data is read, shuffled and spilled, in Comet and in the iceberg-rust reader underneath it. Comet 1.1.0 predates the fixes but is already faster than Spark on both q20 and q21 in the results below, which use a different cluster and memory configuration.&lt;/p&gt;
+&lt;p&gt;The issues fell into four groups:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Spilling.&lt;/strong&gt; Wide nested values made q21's sort spill several hundred GiB per iteration, and Comet wrote spill files uncompressed.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Reading only what a query needs.&lt;/strong&gt; Comet's native Iceberg scan decoded every field of a nested column, even when Spark had pruned it to one field. This is why q20 was no faster than Spark in those first runs.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Shuffle.&lt;/strong&gt; Round-robin shuffle wrote wide nested fields two to three times slower than Spark. The remaining nested shuffle work is still open.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Nested reads in iceberg-rust.&lt;/strong&gt; Nested fields read as NULL, some list types could not be read at all, and projection cost grew with the number of nested leaves.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Spills and shuffle writes happen in flat workloads too. The nested schema changed the data volume or access pattern enough to expose them.&lt;/p&gt;
+&lt;p&gt;The issues and pull requests, with their measurements and details, are listed in &lt;a href="#issues-and-pull-requests"&gt;Issues and pull requests&lt;/a&gt; at the end of the post.&lt;/p&gt;
+&lt;h2 id="results"&gt;Results&lt;a class="headerlink" href="#results" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;h3 id="total-execution-time"&gt;Total execution time&lt;a class="headerlink" href="#total-execution-time" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Comet 1.1.0 takes 869 s against 1,519 s for Spark (1.75x) and is slower than Spark on one query, q14 (8.8 s against 8.1 s). Comet 1.2.0 takes 790 s (1.92x), 9% less than 1.1.0, and is faster than Spark on all 22 queries.&lt;/p&gt;
+&lt;h3 id="execution-time-by-query"&gt;Execution time by query&lt;a class="headerlink" href="#execution-time-by-query" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;&lt;img alt="Execution time by query for Spark 4.1.3, Comet 1.1.0 and upcoming Comet 1.2.0" class="img-fluid" src="/blog/images/comet-nested-tpch/results-queries.svg" width="100%"/&gt;&lt;/p&gt;
+&lt;table class="table"&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Query&lt;/th&gt;
+&lt;th style="text-align: right;"&gt;Spark 4.1.3 (s)&lt;/th&gt;
+&lt;th style="text-align: right;"&gt;Comet 1.1.0 (s)&lt;/th&gt;
+&lt;th style="text-align: right;"&gt;Comet 1.2.0, upcoming (s)&lt;/th&gt;
+&lt;th style="text-align: right;"&gt;Speedup, 1.1.0&lt;/th&gt;
+&lt;th style="text-align: right;"&gt;Speedup, 1.2.0&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;q01&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;84.9&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;17.0&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;14.8&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;5.01x&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;5.73x&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;q02&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;39.3&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;23.4&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;27.0&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;1.68x&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;1.45x&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;q03&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;39.7&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;21.6&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;20.1&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;1.83x&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;1.97x&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;q04&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;45.2&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;19.8&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;16.1&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;2.28x&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;2.81x&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;q05&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;82.6&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;48.5&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;43.9&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;1.70x&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;1.88x&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;q06&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;5.0&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;2.2&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;2.1&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;2.22x&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;2.41x&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;q07&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;58.6&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;35.3&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;33.5&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;1.66x&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;1.75x&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;q08&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;84.6&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;64.1&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;59.3&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;1.32x&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;1.43x&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;q09&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;97.1&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;73.2&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;64.9&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;1.33x&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;1.50x&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;q10&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;50.9&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;29.2&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;26.6&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;1.74x&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;1.91x&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;q11&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;59.9&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;41.8&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;40.0&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;1.43x&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;1.50x&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;q12&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;37.1&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;17.8&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;15.2&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;2.08x&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;2.44x&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;q13&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;25.6&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;9.3&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;8.7&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;2.75x&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;2.95x&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;q14&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;8.1&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;8.8&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;4.3&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;0.93x&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;1.91x&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;q15&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;34.2&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;21.1&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;23.0&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;1.62x&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;1.49x&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;q16&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;31.9&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;14.7&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;15.4&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;2.16x&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;2.08x&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;q17&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;133.6&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;48.1&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;42.8&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;2.78x&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;3.13x&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;q18&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;152.6&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;76.3&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;56.4&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;2.00x&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;2.71x&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;q19&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;32.1&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;17.2&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;15.0&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;1.87x&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;2.14x&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;q20&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;34.3&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;24.6&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;24.3&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;1.39x&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;1.41x&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;q21&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;332.0&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;218.9&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;202.1&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;1.52x&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;1.64x&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;q22&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;49.8&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;36.2&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;35.0&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;1.38x&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;1.43x&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;strong&gt;Total&lt;/strong&gt;&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;&lt;strong&gt;1,519&lt;/strong&gt;&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;&lt;strong&gt;869&lt;/strong&gt;&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;&lt;strong&gt;790&lt;/strong&gt;&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;&lt;strong&gt;1.75x&lt;/strong&gt;&lt;/td&gt;
+&lt;td style="text-align: right;"&gt;&lt;strong&gt;1.92x&lt;/strong&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;The largest gains from 1.1.0 to 1.2.0 are q14 (2.0x), q18 (1.35x) and q04 (1.23x). q02 goes the other way: 1.2.0 is 15% slower (27.0 s against 23.4 s), and we treat it as a regression to investigate until a repeat run shows otherwise. 1.2.0 is also 9% slower on q15 and 5% slower on q16. Each version ran in one Spark application, and the figures are the best of three iterations within it, so differences of a few percent between versions may be noise.&lt;/p&gt;
+&lt;p&gt;Comet 1.2.0 includes two of the fixes described below, &lt;a href="https://github.com/apache/datafusion-comet/pull/6698"&gt;#6698&lt;/a&gt; (spill compression) and &lt;a href="https://github.com/apache/datafusion-comet/pull/6725"&gt;#6725&lt;/a&gt; (nested column pruning in the native Iceberg scan). The iceberg-rust fixes merged after the iceberg-rust revision that Comet 1.2.0 pins, so they are not in these results.&lt;/p&gt;
+&lt;h2 id="whats-next"&gt;What's next&lt;a class="headerlink" href="#whats-next" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Nested TPC-DS&lt;/strong&gt;, with the same rule: keys and partition columns stay at the top level, the rest moves into a single-element &lt;code&gt;array&amp;lt;struct&amp;gt;&lt;/code&gt;. Open questions are which columns count as keys (surrogate keys end in &lt;code&gt;_sk&lt;/code&gt; and many are nullable), which columns to partition by, and how to rewrite &lt;code&gt;ROLLUP&lt;/code&gt; and window queries next to &lt;code&gt;explode&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Other nested shapes&lt;/strong&gt;: multi-element arrays, maps and deeper nesting, at the cost of changing the questions the queries answer.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;More engines&lt;/strong&gt;: results for other engines on the same data.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id="issues-and-pull-requests"&gt;Issues and pull requests&lt;a class="headerlink" href="#issues-and-pull-requests" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Each item links to the pull request that fixed it, or to the open pull request or issue that tracks it.&lt;/p&gt;
+&lt;h3 id="in-comet"&gt;In Comet&lt;a class="headerlink" href="#in-comet" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;q21 spills uncompressed (&lt;a href="https://github.com/apache/datafusion-comet/issues/6467"&gt;#6467&lt;/a&gt;, fixed by &lt;a href="https://github.com/apache/datafusion-comet/pull/6698"&gt;#6698&lt;/a&gt;).&lt;/strong&gt; Spark pushes the &lt;code&gt;EXISTS&lt;/code&gt; and &lt;code&gt;NOT EXISTS&lt;/code&gt; predicates below the &lt;code&gt;explode&lt;/code&gt;, so the whole unpruned &lt;code&gt;lineitem_data&lt;/code&gt; column goes through the shuffle, sort and joins. The sort spilled several hundred GiB per iteration, and DataFusion writes spill files uncompressed by default. #6698 adds &lt;code&gt;spark.comet.exec.spill.compression.codec&lt;/code&gt;, which defaults to &lt;code&gt;lz4&lt;/code&gt;. In the investigation in #6467, which used an earlier build and a different cluster configuration from the results above, compression took q21 from 380 s to 250 s, against 367 s for Spark.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Nested columns are read in full (&lt;a href="https://github.com/apache/datafusion-comet/issues/6724"&gt;#6724&lt;/a&gt;, fixed by &lt;a href="https://github.com/apache/datafusion-comet/pull/6725"&gt;#6725&lt;/a&gt;).&lt;/strong&gt; Comet's native Iceberg scan decoded every field of a nested column even when Spark pruned it. In q20 the &lt;code&gt;partsupp&lt;/code&gt; scan read 26.4 GiB for a query that needs one field, and #6724 found that scan to be the main cost of Comet's q20. #6725 passes the pruned schema, and a microbenchmark of that read went from 624 ms to 62 ms, against 413 ms for Spark. The follow-up &lt;a href="https://github.com/apache/datafusion-comet/issues/7019"&gt;#7019&lt;/a&gt; covers a partition column nested inside a pruned struct.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Nested shuffle writes (&lt;a href="https://github.com/apache/datafusion-comet/issues/5397"&gt;#5397&lt;/a&gt;, closed; open work in &lt;a href="https://github.com/apache/datafusion-comet/issues/6855"&gt;#6855&lt;/a&gt;).&lt;/strong&gt; The motivating issue above. The open work on nested-type conversion and JVM shuffle performance is tracked in #6855. &lt;a href="https://github.com/apache/datafusion-comet/issues/7073"&gt;#7073&lt;/a&gt; tracks shuffles over native plans that fall back to the JVM row shuffle for round-robin and nested hash partitioning.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id="in-iceberg-rust"&gt;In iceberg-rust&lt;a class="headerlink" href="#in-iceberg-rust" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Comet's native Iceberg scan reads data files through iceberg-rust's Arrow reader, so the work on nested reads continued there.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Nested fields of migrated files read as NULL (&lt;a href="https://github.com/apache/iceberg-rust/issues/3374"&gt;apache/iceberg-rust#3374&lt;/a&gt;, fixed by &lt;a href="https://github.com/apache/iceberg-rust/pull/3384"&gt;#3384&lt;/a&gt;).&lt;/strong&gt; For data files without embedded field IDs, the reader applied the table's name mapping to top-level columns only. Fields inside a struct, list or map got no ID, so the projection never selected them. #3384 applies the mapping at every depth, as Iceberg Java does.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Projection mask cost grows with the number of leaves (&lt;a href="https://github.com/apache/iceberg-rust/issues/3394"&gt;#3394&lt;/a&gt;, fixed by &lt;a href="https://github.com/apache/iceberg-rust/pull/3396"&gt;#3396&lt;/a&gt;).&lt;/strong&gt; The reader built a projection mask for every file scan task and hashed every Arrow leaf twice to do it. Nested columns add leaves, so this cost grows with the schema. For a file with 1,000 columns and 10 projected, one call went from 318 µs and 3,976 allocations to 95 µs and 178 allocations.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;List view columns read as NULL (&lt;a href="https://github.com/apache/iceberg-rust/issues/3393"&gt;#3393&lt;/a&gt;, fix in review in &lt;a href="https://github.com/apache/iceberg-rust/pull/3467"&gt;#3467&lt;/a&gt;).&lt;/strong&gt; When a file's embedded Arrow schema asks for &lt;code&gt;ListView&lt;/code&gt;, the projection treats the whole list as one leaf. The column reads as NULL, and a list view of structs shifts every later column to the wrong Parquet leaf. #3467 reads list views as lists.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Fixed-size list columns fail to read (&lt;a href="https://github.com/apache/iceberg-rust/issues/3471"&gt;#3471&lt;/a&gt;, open).&lt;/strong&gt; This is the same kind of problem for &lt;code&gt;FixedSizeList&lt;/code&gt;. The reader cannot convert it to Iceberg's &lt;code&gt;list&lt;/code&gt; type.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id="get-involved"&gt;Get involved&lt;a class="headerlink" href="#get-involved" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Issues, pull requests and results from other engines and scale factors are welcome. See the &lt;a href="https://datafusion.apache.org/comet/contributor-guide/index.html"&gt;Comet contributor guide&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;TPC-H is a trademark of the TPC. The queries are derived from TPC-H under the TPC Fair Use Policy, and results from them are not TPC-H results.&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Best Practices for Single Row Lookups (Point Queries)</title><link href="https://datafusion.apache.org/blog/2026/10/24/point-queries" rel="alternate"/><published>2026-10-24T00:00:00+00:00</published><updated>2026-10-24T00:00:00+00:00</updated><author><name>Nuno Faria (INESC TEC)</name></author><id>tag:datafusion.apache.org,2026-10-24:/blog/2026/10/24/point-queries</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
