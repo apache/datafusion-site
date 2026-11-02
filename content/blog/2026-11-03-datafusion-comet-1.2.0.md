@@ -329,7 +329,7 @@ A few changes in 1.2.0 can affect a deployment. The [Comet Upgrade Guide] has th
   different order. Set it to `1` to restore the old behavior.
 - **Spark-to-Arrow conversions have their own settings.** Using
   `spark.comet.sparkToColumnar.supportedOperatorList` to convert ranges, cached tables, RDDs, queries without a
-  `FROM` clause, Data Source V1 relations or Text scans is deprecated. Use the matching `spark.comet.convert.*`
+  `FROM` clause, Data Source V1 relations that are not file-based, or Text scans is deprecated. Use the matching `spark.comet.convert.*`
   setting instead ([#6602], [#7123]). The old setting still works and logs a warning.
 - **Comet settings reach every stage.** A job launched from a query's RDD, such as through `Dataset.rdd`, ran its
   map stages with every `spark.comet.*` setting at its default, including the memory pool. Those stages now use
