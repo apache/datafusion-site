@@ -192,9 +192,8 @@ Thanks to [@viirya] for the spill pointer sort, [@comphead] for the block reads,
 
 ### Native writes
 
-Native Iceberg writes stay **off by default** in 1.2.0, as they were in 1.1.0 when they were experimental. We
-considered turning them on, but this is their first release as a documented, user-facing feature, and we would
-rather users opt in and report what they find first. We plan to revisit the default in a later release.
+Native Iceberg writes stay **off by default** in 1.2.0. This is their first release as a documented feature, and
+we want users to opt in and report what they find before we revisit the default.
 
 To use them, set `spark.comet.write.iceberg.enabled=true`. This replaces the pair of settings used in 1.1.0, so see
 [Upgrading to 1.2.0](#upgrading-to-120) if you enabled the feature then. What changed in the writer:
@@ -235,9 +234,9 @@ pruning, and [@sam-1112], [@0lai0], and [@parthchandra] for fallback gates.
 - **On by default**: existence joins ([#4587], thanks to [@coderfender]), queries without a `FROM` clause
   (`OneRowRelation`, [#6666]), aggregates with neither grouping keys nor aggregate functions ([#6899]), and `min`
   and `max` over strings and binary ([#6927], thanks to [@comphead]). Broadcast joins whose build side holds an
-  unsupported scan now run natively too ([#6786], thanks to [@parthchandra]), except that a Text scan on the build
-  side stays in Spark unless `spark.comet.convert.text.enabled` is set, because converting it replaces bytes that
-  are not valid UTF-8 with U+FFFD ([#7123]).
+  unsupported scan now run natively too ([#6786], thanks to [@parthchandra]). A Text scan on the build side
+  stays in Spark unless `spark.comet.convert.text.enabled` is set, because converting it replaces invalid UTF-8
+  with U+FFFD ([#7123]).
 - **New operators and expressions**: `SortAggregateExec` ([#4565]), the `PivotFirst` fast path for `PIVOT`
   ([#4798]), HyperLogLog sketch functions ([#4802]), distinct-combined `collect_list` ([#4727]),
   `AtLeastNNonNulls` ([#6180]), `replace` ([#6680]), hashing of wide decimals ([#6548]), `RANGE` window frames
@@ -266,7 +265,7 @@ A new contrib module plans Delta Lake scans on the JVM and runs them in Comet's 
 deletion vectors, row-group pruning, and page pruning ([#5365]). It is opt-in: build the
 `comet-contrib-delta-spark` jar from source, since no release publishes it yet, and set
 `spark.comet.scan.delta.enabled=true`. See the [Delta Lake guide]. Thanks to [@dwsmith1983], with [@schenksj],
-[@adivaish], and [@sunchao] as co-authors.
+[@adityavaish], and [@sunchao] as co-authors.
 
 [Delta Lake guide]: https://datafusion.apache.org/comet/user-guide/latest/delta.html
 
@@ -384,7 +383,7 @@ to get up and running, then point Comet at your existing Spark workloads.
 [@stantheman0128]: https://github.com/stantheman0128
 [@sunchao]: https://github.com/sunchao
 [@schenksj]: https://github.com/schenksj
-[@adivaish]: https://github.com/adivaish
+[@adityavaish]: https://github.com/adityavaish
 [@comphead]: https://github.com/comphead
 [@dwsmith1983]: https://github.com/dwsmith1983
 [@kazuyukitanimura]: https://github.com/kazuyukitanimura
