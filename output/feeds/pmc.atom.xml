@@ -1,5 +1,332 @@
 <?xml version="1.0" encoding="utf-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - pmc</title><link href="https://datafusion.apache.org/blog/" rel="alternate"/><link href="https://datafusion.apache.org/blog/feeds/pmc.atom.xml" rel="self"/><id>https://datafusion.apache.org/blog/</id><updated>2026-10-25T00:00:00+00:00</updated><entry><title>Nested TPC-H: A Benchmark for Nested Data in Apache DataFusion Comet</title><link href="https://datafusion.apache.org/blog/2026/10/25/comet-nested-tpch" rel="alternate"/><published>2026-10-25T00:00:00+00:00</published><updated>2026-10-25T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2026-10-25:/blog/2026/10/25/comet-nested-tpch</id><summary type="html">&lt;!--
+<feed xmlns="http://www.w3.org/2005/Atom"><title>Apache DataFusion Blog - pmc</title><link href="https://datafusion.apache.org/blog/" rel="alternate"/><link href="https://datafusion.apache.org/blog/feeds/pmc.atom.xml" rel="self"/><id>https://datafusion.apache.org/blog/</id><updated>2026-11-02T00:00:00+00:00</updated><entry><title>Apache DataFusion Comet 1.2.0 Release</title><link href="https://datafusion.apache.org/blog/2026/11/02/datafusion-comet-1.2.0" rel="alternate"/><published>2026-11-02T00:00:00+00:00</published><updated>2026-11-02T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2026-11-02:/blog/2026/11/02/datafusion-comet-1.2.0</id><summary type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+
+&lt;p&gt;The Apache DataFusion PMC is pleased to announce version 1.2.0 of the &lt;a href="https://datafusion.apache.org/comet/"&gt;Comet&lt;/a&gt; subproject.&lt;/p&gt;
+&lt;p&gt;Comet is an accelerator for Apache Spark that translates Spark physical plans to DataFusion physical plans for
+improved performance and efficiency without requiring any code changes.&lt;/p&gt;
+&lt;p&gt;This release covers roughly five weeks of development …&lt;/p&gt;</summary><content type="html">&lt;!--
+{% comment %}
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+{% endcomment %}
+--&gt;
+
+&lt;p&gt;The Apache DataFusion PMC is pleased to announce version 1.2.0 of the &lt;a href="https://datafusion.apache.org/comet/"&gt;Comet&lt;/a&gt; subproject.&lt;/p&gt;
+&lt;p&gt;Comet is an accelerator for Apache Spark that translates Spark physical plans to DataFusion physical plans for
+improved performance and efficiency without requiring any code changes.&lt;/p&gt;
+&lt;p&gt;This release covers roughly five weeks of development since 1.1.0: 399 commits from 40 contributors. See the
+&lt;a href="https://github.com/apache/datafusion-comet/blob/branch-1.2/docs/source/changelog/1.2.0.md"&gt;change log&lt;/a&gt; for the full list of changes. Unless stated otherwise, performance figures come from the
+benchmarks in the linked PRs.&lt;/p&gt;
+&lt;p&gt;Comet has always aimed to return the same results as Spark. Much of this cycle went into the edge cases that
+remained, working through whole categories at a time (timezones, floating-point &lt;code&gt;-0.0&lt;/code&gt; and &lt;code&gt;NaN&lt;/code&gt;, collations)
+and adding tests that keep them fixed.&lt;/p&gt;
+&lt;p&gt;The highlights:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Results that match Spark&lt;/strong&gt;: timezone labels, &lt;code&gt;-0.0&lt;/code&gt; and &lt;code&gt;NaN&lt;/code&gt;, collations, decimal &lt;code&gt;AVG&lt;/code&gt;, nested types,
+  broadcasts, and join order.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Memory, spill, and shuffle at scale&lt;/strong&gt;: memory returned to Spark sooner, fewer memory-related task failures,
+  much smaller JVM shuffle memory use with many partitions, and smaller shuffle files.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Iceberg&lt;/strong&gt;: native writes are a documented, opt-in feature with support for format-version 3 tables, and the
+  native scan reads fewer nested fields and more files at once.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;More of the plan runs natively&lt;/strong&gt;: existence joins, &lt;code&gt;SortAggregateExec&lt;/code&gt;, the &lt;code&gt;PIVOT&lt;/code&gt; fast path, and
+  HyperLogLog sketch functions, among others.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;New places to run&lt;/strong&gt;: a native Delta Lake scan (experimental), Arrow Python UDFs (experimental), and Spark 4.2
+  as a supported version.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id="results-that-match-spark"&gt;Results That Match Spark&lt;a class="headerlink" href="#results-that-match-spark" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;h3 id="timestamps-and-timezones"&gt;Timestamps and timezones&lt;a class="headerlink" href="#timestamps-and-timezones" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Spark labels a timestamp with the session timezone, and Comet's native code has to produce the same label, not
+only the same instant. Several native expressions got this wrong. 1.2.0 fixes them:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;timestamp_seconds&lt;/code&gt; results are labeled as UTC timestamps (&lt;a href="https://github.com/apache/datafusion-comet/pull/6341"&gt;#6341&lt;/a&gt;), &lt;code&gt;date_trunc&lt;/code&gt; keeps its input's label
+  (&lt;a href="https://github.com/apache/datafusion-comet/pull/6345"&gt;#6345&lt;/a&gt;), and &lt;code&gt;CASE&lt;/code&gt; and &lt;code&gt;COALESCE&lt;/code&gt; relabel timestamp branches instead of panicking (&lt;a href="https://github.com/apache/datafusion-comet/pull/6347"&gt;#6347&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;Session timezone IDs are normalized before they reach native code (&lt;a href="https://github.com/apache/datafusion-comet/pull/6351"&gt;#6351&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;date_trunc&lt;/code&gt; with a format that differs from row to row uses the same kernel as a literal format (&lt;a href="https://github.com/apache/datafusion-comet/pull/6354"&gt;#6354&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;The driver warns when the native and JVM timezone databases differ (&lt;a href="https://github.com/apache/datafusion-comet/pull/6353"&gt;#6353&lt;/a&gt;), because Comet cannot correct
+  for that difference.&lt;/li&gt;
+&lt;li&gt;The test harness now fails a test when a native plan mislabels a timestamp, so this class of bug can't come
+  back unnoticed (&lt;a href="https://github.com/apache/datafusion-comet/pull/6868"&gt;#6868&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/6930"&gt;#6930&lt;/a&gt;).&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/andygrove"&gt;@andygrove&lt;/a&gt; for the timezone sweep and &lt;a href="https://github.com/LinSimon-901101"&gt;@LinSimon-901101&lt;/a&gt; for the label checks. The new
+&lt;a href="https://datafusion.apache.org/comet/contributor-guide/timezones.html"&gt;timezone handling page&lt;/a&gt; in the contributor guide explains the rules.&lt;/p&gt;
+&lt;h3 id="floating-point-00-00-and-nan"&gt;Floating point: &lt;code&gt;-0.0&lt;/code&gt;, &lt;code&gt;0.0&lt;/code&gt;, and &lt;code&gt;NaN&lt;/code&gt;&lt;a class="headerlink" href="#floating-point-00-00-and-nan" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Spark has two rules for these values. Some operations treat &lt;code&gt;-0.0&lt;/code&gt; and &lt;code&gt;0.0&lt;/code&gt; as equal and every &lt;code&gt;NaN&lt;/code&gt; as one value,
+and others keep them distinct. Which rule an operation follows can change between Spark versions, and DataFusion
+makes its own choices. The differences show up as wrong joins, groups, and sort orders. In 1.2.0, these follow
+Spark:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Hashing&lt;/strong&gt;: &lt;code&gt;hash&lt;/code&gt;, &lt;code&gt;xxhash64&lt;/code&gt;, and native shuffle hash &lt;code&gt;NaN&lt;/code&gt; as Spark does (&lt;a href="https://github.com/apache/datafusion-comet/pull/6413"&gt;#6413&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Comparison and ordering&lt;/strong&gt;: &lt;code&gt;min&lt;/code&gt;, &lt;code&gt;max&lt;/code&gt;, &lt;code&gt;greatest&lt;/code&gt;, and &lt;code&gt;least&lt;/code&gt; (&lt;a href="https://github.com/apache/datafusion-comet/pull/6457"&gt;#6457&lt;/a&gt;), sort and window keys nested in
+  arrays and structs (&lt;a href="https://github.com/apache/datafusion-comet/pull/6475"&gt;#6475&lt;/a&gt;), and &lt;code&gt;percentile&lt;/code&gt; for negative &lt;code&gt;NaN&lt;/code&gt;s (&lt;a href="https://github.com/apache/datafusion-comet/pull/6829"&gt;#6829&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Array functions&lt;/strong&gt;: &lt;code&gt;array_remove&lt;/code&gt;, &lt;code&gt;sort_array&lt;/code&gt;, &lt;code&gt;array_distinct&lt;/code&gt;, and &lt;code&gt;array_union&lt;/code&gt; (&lt;a href="https://github.com/apache/datafusion-comet/pull/6518"&gt;#6518&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/6563"&gt;#6563&lt;/a&gt;), and
+  &lt;code&gt;arrays_overlap&lt;/code&gt; on the Spark versions where &lt;code&gt;-0.0&lt;/code&gt; and &lt;code&gt;0.0&lt;/code&gt; are one value (&lt;a href="https://github.com/apache/datafusion-comet/pull/6989"&gt;#6989&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Arithmetic&lt;/strong&gt;: &lt;code&gt;signum(-0.0)&lt;/code&gt; (&lt;a href="https://github.com/apache/datafusion-comet/pull/6556"&gt;#6556&lt;/a&gt;) and the zero check in &lt;code&gt;Remainder&lt;/code&gt; (&lt;a href="https://github.com/apache/datafusion-comet/pull/6896"&gt;#6896&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Maps&lt;/strong&gt;: Comet no longer builds a map natively when its key type holds a &lt;code&gt;FLOAT&lt;/code&gt; or &lt;code&gt;DOUBLE&lt;/code&gt; (&lt;a href="https://github.com/apache/datafusion-comet/pull/6992"&gt;#6992&lt;/a&gt;).
+  Spark finds duplicate keys by value, so &lt;code&gt;NaN&lt;/code&gt;s with different bits are one key, and from 4.0 it also
+  normalizes &lt;code&gt;-0.0&lt;/code&gt; keys to &lt;code&gt;0.0&lt;/code&gt;. Native code told keys apart by their bits.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;The contributor guide now has a &lt;a href="https://datafusion.apache.org/comet/contributor-guide/floating_point.html"&gt;floating point page&lt;/a&gt; that says which Spark rule each expression follows and how
+to test for it. A sweep suite crosses edge values with every operator context, so a DataFusion upgrade that
+shifts float behavior will fail a test before it reaches users.&lt;/p&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/andygrove"&gt;@andygrove&lt;/a&gt; for the float sweep, &lt;a href="https://github.com/rich7420"&gt;@rich7420&lt;/a&gt; for &lt;code&gt;percentile&lt;/code&gt;, and &lt;a href="https://github.com/zhangfengcdt"&gt;@zhangfengcdt&lt;/a&gt; for &lt;code&gt;signum&lt;/code&gt;.&lt;/p&gt;
+&lt;h3 id="collations"&gt;Collations&lt;a class="headerlink" href="#collations" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Strings with a non-default collation compare differently from ordinary strings. For collated casts, sort keys, and
+comparisons, Comet now falls back to Spark or runs the expression through &lt;a href="https://datafusion.apache.org/blog/2026/06/20/datafusion-comet-0.17.0/"&gt;codegen dispatch&lt;/a&gt; instead of comparing
+bytes (&lt;a href="https://github.com/apache/datafusion-comet/pull/5302"&gt;#5302&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/6206"&gt;#6206&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/6471"&gt;#6471&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/6480"&gt;#6480&lt;/a&gt;). Thanks to &lt;a href="https://github.com/stantheman0128"&gt;@stantheman0128&lt;/a&gt;, &lt;a href="https://github.com/LinSimon-901101"&gt;@LinSimon-901101&lt;/a&gt;, and &lt;a href="https://github.com/viirya"&gt;@viirya&lt;/a&gt;.&lt;/p&gt;
+&lt;h3 id="other-wrong-results-fixes"&gt;Other wrong-results fixes&lt;a class="headerlink" href="#other-wrong-results-fixes" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Decimal &lt;code&gt;AVG&lt;/code&gt;&lt;/strong&gt;: results were &lt;code&gt;NULL&lt;/code&gt; or wrong for sums that overflowed an intermediate &lt;code&gt;i128&lt;/code&gt;, and empty and
+  overflowing partial states were mixed up. 1.2.0 repairs the division and the buffers (&lt;a href="https://github.com/apache/datafusion-comet/pull/5420"&gt;#5420&lt;/a&gt;, thanks to
+  &lt;a href="https://github.com/sunchao"&gt;@sunchao&lt;/a&gt;) and falls back to Spark for the cases it cannot yet do correctly (&lt;a href="https://github.com/apache/datafusion-comet/pull/7017"&gt;#7017&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Variance, covariance, and correlation&lt;/strong&gt;: these now update and merge in Spark's order, so values that are large
+  and close together give Spark's result, and &lt;code&gt;regr_r2&lt;/code&gt; returns &lt;code&gt;NULL&lt;/code&gt; or &lt;code&gt;DIVIDE_BY_ZERO&lt;/code&gt; where Spark does
+  (&lt;a href="https://github.com/apache/datafusion-comet/pull/6076"&gt;#6076&lt;/a&gt;, thanks to &lt;a href="https://github.com/rich7420"&gt;@rich7420&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Nested values in comparisons and sorts&lt;/strong&gt;: &lt;code&gt;greatest&lt;/code&gt; and &lt;code&gt;least&lt;/code&gt; compare struct arguments by position and
+  order nulls inside nested values first (&lt;a href="https://github.com/apache/datafusion-comet/pull/6760"&gt;#6760&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/6761"&gt;#6761&lt;/a&gt;, thanks to &lt;a href="https://github.com/viirya"&gt;@viirya&lt;/a&gt;), and native sort keeps Spark's
+  null ordering inside nested values (&lt;a href="https://github.com/apache/datafusion-comet/pull/6968"&gt;#6968&lt;/a&gt;, thanks to &lt;a href="https://github.com/Weijun-H"&gt;@Weijun-H&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Missing nested Parquet fields&lt;/strong&gt;: when every nested field a query asks for is missing from a Parquet file,
+  Comet could return a non-null struct, array, or map where Spark returns &lt;code&gt;NULL&lt;/code&gt;, which changed &lt;code&gt;IS NULL&lt;/code&gt;, filters,
+  and &lt;code&gt;count&lt;/code&gt;. Comet now follows Spark's version-dependent rules, and falls back for nested reads of name-mapped
+  Iceberg tables (&lt;a href="https://github.com/apache/datafusion-comet/pull/7085"&gt;#7085&lt;/a&gt;, thanks to &lt;a href="https://github.com/rich7420"&gt;@rich7420&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Nested binary read as strings&lt;/strong&gt;: a nested Parquet &lt;code&gt;BINARY&lt;/code&gt; value read as a string that held invalid UTF-8
+  became &lt;code&gt;NULL&lt;/code&gt;. It is now decoded the way Comet's &lt;code&gt;CAST(binary AS STRING)&lt;/code&gt; decodes it, replacing ill-formed bytes
+  with U+FFFD (&lt;a href="https://github.com/apache/datafusion-comet/pull/7106"&gt;#7106&lt;/a&gt;, thanks to &lt;a href="https://github.com/manuzhang"&gt;@manuzhang&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Sliced broadcasts&lt;/strong&gt;: broadcasts of sliced string, binary, array, or map batches could return wrong values or
+  fail with &lt;code&gt;OversizedAllocationException&lt;/code&gt; (&lt;a href="https://github.com/apache/datafusion-comet/pull/6900"&gt;#6900&lt;/a&gt;, thanks to &lt;a href="https://github.com/comphead"&gt;@comphead&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Identity broadcasts&lt;/strong&gt;: a Spark operator that keeps every row of a Comet broadcast could see the last row of
+  each batch repeated in place of the others. Comet now copies each row (&lt;a href="https://github.com/apache/datafusion-comet/pull/7260"&gt;#7260&lt;/a&gt;, thanks to &lt;a href="https://github.com/pingzh"&gt;@pingzh&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Join output order&lt;/strong&gt;: Spark drops a sort above a hash join because the join keeps its streamed side's order.
+  Comet's native hash join did not keep it for some inputs, so the query could return unsorted partitions
+  (&lt;a href="https://github.com/apache/datafusion-comet/pull/6835"&gt;#6835&lt;/a&gt;, thanks to &lt;a href="https://github.com/dwsmith1983"&gt;@dwsmith1983&lt;/a&gt;, and &lt;a href="https://github.com/apache/datafusion-comet/pull/6810"&gt;#6810&lt;/a&gt;, thanks to &lt;a href="https://github.com/andygrove"&gt;@andygrove&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Spark patch releases&lt;/strong&gt;: Spark 4.0.5, 4.1.4, and 4.2.1 change what &lt;code&gt;sequence&lt;/code&gt; returns when &lt;code&gt;stop - start&lt;/code&gt;
+  overflows a long, and the result of casting a zero with a large exponent, such as &lt;code&gt;'0e79'&lt;/code&gt;, to decimal. Comet
+  follows the behavior of the Spark version it runs on (&lt;a href="https://github.com/apache/datafusion-comet/pull/7171"&gt;#7171&lt;/a&gt;, thanks to &lt;a href="https://github.com/snmvaughan"&gt;@snmvaughan&lt;/a&gt;). These patch releases
+  are newer than the versions listed under &lt;a href="#compatibility"&gt;Compatibility&lt;/a&gt;, which are the ones Comet 1.2.0 is
+  tested against.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;ANSI mode&lt;/strong&gt;: &lt;code&gt;array_append&lt;/code&gt; now evaluates its item on rows whose array is &lt;code&gt;NULL&lt;/code&gt;, so it raises the errors
+  Spark raises, and &lt;code&gt;corr&lt;/code&gt; raises &lt;code&gt;DIVIDE_BY_ZERO&lt;/code&gt; (&lt;a href="https://github.com/apache/datafusion-comet/pull/7025"&gt;#7025&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/6830"&gt;#6830&lt;/a&gt;, thanks to &lt;a href="https://github.com/kazuyukitanimura"&gt;@kazuyukitanimura&lt;/a&gt;, with
+  &lt;a href="https://github.com/rich7420"&gt;@rich7420&lt;/a&gt; on &lt;code&gt;corr&lt;/code&gt;).&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id="memory-spill-and-shuffle"&gt;Memory, Spill, and Shuffle&lt;a class="headerlink" href="#memory-spill-and-shuffle" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;1.1.0 made Comet's memory use visible. 1.2.0 fixes more of the ways it went wrong, and makes shuffle cheaper.&lt;/p&gt;
+&lt;h3 id="memory"&gt;Memory&lt;a class="headerlink" href="#memory" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Memory is returned sooner.&lt;/strong&gt; Native plans return their memory before the Spark task ends (&lt;a href="https://github.com/apache/datafusion-comet/pull/6261"&gt;#6261&lt;/a&gt;). When
+  Spark has already dropped a task's memory entry, a failed native memory request or shuffle page allocation is
+  now retried instead of failing the task (&lt;a href="https://github.com/apache/datafusion-comet/pull/6310"&gt;#6310&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/6403"&gt;#6403&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/6813"&gt;#6813&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Spilling works in more places.&lt;/strong&gt; A final aggregate that spilled can now read its spill files back even when
+  they exceed its memory share (&lt;a href="https://github.com/apache/datafusion-comet/pull/6544"&gt;#6544&lt;/a&gt;). A partial merge aggregate whose input is sorted on some of its grouping
+  keys spills instead of failing the task (&lt;a href="https://github.com/apache/datafusion-comet/pull/7222"&gt;#7222&lt;/a&gt;). Grouped integer &lt;code&gt;SUM&lt;/code&gt; state now counts toward the memory
+  reservation (&lt;a href="https://github.com/apache/datafusion-comet/pull/6370"&gt;#6370&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Container sizing.&lt;/strong&gt; The native memory limit follows how YARN and Kubernetes size executor containers
+  (&lt;a href="https://github.com/apache/datafusion-comet/pull/6375"&gt;#6375&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Spill files are compressed with lz4 by default.&lt;/strong&gt; The codec is set by
+  &lt;code&gt;spark.comet.exec.spill.compression.codec&lt;/code&gt; (&lt;a href="https://github.com/apache/datafusion-comet/pull/6698"&gt;#6698&lt;/a&gt;). In the investigation behind it, &lt;a href="https://datafusion.apache.org/blog/2026/10/25/comet-nested-tpch/"&gt;Nested TPC-H&lt;/a&gt; q21 at
+  scale factor 1000 went from 380 s to 250 s, against 367 s for Spark.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;The memory usage log is in the Spark event log.&lt;/strong&gt; It can be read after the application ends (&lt;a href="https://github.com/apache/datafusion-comet/pull/6401"&gt;#6401&lt;/a&gt;,
+  &lt;a href="https://github.com/apache/datafusion-comet/pull/6250"&gt;#6250&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/6271"&gt;#6271&lt;/a&gt;).&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/andygrove"&gt;@andygrove&lt;/a&gt; for most of this work, with &lt;a href="https://github.com/dwsmith1983"&gt;@dwsmith1983&lt;/a&gt; and &lt;a href="https://github.com/viirya"&gt;@viirya&lt;/a&gt; on the retry fixes and
+&lt;a href="https://github.com/comphead"&gt;@comphead&lt;/a&gt; on spill compression and the event log.&lt;/p&gt;
+&lt;h3 id="shuffle-and-broadcast"&gt;Shuffle and broadcast&lt;a class="headerlink" href="#shuffle-and-broadcast" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;JVM shuffle with many partitions.&lt;/strong&gt; The bypass-merge writer gave every partition a page of Spark's page size, 32
+  to 64 MB, as soon as it buffered a row. When a task's memory could not hold one page per partition, every new page
+  forced a spill. Pages now start small and grow (&lt;a href="https://github.com/apache/datafusion-comet/pull/7059"&gt;#7059&lt;/a&gt;). &lt;code&gt;REPARTITION(64)&lt;/code&gt; on TPC-H SF2 &lt;code&gt;orders&lt;/code&gt; went from 266 s
+  and 2.48 GB of shuffle output to 1.1 s and 156 MB, and on &lt;code&gt;lineitem&lt;/code&gt; from 15.5 minutes to 3.3 s.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Smaller shuffle files.&lt;/strong&gt; Shuffle files with string, binary, array, and map columns are 9% to 40% smaller,
+  because offsets are now stored as lengths and compressed with zstd (&lt;a href="https://github.com/apache/datafusion-comet/pull/6943"&gt;#6943&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Faster spills.&lt;/strong&gt; A JVM shuffle spill writes every partition in one native call (&lt;a href="https://github.com/apache/datafusion-comet/pull/7065"&gt;#7065&lt;/a&gt;), which is 21% to 28%
+  faster with 1,000 partitions, and 45% to 49% faster when the writer spills every 100,000 rows. Spill pointers are
+  now sorted in the sorter's scratch space (&lt;a href="https://github.com/apache/datafusion-comet/pull/7125"&gt;#7125&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Shuffle reads.&lt;/strong&gt; Shuffle blocks are read in 64 KiB pieces (&lt;a href="https://github.com/apache/datafusion-comet/pull/6805"&gt;#6805&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Broadcast.&lt;/strong&gt; Every task that read a Comet broadcast decoded the whole broadcast for itself. Tasks on an
+  executor now share one decoded copy (&lt;a href="https://github.com/apache/datafusion-comet/pull/7016"&gt;#7016&lt;/a&gt;). A 1M-row build side read by 128 tasks on &lt;code&gt;local[8]&lt;/code&gt; went from
+  1,321 ms to 684 ms.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/viirya"&gt;@viirya&lt;/a&gt; for the spill pointer sort, &lt;a href="https://github.com/comphead"&gt;@comphead&lt;/a&gt; for the block reads, and &lt;a href="https://github.com/andygrove"&gt;@andygrove&lt;/a&gt; for the rest.&lt;/p&gt;
+&lt;h2 id="iceberg"&gt;Iceberg&lt;a class="headerlink" href="#iceberg" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;h3 id="native-writes"&gt;Native writes&lt;a class="headerlink" href="#native-writes" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Native Iceberg writes stay &lt;strong&gt;off by default&lt;/strong&gt; in 1.2.0. This is their first release as a documented feature, and
+we want users to opt in and report what they find before we revisit the default.&lt;/p&gt;
+&lt;p&gt;To use them, set &lt;code&gt;spark.comet.write.iceberg.enabled=true&lt;/code&gt;. This replaces the pair of settings used in 1.1.0, so see
+&lt;a href="#upgrading-to-120"&gt;Upgrading to 1.2.0&lt;/a&gt; if you enabled the feature then. What changed in the writer:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Format-version 3 tables&lt;/strong&gt;: written natively (&lt;a href="https://github.com/apache/datafusion-comet/pull/6672"&gt;#6672&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Per-location credentials&lt;/strong&gt;: applied to native reads and writes (&lt;a href="https://github.com/apache/datafusion-comet/pull/6478"&gt;#6478&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Files match iceberg-java more closely&lt;/strong&gt;: dictionary encoding is chosen the way iceberg-java does (&lt;a href="https://github.com/apache/datafusion-comet/pull/6241"&gt;#6241&lt;/a&gt;),
+  partitions past year 262142 match (&lt;a href="https://github.com/apache/datafusion-comet/pull/6239"&gt;#6239&lt;/a&gt;), and float and double identity partitions are written natively
+  (&lt;a href="https://github.com/apache/datafusion-comet/pull/6851"&gt;#6851&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Memory&lt;/strong&gt;: write buffers are charged to the task's memory pool (&lt;a href="https://github.com/apache/datafusion-comet/pull/6247"&gt;#6247&lt;/a&gt;), and when the pool refuses a new
+  buffer the writer closes fanout partitions early instead of failing (&lt;a href="https://github.com/apache/datafusion-comet/pull/6773"&gt;#6773&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Speed&lt;/strong&gt;: the writer's dictionary pre-pass is 1.8x to 3.9x faster (&lt;a href="https://github.com/apache/datafusion-comet/pull/6937"&gt;#6937&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Fallbacks&lt;/strong&gt;: more unsupported writes are detected up front and run through iceberg-java, such as writes with
+  unsupported S3 settings or through a void partition field whose source column was dropped (&lt;a href="https://github.com/apache/datafusion-comet/pull/6441"&gt;#6441&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/6502"&gt;#6502&lt;/a&gt;,
+  &lt;a href="https://github.com/apache/datafusion-comet/pull/6677"&gt;#6677&lt;/a&gt;).&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;The &lt;a href="https://datafusion.apache.org/comet/user-guide/latest/iceberg.html#writes"&gt;Iceberg guide&lt;/a&gt; lists the supported operations, every fallback, and every known difference from iceberg-java.&lt;/p&gt;
+&lt;h3 id="reads-and-row-level-operations"&gt;Reads and row-level operations&lt;a class="headerlink" href="#reads-and-row-level-operations" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;The native scan reads only the nested fields Spark keeps (&lt;a href="https://github.com/apache/datafusion-comet/pull/6725"&gt;#6725&lt;/a&gt;) and opens &lt;strong&gt;two data files at once&lt;/strong&gt; by
+  default (&lt;a href="https://github.com/apache/datafusion-comet/pull/7132"&gt;#7132&lt;/a&gt;), which hides the latency of opening files on tables with many small files or on S3. See
+  &lt;a href="#upgrading-to-120"&gt;Upgrading to 1.2.0&lt;/a&gt; for the trade-offs and how to turn it off.&lt;/li&gt;
+&lt;li&gt;The native scan falls back to Spark when Iceberg reports an output ordering, since it does not keep that order
+  and Spark would otherwise drop the sort above it (&lt;a href="https://github.com/apache/datafusion-comet/pull/7043"&gt;#7043&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;MERGE INTO&lt;/code&gt; can run natively in &lt;code&gt;MergeRowsExec&lt;/code&gt; on Spark 3.5+ (&lt;a href="https://github.com/apache/datafusion-comet/pull/5318"&gt;#5318&lt;/a&gt;). It is off by default; enable it with
+  &lt;code&gt;spark.comet.exec.mergeRows.enabled&lt;/code&gt;. It also supports &lt;code&gt;MergeSummary&lt;/code&gt; on Spark 4.1+ (&lt;a href="https://github.com/apache/datafusion-comet/pull/6640"&gt;#6640&lt;/a&gt;) and Spark 4.2
+  write transactions (&lt;a href="https://github.com/apache/datafusion-comet/pull/6587"&gt;#6587&lt;/a&gt;).&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Thanks to &lt;a href="https://github.com/andygrove"&gt;@andygrove&lt;/a&gt; for the writer work, &lt;a href="https://github.com/snmvaughan"&gt;@snmvaughan&lt;/a&gt; for per-location credentials, &lt;a href="https://github.com/unikdahal"&gt;@unikdahal&lt;/a&gt; for the
+row-level operations, &lt;a href="https://github.com/mbutrovich"&gt;@mbutrovich&lt;/a&gt; for float and double identity partitions, &lt;a href="https://github.com/comphead"&gt;@comphead&lt;/a&gt; for nested-field
+pruning, and &lt;a href="https://github.com/sam-1112"&gt;@sam-1112&lt;/a&gt;, &lt;a href="https://github.com/0lai0"&gt;@0lai0&lt;/a&gt;, and &lt;a href="https://github.com/parthchandra"&gt;@parthchandra&lt;/a&gt; for fallback gates.&lt;/p&gt;
+&lt;h2 id="more-of-the-plan-runs-natively"&gt;More of the Plan Runs Natively&lt;a class="headerlink" href="#more-of-the-plan-runs-natively" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;On by default&lt;/strong&gt;: existence joins (&lt;a href="https://github.com/apache/datafusion-comet/pull/4587"&gt;#4587&lt;/a&gt;, thanks to &lt;a href="https://github.com/coderfender"&gt;@coderfender&lt;/a&gt;), queries without a &lt;code&gt;FROM&lt;/code&gt; clause
+  (&lt;code&gt;OneRowRelation&lt;/code&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/6666"&gt;#6666&lt;/a&gt;), aggregates with neither grouping keys nor aggregate functions (&lt;a href="https://github.com/apache/datafusion-comet/pull/6899"&gt;#6899&lt;/a&gt;), and &lt;code&gt;min&lt;/code&gt;
+  and &lt;code&gt;max&lt;/code&gt; over strings and binary (&lt;a href="https://github.com/apache/datafusion-comet/pull/6927"&gt;#6927&lt;/a&gt;, thanks to &lt;a href="https://github.com/comphead"&gt;@comphead&lt;/a&gt;). Broadcast joins whose build side holds an
+  unsupported scan now run natively too (&lt;a href="https://github.com/apache/datafusion-comet/pull/6786"&gt;#6786&lt;/a&gt;, thanks to &lt;a href="https://github.com/parthchandra"&gt;@parthchandra&lt;/a&gt;). A Text scan on the build side
+  stays in Spark unless &lt;code&gt;spark.comet.convert.text.enabled&lt;/code&gt; is set, because converting it replaces invalid UTF-8
+  with U+FFFD (&lt;a href="https://github.com/apache/datafusion-comet/pull/7123"&gt;#7123&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;New operators and expressions&lt;/strong&gt;: &lt;code&gt;SortAggregateExec&lt;/code&gt; (&lt;a href="https://github.com/apache/datafusion-comet/pull/4565"&gt;#4565&lt;/a&gt;), the &lt;code&gt;PivotFirst&lt;/code&gt; fast path for &lt;code&gt;PIVOT&lt;/code&gt;
+  (&lt;a href="https://github.com/apache/datafusion-comet/pull/4798"&gt;#4798&lt;/a&gt;), HyperLogLog sketch functions (&lt;a href="https://github.com/apache/datafusion-comet/pull/4802"&gt;#4802&lt;/a&gt;), distinct-combined &lt;code&gt;collect_list&lt;/code&gt; (&lt;a href="https://github.com/apache/datafusion-comet/pull/4727"&gt;#4727&lt;/a&gt;),
+  &lt;code&gt;AtLeastNNonNulls&lt;/code&gt; (&lt;a href="https://github.com/apache/datafusion-comet/pull/6180"&gt;#6180&lt;/a&gt;), &lt;code&gt;replace&lt;/code&gt; (&lt;a href="https://github.com/apache/datafusion-comet/pull/6680"&gt;#6680&lt;/a&gt;), hashing of wide decimals (&lt;a href="https://github.com/apache/datafusion-comet/pull/6548"&gt;#6548&lt;/a&gt;), &lt;code&gt;RANGE&lt;/code&gt; window frames
+  with an offset on a &lt;code&gt;DATE&lt;/code&gt; key (&lt;a href="https://github.com/apache/datafusion-comet/pull/4974"&gt;#4974&lt;/a&gt;), and interval multiply and divide (&lt;a href="https://github.com/apache/datafusion-comet/pull/4715"&gt;#4715&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/4901"&gt;#4901&lt;/a&gt;). Thanks to
+  &lt;a href="https://github.com/peterxcli"&gt;@peterxcli&lt;/a&gt; for &lt;code&gt;collect_list&lt;/code&gt; and the interval operations, &lt;a href="https://github.com/rich7420"&gt;@rich7420&lt;/a&gt; for &lt;code&gt;AtLeastNNonNulls&lt;/code&gt; and wide
+  decimal hashing, &lt;a href="https://github.com/sam-1112"&gt;@sam-1112&lt;/a&gt; for &lt;code&gt;replace&lt;/code&gt;, and &lt;a href="https://github.com/0lai0"&gt;@0lai0&lt;/a&gt; for &lt;code&gt;RANGE&lt;/code&gt; frames.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Opt-in conversions&lt;/strong&gt;: a native &lt;code&gt;RangeExec&lt;/code&gt; (&lt;a href="https://github.com/apache/datafusion-comet/pull/6553"&gt;#6553&lt;/a&gt;), operators above typed Dataset operations (&lt;a href="https://github.com/apache/datafusion-comet/pull/6564"&gt;#6564&lt;/a&gt;),
+  native shuffle over row input (&lt;a href="https://github.com/apache/datafusion-comet/pull/6607"&gt;#6607&lt;/a&gt;), and join filter pushdown through deterministic residuals (&lt;a href="https://github.com/apache/datafusion-comet/pull/6431"&gt;#6431&lt;/a&gt;,
+  thanks to &lt;a href="https://github.com/sunchao"&gt;@sunchao&lt;/a&gt;).&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id="the-in-memory-cache-stays-opt-in"&gt;The in-memory cache stays opt-in&lt;a class="headerlink" href="#the-in-memory-cache-stays-opt-in" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Comet can store Spark's in-memory cache in Arrow format and read it natively. We planned to turn this on by
+default in 1.2.0 and hardened it first: serializer and Kryo gating (&lt;a href="https://github.com/apache/datafusion-comet/pull/6360"&gt;#6360&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/6537"&gt;#6537&lt;/a&gt;), EXPLAIN and SQL-tab
+fidelity (&lt;a href="https://github.com/apache/datafusion-comet/pull/6453"&gt;#6453&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/6574"&gt;#6574&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/6577"&gt;#6577&lt;/a&gt;), planner statistics (&lt;a href="https://github.com/apache/datafusion-comet/pull/6412"&gt;#6412&lt;/a&gt;), and a reader class generated once per executor
+(&lt;a href="https://github.com/apache/datafusion-comet/pull/6860"&gt;#6860&lt;/a&gt;). Auditing the feature turned up cases where default settings could return rows in the wrong order, so
+it stays opt-in (&lt;code&gt;spark.comet.exec.inMemoryCache.enabled&lt;/code&gt;) for 1.2.0. One of those cases, the join output order
+fix above, is in this release (&lt;a href="https://github.com/apache/datafusion-comet/pull/6835"&gt;#6835&lt;/a&gt;); the rest are tracked in &lt;a href="https://github.com/apache/datafusion-comet/issues/6834"&gt;#6834&lt;/a&gt;. Thanks to &lt;a href="https://github.com/comphead"&gt;@comphead&lt;/a&gt; for the EXPLAIN
+and SQL-tab work and &lt;a href="https://github.com/andygrove"&gt;@andygrove&lt;/a&gt; for the rest.&lt;/p&gt;
+&lt;h2 id="new-places-to-run"&gt;New Places to Run&lt;a class="headerlink" href="#new-places-to-run" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;h3 id="delta-lake-experimental"&gt;Delta Lake (experimental)&lt;a class="headerlink" href="#delta-lake-experimental" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;A new contrib module plans Delta Lake scans on the JVM and runs them in Comet's native Parquet scan, including
+deletion vectors, row-group pruning, and page pruning (&lt;a href="https://github.com/apache/datafusion-comet/pull/5365"&gt;#5365&lt;/a&gt;). It is opt-in: build the
+&lt;code&gt;comet-contrib-delta-spark&lt;/code&gt; jar from source, since no release publishes it yet, and set
+&lt;code&gt;spark.comet.scan.delta.enabled=true&lt;/code&gt;. See the &lt;a href="https://datafusion.apache.org/comet/user-guide/latest/delta.html"&gt;Delta Lake guide&lt;/a&gt;. Thanks to &lt;a href="https://github.com/dwsmith1983"&gt;@dwsmith1983&lt;/a&gt;, with &lt;a href="https://github.com/schenksj"&gt;@schenksj&lt;/a&gt;,
+&lt;a href="https://github.com/adityavaish"&gt;@adityavaish&lt;/a&gt;, and &lt;a href="https://github.com/sunchao"&gt;@sunchao&lt;/a&gt; as co-authors.&lt;/p&gt;
+&lt;h3 id="python-udfs-experimental"&gt;Python UDFs (experimental)&lt;a class="headerlink" href="#python-udfs-experimental" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;On Spark 4.1 and later, scalar &lt;code&gt;@arrow_udf&lt;/code&gt; functions can run in native Comet, passing Arrow data to Python
+without going through rows (&lt;a href="https://github.com/apache/datafusion-comet/pull/6130"&gt;#6130&lt;/a&gt;). The released jars do not include this. It needs a native library built
+from source with the &lt;code&gt;python-udf&lt;/code&gt; Cargo feature, PyArrow on every executor, and
+&lt;code&gt;spark.comet.exec.nativeArrowPythonUDF.enabled&lt;/code&gt;. See the
+&lt;a href="https://datafusion.apache.org/comet/user-guide/latest/pyarrow-udfs.html"&gt;PyArrow UDF guide&lt;/a&gt;. A vectorized
+&lt;code&gt;pyarrow.compute.negate&lt;/code&gt; over 50 million rows runs 3.6x faster than Spark, and a UDF that loops in Python
+runs 3.4x slower, so try it on your own workload before relying on it. Thanks to &lt;a href="https://github.com/viirya"&gt;@viirya&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Custom Rust UDFs are also new and experimental. Comet can load scalar UDFs written in Rust from a shared
+library and call them through Arrow FFI (&lt;a href="https://github.com/apache/datafusion-comet/pull/4459"&gt;#4459&lt;/a&gt;). See the
+&lt;a href="https://datafusion.apache.org/comet/user-guide/latest/rust_udfs.html"&gt;Rust UDF guide&lt;/a&gt;. A new setting disables
+or restricts native library loading (&lt;a href="https://github.com/apache/datafusion-comet/pull/6775"&gt;#6775&lt;/a&gt;).&lt;/p&gt;
+&lt;h3 id="parquet-writes-to-s3-with-the-magic-committer"&gt;Parquet writes to S3 with the magic committer&lt;a class="headerlink" href="#parquet-writes-to-s3-with-the-magic-committer" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;The native Parquet writer can now write to S3 through the S3A magic committer (&lt;a href="https://github.com/apache/datafusion-comet/pull/6940"&gt;#6940&lt;/a&gt;), which Spark 4.1
+configures by default when spark-hadoop-cloud is on the classpath. S3A creates each file, so its write settings,
+such as server-side encryption, ACLs, and storage class, apply as they do for Spark. Other S3 writes fall back to
+Spark. The native Parquet writer is still for testing only and is off by default
+(&lt;code&gt;spark.comet.write.parquet.enabled&lt;/code&gt;). See the &lt;a href="https://datafusion.apache.org/comet/user-guide/latest/parquet.html#writing"&gt;Parquet guide&lt;/a&gt;. Thanks to &lt;a href="https://github.com/andygrove"&gt;@andygrove&lt;/a&gt;.&lt;/p&gt;
+&lt;h3 id="spark-42"&gt;Spark 4.2&lt;a class="headerlink" href="#spark-42" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Spark 4.2.0 is now a supported version rather than an experimental one. Comet's tests and Spark's SQL tests both
+run against it nightly (&lt;a href="https://github.com/apache/datafusion-comet/pull/4950"&gt;#4950&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/6417"&gt;#6417&lt;/a&gt;).&lt;/p&gt;
+&lt;h2 id="performance"&gt;Performance&lt;a class="headerlink" href="#performance" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;&lt;a href="https://datafusion.apache.org/blog/2026/10/25/comet-nested-tpch/"&gt;Nested TPC-H&lt;/a&gt; is a new TPC-H derived benchmark that stores most columns in arrays of structs. At scale factor 1000
+on Iceberg tables, Comet 1.2.0 is faster than Spark on all 22 queries and takes 9% less time than 1.1.0 overall.
+Spill compression (&lt;a href="https://github.com/apache/datafusion-comet/pull/6698"&gt;#6698&lt;/a&gt;) and nested-field pruning in the native Iceberg scan (&lt;a href="https://github.com/apache/datafusion-comet/pull/6725"&gt;#6725&lt;/a&gt;), both described above,
+came out of the work on that benchmark.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Casts and conditionals&lt;/strong&gt;: &lt;code&gt;CASE WHEN&lt;/code&gt; and &lt;code&gt;IF&lt;/code&gt; are up to 12x faster (&lt;a href="https://github.com/apache/datafusion-comet/pull/6350"&gt;#6350&lt;/a&gt;), string-to-timestamp casts up
+  to 5.6x faster (&lt;a href="https://github.com/apache/datafusion-comet/pull/5130"&gt;#5130&lt;/a&gt;), and casts from integers, decimals, floats, and booleans to timestamp are vectorized
+  (&lt;a href="https://github.com/apache/datafusion-comet/pull/6969"&gt;#6969&lt;/a&gt;, thanks to &lt;a href="https://github.com/Ersa-tech"&gt;@Ersa-tech&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Spark-to-Arrow conversion&lt;/strong&gt;: columns are written in bulk (&lt;a href="https://github.com/apache/datafusion-comet/pull/6566"&gt;#6566&lt;/a&gt;), unsafe rows are converted straight from
+  their memory (&lt;a href="https://github.com/apache/datafusion-comet/pull/6730"&gt;#6730&lt;/a&gt;), and JVM columnar shuffle converts strings, maps, and arrays faster (&lt;a href="https://github.com/apache/datafusion-comet/pull/6604"&gt;#6604&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Columnar to row&lt;/strong&gt;: a new experimental converter writes Arrow values straight into Spark rows without
+  allocating an object per value, and is up to 1.9x faster on decimal-heavy schemas. It is opt-in
+  (&lt;code&gt;spark.comet.exec.columnarToRow.direct.enabled&lt;/code&gt;) because the existing path is still faster for some schemas,
+  such as primitives mixed with strings (&lt;a href="https://github.com/apache/datafusion-comet/pull/5496"&gt;#5496&lt;/a&gt;, thanks to &lt;a href="https://github.com/peterxcli"&gt;@peterxcli&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Scans&lt;/strong&gt;: the next Parquet file's footer and page index load while the current file is read, which is up to
+  1.9x faster on high-latency storage (&lt;a href="https://github.com/apache/datafusion-comet/pull/7094"&gt;#7094&lt;/a&gt;). Opt-in TopK threshold pushdown reaches the
+  Parquet readers (&lt;a href="https://github.com/apache/datafusion-comet/pull/6181"&gt;#6181&lt;/a&gt;, &lt;a href="https://github.com/apache/datafusion-comet/pull/6263"&gt;#6263&lt;/a&gt;, thanks to &lt;a href="https://github.com/pingzh"&gt;@pingzh&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Joins&lt;/strong&gt;: decoded probe batches are filtered before intermediate joins (&lt;a href="https://github.com/apache/datafusion-comet/pull/6433"&gt;#6433&lt;/a&gt;, thanks to &lt;a href="https://github.com/sunchao"&gt;@sunchao&lt;/a&gt;).&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id="upgrading-to-120"&gt;Upgrading to 1.2.0&lt;a class="headerlink" href="#upgrading-to-120" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;A few changes in 1.2.0 can affect a deployment. The &lt;a href="https://datafusion.apache.org/comet/user-guide/latest/migration-guide.html"&gt;Comet Upgrade Guide&lt;/a&gt; has more detail on the setting changes
+and the new known differences.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Native Iceberg writes use one setting.&lt;/strong&gt; In 1.1.0, native Iceberg writes were experimental and needed
+  both &lt;code&gt;spark.comet.iceberg.write.enabled&lt;/code&gt; and &lt;code&gt;spark.comet.write.iceberg.splitOperator.enabled&lt;/code&gt;. The setting is
+  now &lt;code&gt;spark.comet.write.iceberg.enabled&lt;/code&gt;, and Comet ignores the old name. Parquet writes were renamed the same
+  way, from &lt;code&gt;spark.comet.parquet.write.enabled&lt;/code&gt; to &lt;code&gt;spark.comet.write.parquet.enabled&lt;/code&gt; (&lt;a href="https://github.com/apache/datafusion-comet/pull/6494"&gt;#6494&lt;/a&gt;, thanks to
+  &lt;a href="https://github.com/zhangfengcdt"&gt;@zhangfengcdt&lt;/a&gt;). Set the new names to keep native writes. &lt;code&gt;spark.comet.write.iceberg.splitOperator.enabled&lt;/code&gt;
+  is no longer needed, because the new setting plans the split on its own. Remove it if you set it for 1.1.0.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;The native Iceberg scan reads two files at once.&lt;/strong&gt; &lt;code&gt;spark.comet.scan.icebergNative.dataFileConcurrencyLimit&lt;/code&gt; now
+  defaults to 2. A task can use more off-heap memory, and a query without &lt;code&gt;ORDER BY&lt;/code&gt; can return rows in a
+  different order. Set it to &lt;code&gt;1&lt;/code&gt; to restore the old behavior.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Spark-to-Arrow conversions have their own settings.&lt;/strong&gt; Using &lt;code&gt;spark.comet.sparkToColumnar.supportedOperatorList&lt;/code&gt;
+  to convert ranges, cached tables, RDDs, queries without a &lt;code&gt;FROM&lt;/code&gt; clause, Data Source V1 relations that are not
+  file-based, or Text scans is deprecated. Use the matching &lt;code&gt;spark.comet.convert.*&lt;/code&gt; setting instead (&lt;a href="https://github.com/apache/datafusion-comet/pull/6602"&gt;#6602&lt;/a&gt;,
+  &lt;a href="https://github.com/apache/datafusion-comet/pull/7123"&gt;#7123&lt;/a&gt;). The old setting still works and logs a warning.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Comet settings reach every stage.&lt;/strong&gt; A job launched from a query's RDD, such as through &lt;code&gt;Dataset.rdd&lt;/code&gt;, ran its
+  map stages with every &lt;code&gt;spark.comet.*&lt;/code&gt; setting at its default, including the memory pool. Those stages now use
+  the session's settings, so their behavior can change after upgrading (&lt;a href="https://github.com/apache/datafusion-comet/pull/7302"&gt;#7302&lt;/a&gt;, thanks to &lt;a href="https://github.com/comphead"&gt;@comphead&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Three known differences from Spark are new in 1.2.0.&lt;/strong&gt; The operators involved now run natively where 1.1.0
+  fell back. The upgrade guide gives a setting that avoids each one:&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;collect_set&lt;/code&gt; over &lt;code&gt;FLOAT&lt;/code&gt; or &lt;code&gt;DOUBLE&lt;/code&gt; next to &lt;code&gt;count(DISTINCT ...)&lt;/code&gt; on Spark before 4.2 (&lt;a href="https://github.com/apache/datafusion-comet/issues/7203"&gt;#7203&lt;/a&gt;)&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;RANGE&lt;/code&gt; window frames over a &lt;code&gt;DATE&lt;/code&gt; column with an offset of roughly 92 million days or more (&lt;a href="https://github.com/apache/datafusion-comet/issues/5022"&gt;#5022&lt;/a&gt;)&lt;/li&gt;
+&lt;li&gt;memory accounting for &lt;code&gt;min&lt;/code&gt; and &lt;code&gt;max&lt;/code&gt; over strings in a hash aggregate (&lt;a href="https://github.com/apache/datafusion-comet/issues/6936"&gt;#6936&lt;/a&gt;)&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Native libraries are extracted into private directories&lt;/strong&gt; (&lt;a href="https://github.com/apache/datafusion-comet/pull/6987"&gt;#6987&lt;/a&gt;, thanks to &lt;a href="https://github.com/manuzhang"&gt;@manuzhang&lt;/a&gt;).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Fewer published artifacts.&lt;/strong&gt; &lt;code&gt;comet-common&lt;/code&gt;, the parent pom, and &lt;code&gt;comet-spark-integration&lt;/code&gt; are no longer
+  published (&lt;a href="https://github.com/apache/datafusion-comet/pull/6888"&gt;#6888&lt;/a&gt;).&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id="compatibility"&gt;Compatibility&lt;a class="headerlink" href="#compatibility" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Supported platforms:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Spark 3.4.3&lt;/strong&gt; with Java 17 and Scala 2.12/2.13 (deprecated)&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Spark 3.5.9&lt;/strong&gt; with Java 17 and Scala 2.12/2.13&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Spark 4.0.4&lt;/strong&gt; with Java 17/21 and Scala 2.13&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Spark 4.1.3&lt;/strong&gt; with Java 17/21 and Scala 2.13&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Spark 4.2.0&lt;/strong&gt; with Java 17 and Scala 2.13&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;See the &lt;a href="https://datafusion.apache.org/comet/user-guide/latest/compatibility/spark-versions.html"&gt;Spark Version Compatibility&lt;/a&gt; page for known limitations specific to each version.&lt;/p&gt;
+&lt;p&gt;This release builds on &lt;strong&gt;DataFusion 55.2&lt;/strong&gt; and &lt;strong&gt;Arrow 59.2&lt;/strong&gt; (&lt;a href="https://github.com/apache/datafusion-comet/pull/6766"&gt;#6766&lt;/a&gt;).&lt;/p&gt;
+&lt;h2 id="get-started-with-comet-120"&gt;Get Started with Comet 1.2.0&lt;a class="headerlink" href="#get-started-with-comet-120" title="Permanent link"&gt;¶&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Follow the &lt;a href="https://datafusion.apache.org/comet/user-guide/1.2/installation.html"&gt;Comet 1.2.0 Installation Guide&lt;/a&gt;
+to get up and running, then point Comet at your existing Spark workloads.&lt;/p&gt;</content><category term="blog"/></entry><entry><title>Nested TPC-H: A Benchmark for Nested Data in Apache DataFusion Comet</title><link href="https://datafusion.apache.org/blog/2026/10/25/comet-nested-tpch" rel="alternate"/><published>2026-10-25T00:00:00+00:00</published><updated>2026-10-25T00:00:00+00:00</updated><author><name>pmc</name></author><id>tag:datafusion.apache.org,2026-10-25:/blog/2026/10/25/comet-nested-tpch</id><summary type="html">&lt;!--
 {% comment %}
 Licensed to the Apache Software Foundation (ASF) under one or more
 contributor license agreements.  See the NOTICE file distributed with
