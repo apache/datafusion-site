@@ -67,9 +67,9 @@ from generate_series(1, {rows}) t(i)
 Unless otherwise stated, the queries tested retrieve a random row from the table
 by key (i.e., `select v from t where k = {}`). Most tests run on a
 `c4d-standard-4` (4 vCPUs, 15GB RAM) Google Cloud virtual machine, using a 100GB
-[HyperDisk] (6k IOPS, 500 MB/s) to store the data. The [Runtime](#runtime) test
-uses a machine with more CPU cores (`c4d-highcpu-8`). Each test builds on the
-last.
+[HyperDisk] (6k IOPS, 500 MB/s) to store the data. The [Target
+Partitions](#target-partitions) and [Runtime](#runtime) tests use a machine with
+more CPU cores (`c4d-highcpu-8`). Each test builds on the last.
 
 [HyperDisk]: https://docs.cloud.google.com/compute/docs/disks/hyperdisks
 
@@ -273,7 +273,7 @@ page size (y).
         <b>Figure 9</b>: Throughput based on the read size and the size of the
         Parquet data pages (512k rows per row group). Each cell shows the ratio
         between its throughput value and the max throughput in its column
-        (darker is better)..
+        (darker is better).
     </p>
 </div>
 
