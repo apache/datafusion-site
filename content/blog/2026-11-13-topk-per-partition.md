@@ -53,16 +53,9 @@ walks through the `EXPLAIN` output before and after, describes how the
 operator works, and reports the measured performance — including the cases
 where it is *not* a good fit.
 
-This post grew out of a draft section [@alamb] wrote for the [DataFusion
-55.0.0 release post][draft-55-post], which was dropped because a release
-summary has limited room to explain how an operator actually works. The
-feature itself was implemented by [@SubhamSinghal], resolving a [feature
-request from 2023][#6899].
-
 [@alamb]: https://github.com/alamb
 [@SubhamSinghal]: https://github.com/SubhamSinghal
 [datafusion.optimizer.enable_window_topn]: https://datafusion.apache.org/user-guide/configs.html
-[draft-55-post]: https://github.com/apache/datafusion/issues/27233
 [#6899]: https://github.com/apache/datafusion/issues/6899
 
 ## The "Top N Per Group" Pattern
@@ -102,66 +95,28 @@ ProjectionExec
         DataSourceExec
 ```
 
-This plan:
+Each stage exists for a reason — and the cost comes from what the stages do
+to rows that will end up discarded:
 
-1. Sorts the entire dataset — O(N log N) time and O(N) memory.
-2. Computes `ROW_NUMBER` for **all** rows.
-3. Runs the filter, which keeps only the top K rows per partition.
+1. **`SortExec` sorts the entire dataset by `(category, revenue)`.** The
+   window function needs each partition's rows contiguous and in `ORDER BY`
+   order, and the only way to guarantee that here is a full sort. This is a
+   blocking, spill-capable sort of all N rows: O(N log N) time, O(N) memory,
+   with excess rows written to disk and merged back once the memory pool
+   runs out.
+
+2. **`BoundedWindowAggExec` computes `ROW_NUMBER` for every row.** It walks
+   the sorted stream and numbers each partition's rows 1, 2, 3, ... It holds
+   state only for the partition currently open — hence "bounded" — but it
+   still touches all N rows, including the ones about to be thrown away.
+
+3. **`FilterExec` keeps only the rows with `rn <= 5`.** Everything the sort
+   and the window did for the remaining rows is discarded here.
 
 With 10 million rows, 1,000 partitions, and `K = 3`, the plan sorts all 10
-million rows to keep 3,000. The fraction of output that survives the filter is
-roughly `K × P / N` — for a high-cardinality partition key this is vanishingly
-small.
-
-## Using It in DataFusion 55
-
-The optimization ships in DataFusion 55.0.0 behind the
-`datafusion.optimizer.enable_window_topn` configuration flag, which is
-**disabled by default**. Enable it with:
-
-```sql
-SET datafusion.optimizer.enable_window_topn = true;
-```
-
-With the flag on, the same query produces (abridged):
-
-```text
-ProjectionExec
-  BoundedWindowAggExec: ROW_NUMBER() PARTITION BY [category] ORDER BY [revenue DESC]
-    RepartitionExec: partitioning=Hash([category], ...)
-      PartitionedTopKExec: fn=row_number, fetch=5, partition=[category], order=[revenue DESC]
-        DataSourceExec
-```
-
-Both the `SortExec` *and* the `FilterExec` are gone. The
-`PartitionedTopKExec` sits directly below the window operator and feeds it
-only the surviving rows, already grouped and ordered, so the window operator
-runs in `Sorted` mode and assigns row numbers cheaply.
-
-### Which Queries the Rewrite Applies To
-
-The physical optimizer rule behind this is called `WindowTopN`. It fires when
-all of the following hold:
-
-- The window function is `ROW_NUMBER` or `RANK` (in DataFusion 55; see
-  [Status and Roadmap](#status-and-roadmap) for `DENSE_RANK`).
-- The window has a `PARTITION BY` clause. A global top-N without partitioning
-  is already handled efficiently by `SortExec` with a fetch limit.
-- For `RANK`: the window has a non-empty `ORDER BY` clause (with an empty
-  `ORDER BY`, every row ties at rank 1 and there is nothing to prune).
-- The filter compares the ranking column to an integer literal using one of
-  `rn <= K`, `rn < K`, `K >= rn`, or `K > rn`.
-
-The rule derives the number of rows to retain from the predicate: `rn <= 5`
-retains 5 rows per partition, and `rn < 5` retains 4.
-
-If any of these conditions fail, the rule simply does not fire and the
-sort-based plan above is used — the flag only switches *this* rewrite off and
-on, it does not affect anything else. To disable it again:
-
-```sql
-SET datafusion.optimizer.enable_window_topn = false;
-```
+million rows to keep 3,000 — 0.03% of the input. The fraction of output that
+survives the filter is roughly `K × P / N` — for a high-cardinality
+partition key this is vanishingly small.
 
 ## How It Works
 
@@ -231,6 +186,56 @@ to be removed from the plan entirely.
 [#21479]: https://github.com/apache/datafusion/pull/21479
 [#23096]: https://github.com/apache/datafusion/pull/23096
 [#26133]: https://github.com/apache/datafusion/pull/26133
+
+## Using It in DataFusion 55
+
+The optimization ships in DataFusion 55.0.0 behind the
+`datafusion.optimizer.enable_window_topn` configuration flag, which is
+**disabled by default**. Enable it with:
+
+```sql
+SET datafusion.optimizer.enable_window_topn = true;
+```
+
+With the flag on, the same query produces (abridged):
+
+```text
+ProjectionExec
+  BoundedWindowAggExec: ROW_NUMBER() PARTITION BY [category] ORDER BY [revenue DESC]
+    RepartitionExec: partitioning=Hash([category], ...)
+      PartitionedTopKExec: fn=row_number, fetch=5, partition=[category], order=[revenue DESC]
+        DataSourceExec
+```
+
+Both the `SortExec` *and* the `FilterExec` are gone. The
+`PartitionedTopKExec` sits directly below the window operator and feeds it
+only the surviving rows, already grouped and ordered, so the window operator
+runs in `Sorted` mode and assigns row numbers cheaply.
+
+### Which Queries the Rewrite Applies To
+
+The physical optimizer rule behind this is called `WindowTopN`. It fires when
+all of the following hold:
+
+- The window function is `ROW_NUMBER` or `RANK` (in DataFusion 55; see
+  [Status and Roadmap](#status-and-roadmap) for `DENSE_RANK`).
+- The window has a `PARTITION BY` clause. A global top-N without partitioning
+  is already handled efficiently by `SortExec` with a fetch limit.
+- For `RANK`: the window has a non-empty `ORDER BY` clause (with an empty
+  `ORDER BY`, every row ties at rank 1 and there is nothing to prune).
+- The filter compares the ranking column to an integer literal using one of
+  `rn <= K`, `rn < K`, `K >= rn`, or `K > rn`.
+
+The rule derives the number of rows to retain from the predicate: `rn <= 5`
+retains 5 rows per partition, and `rn < 5` retains 4.
+
+If any of these conditions fail, the rule simply does not fire and the
+sort-based plan above is used — the flag only switches *this* rewrite off and
+on, it does not affect anything else. To disable it again:
+
+```sql
+SET datafusion.optimizer.enable_window_topn = false;
+```
 
 ## Benchmarks: Where It Helps, and Where It Does Not
 
