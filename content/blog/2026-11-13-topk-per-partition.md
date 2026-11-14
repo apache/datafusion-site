@@ -251,20 +251,53 @@ replaced by the heaps.
 | 10K partitions (1K rows each)     |  619 ms |  128 ms  | **0.2x** (regression) |
 | 100K partitions (100 rows each)   | 4368 ms |  135 ms  | **0.03x** (regression) |
 
-*Timings reported in [#21479] when the operator was introduced; hardware and
+*Timings reported in [#21479] when the operator was introduced — on a build
+that predates [#23096], which shares the row encoder and memory reservation
+across partitions and is included in the 55.0.0 release. Hardware and
 absolute numbers will vary, but the shape of the curve is the point.*
 
-The pattern is clear:
+### Fresh numbers on a released build
 
-- **Moderate partition cardinality is the sweet spot.** With 100 or 1,000
-  partitions, each partition holds enough rows that replacing the full sort
-  with per-partition heaps of size K wins by 2–4x.
-- **Very high partition cardinality is the cliff.** With 100K partitions,
-  there are only ~100 rows per partition, and the per-partition bookkeeping
-  (row conversion, one heap per distinct key) costs more than the sort it
-  replaced. This is why the feature is behind a configuration flag rather
-  than always-on: the sort-based plan is more robust when the number of
-  distinct partition keys is very large.
+Re-running the same shape on DataFusion **55.2.0** (the exact h2o group-by
+Q8 query, 10M rows, `K = 2`, in-memory data, min of 4 runs on a single
+desktop machine — compare the *shape*, not the absolutes, with the table
+above):
+
+| Partitions | Rows/partition | Enabled | Disabled | Enabled/Disabled |
+| ---------: | -------------: | -------: | --------: | ---------------- |
+| 100        | 100,000        |   79 ms |   342 ms | 0.23x (4.3x faster) |
+| 1,000      | 10,000         |   92 ms |   610 ms | 0.15x (6.6x faster) |
+| 5,000      | 2,000          |  124 ms |   848 ms | 0.15x (6.8x faster) |
+| 10,000     | 1,000          |  159 ms |   885 ms | 0.18x (5.6x faster) |
+| 20,000     | 500            |  205 ms |   791 ms | 0.26x (3.9x faster) |
+| 50,000     | 200            |  416 ms |   500 ms | 0.83x (≈ parity)    |
+| 60,000     | ~167           |  454 ms |   289 ms | 1.57x (regression)  |
+| 100,000    | 100            |  699 ms |   530 ms | 1.32x (regression)  |
+| 150,000    | ~67            |  944 ms |   566 ms | 1.67x (regression)  |
+
+The crossover sits between ~50K and ~60K partitions — roughly **150–200 rows
+per partition** at `K = 2`. Beyond that the rewrite loses ground, for two
+reasons:
+
+- **Per-partition overhead grows linearly with P.** Every row probes the
+  hash map of P partition states; every distinct key owns a heap and a
+  hash-map entry; and the emit step sorts all P partition keys once per
+  operator, O(P log P). The enabled-plan wall time grows at roughly 5–6 µs
+  per distinct partition key, while the sort baseline it replaces stays
+  roughly flat in P — so the regression starts where the two curves cross.
+- **`PartitionedTopKExec` has no spill path.** SortExec degrades gracefully:
+  excess data goes to disk. The heaps must hold O(K × P × row_size) in
+  memory, and when the memory reservation cannot grow, the query fails
+  rather than spills. The window operator on top pays per partition too:
+  its compute time grows at ~4 µs per partition (417 µs at P=100 → 418 ms
+  at P=100K) even though it only touches the 2×P surviving rows.
+
+The trade-off in one line: per-partition bookkeeping grows linearly with
+the number of distinct keys, while the sort it replaces costs O(N log N)
+regardless of P — the rewrite wins while each partition still holds enough
+rows for the heaps to pay for themselves, and loses when they don't. This
+is why the feature is behind a configuration flag rather than always-on:
+the sort-based plan is more robust at very high partition cardinality.
 
 The [DataFusion configuration documentation][configs-doc] summarizes this
 trade-off: the optimization helps when the window partition key has low
@@ -273,9 +306,9 @@ memory usage and runtime, in which case the sort-based plan is more robust.
 
 [configs-doc]: https://datafusion.apache.org/user-guide/configs.html
 
-Follow-up work on the main branch narrows this gap: [#23096] shares the row
-encoder and memory reservation across partitions, and [#24591] reduced `RANK`
-memory from O(input) to O(K + ties).
+Note that both optimizations from the table's era have since shipped:
+[#23096] (shared encoder and memory reservation) is part of the 55.0.0
+release, and [#24591] reduced `RANK` memory from O(input) to O(K + ties).
 
 [#24591]: https://github.com/apache/datafusion/pull/24591
 
