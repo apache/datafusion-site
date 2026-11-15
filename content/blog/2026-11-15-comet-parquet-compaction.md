@@ -27,9 +27,11 @@ limitations under the License.
 
 [TOC]
 
-Compaction is one of the most common maintenance jobs on a data lake. It rewrites the many small files of a table partition as a few large ones. For plain Parquet tables it is often a single line of Spark, and at its center is the round robin shuffle behind `repartition(n)`.
+Apache DataFusion Comet tracks its performance with standard benchmarks such as TPC-H and TPC-DS. Alongside them, we keep testing Comet on real-world use cases. The first step was [nested TPC-H](https://datafusion.apache.org/blog/2026/10/25/comet-nested-tpch/), a TPC-H derived benchmark that brings in the nested data real workloads often have. This post looks at a real customer workload: Parquet compaction.
 
-On a production table with more than 200 columns, nested up to seven levels deep, Apache DataFusion Comet compacted a 200 GB daily partition in 70 minutes, against 80 minutes for Spark. The bottleneck was the shuffle write, where Comet's round robin hashed every value of every row. With positional round robin, which places rows by their position and copies them in contiguous groups, Comet compacts the same partition in 28 minutes. That is 2.9x faster than Spark, with 6.4x less memory.
+Compaction rewrites the many small files of a table partition as a few large ones. It runs in the background across many datasets of a data lake, and it is typically very expensive in terms of resources. For plain Parquet tables it is often a single line of Spark, and at its center is the round robin shuffle behind `repartition(n)`.
+
+On a table with more than 200 columns, nested up to seven levels deep, Comet compacted a 200 GB daily partition in 70 minutes, against 80 minutes for Spark. The bottleneck was the shuffle write, where Comet's round robin hashed every value of every row. With positional round robin, which places rows by their position and copies them in contiguous groups, Comet compacts the same partition in 28 minutes. That is 2.9x faster than Spark, with 6.4x less memory.
 
 <img
 src="/blog/images/comet-parquet-compaction/results.svg"
@@ -44,7 +46,9 @@ This post explains how compaction runs, why hashing was slow on nested data, and
 
 Small files are a side effect of how data lands in a data lake. Streaming jobs commit every few minutes, many writers each add files to the same partition, and late data arrives in small batches. Every file costs a reader a file open, a footer read and at least one request to object storage, and small files hold small row groups that encode and compress less well. A day of data is slower to read from a thousand small files than from a few dozen large ones.
 
-Compaction runs in the background and rewrites a partition's small files as a few large ones. Table formats such as Apache Iceberg and Delta Lake have their own procedures for it. For a plain directory of Parquet files, a common way is a short Spark job:
+Compaction rewrites a partition's small files as a few large ones. It is heavily I/O bound, because it reads and rewrites all of the data it touches. It usually runs on a schedule, so any saving repeats for every dataset and every partition it runs on.
+
+Table formats such as Apache Iceberg and Delta Lake have their own procedures for compaction. For a plain directory of Parquet files, a common way is a short Spark job:
 
 ```scala
 spark.read.parquet(inputPath)
@@ -60,6 +64,8 @@ The job runs as two stages with a shuffle between them:
 
 1. **Map stage.** Each task scans one split of the input, assigns every row to one of the 50 output partitions (round robin partitioning) and writes the rows to a local shuffle file, grouped by partition (shuffle write).
 2. **Reduce stage.** Each of the 50 tasks fetches its partition from every map task (shuffle read) and writes the rows as one Parquet file (Parquet write).
+
+Every byte of the partition crosses I/O four times. It is read from the input files, written to shuffle files, read back by the reducers and written to the output files.
 
 <img
 src="/blog/images/comet-parquet-compaction/pipeline.svg"
@@ -88,7 +94,7 @@ a.b[].d    utf8     validity, offsets, values
 
 That is five arrays and nine buffers for two leaf values. One row of the compaction table is spread over hundreds of arrays like these. Work that handles one row at a time, such as hashing a row or copying it into another batch, visits every one of them for every row. Work that handles a range of rows visits each array once per range.
 
-Flat benchmarks such as TPC-H have no data like this, which is why we built [nested TPC-H](https://datafusion.apache.org/blog/2026/10/25/comet-nested-tpch/).
+Flat benchmarks such as TPC-H have no data like this. Nested TPC-H wraps its columns in a single `array<struct>`, while this table nests seven levels deep.
 
 ## Round robin in Spark and in Comet
 
@@ -108,7 +114,7 @@ A hash depends only on a row's content, so a retried task places rows the same w
 
 ## Hashing made compaction slow
 
-Flat benchmarks never showed a problem, because hashing a flat row is cheap. On wide nested data like this table, the map tasks that do Comet's shuffle write ran two to three times slower than Spark's ([#5397](https://github.com/apache/datafusion-comet/issues/5397)). End to end, Comet took 70 minutes against Spark's 80, only 1.1x faster.
+Flat benchmarks never showed a problem, because hashing a flat row is cheap. In a job as I/O bound as compaction, the CPU work of the shuffle writer should not set the pace. On wide nested data like this table, it did. The map tasks that do Comet's shuffle write ran two to three times slower than Spark's ([#5397](https://github.com/apache/datafusion-comet/issues/5397)), and end to end, Comet took 70 minutes against Spark's 80, only 1.1x faster.
 
 The time went into two passes over every value of every row:
 
@@ -193,6 +199,15 @@ In the #6095 microbenchmark, positional placement is 124x cheaper than hashing o
 
 Groups as large as a batch would make every run a whole batch and the gather almost free, 549x faster than hashing in the same benchmark. They are not the default, because the benchmark runs a single map task and hides what happens across tasks. A reducer receives groups from every map task, and the stage is only balanced when each task emits many more groups than there are partitions. In a simulation of 50 map tasks of a million rows each into 200 partitions, batch-sized groups gave the largest partition 1.57 times as many rows as the smallest, against 1.00 for the default. For 10 tasks of 500,000 rows, the ratio was 6.0 against 1.01. Larger groups remain available through `spark.comet.shuffle.native.partitioning.roundrobin.positional.groupRows`.
 
+## Benchmark setup
+
+- **Workload**: a real customer compaction job, `spark.read.parquet(inputPath).repartition(50).write.parquet(outputPath)`, over one daily partition.
+- **Data**: 1,200 Parquet files and 200 GB in total, with more than 200 columns nested up to seven levels deep. The job writes 50 Parquet files.
+- **Spark**: an internal fork of Spark 4.0. This is a real customer workload, so we tested it on the Spark fork it runs on in production.
+- **Comet**: 1.3.0-SNAPSHOT, a development build ahead of the 1.3.0 release. Positional round robin itself has been available since [Comet 1.1.0](https://datafusion.apache.org/blog/2026/10/01/datafusion-comet-1.1.0/).
+- **Comet settings**: `spark.comet.shuffle.native.partitioning.roundrobin.enabled=true` in both Comet runs, plus `spark.comet.shuffle.native.partitioning.roundrobin.positional.enabled=true` in the positional run. Nothing else differs between the two Comet runs.
+- **Memory**: peak memory is the mean over all executors.
+
 ## Results
 
 | | Execution time | Peak memory, mean over executors |
@@ -201,15 +216,8 @@ Groups as large as a batch would make every run a whole batch and the gather alm
 | Comet, hash round robin | 1 h 10 min (1.1x) | 130 GB (5.9x less) |
 | Comet, positional round robin | **28 min (2.9x)** | **120 GB (6.4x less)** |
 
-- Positional round robin cut Comet's time from 70 to 28 minutes, 2.5x on its own. The two Comet runs differ only in `spark.comet.shuffle.native.partitioning.roundrobin.positional.enabled`.
+- Positional round robin cut Comet's time from 70 to 28 minutes, 2.5x on its own, since it is the only setting that differs between the two Comet runs.
 - Both Comet runs use about a sixth of Spark's memory. We have not profiled where Spark's memory goes, but its sort before the round robin is the likely cause of most of it.
-
-Setup:
-
-- **Job**: `spark.read.parquet(inputPath).repartition(50).write.parquet(outputPath)`.
-- **Input**: one daily partition, 1,200 Parquet files and 200 GB, with more than 200 columns nested up to seven levels deep. **Output**: 50 Parquet files.
-- **Versions**: Spark 4.0, and Comet built from `main` ahead of 1.3.0. Positional round robin has been available since [Comet 1.1.0](https://datafusion.apache.org/blog/2026/10/01/datafusion-comet-1.1.0/).
-- **Comet settings**: `spark.comet.shuffle.native.partitioning.roundrobin.enabled=true` in both Comet runs, plus `spark.comet.shuffle.native.partitioning.roundrobin.positional.enabled=true` in the positional run.
 
 ## Trying it
 
