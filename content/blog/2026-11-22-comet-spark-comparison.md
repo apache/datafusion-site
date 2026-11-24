@@ -72,7 +72,7 @@ Here are the physical plans of both runs:
 | Final aggregate | `HashAggregate` (final) | `CometHashAggregate` (final) |
 | Write | `AppendData`: iceberg-java writes rows | `CometIcebergWrite` under `IcebergCommit` |
 
-The Comet plan requires `spark.comet.write.iceberg.enabled=true`. The native write is off by default in Comet 1.2, and without it the plan ends with `CometColumnarToRow` → `AppendData`. Reading a Comet plan comes down to one rule: every `Comet*` node is accelerated, a node without the prefix is plain Spark, and `CometColumnarToRow` marks the place where Arrow batches become rows.
+The Comet plan requires `spark.comet.write.iceberg.enabled=true`. The native write is off by default in Comet 1.2, and without it the plan ends with `CometColumnarToRow` → `AppendData`. Reading a Comet plan mostly comes down to one rule: every `Comet*` node is accelerated, and a node without the prefix is plain Spark. The rule has two exceptions. `CometColumnarToRow` has the prefix, but it is a conversion that marks the place where Arrow batches become rows, not accelerated work. `IcebergWrite` and `IcebergCommit` have no prefix, but they are Comet's own operators for its split Iceberg write: `IcebergCommit` commits on the driver, and `IcebergWrite` is the executor side when iceberg-java writes the files. When the write is native, the executor side is `CometIcebergWrite`.
 
 ## How Spark executes the job
 
@@ -343,7 +343,7 @@ A few minutes with the plan tell you whether Comet can help a job before you ben
 
 1. **Prerequisites.** `spark.plugins=org.apache.spark.CometPlugin`; off-heap memory enabled and sized (`spark.memory.offHeap.enabled`, `spark.memory.offHeap.size`); for Comet's shuffle, `spark.shuffle.manager=org.apache.spark.sql.comet.execution.shuffle.CometShuffleManager`, set before the Spark context starts.
 2. **Read the plan** with `df.explain("formatted")` or in the SQL tab after the run:
-    - `Comet*` nodes are accelerated; nodes without the prefix are plain Spark.
+    - `Comet*` nodes are accelerated; nodes without the prefix are plain Spark. The exceptions are `CometColumnarToRow`, which is a conversion, and `IcebergWrite` and `IcebergCommit`, which are Comet's operators for the split Iceberg write.
     - Find where the native part ends. A Spark operator in the middle of a stage gets a `CometColumnarToRow` below it and no conversion back, so everything above it stays in Spark.
     - Check the exchange type: `CometExchange` (native shuffle), `CometColumnarExchange` (JVM columnar shuffle) or a plain `Exchange` (Spark's shuffle).
     - Check the write: `CometIcebergWrite` under `IcebergCommit` is native; `IcebergWrite` or `AppendData` means that iceberg-java writes the files.
