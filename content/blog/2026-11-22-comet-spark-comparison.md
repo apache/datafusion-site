@@ -29,7 +29,7 @@ limitations under the License.
 
 ## Introduction
 
-[Apache DataFusion Comet](https://datafusion.apache.org/comet/) is an accelerator for [Apache Spark](https://spark.apache.org/) that can also read and write [Apache Iceberg](https://iceberg.apache.org/) tables natively. It is built on top of [Apache DataFusion](https://datafusion.apache.org/), a query engine written in Rust on [Apache Arrow](https://arrow.apache.org/). Comet plugs into Spark without changes to the jobs: it takes the physical plan that Spark has built and executes the operators it supports in native code. The promise is better performance thanks to two things: Comet processes data in columnar Arrow batches instead of one row at a time, and it runs in native code outside the JVM, without JVM objects and their overhead. The project's README states a speedup of about 1.8 times on TPC-DS at 1 TB, which translates into roughly 45% lower cost.
+[Apache DataFusion Comet](https://datafusion.apache.org/comet/) is an accelerator for [Apache Spark](https://spark.apache.org/) that can also read and write [Apache Iceberg](https://iceberg.apache.org/) tables natively. It is built on top of [Apache DataFusion](https://datafusion.apache.org/), a query engine written in Rust on [Apache Arrow](https://arrow.apache.org/). Comet plugs into Spark without changes to the jobs: it takes the physical plan that Spark has built and executes the operators it supports in native code. The promise is better performance thanks to two things: Comet processes data in columnar Arrow batches instead of one row at a time, and it runs in native code inside the executor process, through JNI, but outside the JVM heap, without JVM objects and their overhead. The project's README states a speedup of about 1.8 times on TPC-DS at 1 TB, which translates into roughly 45% lower cost.
 
 Numbers like these are useful, but they don't explain where the gain comes from. The usual answer – "Comet is columnar and native" – is true, but it explains less than it seems, because Spark's own Iceberg reader already decodes Parquet into Arrow vectors. If both engines start from columnar batches, where exactly does Spark lose time, and what does Comet do differently? I wanted to see this in detail, step by step, on a real job.
 
@@ -183,10 +183,12 @@ When batches do cross between the JVM and Rust, they go through the Arrow C Data
 
 Here are the totals for the whole job, as medians of five iterations, with the fastest and the slowest iteration in brackets:
 
-| Run | Wall time | CPU time | GC time | Shuffle written |
+| Run | Wall time | CPU time | Task time in GC | Shuffle written |
 | --- | --- | --- | --- | --- |
 | Spark | 38.7 s (35.4-39.0) | 295 s | 7.9 s | 1,698 MiB |
 | Spark + Comet | 10.5 s (9.2-11.4) | 76 s | 0.3 s | 1,197 MiB |
+
+The GC column is Spark's `jvmGCTime` summed over tasks: the time that tasks were stopped for garbage collection, not the CPU time of the collector.
 
 With Comet, the job ran 3.7 times faster and used 3.9 times less CPU; even its slowest iteration beat Spark's fastest by 3.1 times. Both engines kept most of the 8 cores busy (7.6 and 7.2 cores on average), so the gain comes from removing CPU work, not from removing waiting.
 
@@ -217,7 +219,7 @@ In Spark's flame graph (Figure 7), almost everything grows out of `java/lang/Thr
 - The tower on the left, about 31%, is the reduce stage: `ResultTask` → `WritingSparkTask`, with the shuffle read, the final aggregate – again with decimal and hash map frames on top – and Iceberg's Parquet writer with zstd compression.
 - The thin towers at the far left, about 5%, are JVM threads that don't run tasks: the JIT compiler and the garbage collector.
 
-If we convert each step's share of the samples into CPU-seconds, using the measured CPU time, the biggest cost in Spark is decimal math: about a third of the CPU, or 100 seconds, of which 79 are in the map stage and 21 in the final aggregate. This includes the subtraction and multiplication, the precision checks, and moving the `decimal(38,4)` sum in and out of the aggregation buffer as bytes (`UnsafeRow.getDecimal` and `setDecimal`). Garbage collection took only 7.9 seconds; the cost is in computing with objects. The hash maps of the two aggregates take another 55 seconds: 35 in the partial aggregate (building the key, hashing it, probing the map and updating the buffer) and 20 in the final one. The remaining 8 seconds of the final aggregate go to its per-row loop and to building the output rows. The table below has every step.
+If we convert each step's share of the samples into CPU-seconds, using the measured CPU time, the biggest cost in Spark is decimal math: about a third of the CPU, or 100 seconds, of which 79 are in the map stage and 21 in the final aggregate. This includes the subtraction and multiplication, the precision checks, and moving the `decimal(38,4)` sum in and out of the aggregation buffer as bytes (`UnsafeRow.getDecimal` and `setDecimal`). Tasks spent only 7.9 seconds stopped for garbage collection; the cost is in computing with objects. The hash maps of the two aggregates take another 55 seconds: 35 in the partial aggregate (building the key, hashing it, probing the map and updating the buffer) and 20 in the final one. The remaining 8 seconds of the final aggregate go to its per-row loop and to building the output rows. The table below has every step.
 
 <figure>
 <a href="/blog/images/comet-spark-comparison/08-flamegraph-comet.png">
@@ -316,7 +318,7 @@ The result is 34.8 seconds and 268 CPU-seconds, compared to 10.5 seconds with Co
 
 That was one way out of the native path. Here are the others I know of:
 
-- **The sink.** With Comet's defaults, every Iceberg write ends with `CometColumnarToRow`, because Spark's `AppendData` and iceberg-java's writer take rows. The native Iceberg write removes that conversion, but only for eligible writes, as described above; most non-default `write.parquet.*` settings are not on Comet's allowlist.
+- **The sink.** With Comet's defaults, when the input of an Iceberg write runs in Comet, the plan ends with `CometColumnarToRow`, because Spark's `AppendData` and iceberg-java's writer take rows. The native Iceberg write removes that conversion, but only for eligible writes, as described above; most non-default `write.parquet.*` settings are not on Comet's allowlist.
 - **The shuffle.** A plain `Exchange` between two Comet stages means rows on both sides of it. Comet's docs name string keys with a non-default collation as one cause.
 - **Wide or nested schemas.** Where a conversion does happen, its cost grows with the number of columns and nested fields. Comet's own microbenchmark puts the default conversion at 9.4 ns per row for a `long, int, double, string` schema at 8,192 rows per batch, and decimal-heavy schemas allocate an object per value.
 - **The safety valve.** `spark.comet.exec.transitionRevert.enabled` (off by default) reverts a whole stage to Spark when it would need more columnar-to-row conversions than `spark.comet.exec.transitionRevert.maxTransitions` (2 by default).
@@ -325,7 +327,7 @@ So the most useful thing to look for in a Comet plan is the place where the nati
 
 ## Does the API matter?
 
-For this query, it doesn't. Spark SQL, the DataFrame API in Python, Scala or Java, and Spark Connect all build the same logical plan, so Catalyst and Comet see the same thing, and the executors run the same JVM and native code. Python runs only on the driver and sends the plan over Py4J or Spark Connect. The repository checks this: it builds the `SELECT` part of the query with `spark.sql()` and with DataFrame calls in PySpark and compares the physical plans, which are identical.
+For this query, it doesn't. Spark SQL, the DataFrame API in Python, Scala or Java, and Spark Connect all build the same logical plan, so Catalyst and Comet see the same thing, and the executors run the same JVM and native code. Python runs only on the driver and sends the plan over Py4J or Spark Connect. The repository checks this for SQL and the classic DataFrame API: it builds the `SELECT` part of the query with `spark.sql()` and with DataFrame calls in PySpark, without Spark Connect, and compares the physical plans, which are identical.
 
 The API starts to matter only when your own code has to run on the data:
 
@@ -377,7 +379,7 @@ The rule of thumb: long native stretches, few conversions, Comet's shuffle on bo
 - **Runs.** Spark defaults otherwise, including ANSI mode, 200 shuffle partitions and AQE. One warm-up and five measured iterations per configuration in one Spark application, with medians reported. All iterations of all three configurations produced the same row count, revenue sum and lines sum.
 - **CPU.** Read from the container's cgroup counter around each query, because Spark's metric misses Comet's native threads.
 - **Flame graphs.** Recorded in separate Spark applications under async-profiler, so the timed iterations are never profiled. The profiler records only part of the CPU time as samples, so the per-step figures use each step's share of the samples times the measured CPU time. The profiled applications also include a warm-up iteration, so JIT compilation takes a larger share of the samples than it does in the timed iterations.
-- **Machine.** A MacBook Pro with an Apple M3 Pro chip and 36 GiB of memory. Docker Desktop runs the container in a Linux virtual machine on the same chip, so absolute times depend on it and will differ on other hardware. The comparison holds, because both engines share the same container, data and settings.
+- **Machine.** A MacBook Pro with an Apple M3 Pro chip and 36 GiB of memory. Docker Desktop runs the container in a Linux virtual machine on the same chip, so absolute times depend on it and will differ on other hardware. The M3 Pro also has only 5 or 6 performance cores, depending on the model, so with 8 busy CPUs some of the work probably ran on efficiency cores, and a CPU-second here is not a uniform unit. The comparison holds, because both engines share the same container, data and settings.
 - **Limitations.** This is one query on one machine, with local files and a shuffle that never crosses the network. On a cluster that reads from object storage, I/O takes a larger share of the time, and the speedup can be smaller. The Comet run has the native Iceberg write enabled, which is off by default in Comet 1.2; I did not measure Comet with its default settings.
 
 The repository [Visorgood/spark-comet-iceberg-bench](https://github.com/Visorgood/spark-comet-iceberg-bench) contains the Dockerfile and the scripts. After `docker build`, one `docker run` generates the data, runs all three configurations, and serves a report with the timings, plans and flame graphs next to the Spark History Server.
@@ -393,5 +395,5 @@ Comet is developing quickly, and some details above, such as the default of the 
 ## References
 
 - [Apache DataFusion Comet](https://github.com/apache/datafusion-comet) and its [Iceberg guide for 1.2](https://datafusion.apache.org/comet/user-guide/1.2/iceberg.html)
-- Matt Butrovich, [Accelerating Iceberg Rust Development with DataFusion Comet](https://iceberg.apache.org/blog/accelerating-iceberg-rust-development-with-datafusion-comet/), Apache Iceberg blog
+- Matt Butrovich, [Accelerating Apache Spark Queries (and Iceberg Rust Development) with Apache DataFusion Comet](https://iceberg.apache.org/blog/accelerating-iceberg-rust-development-with-datafusion-comet/), Apache Iceberg blog
 - Benchmark and reproduction: [Visorgood/spark-comet-iceberg-bench](https://github.com/Visorgood/spark-comet-iceberg-bench)
