@@ -59,7 +59,7 @@ A few details of this setup matter for the results:
 - **Target.** An unpartitioned Iceberg table with no sort order and default properties. In this case, Iceberg asks Spark for no extra shuffle or sort before the write, and the write stays eligible for Comet's native Iceberg writer.
 - **Shape.** An order has about four lines, so the partial aggregate shrinks the data only about four times, and the shuffle still carries 87 million rows. A query with few groups, like TPC-H Q1, would hide the shuffle.
 - **Types.** The money columns are `decimal(15,2)`. The product `l_extendedprice * (1 - l_discount)` is `decimal(32,4)`, and the sum is `decimal(38,4)`, both wider than 18 digits. As we will see later, this matters more than anything else in this job.
-- **`INSERT INTO` rather than `CREATE TABLE AS SELECT`.** Comet's native Iceberg write covers append, overwrite and copy-on-write DML, but not CTAS.
+- **`INSERT INTO` rather than `CREATE TABLE AS SELECT`.** Comet's native write handles CTAS too, but Spark runs the CTAS write as a nested append that it plans separately, so the plan of the CTAS statement itself does not show the write operators. `INSERT INTO` keeps the whole job, from the scan to the write, in one plan.
 
 Here are the physical plans of both runs:
 
