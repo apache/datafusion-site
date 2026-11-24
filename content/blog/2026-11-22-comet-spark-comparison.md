@@ -262,7 +262,7 @@ The Spark UI adds one more detail. AQE coalesces the 200 shuffle partitions by s
 
 ## Where the speedup disappears
 
-Comet's gain lives inside the native part of the plan, and one unsupported expression can end that part for the rest of the job. Comet runs an operator natively only when its input is already native, and it turns rows back into Arrow only right above a scan. So everything above the first operator that Comet cannot run stays in Spark.
+Comet's gain lives inside the native part of the plan, and one unsupported expression can end that part for the rest of its stage. Within a stage, Comet runs an operator natively only when its input is already native, and by default it turns rows back into Arrow only right above a scan. So everything in the stage above the first operator that Comet cannot run stays in Spark. A shuffle can start a native part again: with Comet's shuffle enabled, as it is by default, its JVM columnar shuffle (`CometColumnarExchange`) takes rows from any Spark operator and writes Arrow, so the next stage can run natively. In this job, the stage after the shuffle stays in Spark too, for a reason that we will see below.
 
 To show this, I added an artificial but harmless condition to the `WHERE` clause: a data check with `assert_true`, a built-in Spark function that Comet 1.2 does not run natively.
 
@@ -280,7 +280,7 @@ Spark rewrites `assert_true` into an `If` with `RaiseError`, which Comet 1.2 doe
 - The final aggregate follows its input.
 - The Iceberg write falls back to iceberg-java, because the native write needs native input.
 
-Comet does have a conversion from rows to Arrow, `CometSparkRowToColumnar`, but in 1.2 it applies only above leaf operators such as scans, not after a Spark operator in the middle of a stage.
+Comet does have a conversion from rows to Arrow, `CometSparkRowToColumnar`, but by default in 1.2 it applies only above leaf operators such as scans, not after a Spark operator in the middle of a stage. Two settings, both off by default, place it elsewhere: `spark.comet.convert.shuffleInput.enabled` under a native shuffle, and `spark.comet.convert.typedDataset.enabled` above a typed Dataset operation.
 
 <figure>
 <a href="/blog/images/comet-spark-comparison/09-fallback-plan.png">
