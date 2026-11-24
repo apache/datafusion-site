@@ -273,12 +273,18 @@ WHERE  l_shipdate >= DATE '1995-01-01'
 
 `assert_true` returns `NULL` when the condition holds and fails the query otherwise, so `IS NULL` keeps every row. It is not something you would write in a filter every day, but it does not change the result and costs almost nothing by itself, so the difference between the runs shows only the effect of the fallback. In real jobs, a common trigger of the same kind is a Python UDF (see the next section).
 
-Spark rewrites `assert_true` into an `If` with `RaiseError`, which Comet 1.2 does not run natively. Comet converts a `Filter` only if its whole condition converts, so the `Filter` stays in Spark, and the rest of the plan follows:
+Spark rewrites `assert_true` into an `If` with `RaiseError`, which Comet 1.2 does not run natively. Comet converts a `Filter` only if its whole condition converts, so the `Filter` stays in Spark. The operators above it stay in Spark too, each for its own reason:
 
 - `Project` and the partial `HashAggregate` stay in Spark because their input is not native.
-- The shuffle stays Spark's. Comet could use its JVM columnar shuffle here, but it reverts that shuffle when both of its neighbours are Spark aggregates, to avoid two pointless conversions (`spark.comet.shuffle.revertRedundantColumnar.enabled`, on by default).
-- The final aggregate follows its input.
+- The final aggregate stays in Spark because of its aggregation buffer. Comet does not run a final aggregate on top of Spark's partial one if it contains a decimal `sum`, because overflow detection does not survive such a split, or a `count`, which Comet excludes on purpose because this combination broke some of Spark's plan rewrites.
+- Only then does Comet decide on the shuffle. It could use its JVM columnar shuffle here, but it reverts that shuffle to Spark's when both of its neighbours are Spark aggregates, to avoid two pointless conversions (`spark.comet.shuffle.revertRedundantColumnar.enabled`, on by default).
 - The Iceberg write falls back to iceberg-java, because the native write needs native input.
+
+The run sets `spark.comet.explain.fallback.enabled=true`, so the driver log names the reason for the final aggregate:
+
+```text
+Comet aggregate that merges intermediate buffers requires a Comet child aggregate when the intermediate buffer formats are incompatible with Spark. Incompatible aggregate function(s): count, sum
+```
 
 Comet does have a conversion from rows to Arrow, `CometSparkRowToColumnar`, but by default in 1.2 it applies only above leaf operators such as scans, not after a Spark operator in the middle of a stage. Two settings, both off by default, place it elsewhere: `spark.comet.convert.shuffleInput.enabled` under a native shuffle, and `spark.comet.convert.typedDataset.enabled` above a typed Dataset operation.
 
