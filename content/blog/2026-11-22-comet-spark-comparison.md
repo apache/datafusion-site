@@ -354,8 +354,8 @@ A few minutes with the plan tell you whether Comet can help a job before you ben
     - Check the exchange type: `CometExchange` (native shuffle), `CometColumnarExchange` (JVM columnar shuffle) or a plain `Exchange` (Spark's shuffle).
     - Check the write: `CometIcebergWrite` under `IcebergCommit` is native; `IcebergWrite` or `AppendData` means that iceberg-java writes the files.
     - Under AQE, an `EXPLAIN` before the run shows the initial plan without transitions; the final plan is in the SQL tab after the run.
-3. **Ask why something fell back.** `spark.comet.explain.fallback.enabled=true` logs the reasons on the driver; on Spark 4.0+, the SQL UI shows the annotated plan. Ineligible Iceberg writes report their reason there too.
-4. **Preview without risk.** `spark.comet.explain.planOnly.enabled=true` logs the plan Comet would run and its coverage, while Spark runs the original plan. The coverage can be optimistic.
+3. **Ask why something fell back.** `spark.comet.explain.fallback.enabled=true` logs the reasons on the driver. On Spark 4.0+, the SQL UI can also show the plan annotated with the reasons, but only after you add `spark.sql.extendedExplainProviders=org.apache.comet.ExtendedExplainInfo`, which Comet does not set itself. Ineligible Iceberg writes report their reason there too.
+4. **Preview without risk.** `spark.comet.explain.planOnly.enabled=true` logs the plan Comet would run and its coverage, while Spark runs the original plan. The coverage can be optimistic, and Comet declines its split Iceberg write in this mode, so the write is reported as Spark.
 5. **Look inside the native part.** `spark.comet.explain.native.enabled=true` writes the DataFusion plan with its metrics to the executor logs.
 6. **Measure CPU outside Spark.** The Executors tab and the task metrics miss Comet's native threads, so compare CPU at the process or container level.
 
