@@ -25,12 +25,8 @@ limitations under the License.
 -->
 
 <!--
-DRAFT. Before publishing:
+Before publishing:
 - TODO: set the date (front matter and file name) to the release date.
-- TODO: update the commit and contributor counts and the thank-you list from the 56.0.0 changelog.
-  Counts below are for main at 333e2636a (2026-11-11): 189 commits from 20 authors.
-- TODO: confirm the DataFusion version 56.0.0 ships with (main is on DataFusion 55).
-- TODO: the memory usage page is in apache/datafusion-ballista#2855; update the link once it merges.
 -->
 
 [TOC]
@@ -43,9 +39,10 @@ nodes.
 [Apache DataFusion Ballista]: https://datafusion.apache.org/ballista/
 [Apache DataFusion]: https://datafusion.apache.org
 
-This release contains 189 commits from 20 contributors. It builds on [55.0.0], which made adaptive query
-execution (AQE) the default, and this cycle went into three things: making Ballista faster, making AQE's
-decisions better, and making the scheduler and executors behave correctly when things go wrong.
+This release contains 259 commits from 27 contributors and is built on DataFusion 56.0.0. It builds on [55.0.0],
+which made adaptive query execution (AQE) the default, and this cycle went into three things: making Ballista
+faster, making AQE's decisions better, and making the scheduler and executors behave correctly when things go
+wrong.
 
 The highlights:
 
@@ -55,8 +52,11 @@ The highlights:
   memory than Spark or Spark with Apache DataFusion Comet, and ran just as fast in 8 GiB as in 64 GiB.
 - **Better adaptive plans**: AQE now sees distinct counts from shuffles, measures a join's output before
   broadcasting it, runs a repeated subquery once, and plans submitted physical plans too.
+- **DataFrame caching**: `DataFrame::cache()` keeps a DataFrame's output on the cluster for later queries, and
+  rebuilds it when an executor holding it is lost.
 - **More robust**: graceful shutdown, a standalone result service, and a set of fixes that turn silent wrong
   results and hung jobs into correct results or clear errors.
+- **Apache Iceberg (experimental)**: a new integration scans Iceberg tables.
 
 [55.0.0]: /blog/2026/10/03/datafusion-ballista-55.0.0/
 
@@ -65,7 +65,8 @@ The highlights:
 We benchmarked Ballista against [Apache Spark] 4.1.3, and against Spark 4.1.3 with [Apache DataFusion Comet]
 1.1.0, on TPC-H at scale factor 1000, with the data stored as Parquet on S3. All three ran on the same Kubernetes
 cluster with 32 executors, each with 8 vCPU and 64 GiB of memory, and each query time is the mean of two runs
-including the cold first run.
+including the cold first run. The Ballista results were measured on `main` during the release cycle, at commit
+[`d9872080`].
 
 <img
 src="/blog/images/datafusion-ballista-56.0.0/tpch_sf1000_total.svg"
@@ -87,14 +88,17 @@ These are not tuned comparisons. Spark and Comet ran 16 tasks on each executor's
 and Comet had an extra 32 GiB of off-heap memory per executor. The Spark and Comet results come from an earlier
 run with separate scripts and their own phrasing of the queries, so they are not an exact like-for-like
 comparison. The [benchmarking guide] has the full configuration, the per-query results, and columns for
-[DataFusion Distributed] and Trino. The scripts that ran the Ballista columns are now in the repository, in
+[DataFusion Distributed] and Trino, and the [DataFusion Distributed comparison] is now generated from the same
+published results. The scripts that ran the Ballista columns are now in the repository, in
 [`benchmarks/cluster`], and can run all five engines on your own Kubernetes cluster.
 
 [Apache Spark]: https://spark.apache.org/
 [Apache DataFusion Comet]: https://datafusion.apache.org/comet/
 [benchmarking guide]: https://datafusion.apache.org/ballista/contributors-guide/benchmarking/index.html
 [DataFusion Distributed]: https://github.com/datafusion-contrib/datafusion-distributed
+[DataFusion Distributed comparison]: https://datafusion.apache.org/ballista/about/datafusion-distributed-comparison.html
 [`benchmarks/cluster`]: https://github.com/apache/datafusion-ballista/tree/main/benchmarks/cluster
+[`d9872080`]: https://github.com/apache/datafusion-ballista/commit/d98720804369917151052e1c280a1dae711817fb
 
 ### Where the time went
 
@@ -188,7 +192,8 @@ they have allocated, including memory the pool does not track, and when a task r
 names the operators holding the most memory. Spill files now go to the executor's work directory, whose free
 space sets the spill limit by default. Executors also raise their open file limit at startup: a task holds a
 file for each shuffle partition it reads or writes, and with the common limit of 1024, TPC-H at 128 partitions
-or more failed with `Too many open files`.
+or more failed with `Too many open files`. The executor can now also be built with jemalloc as its allocator
+(the `jemalloc` feature) instead of mimalloc.
 
 ## Adaptive query execution
 
@@ -222,11 +227,17 @@ AQE now runs it as its own stage and measures it before deciding to broadcast it
 - **Skew joins (opt-in).** With `ballista.planner.skew_join.enabled`, AQE splits a skewed partition of a
   partitioned join into smaller tasks and replicates the matching partition of the other side, so one hot key
   no longer serializes the join on a single task.
-- **Extension rules.** Projects that embed the scheduler can add their own rules to adaptive planning.
+- **Extension rules.** Projects that embed the scheduler can add their own rules to adaptive planning, and
+  can tell the coalesce rule that their own operators accept a changed partition count, so stages that run
+  them get partition coalescing too.
 
-The release also lays the groundwork for distributed runtime filters: executors can now build Bloom, IN-list,
-and min/max summaries of a join's build side and apply them to the probe side. Placing these filters in query
-plans will follow in a future release.
+### Runtime filters (opt-in)
+
+With `ballista.planner.runtime_filter.enabled`, AQE builds Bloom, IN-list and min/max summaries of the build side
+of inner and semi hash joins and applies them to the probe side, so rows that cannot match are dropped as the
+probe side is scanned. Probe stages never wait for a filter: a stage uses the filters whose builds are complete
+when it starts, and runs without them otherwise. Broadcast joins can use them too, and `EXPLAIN ANALYZE` shows
+how many rows each filter pruned.
 
 ### Correctness
 
@@ -234,7 +245,37 @@ Much of the AQE work in this cycle was making replanning safe. A stage cancelled
 its late tasks discarded, a stage that is rolled back discards its partial outputs before it runs again, a
 failed stage transition no longer drops the stage from the graph, and intermediate shuffle files are freed when
 an adaptive job succeeds. Aggregates above joins whose strategy is still undecided keep their partial and final
-phases, and semi joins with volatile expressions are no longer moved.
+phases, and semi joins with volatile expressions are no longer moved. An AQE job that loses the output of a
+stage that has already finished now fails, instead of hanging; rerunning that stage is still to come ([#1986]).
+
+[#1986]: https://github.com/apache/datafusion-ballista/issues/1986
+
+## Caching DataFrames
+
+`DataFrame::cache()` now works on a cluster. Once `ballista.cache.noop` is set to `false`, the first query on a
+cached DataFrame runs the cached part as a job of its own and keeps its output on the executors, and later
+queries in the same session read that output instead of computing it again:
+
+```rust
+ctx.sql("SET ballista.cache.noop = false").await?;
+let cached = ctx.table("t").await?.filter(col("x").gt(lit(5)))?.cache().await?;
+cached.clone().count().await?; // builds the cache, then reads it
+cached.collect().await?;       // reads it
+```
+
+The cache is built in staged mode, and queries over it run in the session's mode, so a pipelined session can
+read a cache with streaming queries. Cached data lives on the executors, so the scheduler also recovers it. If a
+query loses part of a cache it reads, because the executor holding it is lost or a fetch from it fails, the stage
+reading it rolls back, the cache is rebuilt, and the query carries on from there. Queries planned by AQE, and
+pipelined queries once their tasks have started, cannot resume yet, and fail instead with an error that says to
+retry, and the retry rebuilds the cache. A session's caches are dropped when the session is removed, and an
+operator can turn caching off for the whole cluster with the scheduler's `--disable-dataframe-cache` flag.
+
+Cached data is not evicted yet, so cache only what you reuse. The [tuning guide] has a full example in both
+execution modes, and the [DataFrame cache design] describes how it works.
+
+[tuning guide]: https://datafusion.apache.org/ballista/user-guide/tuning-guide.html#caching-dataframes
+[DataFrame cache design]: https://datafusion.apache.org/ballista/contributors-guide/dataframe-cache.html
 
 ## Robustness and operations
 
@@ -266,22 +307,41 @@ fail clearly:
 - A task whose status update carried metrics the scheduler could not merge had its status dropped, and under
   pull scheduling, tasks that did not fit in one poll response never ran and the job hung. Both are fixed, and an
   unreadable shuffle block is now reported as a fetch failure so the stage that wrote it reruns.
+- Nested-loop joins that emit their build rows, such as `LEFT` and `FULL` joins, emitted them once per task when
+  their probe side was split between tasks. They now run as a single task.
+- In a stage split between tasks, a `UNION ALL` branch that merges its input, such as one with a `LIMIT`, was run
+  by every task. Such a branch now gets a stage of its own.
 - Pull-based executors no longer take on more partitions than they have vcores.
+- Jobs whose rollback fails after an executor is lost now fail instead of hanging.
 
 The TPC-H SF10 and TPC-DS SF1 suites now run against every code change before it merges, through a merge
 queue, in addition to the high-availability chaos tests added in 55.0.0.
 
 ## Python
 
-The Python client has been rebuilt on DataFusion Python's foreign function interface. `BallistaSessionContext`
-now returns a standard `datafusion.SessionContext` with a Ballista query planner installed, so every operation
-that executes a plan, including `collect`, `to_pandas`, `write_parquet` and `EXPLAIN ANALYZE`, runs on the cluster
-without a wrapper in between. Python UDFs are supported, as is S3, and a pure-Python client is available as the
+The Python bindings for 56.0.0 will be released separately, after this release. In them, the Python client has
+been rebuilt on DataFusion Python's foreign function interface. `BallistaSessionContext` now returns a standard
+`datafusion.SessionContext` with a Ballista query planner installed, so every operation that executes a plan,
+including `collect`, `to_pandas`, `write_parquet` and `EXPLAIN ANALYZE`, runs on the cluster without a wrapper in
+between. Python UDFs are supported, as is S3, and a pure-Python client is available as the
 `python-client` extra for environments where the native client does not fit.
+
+## Apache Iceberg (experimental)
+
+The new `ballista-iceberg` crate, in `integrations/iceberg`, lets Ballista scan [Apache Iceberg] tables. On top of
+[iceberg-datafusion], it adds the codecs that send Iceberg tables and scans between the client, the scheduler and
+the executors, pins each table to one version for the whole query, and mounts Iceberg catalogs on the scheduler
+for Flight SQL clients. It is not published to crates.io yet, because it depends on unreleased revisions of
+iceberg-rust; see the [Iceberg guide] to build it.
+
+[Apache Iceberg]: https://iceberg.apache.org/
+[iceberg-datafusion]: https://github.com/apache/datafusion-iceberg
+[Iceberg guide]: https://datafusion.apache.org/ballista/user-guide/iceberg.html
 
 ## Other changes
 
-- `DataFrame::cache()` materializes a DataFrame on the cluster, and later queries read it back.
+- Hash shuffles can place rows by a partition id that the client computes, so Ballista can match data that is
+  already partitioned by another function, such as Spark's Murmur3 hash for bucketed tables.
 - `DESCRIBE` works on Ballista tables.
 - `ComposedLogicalExtensionCodec` combines logical extension codecs, so a project can use several.
 - The `spark-compat` feature has been removed.
@@ -289,18 +349,18 @@ without a wrapper in between. Python UDFs are supported, as is S3, and a pure-Py
 
 ## Upgrading
 
-The wire format between the scheduler and executors has changed (protocol version 4), so they must be upgraded
-together. The Python client's API changed as described above, and several scheduler and executor APIs gained
-fields. The [upgrade guide] lists every change and what to do about it.
+Ballista 56.0.0 uses DataFusion 56.0.0 and Arrow 60. The wire format between the scheduler and executors has
+changed (protocol version 4), so they must be upgraded together. Several scheduler and executor APIs gained
+fields, and the scheduler's embedded Flight proxy is deprecated and will be removed in 57.0.0. The Python client's
+API changes described above, and the deprecation of its `cluster_config` argument, arrive with the 56.0.0 Python
+bindings. The [upgrade guide] lists every change and what to do about it.
 
 [upgrade guide]: https://datafusion.apache.org/ballista/upgrading/56.0.0.html
 
 ## Thank You
 
-<!-- TODO: regenerate from the 56.0.0 changelog at release. -->
-
-Thank you to all 20 contributors, including Andy Grove, Marko Milenković, Ville Brofeldt, Richard Durkee, Noah
-Kusaba, Samuel James, Akshay Chitneni, and everyone who contributed code, reviews, bug reports, and feedback.
-See the [changelog] for the complete list of changes and contributors.
+Thank you to everyone who contributed to this release, including Andy Grove, Marko Milenković, Noah Kusaba, Ville
+Brofeldt, Akshay Chitneni, Richard Durkee, Vikrant Mehta, Bharadwaj Pendyala, Samuel James, Xuanyi Li, Ethan
+Woodbury, and everyone who contributed code, reviews, bug reports, and feedback. See the [changelog] for the complete list of changes and contributors.
 
 [changelog]: https://github.com/apache/datafusion-ballista/blob/56.0.0/docs/source/changelog/56.0.0.md
