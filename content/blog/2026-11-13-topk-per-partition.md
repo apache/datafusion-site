@@ -29,10 +29,10 @@ limitations under the License.
 
 *[Vadim Lazuk](https://github.com/Inf1mum)*
 
-"Find the top N rows within each group" is one of the most common shapes in
-analytics: the five best-selling products in each category, the three most
-recent events per device, the two highest-revenue rows per store. In SQL this
-is usually written with a ranking window function and an outer filter:
+"The five best-selling products in each category" is a common analytics
+query: rank the rows within each group, keep only the top few per group, and
+discard the rest. In SQL this is usually written with a ranking window
+function and an outer filter:
 
 ```sql
 SELECT * FROM (
@@ -41,43 +41,42 @@ SELECT * FROM (
 ) WHERE rn <= 5;
 ```
 
-Until recently, DataFusion evaluated this query by sorting the *entire* input
-to compute the window function, and then throwing almost all of the sorted
-output away. DataFusion 55 recognizes the pattern: with
-[datafusion.optimizer.enable_window_topn] enabled, the full sort is replaced
-by a new `PartitionedTopKExec` operator that keeps only the top N rows per
-partition in a bounded heap.
+The window expression means: divide the rows of `sales` into groups called
+partitions — one per distinct `category` — order the rows within each group
+by `revenue` descending, and number them 1, 2, 3, .... The outer
+`WHERE rn <= 5` discards every row whose number is greater than 5, leaving
+the five highest-revenue rows of each category. Here is one group
+(`category = 'books'`) with the rows the filter removes marked:
 
-The rest of this post shows how to enable the feature, what changes in the
-plan, how the operator works, and where it helps and where it does not.
+```text
+category | revenue | rn | kept
+---------|--------:|---:|-----
+books    |     300 |  1 | yes
+books    |     250 |  2 | yes
+books    |     200 |  3 | yes
+books    |     150 |  4 | yes
+books    |     100 |  5 | yes
+books    |      50 |  6 | no
+books    |      20 |  7 | no
+```
 
-[@alamb]: https://github.com/alamb
-[@SubhamSinghal]: https://github.com/SubhamSinghal
-[datafusion.optimizer.enable_window_topn]: https://datafusion.apache.org/user-guide/configs.html
-[#6899]: https://github.com/apache/datafusion/issues/6899
+Throughout this post: **N** is the number of input rows, **P** is the number
+of distinct groups (partitions), and **K** is the number of rows kept per
+group — 5 in the query above.
 
-## The "Top N Per Group" Pattern
-
-The query above computes the top five rows per `category`. The same shape
-covers the latest events per device, the highest-paid employees per
-department, and many other screens and reports. It is also query 8 of the
-[h2o group-by benchmark] ("top 2 rows by value per group"), which DataFusion
-tracks as part of its effort to stay competitive on [db-benchmark][#13586].
-
-[h2o group-by benchmark]: https://github.com/h2oai/db-benchmark
-[#13586]: https://github.com/apache/datafusion/issues/13586
-
-What matters for the optimizer is the ratio: the filter keeps a *small, fixed
-number of rows per group* (`rn <= K`), while the input per group is large.
-When that holds, almost all the work of a sort-based plan is discarded.
+Until recently, DataFusion evaluated this query by sorting all N rows and
+then throwing almost all of them away. DataFusion now has a specialized
+operator for this pattern: with
+[datafusion.optimizer.enable_window_topn] enabled, `PartitionedTopKExec`
+keeps only the top K rows per group, and the same query runs up to **6.8x
+faster** in the benchmarks below. This post shows what changes in the plan,
+where the new operator helps, and where it does not.
 
 ## The Default Plan Sorts Everything
 
-A ranking window function must see each partition's rows as one contiguous,
-ordered run. The straightforward way to guarantee that is to sort the whole
-input by `(partition keys, order keys)` and evaluate the window over the
-sorted stream. With the optimization disabled, the physical plan for the
-query above is (abridged):
+A ranking window function needs each group's rows to be contiguous and in
+`ORDER BY` order, so the default plan sorts the whole input and evaluates
+the window over the sorted stream:
 
 ```text
 ProjectionExec
@@ -87,109 +86,28 @@ ProjectionExec
         DataSourceExec
 ```
 
-The plan is correct, but every stage does work on rows the filter later
-throws away:
+Each stage does work on rows the filter later throws away:
 
-1. **`SortExec` sorts the entire dataset by `(category, revenue)`.** The
-   window function needs each partition's rows contiguous and in `ORDER BY`
-   order, and a full sort is the only way to guarantee that here. It is a
-   blocking, spill-capable sort of all N rows: O(N log N) time, O(N) memory,
-   with excess rows written to disk and merged back once the memory pool
-   runs out.
+- `SortExec` sorts the entire dataset by `(category, revenue)`.
+- `BoundedWindowAggExec` numbers every row, including the ones about to be
+  discarded.
+- `FilterExec` keeps only the rows with `rn <= 5`.
 
-2. **`BoundedWindowAggExec` computes `ROW_NUMBER` for every row.** It walks
-   the sorted stream and numbers each partition's rows 1, 2, 3, ... It holds
-   state only for the partition currently open, hence "bounded", but it
-   still touches all N rows, including the ones about to be discarded.
-
-3. **`FilterExec` keeps only the rows with `rn <= 5`.** Everything the sort
-   and the window did for the other rows is wasted here.
-
-With 10 million rows, 1,000 partitions, and `K = 3`, the plan sorts all 10
-million rows to keep 3,000 — 0.03% of the input. The surviving fraction is
-roughly `K × P / N`, and it shrinks toward zero as the partition key's
-cardinality grows.
+With 10 million rows, 1,000 groups, and `K = 3`, the plan sorts all 10
+million rows to keep 3,000.
 
 ## How It Works
 
-`PartitionedTopKExec` reads *unsorted* input and keeps one bounded top-K heap
-per distinct partition key, instead of sorting the dataset. Rows are
-converted to Arrow's row format with a single shared `RowConverter` and
-grouped by their partition key. Each group's rows flow into that group's
-heap, which holds the best K rows according to the `ORDER BY` and evicts the
-rest as new rows arrive. All heaps share a single `MemoryReservation`, so the
-operator reports its memory usage to DataFusion's memory pool as one unit
-[#21479], [#23096].
+`PartitionedTopKExec` is a specialized operator that holds just the top K
+rows for each distinct partition key in a hash map of bounded heaps. It
+reads the unsorted input once: each row goes into its group's heap, which
+keeps the best K rows according to the `ORDER BY` keys and evicts the rest.
+It emits the surviving rows grouped by partition and ordered within each
+partition — exactly the shape the window operator needs to assign row
+numbers. The full input is still read; only the sort is replaced
+([source][partitioned-topk-source]).
 
-The overall cost changes from O(N log N) time and O(N) memory to:
-
-- **O(N log K)** time — each row is compared against a heap of size K.
-- **O(K × P × row_size)** memory — K retained rows for each of the P
-  distinct partitions.
-
-For example, with `fetch=3` and input:
-
-```text
-store | revenue
-------|--------
-  A   |  100
-  B   |   50
-  A   |  200
-  B   |  150
-  A   |  300
-  A   |  400
-```
-
-the operator keeps two heaps: `store=A` retains `{400, 300, 200}` and evicts
-`100`; `store=B` retains `{150, 50}`. It emits the retained rows in
-`(partition_keys, order_keys)` order — `A/400, A/300, A/200, B/150, B/50` —
-which is exactly the contiguous ordered run the window operator needs to
-assign `ROW_NUMBER` values 1..3 per partition.
-
-### What Each Ranking Function Has to Retain
-
-The three ranking functions differ in what a correct implementation must keep
-per partition:
-
-- `ROW_NUMBER` numbers rows 1, 2, 3, ... with no ties, so exactly K rows
-  per partition suffice.
-- `RANK` gives tied rows the same rank and skips subsequent ranks, so
-  `WHERE rk <= K` must keep K rows *plus any additional rows tied with the
-  row at the boundary*. The operator therefore pairs its heap with a sibling
-  ties list, and a query can legitimately return more than K rows per
-  partition when ties straddle the boundary — that is what `RANK` means.
-- `DENSE_RANK` gives tied rows the same rank without gaps, which requires
-  tracking distinct order-by values rather than just rows.
-
-### Emission Order and the Window Operator
-
-Window functions do not require the *partition keys* to be globally sorted —
-only each partition's rows must be contiguous and ordered among themselves.
-`PartitionedTopKExec` emits rows grouped by partition and ordered by the
-`ORDER BY` keys within each partition, which is the weaker guarantee the
-window operator needs, and avoids paying for a global sort of the partition
-keys. The `BoundedWindowAggExec` above the operator then runs in `Sorted`
-mode: it only walks the retained rows and writes the rank column.
-
-Work on the main branch since DataFusion 55 goes further: [#26133] emits the
-rank column directly from `PartitionedTopKExec`, allowing the window operator
-to be removed from the plan entirely.
-
-[#21479]: https://github.com/apache/datafusion/pull/21479
-[#23096]: https://github.com/apache/datafusion/pull/23096
-[#26133]: https://github.com/apache/datafusion/pull/26133
-
-## Using It in DataFusion 55
-
-The optimization ships in DataFusion 55.0.0 behind the
-`datafusion.optimizer.enable_window_topn` configuration flag, which is
-**disabled by default**. Enable it with:
-
-```sql
-SET datafusion.optimizer.enable_window_topn = true;
-```
-
-With the flag on, the same query produces (abridged):
+With the flag enabled, the plan for the query above becomes (abridged):
 
 ```text
 ProjectionExec
@@ -199,59 +117,63 @@ ProjectionExec
         DataSourceExec
 ```
 
-The `SortExec` and the `FilterExec` are gone. `PartitionedTopKExec` sits
-directly below the window operator and feeds it only the surviving rows,
-already grouped and ordered.
+The `SortExec` and the `FilterExec` are gone: the operator feeds the window
+operator only the surviving rows, already grouped and ordered.
 
-### Which Queries the Rewrite Applies To
+<!-- TODO(alamb): diagram of the two plans (the sort-based plan above and
+     this PartitionedTopKExec plan). Site convention is SVG images under
+     /blog/images/<slug>/, as in the sort-pushdown post. -->
 
-The physical optimizer rule behind this is called `WindowTopN`. It fires when
-all of the following hold:
+With `K = 3` and the input:
 
-- The window function is `ROW_NUMBER` or `RANK` (in DataFusion 55; see
-  [Status and Roadmap](#status-and-roadmap) for `DENSE_RANK`).
-- The window has a `PARTITION BY` clause. A global top-N without partitioning
-  is already handled efficiently by `SortExec` with a fetch limit.
-- For `RANK`: the window has a non-empty `ORDER BY` clause (with an empty
-  `ORDER BY`, every row ties at rank 1 and there is nothing to prune).
-- The filter compares the ranking column to an integer literal using one of
-  `rn <= K`, `rn < K`, `K >= rn`, or `K > rn`.
-
-The rule derives the number of rows to retain from the predicate: `rn <= 5`
-retains 5 rows per partition, and `rn < 5` retains 4.
-
-If any of these conditions fail, the rule does not fire and the sort-based
-plan above is used. The flag switches only this rewrite on and off; it
-affects nothing else. To disable it again:
-
-```sql
-SET datafusion.optimizer.enable_window_topn = false;
+```text
+category | revenue
+---------|--------
+books    |  100
+toys     |   50
+books    |  200
+toys     |  150
+books    |  300
+books    |  400
 ```
 
-## Benchmarks: Where It Helps, and Where It Does Not
+the operator keeps two heaps: `books` retains `{400, 300, 200}` and evicts
+`100`; `toys` retains `{150, 50}`.
 
-When the operator was introduced, it was measured on the h2o group-by shape —
-10 million rows, top-2 rows per partition — across partition counts from 100
-to 100,000 [#21479]. The full input is processed either way; only the sort is
-replaced by the heaps.
+Computational complexity changes from **O(N log N)** time and **O(N)**
+memory (the sort) to **O(N log K)** time and **O(K × P × row_size)** memory
+(K retained rows for each of the P distinct groups).
 
-| Scenario                          | Enabled | Disabled | Speedup     |
-| --------------------------------- | ------: | -------: | ----------- |
-| 100 partitions (100K rows each)   |   43 ms |  174 ms  | **4.0x**    |
-| 1K partitions (10K rows each)     |   71 ms |  146 ms  | **2.1x**    |
-| 10K partitions (1K rows each)     |  619 ms |  128 ms  | **0.2x** (regression) |
-| 100K partitions (100 rows each)   | 4368 ms |  135 ms  | **0.03x** (regression) |
+The rewrite applies to the three SQL ranking functions — `ROW_NUMBER`,
+`RANK`, and `DENSE_RANK` — each with slightly different bookkeeping:
+`ROW_NUMBER` needs exactly K rows per group, `RANK` must also retain rows
+tied with the row at the boundary (so a query can legitimately return more
+than K rows per group), and `DENSE_RANK` tracks distinct order-by values
+rather than rows. As of DataFusion 56 the operator also emits the rank
+column itself ([#26133]), so the window operator can leave the plan
+entirely.
 
-*Timings reported in [#21479] when the operator was introduced — on a build
-that predates [#23096], which shares the row encoder and memory reservation
-across partitions and is included in the 55.0.0 release. Hardware and
-absolute numbers will vary, but the shape of the curve is the point.*
+## Using It
 
-### Fresh numbers on a released build
+In DataFusion 55 and 56 the optimization is off by default; enable it with:
 
-I re-ran the same shape on DataFusion **55.2.0**: the exact h2o group-by Q8
-query, 10M rows, `K = 2`, in-memory data, min of 4 runs on a single desktop
-machine. Compare the *shape*, not the absolutes, with the table above:
+```sql
+SET datafusion.optimizer.enable_window_topn = true;
+```
+
+The rewrite fires when the ranking function is `ROW_NUMBER`, `RANK`, or
+`DENSE_RANK`, the window has a `PARTITION BY` clause, and the filter
+compares the rank column to an integer literal (`rn <= K` retains K rows
+per group, `rn < K` retains K−1). Any other window query uses the default
+sort-based plan. The optimizer rule that implements this is
+[window_topn.rs][window-topn-source] for anyone curious.
+
+## Performance
+
+Here is how much faster the new operator is. I re-ran the [h2o group-by]
+benchmark's Q8 query (top-2 rows per group) on released DataFusion
+**55.2.0**: 10M rows, in-memory data, min of 4 runs on a single desktop
+machine.
 
 | Partitions | Rows/partition | Enabled | Disabled | Enabled/Disabled |
 | ---------: | -------------: | -------: | --------: | ---------------- |
@@ -265,74 +187,35 @@ machine. Compare the *shape*, not the absolutes, with the table above:
 | 100,000    | 100            |  699 ms |   530 ms | 1.32x (regression)  |
 | 150,000    | ~67            |  944 ms |   566 ms | 1.67x (regression)  |
 
-The crossover sits between ~50K and ~60K partitions — roughly **150–200 rows
-per partition** at `K = 2`. Past that the rewrite loses ground for two
-reasons:
+Up to about 10,000 partitions the new plan is 4–7x faster. Above 50,000
+partitions performance gets worse: every distinct partition key adds a heap
+and a hash-map entry, so very high-cardinality keys cost more than the sort
+they replace — which is why the optimization is opt-in and the
+[configuration documentation][datafusion.optimizer.enable_window_topn]
+recommends it for low-cardinality partition keys.
 
-- **Per-partition overhead grows linearly with P.** Every row probes the
-  hash map of P partition states; every distinct key owns a heap and a
-  hash-map entry; the emit step sorts all P keys once, O(P log P). The
-  enabled plan costs roughly 5–6 µs per distinct partition key, while the
-  sort baseline stays roughly flat in P. The regression starts where the two
-  curves cross.
-- **`PartitionedTopKExec` has no spill path.** SortExec degrades gracefully:
-  excess data goes to disk. The heaps must hold O(K × P × row_size) in
-  memory, and when the memory reservation cannot grow, the query fails
-  rather than spills. The window operator on top pays ~4 µs per partition
-  (417 µs at P=100 → 418 ms at P=100K) even though it only touches the 2×P
-  surviving rows.
+<!-- TODO(alamb): question — you asked whether this was fixed in DataFusion
+     56. The 56.0.0 changelog lists PartitionedTopK perf work ([#25730],
+     [#25968]) but nothing identified as fixing the high-partition-count
+     regression, so the post reports the measured 55.2.0 crossover and does
+     not claim a 56 fix. Please confirm. -->
 
-Per-partition bookkeeping grows linearly with the number of distinct keys,
-while the sort it replaces costs O(N log N) regardless of P. The rewrite
-wins while each partition still holds enough rows for the heaps to pay for
-themselves, and loses when they don't. That is why the feature is behind a
-flag rather than always-on; the [configuration documentation][configs-doc]
-reaches the same conclusion: the optimization helps with low-cardinality
-window partition keys, while high-cardinality keys can regress both memory
-usage and runtime.
+## Status
 
-[configs-doc]: https://datafusion.apache.org/user-guide/configs.html
+As of DataFusion 56.0.0 (released November 2026):
 
-Both follow-up optimizations from the [#21479] era have since shipped:
-[#23096] (shared encoder and memory reservation) is part of the 55.0.0
-release, and [#24591] reduced `RANK` memory from O(input) to O(K + ties).
-
-[#24591]: https://github.com/apache/datafusion/pull/24591
-
-## Status and Roadmap
-
-As of DataFusion 55.0.0:
-
-- `ROW_NUMBER` and `RANK` are supported, opt-in via
+- `ROW_NUMBER`, `RANK`, and `DENSE_RANK` are all supported ([#23869]
+  extended the rewrite to `DENSE_RANK` in 56), opt-in via
   `datafusion.optimizer.enable_window_topn`.
-- `DENSE_RANK` support has landed on the main branch
-  ([#23869]) and is expected in an upcoming release.
-- The optimization is **not yet enabled by default**. Work to flip the
-  default is tracked in the [enable-by-default EPIC][#24608]
-  ([#27197] is the change itself, open at the time of writing).
-
-[#23869]: https://github.com/apache/datafusion/pull/23869
-[#24608]: https://github.com/apache/datafusion/issues/24608
-[#27197]: https://github.com/apache/datafusion/pull/27197
+- The optimization is still **off by default** in 56.
+- It will be **enabled by default in DataFusion 57**: [#27197] flipped the
+  default (merged after the 56.0.0 branch cut), and the
+  [enable-by-default EPIC][#24608] is closed.
 
 ## Remaining Work
 
-There is active work to extend and harden the optimization; good places to
-jump in:
-
-- [Further "per partition" top-k optimizations][#24060] — the umbrella for
-  the next round of improvements.
-- [Support filters with embedded projections][#21596] — widen the set of
-  queries the rule recognizes.
-- [Memory-efficient dedup on wide payloads][#23600] — the `ROW_NUMBER() = 1`
-  / `DISTINCT ON` dedup pattern.
-- [Utf8View buffers kept alive by retained rows][#26381] — memory footprint
-  when string columns are present.
-
-[#24060]: https://github.com/apache/datafusion/issues/24060
-[#21596]: https://github.com/apache/datafusion/issues/21596
-[#23600]: https://github.com/apache/datafusion/issues/23600
-[#26381]: https://github.com/apache/datafusion/issues/26381
+- [Further "per partition" top-k optimizations][#24060] — the umbrella issue
+  for the remaining improvements, with links to the individual tickets.
 
 ## Acknowledgements
 
@@ -343,6 +226,49 @@ the memory optimizations, and further contributions came from
 feature request was filed in 2023 ([#6899]), and the draft this post is based
 on was written by [@alamb] for the DataFusion 55 announcement.
 
+## Get Involved
+
+- **Try it out**: run your "top N per group" queries with
+  `datafusion.optimizer.enable_window_topn = true` on DataFusion 56 and
+  compare `EXPLAIN ANALYZE` output. If you hit the high-partition-count
+  regression, please report it.
+- **Work on a [good first issue](https://github.com/apache/datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)**,
+  or pick up one of the [remaining work](#remaining-work) items.
+- Learn more by visiting the [DataFusion](https://datafusion.apache.org/index.html) project page, and join the
+  conversation on [GitHub](https://github.com/apache/datafusion/) or
+  [Slack or Discord](https://datafusion.apache.org/contributor-guide/communication.html).
+
+## References
+
+- Original feature request (2023): [#6899]
+- Introducing `PartitionedTopKExec` and the `WindowTopN` rule (`ROW_NUMBER`): [#21479]
+- `RANK` support: [#22885]
+- `DENSE_RANK` support: [#23869]
+- Shared encoder and memory reservation across partitions: [#23096]
+- `RANK` memory from O(input) to O(K + ties): [#24591]
+- Emit the rank column from the operator: [#26133]
+- Enabled by default in 57: [#27197] / EPIC [#24608]
+- This post's ticket: [#27233]
+
+[datafusion.optimizer.enable_window_topn]: https://datafusion.apache.org/user-guide/configs.html
+[partitioned-topk-source]: https://github.com/apache/datafusion/blob/main/datafusion/physical-plan/src/sorts/partitioned_topk.rs
+[window-topn-source]: https://github.com/apache/datafusion/blob/main/datafusion/physical-optimizer/src/window_topn.rs
+[h2o group-by]: https://github.com/h2oai/db-benchmark
+[#6899]: https://github.com/apache/datafusion/issues/6899
+[#21479]: https://github.com/apache/datafusion/pull/21479
+[#22885]: https://github.com/apache/datafusion/pull/22885
+[#23096]: https://github.com/apache/datafusion/pull/23096
+[#23869]: https://github.com/apache/datafusion/pull/23869
+[#24591]: https://github.com/apache/datafusion/pull/24591
+[#25730]: https://github.com/apache/datafusion/pull/25730
+[#25968]: https://github.com/apache/datafusion/pull/25968
+[#26133]: https://github.com/apache/datafusion/pull/26133
+[#27197]: https://github.com/apache/datafusion/pull/27197
+[#24608]: https://github.com/apache/datafusion/issues/24608
+[#24060]: https://github.com/apache/datafusion/issues/24060
+[#27233]: https://github.com/apache/datafusion/issues/27233
+[@alamb]: https://github.com/alamb
+[@SubhamSinghal]: https://github.com/SubhamSinghal
 [@2010YOUY01]: https://github.com/2010YOUY01
 [@kosiew]: https://github.com/kosiew
 [@jayzhan211]: https://github.com/jayzhan211
@@ -350,28 +276,3 @@ on was written by [@alamb] for the DataFusion 55 announcement.
 [@stuhood]: https://github.com/stuhood
 [@viirya]: https://github.com/viirya
 [@zhuqi-lucas]: https://github.com/zhuqi-lucas
-
-## Get Involved
-
-- **Try it out**: run your "top N per group" queries with
-  `datafusion.optimizer.enable_window_topn = true` on DataFusion 55 and
-  compare `EXPLAIN ANALYZE` output. If you hit the high-cardinality cliff,
-  please report it — those numbers drive the remaining optimization work.
-- **Work on a [good first issue](https://github.com/apache/datafusion/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)**,
-  or pick up one of the [remaining work](#remaining-work) items above.
-- **File issues or join the conversation**: [GitHub](https://github.com/apache/datafusion/)
-  for bugs and feature requests, [Slack or Discord](https://datafusion.apache.org/contributor-guide/communication.html)
-  for discussion.
-- Learn more by visiting the [DataFusion](https://datafusion.apache.org/index.html) project page.
-
-## References
-
-- Original feature request (2023): [#6899]
-- Introducing `PartitionedTopKExec` and the `WindowTopN` rule (`ROW_NUMBER`): [#21479]
-- `RANK` support: [#22885](https://github.com/apache/datafusion/pull/22885)
-- `DENSE_RANK` support (main): [#23869]
-- Shared encoder and memory reservation across partitions: [#23096]
-- `RANK` memory from O(input) to O(K + ties): [#24591]
-- Emit the rank column from the operator (main): [#26133]
-- Enable-by-default EPIC: [#24608] / [#27197]
-- This post's ticket: [#27233](https://github.com/apache/datafusion/issues/27233)
